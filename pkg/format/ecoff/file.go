@@ -8,6 +8,7 @@ import (
 	"os"
 )
 
+// A FileHeader represents an ECOFF file header.
 type FileHeader struct {
 	Magic                [2]byte
 	NumSections          uint16
@@ -18,6 +19,8 @@ type FileHeader struct {
 	Flags                uint16
 }
 
+// An ObjectHeader represents an ECOFF object header. This is the header
+// referred to in the OptionalHeader field of FileHeader.
 type ObjectHeader struct {
 	Magic     int16
 	Vstamp    int16
@@ -33,18 +36,20 @@ type ObjectHeader struct {
 	GpValue   uint32
 }
 
+// A File represents an ECOFF file.
 type File struct {
 	FileHeader
 	ObjectHeader
-	Sections []*Section
-
-	byteOrder binary.ByteOrder
-	closer    io.Closer
 
 	ExternalSymbols []*ExternalSymbol
 	LocalSymbols    []*Symbol
+	Sections        []*Section
+
+	byteOrder binary.ByteOrder
+	closer    io.Closer
 }
 
+// A SectionHeader represents an ECOFF section header.
 type SectionHeader struct {
 	Name              [8]uint8
 	PhysicalAddress   uint32
@@ -58,6 +63,7 @@ type SectionHeader struct {
 	Flags             int32
 }
 
+// A Section represents a single section in an ECOFF file.
 type Section struct {
 	SectionHeader
 
@@ -65,12 +71,14 @@ type Section struct {
 	sr *io.SectionReader
 }
 
+// Data reads and returns the contents of the ECOFF section.
 func (s *Section) Data() ([]byte, error) {
 	data := make([]byte, s.Size)
 	n, err := io.ReadFull(s.Open(), data)
 	return data[0:n], err
 }
 
+// Open returns a new ReadSeeker reading the ECOFF section.
 func (s *Section) Open() io.ReadSeeker {
 	return io.NewSectionReader(s.sr, 0, 1<<63-1)
 }
@@ -111,9 +119,14 @@ func NewFile(r io.ReaderAt) (*File, error) {
 	if err := binary.Read(sr, f.byteOrder, &f.FileHeader); err != nil {
 		return nil, err
 	}
+
+	// TODO: should check for OptionalHeader to determine if ObjectHeader is
+	// included
 	if err := binary.Read(sr, f.byteOrder, &f.ObjectHeader); err != nil {
 		return nil, err
 	}
+
+	// Read section headers
 	for i := uint16(0); i < f.FileHeader.NumSections; i++ {
 		s := new(Section)
 		if err := binary.Read(sr, f.byteOrder, &s.SectionHeader); err != nil {
@@ -126,6 +139,8 @@ func NewFile(r io.ReaderAt) (*File, error) {
 		s.ReaderAt = s.sr
 		f.Sections = append(f.Sections, s)
 	}
+
+	// Read symbolic headers
 	sr.Seek(int64(f.FileHeader.SymbolicHeaderOffset), os.SEEK_SET)
 	shdr := new(SymbolicHeader)
 	if err := binary.Read(sr, f.byteOrder, shdr); err != nil {
@@ -134,18 +149,23 @@ func NewFile(r io.ReaderAt) (*File, error) {
 
 	sr.Seek(int64(shdr.ProceduresOffset), os.SEEK_SET)
 	for i := 0; i < int(shdr.ProceduresCount); i++ {
-		pd := new(ProcedureDescriptor)
+		// NOTE: Support only planned for 32-bit files.
+		pd := new(ProcedureDescriptor32)
 		if err := binary.Read(sr, f.byteOrder, pd); err != nil {
 			return nil, err
 		}
 	}
 
+	// TODO: read additional headers, such as FileDescriptor
+
+	// Parse local strings
 	ls := make([]byte, shdr.LocalStringsLength)
 	sr.Seek(int64(shdr.LocalStringsOffset), os.SEEK_SET)
 	if _, err := sr.Read(ls); err != nil {
 		return nil, err
 	}
 
+	// Parse local symbols
 	sr.Seek(int64(shdr.LocalSymbolsOffset), os.SEEK_SET)
 	for i := 0; i < int(shdr.LocalSymbolsCount); i++ {
 		var s [3]uint32
@@ -170,12 +190,14 @@ func NewFile(r io.ReaderAt) (*File, error) {
 		f.LocalSymbols = append(f.LocalSymbols, sym)
 	}
 
+	// Parse external strings
 	es := make([]byte, shdr.ExternalStringsLength)
 	sr.Seek(int64(shdr.ExternalStringsOffset), os.SEEK_SET)
 	if _, err := sr.Read(es); err != nil {
 		return nil, err
 	}
 
+	// Parse external symbols
 	sr.Seek(int64(shdr.ExternalSymbolsOffset), os.SEEK_SET)
 	for i := 0; i < int(shdr.ExternalSymbolsCount); i++ {
 		var s struct {
@@ -219,6 +241,7 @@ func (f *File) Close() error {
 	return err
 }
 
+// Data returns a byte slice representing all contiguous section data.
 func (f *File) Data() []byte {
 	data := make([]byte, 0)
 	for _, s := range f.Sections {
@@ -228,6 +251,7 @@ func (f *File) Data() []byte {
 	return data
 }
 
+// Size returns the number of bytes for data in all sections.
 func (f *File) Size() uint32 {
 	var n int
 	for _, s := range f.Sections {
@@ -237,7 +261,7 @@ func (f *File) Size() uint32 {
 }
 
 func (f *File) String() string {
-	name := "MIPS-ECOFF"
+	var name string
 	switch f.FileHeader.Magic {
 	case MIPSBE_MAGIC:
 		name = "MIPSBE ECOFF"
@@ -247,10 +271,14 @@ func (f *File) String() string {
 		name = "MIPSEL ECOFF"
 	case MIPSBE_EL_MAGIC:
 		name = "MIPSBE-EL ECOFF"
+	default:
+		panic("invalid file magic")
 	}
 	return fmt.Sprintf("%s executable - start=0x%08X size=%d sections=%d", name, f.Entry, f.Size(), len(f.Sections))
 }
 
+// Symbols returns a slice of Symbols from the combined local and external
+// symbol tables.
 func (f *File) Symbols() []*Symbol {
 	symbols := make([]*Symbol, 0)
 	for _, s := range f.LocalSymbols {
@@ -262,6 +290,7 @@ func (f *File) Symbols() []*Symbol {
 	return symbols
 }
 
+// Symbols returns a map of Symbols to start addresses for the given type.
 func (f *File) SymbolsByType(st SymbolType) map[uint32]*Symbol {
 	symbols := make(map[uint32]*Symbol)
 	for _, s := range f.Symbols() {
@@ -271,4 +300,18 @@ func (f *File) SymbolsByType(st SymbolType) map[uint32]*Symbol {
 		symbols[s.Value] = s
 	}
 	return symbols
+}
+
+// getString extracts a string from an ECOFF string table.
+func getString(section []byte, start int) (string, bool) {
+	if start < 0 || start >= len(section) {
+		return "", false
+	}
+
+	for end := start; end < len(section); end++ {
+		if section[end] == 0 {
+			return string(section[start:end]), true
+		}
+	}
+	return "", false
 }

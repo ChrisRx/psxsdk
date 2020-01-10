@@ -9,3 +9,6 @@ build:
 
 gen:
 	@go generate ./pkg/yaroze
+
+test:
+	@go test ./pkg/...

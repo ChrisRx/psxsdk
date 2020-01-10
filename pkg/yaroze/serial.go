@@ -18,93 +18,98 @@ const (
 	Prompt       = ">>"
 )
 
-type Conn struct {
+type PortConfig struct {
+	BaudRate   int
+	DeviceName string
+	Output     io.Writer
+}
+
+type Port struct {
 	serial.Port
 	w io.Writer
 }
 
-func NewConn(w io.Writer, baudRate int) (*Conn, error) {
-	//serial.GetPortsList()
-	port, err := serial.Open("/dev/ttyUSB0", &serial.Mode{BaudRate: baudRate})
+func OpenPort(cfg *PortConfig) (*Port, error) {
+	port, err := serial.Open(cfg.DeviceName, &serial.Mode{BaudRate: cfg.BaudRate})
 	if err != nil {
 		return nil, err
 	}
-	c := &Conn{
+	p := &Port{
 		Port: port,
-		w:    w,
+		w:    cfg.Output,
 	}
-	if err := c.Port.SetRTS(true); err != nil {
+	if err := p.Port.SetRTS(true); err != nil {
 		return nil, err
 	}
-	if err := c.Clear(); err != nil {
+	if err := p.Clear(); err != nil {
 		return nil, err
 	}
-	return c, nil
+	return p, nil
 }
 
-func (c *Conn) Clear() error {
-	return c.WriteByte(0x03)
+func (p *Port) Clear() error {
+	return p.WriteByte(0x03)
 }
 
-func (c *Conn) ClearScreen() error {
-	return c.SendCommand("\rcls")
+func (p *Port) ClearScreen() error {
+	return p.SendCommand("\rcls")
 }
 
-func (c *Conn) Go() error {
-	if _, err := c.Port.Write([]byte("go\r")); err != nil {
+func (p *Port) Go() error {
+	if _, err := p.Port.Write([]byte("go\r")); err != nil {
 		return err
 	}
 	time.Sleep(2000 * time.Millisecond)
 	return nil
 }
 
-func (c *Conn) Bwr() error {
-	_, err := c.Port.Write([]byte("bwr\x0d"))
+func (p *Port) Bwr() error {
+	_, err := p.Port.Write([]byte("bwr\x0d"))
 	if err != nil {
 		return err
 	}
-	return c.ReadUntil("binary")
+	return p.ReadUntil("binary")
 }
 
-func (c *Conn) Write(data []byte) error {
+func (p *Port) Write(data []byte) error {
 	for _, b := range data {
-		if err := c.WriteByte(b); err != nil {
+		if err := p.WriteByte(b); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (c *Conn) Handshake(addr uint32, size int32) error {
-	if err := c.WriteByte(0x01); err != nil {
+func (p *Port) Handshake(addr uint32, size int32) error {
+	if err := p.WriteByte(0x01); err != nil {
 		return err
 	}
 	data := make([]byte, 8)
 	binary.BigEndian.PutUint32(data[0:], addr)
 	binary.BigEndian.PutUint32(data[4:], uint32(size))
-	return c.Write(data)
+	return p.Write(data)
 }
 
-func (c *Conn) SendCommand(command string) error {
-	_, err := c.Port.Write([]byte(fmt.Sprintf("%s\r", command)))
+func (p *Port) SendCommand(command string) error {
+	_, err := p.Port.Write([]byte(fmt.Sprintf("%s\r", command)))
 	if err != nil {
 		return err
 	}
-	return c.ReadUntil(Prompt)
+	return p.ReadUntil(Prompt)
 }
 
-func (c *Conn) ReadByte() (byte, error) {
+func (p *Port) ReadByte() (byte, error) {
 	var b bytes.Buffer
 	buf := make([]byte, 1024)
 	for {
-		status, err := c.Port.GetModemStatusBits()
+		status, err := p.Port.GetModemStatusBits()
 		if err != nil {
 			return 0, err
 		}
 		if !status.CTS {
 			continue
 		}
-		n, err := c.Port.Read(buf)
+		n, err := p.Port.Read(buf)
 		time.Sleep(100 * time.Millisecond)
 		if err != nil {
 			if err == io.EOF {
@@ -112,7 +117,7 @@ func (c *Conn) ReadByte() (byte, error) {
 			}
 			return 0, err
 		}
-		c.w.Write(buf[:n])
+		p.w.Write(buf[:n])
 		if n == 0 {
 			return 0, errors.New("oh no")
 		}
@@ -122,11 +127,11 @@ func (c *Conn) ReadByte() (byte, error) {
 	return 0, errors.New("oh nos")
 }
 
-func (c *Conn) ReadUntil(seq string) error {
+func (p *Port) ReadUntil(seq string) error {
 	var b bytes.Buffer
 	buf := make([]byte, 1024)
 	for {
-		n, err := c.Port.Read(buf)
+		n, err := p.Port.Read(buf)
 		time.Sleep(100 * time.Millisecond)
 		if err != nil {
 			if err == io.EOF {
@@ -134,7 +139,7 @@ func (c *Conn) ReadUntil(seq string) error {
 			}
 			return err
 		}
-		c.w.Write(buf[:n])
+		p.w.Write(buf[:n])
 		b.Write(buf[:n])
 		//fmt.Printf("b.String() = %+v\n", b.String())
 
@@ -145,10 +150,10 @@ func (c *Conn) ReadUntil(seq string) error {
 	return nil
 }
 
-func (c *Conn) WriteByte(b byte) error {
+func (p *Port) WriteByte(b byte) error {
 	st := time.Now()
 	for {
-		status, err := c.Port.GetModemStatusBits()
+		status, err := p.Port.GetModemStatusBits()
 		if err != nil {
 			return err
 		}
@@ -159,22 +164,22 @@ func (c *Conn) WriteByte(b byte) error {
 			return errors.New("WriteByte timeout")
 		}
 	}
-	_, err := c.Port.Write([]byte{b})
+	_, err := p.Port.Write([]byte{b})
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *Conn) Load(f *ecoff.File) error {
+func (p *Port) Load(f *ecoff.File) error {
 	time.Sleep(500 * time.Millisecond)
-	if err := c.SendCommand(fmt.Sprintf("sr epc %x", f.Entry)); err != nil {
+	if err := p.SendCommand(fmt.Sprintf("sr epc %x", f.Entry)); err != nil {
 		return err
 	}
-	if err := c.SendCommand(fmt.Sprintf("sr gp %x", f.GpValue)); err != nil {
+	if err := p.SendCommand(fmt.Sprintf("sr gp %x", f.GpValue)); err != nil {
 		return err
 	}
-	if err := c.SendCommand(fmt.Sprintf("sr sp %x", ECOFF_PSX_SP)); err != nil {
+	if err := p.SendCommand(fmt.Sprintf("sr sp %x", ECOFF_PSX_SP)); err != nil {
 		return err
 	}
 	for _, s := range f.Sections {
@@ -185,31 +190,31 @@ func (c *Conn) Load(f *ecoff.File) error {
 		if len(data) == 0 {
 			continue
 		}
-		if err := c.Bwr(); err != nil {
+		if err := p.Bwr(); err != nil {
 			return err
 		}
 
-		if err := c.Handshake(s.VirtualAddress, s.Size); err != nil {
+		if err := p.Handshake(s.VirtualAddress, s.Size); err != nil {
 			return err
 		}
 
 		// if this isn't here it will fail with WriteByte timeout
 		time.Sleep(100 * time.Millisecond)
-		if err := c.SendData(data, 2048); err != nil {
+		if err := p.SendData(data, 2048); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (c *Conn) SendData(data []byte, batch int) error {
+func (p *Port) SendData(data []byte, batch int) error {
 	for i := 0; i < len(data); i += batch {
 		j := i + batch
 		if j > len(data) {
 			j = len(data)
 		}
 
-		if err := c.WriteByte(0x02); err != nil {
+		if err := p.WriteByte(0x02); err != nil {
 			return err
 		}
 		chunk := data[i:j]
@@ -222,16 +227,16 @@ func (c *Conn) SendData(data []byte, batch int) error {
 		time.Sleep(1 * time.Millisecond)
 		var sum uint8
 		for _, b := range chunk {
-			err := c.WriteByte(b)
+			err := p.WriteByte(b)
 			if err != nil {
 				return errors.Wrap(err, "SendData")
 			}
 			sum += b
 		}
-		if err := c.WriteByte(sum); err != nil {
+		if err := p.WriteByte(sum); err != nil {
 			return err
 		}
-		resp, err := c.ReadByte()
+		resp, err := p.ReadByte()
 		if err != nil {
 			return err
 		}
@@ -239,10 +244,10 @@ func (c *Conn) SendData(data []byte, batch int) error {
 			return errors.Errorf("end: %d", resp)
 		}
 	}
-	if err := c.WriteByte(0x0d); err != nil {
+	if err := p.WriteByte(0x0d); err != nil {
 		return err
 	}
-	if err := c.ReadUntil("end binary"); err != nil {
+	if err := p.ReadUntil("end binary"); err != nil {
 		return err
 	}
 	return nil
