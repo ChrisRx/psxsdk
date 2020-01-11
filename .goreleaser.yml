@@ -7,6 +7,13 @@ builds:
   - GO111MODULE=on
   id: eco2exe
   binary: eco2exe
+  goos:
+  - darwin
+  - linux
+  - windows
+  goarch:
+  - 386
+  - amd64
   main: ./cmd/eco2exe
   gcflags:
   - all=-trimpath={{.Env.GOPATH}}
@@ -19,6 +26,13 @@ builds:
   - GO111MODULE=on
   id: objdump
   binary: objdump
+  goos:
+  - darwin
+  - linux
+  - windows
+  goarch:
+  - 386
+  - amd64
   main: ./cmd/objdump
   gcflags:
   - all=-trimpath={{.Env.GOPATH}}
@@ -31,6 +45,13 @@ builds:
   - GO111MODULE=on
   id: sioload
   binary: sioload
+  goos:
+  - darwin
+  - linux
+  - windows
+  goarch:
+  - 386
+  - amd64
   main: ./cmd/sioload
   gcflags:
   - all=-trimpath={{.Env.GOPATH}}
