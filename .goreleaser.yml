@@ -1,0 +1,57 @@
+before:
+  hooks:
+    - go mod tidy
+builds:
+- env:
+  - CGO_ENABLED=0
+  - GO111MODULE=on
+  id: eco2exe
+  binary: eco2exe
+  main: ./cmd/eco2exe
+  gcflags:
+  - all=-trimpath={{.Env.GOPATH}}
+  asmflags:
+  - all=-trimpath={{.Env.GOPATH}}
+  ldflags:
+  - -s -w
+- env:
+  - CGO_ENABLED=0
+  - GO111MODULE=on
+  id: objdump
+  binary: objdump
+  main: ./cmd/objdump
+  gcflags:
+  - all=-trimpath={{.Env.GOPATH}}
+  asmflags:
+  - all=-trimpath={{.Env.GOPATH}}
+  ldflags:
+  - -s -w
+- env:
+  - CGO_ENABLED=0
+  - GO111MODULE=on
+  id: sioload
+  binary: sioload
+  main: ./cmd/sioload
+  gcflags:
+  - all=-trimpath={{.Env.GOPATH}}
+  asmflags:
+  - all=-trimpath={{.Env.GOPATH}}
+  ldflags:
+  - -s -w
+archives:
+- replacements:
+    darwin: Darwin
+    linux: Linux
+    windows: Windows
+    386: i386
+    amd64: x86_64
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ .Tag }}-next"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+    - '^docs:'
+    - '^test:'
