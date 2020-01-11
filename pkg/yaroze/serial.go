@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	ECOFF_PSX_SP = 0x801fff00
-	Prompt       = ">>"
+	ECOFF_PSX_SP uint64 = 0x801fff00
+	Prompt              = ">>"
 )
 
 type PortConfig struct {
