@@ -28,7 +28,7 @@ With this said, some of the major goals of this project:
 
 ## Getting started
 
-The only requirement for building is [Go 1.13](https://golang.org/dl/#stable).
+There are pre-built binaries available for linux, macOS, and Windows that can be found [here](https://github.com/ChrisRx/psxsdk/releases/latest). Building from source is incredibly easy with Go and the only requirement for building is [Go 1.13](https://golang.org/dl/#stable) (or higher).
 
 First, download and build all of the psxsdk example binaries:
 
