@@ -1,3 +1,5 @@
+// Package binutils provides an interface for manipulating object files used by
+// the Sony Playstation 1.
 package binutils
 
 import (

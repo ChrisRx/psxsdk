@@ -1,4 +1,6 @@
 //go:generate go run generate.go
+
+// Package yaroze provides an interface Net Yaroze functionality.
 package yaroze
 
 import (

@@ -1,3 +1,4 @@
+// Package ecoff implements access to ECOFF object files.
 package ecoff
 
 import (

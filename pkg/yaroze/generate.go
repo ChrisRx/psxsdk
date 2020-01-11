@@ -51,6 +51,7 @@ func main() {
 }
 
 const tmpl = `// Code generated DO NOT EDIT
+
 package {{ .PackageName }}
 
 import (

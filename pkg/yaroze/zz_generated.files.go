@@ -1,4 +1,5 @@
 // Code generated DO NOT EDIT
+
 package yaroze
 
 import (
