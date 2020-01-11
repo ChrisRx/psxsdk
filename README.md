@@ -1,5 +1,8 @@
 # psxsdk
 
+[![GoDoc](https://godoc.org/github.com/ChrisRx/psxsdk?status.svg)](https://godoc.org/github.com/ChrisRx/psxsdk)
+[![Build Status](https://cloud.drone.io/api/badges/ChrisRx/psxsdk/status.svg)](https://cloud.drone.io/ChrisRx/psxsdk)
+
 psxsdk is a collection of tools and libraries for Playstation 1 development.
 
 - [What is psxsdk](#what-is-psxsdk)
