@@ -10,18 +10,17 @@ import (
 	"github.com/ChrisRx/psxsdk/pkg/format/psx"
 )
 
-var yarozePatch = []uint32{
-	0x0c00400c,
-	0x0,
-	0x08000000 + (0x80140000&0x03ffffff)>>2,
-	0x0,
-}
-
 func Combine(f *psx.File) (*psx.File, error) {
 	return binutils.Combine(Libps, f)
 }
 
 func PatchExecutable(f *psx.File) error {
+	var yarozePatch = []uint32{
+		0x0c00400c,
+		0x0,
+		0x08000000 + (f.PC0&0x03ffffff)>>2,
+		0x0,
+	}
 	patchData := make([]byte, 4*len(yarozePatch))
 	for i, val := range yarozePatch {
 		binary.LittleEndian.PutUint32(patchData[4*i:], val)
