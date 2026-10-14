@@ -30,15 +30,29 @@ func NewRawWriter(w io.Writer) *RawWriter {
 }
 
 // WriteBlock implements iso9660.BlockWriter.
-func (r *RawWriter) WriteBlock(lba uint32, data []byte) error {
+func (r *RawWriter) WriteBlock(b iso9660.Block) error {
 	// Blocks must arrive in order: a sector's address is encoded in its own
 	// header, so emitting them out of order would silently produce an image
 	// whose contents and addressing disagree.
-	if lba != r.next {
-		return fmt.Errorf("block %d arrived out of order, expected %d", lba, r.next)
+	if b.LBA != r.next {
+		return fmt.Errorf("block %d arrived out of order, expected %d", b.LBA, r.next)
 	}
-	if err := cdrom.EncodeForm1(r.buf, lba, cdrom.DataSubheader, data); err != nil {
-		return err
+	if b.Raw {
+		// The payload is already a sector's worth of subheader, data and
+		// error detection, so only the address is ours to supply.
+		if err := cdrom.EncodeRaw(r.buf, b.LBA, b.Data); err != nil {
+			return err
+		}
+	} else {
+		sh := cdrom.DataSubheader
+		if b.EndOfFile {
+			// The last sector of a file ends both the file and the record
+			// within it, which is the 0x89 submode seen on pressed discs.
+			sh.Submode |= cdrom.SubmodeEndOfFile | cdrom.SubmodeEndOfRecord
+		}
+		if err := cdrom.EncodeForm1(r.buf, b.LBA, sh, b.Data); err != nil {
+			return err
+		}
 	}
 	if _, err := r.w.Write(r.buf); err != nil {
 		return err
@@ -62,19 +76,36 @@ func NewISOWriter(w io.Writer) *ISOWriter {
 }
 
 // WriteBlock implements iso9660.BlockWriter.
-func (i *ISOWriter) WriteBlock(lba uint32, data []byte) error {
-	if lba != i.next {
-		return fmt.Errorf("block %d arrived out of order, expected %d", lba, i.next)
+func (i *ISOWriter) WriteBlock(b iso9660.Block) error {
+	if b.LBA != i.next {
+		return fmt.Errorf("block %d arrived out of order, expected %d", b.LBA, i.next)
 	}
-	if len(data) != iso9660.LogicalBlockSize {
-		return fmt.Errorf("block %d is %d bytes, want %d", lba, len(data), iso9660.LogicalBlockSize)
+	if b.Raw {
+		// There is nowhere to put a subheader in a 2048-byte block, and
+		// dropping it would turn a stream into 2324 bytes of noise with no
+		// way to tell what it was.
+		return fmt.Errorf("block %d holds a raw Mode 2 sector, which a 2048-byte image cannot represent", b.LBA)
 	}
-	if _, err := i.w.Write(data); err != nil {
+	if len(b.Data) != iso9660.LogicalBlockSize {
+		return fmt.Errorf("block %d is %d bytes, want %d", b.LBA, len(b.Data), iso9660.LogicalBlockSize)
+	}
+	if _, err := i.w.Write(b.Data); err != nil {
 		return err
 	}
 	i.next++
 	return nil
 }
+
+// StandardPadding is the run-out to leave after the last file of the data
+// track, in sectors, for iso9660.Options.Padding.
+//
+// Two seconds of sectors, the same margin as the pause between tracks. The
+// console reads a file by asking for whole sectors and the drive reads ahead
+// of what it was asked for, so a file that ends at the last sector of the
+// track is a file the console cannot read all of: the request runs into the
+// lead-out and fails. The cost of avoiding that is 300KB of zeros, which is
+// what a pressed disc carries there too.
+const StandardPadding = 2 * 75
 
 // LicenseStringSector is where the disc identification string lives, within
 // the 16 sector system area that precedes the filesystem.
@@ -101,13 +132,32 @@ func SystemArea() []byte {
 	return area
 }
 
-// WriteCueSheet writes a .cue describing a single Mode 2 data track, which is
-// what a disc holding only a filesystem needs. binName should be the file
-// name of the .bin as it sits beside the .cue, not a full path.
-func WriteCueSheet(w io.Writer, binName string) error {
+// WriteCueSheet writes the .cue describing a written image's tracks.
+// binName should be the file name of the .bin as it sits beside the .cue, not
+// a full path, since that is where a cue sheet is read from.
+func WriteCueSheet(w io.Writer, binName string, l Layout) error {
 	bw := bufio.NewWriter(w)
 	fmt.Fprintf(bw, "FILE %q BINARY\n", filepath.Base(binName))
-	fmt.Fprintf(bw, "  TRACK 01 MODE2/%d\n", cdrom.SectorSize)
-	fmt.Fprintf(bw, "    INDEX 01 00:00:00\n")
+	for _, t := range l.Tracks {
+		if t.Audio {
+			fmt.Fprintf(bw, "  TRACK %02d AUDIO\n", t.Number)
+		} else {
+			fmt.Fprintf(bw, "  TRACK %02d MODE2/%d\n", t.Number, cdrom.SectorSize)
+		}
+		// A pause that is recorded in the file is given as index zero, so
+		// that a player seeking to the track lands on the samples and a
+		// program copying the disc still finds the gap where it was.
+		if t.Pregap != t.Start {
+			fmt.Fprintf(bw, "    INDEX 00 %s\n", msf(t.Pregap))
+		}
+		fmt.Fprintf(bw, "    INDEX 01 %s\n", msf(t.Start))
+	}
 	return bw.Flush()
+}
+
+// msf formats a sector as the timecode a cue sheet uses. Positions in a cue
+// sheet are offsets into the file it names, so unlike the timecode in a
+// sector header they do not include the two second lead-in.
+func msf(sector uint32) string {
+	return fmt.Sprintf("%02d:%02d:%02d", sector/(75*60), (sector/75)%60, sector%75)
 }

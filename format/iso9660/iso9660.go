@@ -92,18 +92,34 @@ func putDecDateTime(b []byte, t time.Time) {
 	}
 	copy(b, fmt.Sprintf("%04d%02d%02d%02d%02d%02d%02d",
 		t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), 0))
-	b[16] = 0 // offset from GMT in 15 minute intervals
+	b[16] = byte(zoneOffset(t))
+}
+
+// zoneOffset is a time's offset from GMT in 15 minute intervals, which is how
+// both date forms record a zone. The digits in the fields before it are local
+// time, so leaving this zero would move the recorded instant by whatever the
+// local offset happened to be when the image was built.
+func zoneOffset(t time.Time) int8 {
+	_, off := t.Zone()
+	return int8(off / (15 * 60))
 }
 
 // putDirDateTime writes the compact 7-byte form used in directory records.
 func putDirDateTime(b []byte, t time.Time) {
+	if t.IsZero() {
+		// All zeros means "not specified". Encoding the zero time
+		// arithmetically instead would wrap the year byte and claim a date
+		// in the next century.
+		clear(b[:7])
+		return
+	}
 	b[0] = byte(t.Year() - 1900)
 	b[1] = byte(t.Month())
 	b[2] = byte(t.Day())
 	b[3] = byte(t.Hour())
 	b[4] = byte(t.Minute())
 	b[5] = byte(t.Second())
-	b[6] = 0
+	b[6] = byte(zoneOffset(t))
 }
 
 // NormalizeName converts a name to the restricted ISO 9660 form: uppercase
@@ -125,6 +141,9 @@ func NormalizeName(name string) string {
 	}
 	return b.String()
 }
+
+// MaxVolumeIDLen is the width of the volume identifier field.
+const MaxVolumeIDLen = 32
 
 // FileIdentifier returns the on-disc identifier for a file name, which
 // carries the ";1" version suffix that PlayStation programs include in the

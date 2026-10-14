@@ -15,7 +15,10 @@
 // a .cue alongside, rather than as a 2048-byte-per-sector .iso.
 package cdrom
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+)
 
 const (
 	// SectorSize is the size of a raw CD-ROM sector.
@@ -27,6 +30,18 @@ const (
 	// Form2DataSize is the user data carried by a Mode 2 Form 2 sector.
 	Form2DataSize = 2324
 
+	// Mode2PayloadSize is everything a Mode 2 sector holds after its sync
+	// and address header: both copies of the subheader, the user data and
+	// the error detection, 2336 bytes in all. It is derived from the layout
+	// rather than written out so that the two cannot disagree.
+	//
+	// XA audio and STR video are produced as a stream of these, subheaders
+	// included, which is why such a file is a whole number of 2336-byte
+	// units rather than a plain byte stream.
+	Mode2PayloadSize = SectorSize - subheaderOffset
+)
+
+const (
 	// LeadInSectors is the 2 second pregap before logical sector zero. CD
 	// addressing counts from the physical start of the disc, so converting
 	// a logical block address to a timecode adds it.
@@ -133,9 +148,96 @@ func EncodeForm2(dst []byte, lba uint32, sh Subheader, data []byte) error {
 	return nil
 }
 
-// writeHeader fills in the sync pattern, address header and both copies of
-// the subheader.
-func writeHeader(dst []byte, lba uint32, sh Subheader) {
+// EncodeRaw writes a sector whose Mode 2 payload is supplied whole:
+// subheader, user data and error detection exactly as they are to appear on
+// the disc. Only the sync pattern and the address header are added.
+//
+// This is how XA audio and STR video have to be written. Their sectors carry
+// per-sector subheaders that say which form each one is and which interleaved
+// channel it belongs to, so re-encoding them from a payload would mean
+// inventing information the stream already carries. Nothing is recomputed,
+// not even the EDC: a stream whose sectors are deliberately Form 2 is one
+// where a damaged sector is meant to be passed through, and silently
+// rewriting its error detection would misrepresent the source.
+func EncodeRaw(dst []byte, lba uint32, payload []byte) error {
+	if len(dst) != SectorSize {
+		return fmt.Errorf("sector buffer is %d bytes, want %d", len(dst), SectorSize)
+	}
+	if len(payload) != Mode2PayloadSize {
+		return fmt.Errorf("payload is %d bytes, want a whole Mode 2 payload of %d", len(payload), Mode2PayloadSize)
+	}
+	writeSyncHeader(dst, lba)
+	copy(dst[subheaderOffset:], payload)
+	return nil
+}
+
+// Mode2Payload returns the Mode 2 payload of a raw sector: the subheader,
+// user data and error detection, with only the sync pattern and address
+// header left behind. This is the form XA audio and STR video are stored in,
+// so it is what reading one back out of an image gives.
+func Mode2Payload(sector []byte) ([]byte, error) {
+	if err := checkSector(sector); err != nil {
+		return nil, err
+	}
+	return sector[subheaderOffset:], nil
+}
+
+// Form1Data returns the user data of a Mode 2 Form 1 sector.
+//
+// The EDC is checked as well as the layout. A sector of a filesystem is
+// exactly the kind that is meant to be read correctly or not at all, and a
+// reader that passed a failing one through would report a file that the
+// console itself would refuse.
+func Form1Data(sector []byte) ([]byte, error) {
+	if err := checkSector(sector); err != nil {
+		return nil, err
+	}
+	if Submode(sector[subheaderOffset+2])&SubmodeForm2 != 0 {
+		return nil, fmt.Errorf("sector is Form 2, which holds %d bytes of streamed data rather than %d of user data",
+			Form2DataSize, Form1DataSize)
+	}
+	stored := uint32(sector[form1EDCOffset]) | uint32(sector[form1EDCOffset+1])<<8 |
+		uint32(sector[form1EDCOffset+2])<<16 | uint32(sector[form1EDCOffset+3])<<24
+	if got := edc(sector[subheaderOffset:form1EDCOffset]); got != stored {
+		return nil, fmt.Errorf("error detection is %#08x but the contents give %#08x, so the sector is damaged", stored, got)
+	}
+	return sector[dataOffset : dataOffset+Form1DataSize], nil
+}
+
+// DecodeSubheader returns a sector's subheader, which says what the sector
+// holds and which interleaved stream it belongs to.
+func DecodeSubheader(sector []byte) (Subheader, error) {
+	if err := checkSector(sector); err != nil {
+		return Subheader{}, err
+	}
+	return Subheader{
+		File:    sector[subheaderOffset+0],
+		Channel: sector[subheaderOffset+1],
+		Submode: Submode(sector[subheaderOffset+2]),
+		Coding:  sector[subheaderOffset+3],
+	}, nil
+}
+
+// checkSector rejects anything that is not a Mode 2 sector before its
+// contents are believed. The sync pattern is fixed and the mode byte has one
+// acceptable value, so either being wrong means the bytes are not a sector at
+// all: the wrong file, or an image read at the wrong offset.
+func checkSector(sector []byte) error {
+	if len(sector) != SectorSize {
+		return fmt.Errorf("sector is %d bytes, want %d", len(sector), SectorSize)
+	}
+	if !bytes.Equal(sector[syncOffset:syncOffset+len(syncPattern)], syncPattern[:]) {
+		return fmt.Errorf("sector does not begin with a sync pattern, so it is not a raw CD-ROM sector")
+	}
+	if mode := sector[headerOffset+3]; mode != 2 {
+		return fmt.Errorf("sector is mode %d, and only mode 2 carries a PlayStation filesystem", mode)
+	}
+	return nil
+}
+
+// writeSyncHeader fills in the sync pattern and the address header, which
+// every raw sector begins with regardless of what follows.
+func writeSyncHeader(dst []byte, lba uint32) {
 	copy(dst[syncOffset:], syncPattern[:])
 
 	m, s, f := MSF(lba)
@@ -143,7 +245,12 @@ func writeHeader(dst []byte, lba uint32, sh Subheader) {
 	dst[headerOffset+1] = s
 	dst[headerOffset+2] = f
 	dst[headerOffset+3] = 2 // mode 2
+}
 
+// writeHeader fills in the sync pattern, address header and both copies of
+// the subheader.
+func writeHeader(dst []byte, lba uint32, sh Subheader) {
+	writeSyncHeader(dst, lba)
 	for _, off := range [2]int{subheaderOffset, subheaderOffset + 4} {
 		dst[off+0] = sh.File
 		dst[off+1] = sh.Channel

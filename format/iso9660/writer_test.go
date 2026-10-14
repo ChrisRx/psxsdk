@@ -11,13 +11,27 @@ import (
 // memWriter collects the emitted blocks so a test can read the image back.
 type memWriter struct {
 	blocks [][]byte
+	raw    map[uint32]bool
+	eof    map[uint32]bool
 }
 
-func (m *memWriter) WriteBlock(lba uint32, data []byte) error {
-	if int(lba) != len(m.blocks) {
+func (m *memWriter) WriteBlock(b Block) error {
+	if int(b.LBA) != len(m.blocks) {
 		return io.ErrUnexpectedEOF
 	}
-	m.blocks = append(m.blocks, bytes.Clone(data))
+	m.blocks = append(m.blocks, bytes.Clone(b.Data))
+	if b.Raw {
+		if m.raw == nil {
+			m.raw = map[uint32]bool{}
+		}
+		m.raw[b.LBA] = true
+	}
+	if b.EndOfFile {
+		if m.eof == nil {
+			m.eof = map[uint32]bool{}
+		}
+		m.eof[b.LBA] = true
+	}
 	return nil
 }
 
@@ -190,6 +204,68 @@ func TestFileContentsAndAddresses(t *testing.T) {
 	// A zero length file still has to be given a real address.
 	if byName["EMPTY.DAT;1"].LBA == 0 {
 		t.Error("empty file was not assigned an address")
+	}
+}
+
+// The run-out after the last file is what keeps a drive's read-ahead from
+// running off the end of the track, so it has to be real blocks in the image
+// and inside the volume rather than a number in a header.
+func TestPadding(t *testing.T) {
+	const padding = 150
+
+	root := &Dir{}
+	root.Entries = append(root.Entries, entry("main.exe", "hello"))
+
+	bare, err := NewWriter(root, Options{VolumeID: "TEST"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unpadded := bare.TotalBlocks()
+
+	w, err := NewWriter(root, Options{VolumeID: "TEST", Padding: padding})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := w.TotalBlocks(); got != unpadded+padding {
+		t.Errorf("padded image is %d blocks, want %d", got, unpadded+padding)
+	}
+
+	m := &memWriter{}
+	if err := w.WriteTo(m); err != nil {
+		t.Fatal(err)
+	}
+	if got := uint32(len(m.blocks)); got != unpadded+padding {
+		t.Fatalf("emitted %d blocks, want %d", got, unpadded+padding)
+	}
+
+	// The last file still ends where it did, and everything after it is
+	// empty.
+	last := root.Entries[0]
+	first := last.LBA + last.sectors()
+	for lba := first; lba < uint32(len(m.blocks)); lba++ {
+		if !bytes.Equal(m.blocks[lba], make([]byte, LogicalBlockSize)) {
+			t.Fatalf("block %d of the run-out is not empty", lba)
+		}
+		if m.eof[lba] {
+			t.Errorf("block %d of the run-out is marked as the end of a file", lba)
+		}
+	}
+
+	// A reader must see a volume that covers the padding, or its own bounds
+	// checks will disagree with the image it was given.
+	pvd := m.blocks[PVDSector]
+	if got := binary.LittleEndian.Uint32(pvd[80:]); got != w.TotalBlocks() {
+		t.Errorf("volume space size = %d, want %d", got, w.TotalBlocks())
+	}
+	r, err := NewReader(memReader{m})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Volume.Blocks != w.TotalBlocks() {
+		t.Errorf("read back %d blocks, want %d", r.Volume.Blocks, w.TotalBlocks())
+	}
+	if len(r.Root.Entries) != 1 {
+		t.Errorf("read %d files, want 1", len(r.Root.Entries))
 	}
 }
 

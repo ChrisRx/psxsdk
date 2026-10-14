@@ -6,15 +6,38 @@ import (
 	"time"
 )
 
-// A BlockWriter receives the 2048-byte logical blocks of the image, in
-// ascending order with no gaps.
+// A Block is one block of the image, with what a disc needs to know in order
+// to record it.
+type Block struct {
+	// LBA is the address of the block. Blocks are emitted in ascending
+	// order with no gaps.
+	LBA uint32
+
+	// Data is the contents: LogicalBlockSize bytes, or a whole
+	// RawSectorSize payload when Raw is set.
+	Data []byte
+
+	// Raw marks Data as a complete Mode 2 sector payload, subheader and
+	// error detection included, to be recorded as it stands rather than
+	// wrapped in a freshly encoded sector. See Entry.Raw.
+	Raw bool
+
+	// EndOfFile marks the last block of a file's contents or of a
+	// directory's records. A Mode 2 sector records this in its subheader,
+	// which is how a reader knows a file has ended without consulting the
+	// filesystem again.
+	EndOfFile bool
+}
+
+// A BlockWriter receives the blocks of the image in order.
 //
 // Keeping emission behind this interface is what lets the same filesystem be
 // written either as a plain .iso of 2048-byte blocks or as the raw 2352-byte
 // sectors a PlayStation disc actually uses, without the filesystem code
-// knowing which.
+// knowing which. A writer that cannot record raw sectors should reject a
+// Block with Raw set rather than write something approximate.
 type BlockWriter interface {
-	WriteBlock(lba uint32, data []byte) error
+	WriteBlock(Block) error
 }
 
 // Options configure the volume descriptor.
@@ -31,9 +54,38 @@ type Options struct {
 	Preparer    string
 	Application string
 
-	// Created is the volume timestamp. Leaving it zero produces a
-	// reproducible image.
+	// Created is the volume timestamp, and the timestamp recorded for every
+	// file unless FileTimes is set. Leaving it zero produces a reproducible
+	// image.
 	Created time.Time
+
+	// FileTimes records each file's own modification time in its directory
+	// record rather than Created. It is off by default because an image
+	// then depends on the mtimes of the tree it was built from, which
+	// differ between checkouts.
+	FileTimes bool
+
+	// OmitXA leaves out the CD-XA extension: the "CD-XA001" signature in
+	// the volume descriptor and the attribute block on every directory
+	// record. A PlayStation disc carries both, so this is only useful for
+	// producing something a plain ISO 9660 implementation can be compared
+	// against byte for byte.
+	OmitXA bool
+
+	// Padding is a run of empty blocks to leave after the last file, counted
+	// in the volume like any other block but reachable through no directory
+	// record.
+	//
+	// A drive does not stop at the sector it was asked for: it reads ahead,
+	// and the console's own CD code asks for whole sectors past the end of a
+	// file. When the last file ends at the last sector of the track there is
+	// nothing there to read, and the read fails rather than returning the
+	// data that was wanted. Pressed discs leave a run-out for this reason,
+	// which is what psxdisc.StandardPadding is.
+	//
+	// Zero writes no padding, which keeps an image as small as its contents
+	// and is fine for anything only ever read by an emulator.
+	Padding uint32
 
 	// SystemArea is written to the first 32KB. On a real PlayStation this
 	// is where the licence data goes; an emulator does not need it.
@@ -47,6 +99,11 @@ func (o *Options) defaults() {
 	if o.VolumeID == "" {
 		o.VolumeID = "UNTITLED"
 	}
+	// The volume identifier is a d-character field, so the same folding
+	// that applies to file names applies here. Doing it in the library
+	// keeps a stray lowercase letter or dot out of the descriptor whatever
+	// the caller passes.
+	o.VolumeID = NormalizeName(o.VolumeID)
 }
 
 // A Writer lays out and emits an ISO 9660 image.
@@ -55,6 +112,10 @@ type Writer struct {
 	opts Options
 
 	dirs []*Dir
+
+	// sysUse is the system use area appended to every directory record,
+	// which is the XA attribute block unless it was turned off.
+	sysUse uint32
 
 	lPathTableLBA uint32
 	mPathTableLBA uint32
@@ -71,9 +132,29 @@ func NewWriter(root *Dir, opts Options) (*Writer, error) {
 		return nil, fmt.Errorf("system area is %d bytes, more than the %d available",
 			len(opts.SystemArea), SystemAreaSectors*LogicalBlockSize)
 	}
+	if len(opts.VolumeID) > MaxVolumeIDLen {
+		return nil, fmt.Errorf("volume id %q is %d characters, more than the %d a volume identifier holds",
+			opts.VolumeID, len(opts.VolumeID), MaxVolumeIDLen)
+	}
 
 	w := &Writer{root: root, opts: opts}
+	if !opts.OmitXA {
+		w.sysUse = xaSysUseLen
+	}
 	w.dirs = root.walk()
+
+	// A raw file is a sequence of whole sectors, so a length that is not a
+	// multiple of one is not a short final sector but a sign that the file
+	// is not what it was taken for: an ordinary data file given a .XA name,
+	// or a stream truncated in transit.
+	for _, d := range w.dirs {
+		for _, e := range d.Entries {
+			if e.Raw && e.Size%RawSectorSize != 0 {
+				return nil, fmt.Errorf("%s: %d bytes is not a whole number of %d-byte Mode 2 sectors, so it is not a raw stream",
+					e.Name, e.Size, RawSectorSize)
+			}
+		}
+	}
 
 	// The volume descriptors occupy the two sectors after the system area,
 	// then the path tables, then directory records, then file data. Nothing
@@ -89,18 +170,21 @@ func NewWriter(root *Dir, opts Options) (*Writer, error) {
 	lba += ptBlocks
 
 	for _, d := range w.dirs {
-		d.Size = d.contentSize()
+		// A directory's recorded length is a whole number of logical
+		// blocks, unlike a file's. The records themselves stop short of
+		// that and the rest is zeroed, which is the same padding a reader
+		// already has to step over inside the extent.
+		d.Size = blocks(d.contentSize(w.sysUse)) * LogicalBlockSize
 		d.LBA = lba
 		lba += blocks(d.Size)
 	}
 	for _, d := range w.dirs {
 		for _, e := range d.Entries {
 			e.LBA = lba
-			// A zero length file still occupies a block, so that its
-			// recorded address points at something real.
-			lba += max(blocks(e.Size), 1)
+			lba += e.sectors()
 		}
 	}
+	lba += opts.Padding
 
 	w.totalBlocks = lba
 	return w, nil
@@ -109,13 +193,23 @@ func NewWriter(root *Dir, opts Options) (*Writer, error) {
 // TotalBlocks is the size of the image in logical blocks.
 func (w *Writer) TotalBlocks() uint32 { return w.totalBlocks }
 
+// recordTime is the timestamp to record for a file or directory. A
+// modification time is only honoured when the caller asked for it, so the
+// default image depends on nothing but the tree's contents.
+func (w *Writer) recordTime(mod time.Time) time.Time {
+	if w.opts.FileTimes && !mod.IsZero() {
+		return mod
+	}
+	return w.opts.Created
+}
+
 // WriteTo emits the image, one logical block at a time and in order.
 func (w *Writer) WriteTo(bw BlockWriter) error {
 	block := make([]byte, LogicalBlockSize)
 	lba := uint32(0)
 
-	emit := func(data []byte) error {
-		if err := bw.WriteBlock(lba, data); err != nil {
+	emit := func(data []byte, endOfFile bool) error {
+		if err := bw.WriteBlock(Block{LBA: lba, Data: data, EndOfFile: endOfFile}); err != nil {
 			return fmt.Errorf("writing block %d: %w", lba, err)
 		}
 		lba++
@@ -128,14 +222,14 @@ func (w *Writer) WriteTo(bw BlockWriter) error {
 		if off := int(lba) * LogicalBlockSize; off < len(w.opts.SystemArea) {
 			copy(block, w.opts.SystemArea[off:])
 		}
-		if err := emit(block); err != nil {
+		if err := emit(block, false); err != nil {
 			return err
 		}
 	}
 
 	clear(block)
 	w.writePVD(block)
-	if err := emit(block); err != nil {
+	if err := emit(block, false); err != nil {
 		return err
 	}
 
@@ -143,7 +237,7 @@ func (w *Writer) WriteTo(bw BlockWriter) error {
 	block[0] = volumeDescriptorTerminator
 	copy(block[1:], "CD001")
 	block[6] = 1
-	if err := emit(block); err != nil {
+	if err := emit(block, false); err != nil {
 		return err
 	}
 
@@ -153,19 +247,24 @@ func (w *Writer) WriteTo(bw BlockWriter) error {
 			clear(block)
 			n := copy(block, table)
 			table = table[n:]
-			if err := emit(block); err != nil {
+			// The volume descriptors and the path tables are structure
+			// rather than files, and have no directory record to be the end
+			// of, so they go unmarked.
+			if err := emit(block, false); err != nil {
 				return err
 			}
 		}
 	}
 
+	// A directory's records are a file as far as the disc is concerned, so
+	// its last block is marked as the end of one.
 	for _, d := range w.dirs {
 		records := w.dirRecords(d)
 		for len(records) > 0 {
 			clear(block)
 			n := copy(block, records)
 			records = records[n:]
-			if err := emit(block); err != nil {
+			if err := emit(block, len(records) == 0); err != nil {
 				return err
 			}
 		}
@@ -176,6 +275,14 @@ func (w *Writer) WriteTo(bw BlockWriter) error {
 			if err := w.writeFile(bw, &lba, e); err != nil {
 				return err
 			}
+		}
+	}
+
+	// The run-out. These belong to no file, so they are not the end of one.
+	for range w.opts.Padding {
+		clear(block)
+		if err := emit(block, false); err != nil {
+			return err
 		}
 	}
 
@@ -192,15 +299,29 @@ func (w *Writer) writeFile(bw BlockWriter, lba *uint32, e *Entry) error {
 	}
 	defer rc.Close()
 
-	block := make([]byte, LogicalBlockSize)
-	remaining := max(blocks(e.Size), 1)
-	for range remaining {
+	// A raw file's contents are already sectors, so they are passed through
+	// a sector at a time. Everything else is a byte stream packed into
+	// logical blocks, with the last one zero padded.
+	unit := uint32(LogicalBlockSize)
+	if e.Raw {
+		unit = RawSectorSize
+	}
+
+	block := make([]byte, unit)
+	total := e.sectors()
+	for i := range total {
 		clear(block)
 		if _, err := io.ReadFull(rc, block); err != nil &&
 			err != io.EOF && err != io.ErrUnexpectedEOF {
 			return fmt.Errorf("reading %s: %w", e.Name, err)
 		}
-		if err := bw.WriteBlock(*lba, block); err != nil {
+		b := Block{
+			LBA:       *lba,
+			Data:      block,
+			Raw:       e.Raw,
+			EndOfFile: i == total-1,
+		}
+		if err := bw.WriteBlock(b); err != nil {
 			return fmt.Errorf("writing %s at block %d: %w", e.Name, *lba, err)
 		}
 		*lba++
@@ -226,8 +347,16 @@ func (w *Writer) writePVD(b []byte) {
 	putBE32(b[148:], w.mPathTableLBA)
 	putBE32(b[152:], 0) // no optional M path table
 
-	// The root directory record is stored inline rather than referenced.
-	writeDirRecord(b[156:190], "\x00", w.root.LBA, w.root.Size, true, w.opts.Created)
+	// The root directory record is stored inline rather than referenced, in
+	// a fixed 34-byte field. There is no room for a system use area, so the
+	// XA block goes only on the records in the directories themselves.
+	writeDirRecord(b[156:190], record{
+		id:    "\x00",
+		lba:   w.root.LBA,
+		size:  w.root.Size,
+		isDir: true,
+		mod:   w.recordTime(w.root.Modified),
+	})
 
 	padString(b[190:318], "")
 	padString(b[318:446], w.opts.Publisher)
@@ -243,6 +372,12 @@ func (w *Writer) writePVD(b []byte) {
 	putDecDateTime(b[864:881], w.opts.Created)
 
 	b[881] = 1 // file structure version
+
+	// The application use area is otherwise unused, and an XA disc puts its
+	// signature in the middle of it.
+	if !w.opts.OmitXA {
+		copy(b[xaSignatureOffset:], "CD-XA001")
+	}
 }
 
 // pathTable renders the flat directory index, in either byte order.
@@ -283,12 +418,14 @@ func (w *Writer) dirRecords(d *Dir) []byte {
 
 	// A record may not cross a block boundary; skip to the next one rather
 	// than split it. contentSize accounts for the same padding.
-	put := func(id string, lba, size uint32, isDir bool) {
-		n := recordLen(len(id))
+	put := func(r record) {
+		r.sysUse = w.sysUse
+		r.mod = w.recordTime(r.mod)
+		n := recordLen(len(r.id), r.sysUse)
 		if off%LogicalBlockSize+n > LogicalBlockSize {
 			off += LogicalBlockSize - off%LogicalBlockSize
 		}
-		writeDirRecord(out[off:], id, lba, size, isDir, w.opts.Created)
+		writeDirRecord(out[off:], r)
 		off += n
 	}
 
@@ -296,13 +433,14 @@ func (w *Writer) dirRecords(d *Dir) []byte {
 	if parent == nil {
 		parent = d
 	}
-	put("\x00", d.LBA, d.Size, true)           // "."
-	put("\x01", parent.LBA, parent.Size, true) // ".."
+	// "." and ".."
+	put(record{id: "\x00", lba: d.LBA, size: d.Size, isDir: true, mod: d.Modified})
+	put(record{id: "\x01", lba: parent.LBA, size: parent.Size, isDir: true, mod: parent.Modified})
 	for _, sub := range d.Dirs {
-		put(sub.Name, sub.LBA, sub.Size, true)
+		put(record{id: sub.Name, lba: sub.LBA, size: sub.Size, isDir: true, mod: sub.Modified})
 	}
 	for _, e := range d.Entries {
-		put(e.Name, e.LBA, e.Size, false)
+		put(record{id: e.Name, lba: e.LBA, size: e.recordedSize(), raw: e.Raw, mod: e.Modified})
 	}
 	return out
 }
