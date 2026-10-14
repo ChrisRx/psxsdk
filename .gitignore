@@ -18,3 +18,5 @@ vendor/
 
 # ignore Go testing fixtures
 testdata
+
+.direnv/

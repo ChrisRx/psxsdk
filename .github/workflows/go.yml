@@ -1,0 +1,25 @@
+name: Build/Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  repository_dispatch:
+    types: [trigger-workflow]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Nix
+      uses: cachix/install-nix-action@v31
+
+    - name: Cache Nix store
+      uses: DeterminateSystems/magic-nix-cache-action@v8
+
+    - name: Test
+      run: nix develop .#ci --command task test

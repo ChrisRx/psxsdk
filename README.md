@@ -9,6 +9,10 @@ psxsdk is a collection of tools and libraries for Playstation 1 development.
 - [Getting started](#getting-started)
 - [What's included](#whats-included)
   - [eco2exe](#eco2exe)
+  - [elf2exe](#elf2exe)
+  - [mkpsxiso](#mkpsxiso)
+  - [hdr2go](#hdr2go)
+  - [mips1fix](#mips1fix)
   - [objdump](#objdump)
   - [sioload](#sioload)
 - [Reference](#reference)
@@ -28,7 +32,7 @@ With this said, some of the major goals of this project:
 
 ## Getting started
 
-There are pre-built binaries available for linux, macOS, and Windows that can be found [here](https://github.com/ChrisRx/psxsdk/releases/latest). Building from source is incredibly easy with Go and the only requirement for building is [Go 1.13](https://golang.org/dl/#stable) (or higher).
+There are pre-built binaries available for linux, macOS, and Windows that can be found [here](https://github.com/ChrisRx/psxsdk/releases/latest). Building from source is incredibly easy with Go and the only requirement for building is [Go 1.27](https://golang.org/dl/#stable) (or higher).
 
 First, download and build all of the psxsdk example binaries:
 
@@ -77,6 +81,129 @@ and this will create a working PSX-EXE executable.
 
 
 *Note: The Net Yaroze development library itself is relatively small, so it has been embedded in the `eco2exe` binary, meaning it doesn't need to be provided by the user!*
+
+#### elf2exe
+
+`elf2exe` writes a linked program out as a PSX-EXE, for a program that is the
+whole of the machine rather than a Net Yaroze one.
+
+It is the plain conversion: the loadable image and the entry point go into the
+2048-byte header and nothing is added. `eco2exe` exists because a Net Yaroze
+program is only half a program, and has to be combined with the library the
+boot disc leaves resident in RAM; a program that brings its own crt0 and
+drives the hardware itself needs none of that.
+
+```bash
+$ bin/elf2exe prog.elf MAIN.EXE
+created "MAIN.EXE": load=0x80010000 entry=0x80010000 8192 bytes, d00f145ee4fd44f1
+```
+
+The input may be ELF or ECOFF, since only the loadable segments and the entry
+point are read. `--stack-addr` sets the stack pointer the BIOS installs before
+jumping to the entry point, which matters only for a program whose crt0 does
+not set its own.
+
+#### mkpsxiso
+
+`mkpsxiso` builds a PlayStation disc image from a directory. A disc is a `.bin` of raw 2352-byte CD-ROM XA Mode 2 sectors plus a `.cue` naming its tracks, not a plain `.iso`, because the format also has to carry CD audio and streamed XA that will not fit in 2048-byte blocks.
+
+The common case is an executable plus the data it loads, so the directory *is* the interface and no layout file is involved:
+
+```bash
+$ bin/mkpsxiso -o game.bin --boot MAIN.EXE --volume-id MYGAME ./disc
+created "game.bin": 639 blocks, "game.cue"
+```
+
+The tree is placed on the disc as it appears on disk. Names are folded to the restricted uppercase set ISO 9660 allows and given the `;1` version suffix that PlayStation programs use when opening files, so `data/sound/sample1.seq` becomes `\DATA\SOUND\SAMPLE1.SEQ;1`. `--boot` writes a `SYSTEM.CNF` naming the executable, unless the tree already has one. `-v` lists what was placed where:
+
+```
+  \MAIN.EXE;1                                1251328 bytes  LBA 23
+  \SYSTEM.CNF;1                                   53 bytes  LBA 634
+  \DATA                                        <dir>        LBA 21
+  \DATA\SOUND\SAMPLE1.SEQ;1                     5000 bytes  LBA 636
+```
+
+`--iso` writes plain 2048-byte blocks instead. That cannot represent audio or Form 2 tracks, but ordinary ISO 9660 tools can read it, which is how the filesystem is checked against an independent implementation:
+
+```bash
+$ bin/mkpsxiso --iso -o test.iso ./disc
+$ xorriso -indev test.iso -find /
+```
+
+Every image carries the 64-byte string that identifies it as a PlayStation disc, written into the system area at sector 4. This is format identification: without it mednafen cannot tell the image from any other CD-XA disc and rejects it outright with *"Could not find a system that supports this CD"*. It is not a protection bypass, and could not be — an unmodified console decides whether to boot from the wobble encoded in a pressed disc's lead-in groove, a physical property no file can reproduce.
+
+Booting on real hardware additionally wants Sony's licence data, which holds the logo shown at startup. That cannot be redistributed, so supply your own copy with `--license`; it replaces the whole system area.
+
+#### hdr2go
+
+`hdr2go` generates Go bindings from a C header. It was written to bind the Net
+Yaroze library for TinyGo, where the alternative was 166 functions and 30
+structs transcribed by hand.
+
+Transcription is not safe here. Every struct has to match the C layout byte
+for byte, because the library reads and writes them directly, and a field at
+the wrong offset does not fail to compile. It draws nothing. So rather than
+read the header, `hdr2go` asks the compiler that will build the code, twice:
+
+```bash
+clang -target mipsel-none-elf -march=mips1 -msoft-float -std=gnu89 -fsyntax-only \
+    -Xclang -ast-dump=json                  hdr.c   # structure and types
+clang ... -Xclang -fdump-record-layouts-complete hdr.c  # offsets and sizes
+
+$ bin/hdr2go --layouts layouts.txt --header libps.h --package libps \
+    --out libps/zz_generated.go < ast.json
+30 structs, 2 aliases, 166 functions (named=31 known=33 sizes=35)
+```
+
+Padding the C compiler inserted implicitly is written out explicitly, and
+each struct's size is asserted against clang's number:
+
+```go
+var _ [unsafe.Sizeof(GsSPRITE{}) - 36]byte
+var _ [36 - unsafe.Sizeof(GsSPRITE{})]byte
+```
+
+An array cannot have negative length, so the pair fails to compile unless the
+size is exactly right. This is deliberately not a test: a host toolchain will
+not compile the bodyless function declarations, and a bare-metal target has
+nowhere to run one, so an assertion inside the generated file is the only
+check that runs during the build that matters.
+
+Names stay as the header spells them, so the library's documentation reads
+across directly. The one departure is that a C name beginning with a
+lowercase letter is capitalised, since Go would otherwise put it out of reach
+of every other package; `//export` carries the real symbol either way.
+
+Anything the type mapping does not recognise is reported rather than guessed
+at, and the report names what has to be bound by hand:
+
+```
+1 declarations with unmapped types, skipped:
+  GsOT_TAG: uses bitfields, bind by hand
+8 unprototyped or variadic, bind by hand:
+  FntPrint int ()
+  ...
+```
+
+An empty parameter list is the common case there. In this vintage of C it
+means "unspecified", not "none", so generating a zero-argument binding would
+produce something that compiles and then passes nothing.
+
+#### mips1fix
+
+`mips1fix` rewrites MIPS II trap instructions as nops so that an object built by LLVM for `mips1` will run on a PlayStation.
+
+LLVM emits a `teq` after every integer division to catch division by zero. That instruction arrived with MIPS II; a MIPS I core takes a reserved instruction exception instead, and the program stops with no indication of why. GCC does not have the problem, branching around a `break` instead.
+
+```bash
+$ bin/mips1fix prog.o
+  .text+0x1c50: teq (0x00a001f4) -> nop
+  patched 1 trap instruction(s)
+```
+
+A trap and a nop are the same width, so nothing moves and no relocation or symbol needs adjusting. Clang suppresses these with `-mno-check-zero-division`, but that is an LLVM backend option rather than a target feature and so cannot be reached through TinyGo. Either way, integer division by zero becomes undefined rather than trapping.
+
+`-n` reports without writing.
 
 #### objdump
 
@@ -164,10 +291,8 @@ I am pleased to report that it has been working very consistently (so far) and f
 
 - [x] ECOFF to PSX-EXE converter (eco2exe)
 - [x] Net Yaroze executable serial loader (sioload)
-- [ ] PSX ISO builder
+- [x] PSX ISO builder (mkpsxiso)
 - [ ] Document code and add godoc badge to README.md
 - [ ] Tests for all packages
-- [ ] Split library code into separate repo/Go module
-- [ ] Setup drone.io and goreleaser (publish binaries to GitHub Releases)
 - [ ] Include collected PDFs and other Net Yaroze documents in repo
 - [ ] Add initial references/links
