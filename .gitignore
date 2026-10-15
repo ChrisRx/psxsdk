@@ -20,3 +20,6 @@ vendor/
 testdata
 
 .direnv/
+
+# Discs built for the emulator tests (task test:emu)
+.build/

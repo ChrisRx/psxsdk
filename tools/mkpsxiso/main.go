@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	"go.chrisrx.dev/psx/format/iso9660"
 	"go.chrisrx.dev/psx/format/psxdisc"
+	"go.chrisrx.dev/psx/internal/flags"
 )
 
 var opts struct {
@@ -26,6 +27,7 @@ var opts struct {
 	Date        string
 	FileTimes   bool
 	Boot        string
+	Stack       flags.Address
 	License     string
 	Padding     uint32
 	Audio       []string
@@ -101,6 +103,11 @@ whole 2336-byte Mode 2 sectors with their subheaders already in place, and are
 written through untouched rather than packed into logical blocks. --raw adds
 patterns to that set and --no-raw empties it.
 
+--boot writes a SYSTEM.CNF naming the executable to start, unless the tree
+already has one. Its stack starts at 801FF000 rather than the customary
+801FFFF0, which leaves the BIOS the frame it needs for a program that returns
+from main; --stack changes it.
+
 --audio appends a CD audio track, which a program plays by its track number
 rather than opening as a file. The two second pause the standard requires
 between the data track and the audio is inserted automatically.
@@ -128,6 +135,8 @@ audio or streamed tracks but can be read by ordinary ISO 9660 tools.`,
 	f.StringVar(&opts.Date, "date", "", `volume date, as a timestamp or "now"; unset records no date, which keeps the image reproducible`)
 	f.BoolVar(&opts.FileTimes, "file-times", false, "record each file's modification time instead of the volume date")
 	f.StringVar(&opts.Boot, "boot", "", "executable to boot, written into a generated SYSTEM.CNF")
+	opts.Stack = defaultStack
+	f.Var(&opts.Stack, "stack", "initial stack pointer written into a generated SYSTEM.CNF; values above the default grow over the BIOS's frame, which breaks returning from main")
 	f.StringVar(&opts.License, "license", "", "licence data for the first 32KB, needed only by unmodified hardware")
 	f.Uint32Var(&opts.Padding, "padding", psxdisc.StandardPadding, "empty sectors to leave after the last file, so that reading it does not run into the lead-out; 0 for none")
 	f.StringArrayVar(&opts.Audio, "audio", nil, "WAV or raw 44.1kHz 16-bit stereo file to record as a CD audio track; may be repeated")
@@ -143,24 +152,57 @@ audio or streamed tracks but can be read by ordinary ISO 9660 tools.`,
 }
 
 // systemCNF is the boot configuration the console reads before loading
-// anything. BOOT names the executable; the remaining values are the defaults
-// every PlayStation title uses.
-// bootName is already a full identifier including its ";1" version suffix.
+// anything. BOOT names the executable; TCB and EVENT are the defaults every
+// PlayStation title uses.
+//
+// STACK is not, and --stack sets it. Titles conventionally use 801FFFF0, but
+// the BIOS that calls the executable keeps its own frame, with the registers
+// it restores when the executable returns, at the top of RAM. A stack starting
+// at 801FFFF0 grows straight over it, so a program that returns from main
+// comes back to an address it wrote there itself. Commercial titles never
+// return, so they never notice; a Net Yaroze program's crt0 does. Starting at
+// 801FF000 leaves the BIOS its frame, and a returning program ends at the
+// BIOS's "End of Main".
 const systemCNFTemplate = `BOOT=cdrom:\%s
 TCB=4
 EVENT=10
-STACK=801FFFF0
+STACK=%08X
 `
 
-// addSystemCNF synthesises a SYSTEM.CNF naming the boot executable, unless
-// the source tree already provides one.
-func addSystemCNF(root *iso9660.Dir, bootName string) {
+// defaultStack is the STACK written when --stack is not given.
+const defaultStack = 0x801ff000
+
+// checkStack rejects a stack pointer the program could not run with: one
+// outside the 2MB of main RAM, as the cached KSEG0 addresses programs use, or
+// one not aligned to the 8 bytes the MIPS calling convention requires.
+func checkStack(sp uint32) error {
+	if sp <= 0x80000000 || sp > 0x80200000 {
+		return fmt.Errorf("stack %#08x is outside main RAM (0x80000000 to 0x80200000)", sp)
+	}
+	if sp%8 != 0 {
+		return fmt.Errorf("stack %#08x is not 8-byte aligned", sp)
+	}
+	return nil
+}
+
+// systemCNF returns the contents of a SYSTEM.CNF booting bootName, which is
+// already a full identifier including its ";1" version suffix.
+func systemCNF(bootName string, stack uint32) []byte {
+	return fmt.Appendf(nil, systemCNFTemplate, strings.ToUpper(bootName), stack)
+}
+
+// hasSystemCNF reports whether the source tree provides its own SYSTEM.CNF.
+func hasSystemCNF(root *iso9660.Dir) bool {
 	for _, e := range root.Entries {
 		if e.Name == "SYSTEM.CNF;1" {
-			return
+			return true
 		}
 	}
-	content := fmt.Appendf(nil, systemCNFTemplate, strings.ToUpper(bootName))
+	return false
+}
+
+// addSystemCNF adds a generated SYSTEM.CNF to the root of the tree.
+func addSystemCNF(root *iso9660.Dir, content []byte) {
 	root.Entries = append(root.Entries, &iso9660.Entry{
 		Name: "SYSTEM.CNF;1",
 		Size: uint32(len(content)),
@@ -198,8 +240,24 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if opts.Boot != "" {
-		addSystemCNF(root, iso9660.FileIdentifier(filepath.Base(opts.Boot)))
+	// --stack only means something in a SYSTEM.CNF this command writes, so
+	// asking for it where none is written is a mistake worth stopping on,
+	// rather than an image that silently boots with some other stack.
+	stackSet := cmd.Flags().Changed("stack")
+	if err := checkStack(uint32(opts.Stack)); err != nil {
+		return err
+	}
+	switch {
+	case opts.Boot == "":
+		if stackSet {
+			return fmt.Errorf("--stack is written into the SYSTEM.CNF generated for --boot, and no --boot was given")
+		}
+	case hasSystemCNF(root):
+		if stackSet {
+			return fmt.Errorf("%s provides its own SYSTEM.CNF, which is used as is, so --stack would have no effect; set STACK there instead", args[0])
+		}
+	default:
+		addSystemCNF(root, systemCNF(iso9660.FileIdentifier(filepath.Base(opts.Boot)), uint32(opts.Stack)))
 	}
 
 	created, err := parseDate(opts.Date)

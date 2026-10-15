@@ -1,0 +1,5 @@
+[
+  {"name": "check", "cue": "examples/check/check.cue"},
+  {"name": "chrome", "cue": "examples/chrome/chrome.cue"},
+  {"name": "clone", "cue": "examples/clone/clone.cue"}
+]

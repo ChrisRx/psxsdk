@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>psxsdk examples</title>
+  <meta name="description" content="Play the psxsdk example programs in an emulator written in Go, compiled to WebAssembly.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>psxsdk examples</h1>
+    <p>PlayStation programs written in Go with <a href="https://github.com/ChrisRx/psxsdk">psxsdk</a>, running in an emulator that is also written in Go, compiled to WebAssembly.</p>
+  </header>
+
+  <main>
+    <nav aria-label="Examples">
+      <h2>Examples</h2>
+      <ul id="examples"><li class="muted">Loading…</li></ul>
+    </nav>
+
+    <section class="player">
+      <div class="screen">
+        <canvas id="screen" width="320" height="240" aria-label="Emulator display"></canvas>
+        <div id="overlay" class="overlay">Pick an example to start it.</div>
+      </div>
+      <div class="bar">
+        <button id="pause" type="button" disabled>Pause</button>
+        <button id="reset" type="button" disabled>Reset</button>
+        <button id="sound" type="button" aria-pressed="true">Sound on</button>
+        <span id="status" class="status" aria-live="polite"></span>
+      </div>
+
+      <details class="panel">
+        <summary>Controls</summary>
+        <table class="keys">
+          <tr><th>D-pad</th><td>Arrow keys</td></tr>
+          <tr><th>Cross, Circle</th><td>Z, X</td></tr>
+          <tr><th>Square, Triangle</th><td>A, S</td></tr>
+          <tr><th>L1, R1</th><td>Q, W</td></tr>
+          <tr><th>L2, R2</th><td>1, 2</td></tr>
+          <tr><th>Start, Select</th><td>Enter, Backspace</td></tr>
+        </table>
+        <p class="muted">A gamepad works too, with the standard layout.</p>
+      </details>
+
+      <details class="panel">
+        <summary>BIOS</summary>
+        <p>The examples boot with the <a href="https://github.com/pcsx-redux/nugget/tree/main/openbios">OpenBIOS</a> from PCSX-Redux (<a href="OPENBIOS-LICENSE.txt">MIT license</a>). You can use your own BIOS image instead. It stays in this browser.</p>
+        <p><span id="bios-name">Using OpenBIOS.</span></p>
+        <p>
+          <label class="file">Choose a BIOS image… <input id="bios-file" type="file"></label>
+          <button id="bios-clear" type="button" hidden>Use OpenBIOS</button>
+        </p>
+      </details>
+
+      <details class="panel">
+        <summary>Console</summary>
+        <pre id="tty" class="tty"></pre>
+      </details>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

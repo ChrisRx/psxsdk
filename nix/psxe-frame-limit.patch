@@ -1,0 +1,55 @@
+diff --git a/frontend/screen.c b/frontend/screen.c
+index 6547c20..63b0153 100644
+--- a/frontend/screen.c
++++ b/frontend/screen.c
+@@ -525,10 +525,49 @@ void psxe_gpu_dmode_event_cb(psx_gpu_t* gpu) {
+     SDL_SetWindowSize(screen->window, screen->width, screen->height);
+ }
+ 
++// The emulated frame is 263 lines of 3413 GPU cycles (see gpu.c), about
++// 59.82 Hz. Frames used to be paced only by presenting with vsync, which
++// ties emulation speed to the host display: on a 120 Hz panel everything
++// driven by VBLANK, such as a sequencer, ran twice as fast while the SPU,
++// pulled by the audio callback, kept real time. Presenting still waits for
++// vsync, so there is no tearing, but each frame then also waits for its own
++// deadline, which holds the emulated rate whatever the display runs at.
++// Falling more than a few frames behind drops the debt rather than racing
++// to catch up.
++#define PSXE_FRAME_SECONDS ((263.0 * 3413.0) / (PSX_GPU_CLOCK_FREQ_NTSC * 1000000.0))
++
++static void psxe_screen_limit_frame(void) {
++    static Uint64 deadline = 0;
++
++    Uint64 freq = SDL_GetPerformanceFrequency();
++    Uint64 period = (Uint64)(PSXE_FRAME_SECONDS * (double)freq);
++    Uint64 now = SDL_GetPerformanceCounter();
++
++    if (!deadline || (now > deadline + (period * 4))) {
++        deadline = now + period;
++
++        return;
++    }
++
++    if (now < deadline) {
++        Uint64 remaining_ms = ((deadline - now) * 1000) / freq;
++
++        // SDL_Delay oversleeps by up to a scheduler tick, so it covers
++        // all but the last 2ms and the rest is spun.
++        if (remaining_ms > 2)
++            SDL_Delay((Uint32)(remaining_ms - 2));
++
++        while (SDL_GetPerformanceCounter() < deadline);
++    }
++
++    deadline += period;
++}
++
+ void psxe_gpu_vblank_event_cb(psx_gpu_t* gpu) {
+     psxe_screen_t* screen = gpu->udata[0];
+ 
+     psxe_screen_update(screen);
++    psxe_screen_limit_frame();
+ 
+     psxe_gpu_vblank_timer_event_cb(gpu);
+ }
+\ No newline at end of file

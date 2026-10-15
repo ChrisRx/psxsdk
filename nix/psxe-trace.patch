@@ -1,0 +1,349 @@
+diff --git a/frontend/main.c b/frontend/main.c
+index 4c2de72..3152759 100644
+--- a/frontend/main.c
++++ b/frontend/main.c
+@@ -2,6 +2,7 @@
+ #include "../psx/input/sda.h"
+ #include "../psx/input/guncon.h"
+ #include "../psx/dev/cdrom/cdrom.h"
++#include "../psx/trace.h"
+ 
+ #include "screen.h"
+ #include "config.h"
+@@ -14,6 +15,12 @@ void audio_update(void* ud, uint8_t* buf, int size) {
+ 
+     memset(buf, 0, size);
+ 
++    // While tracing, the emulation drives the SPU (see psx/trace.h), and
++    // CD audio is not pulled from the drive either, since that too would
++    // change emulated state from this thread.
++    if (psx_trace_enabled)
++        return;
++
+     psx_cdrom_get_audio_samples(cdrom, buf, size);
+     psx_spu_update_cdda_buffer(spu, cdrom->cdda_buf);
+ 
+diff --git a/psx/cpu.c b/psx/cpu.c
+index e041d24..7d2ff79 100644
+--- a/psx/cpu.c
++++ b/psx/cpu.c
+@@ -6,6 +6,7 @@
+ #include <string.h>
+ 
+ #include "cpu_debug.h"
++#include "trace.h"
+ 
+ static const uint32_t g_psx_cpu_cop0_write_mask_table[] = {
+     0x00000000, // cop0r0   - N/A
+@@ -205,6 +206,8 @@ static inline int psx_cpu_check_irq(psx_cpu_t* cpu) {
+ }
+ 
+ static inline void psx_cpu_exception(psx_cpu_t* cpu, uint32_t cause) {
++    psx_trace_excode = cause >> 2;
++
+     // Set excode and clear 3 LSBs
+     cpu->cop0_r[COP0_CAUSE] &= 0xffffff80;
+     cpu->cop0_r[COP0_CAUSE] |= cause;
+diff --git a/psx/psx.c b/psx/psx.c
+index 6902b99..42897f8 100644
+--- a/psx/psx.c
++++ b/psx/psx.c
+@@ -1,4 +1,5 @@
+ #include "psx.h"
++#include "trace.h"
+ 
+ psx_t* psx_create(void) {
+     return (psx_t*)malloc(sizeof(psx_t));
+@@ -25,13 +26,22 @@ void psx_load_exe(psx_t* psx, const char* path) {
+ }
+ 
+ void psx_update(psx_t* psx) {
+-    psx_cpu_cycle(psx->cpu);
++    if (psx_trace_enabled) {
++        psx_trace_before(psx->cpu);
++        psx_cpu_cycle(psx->cpu);
++        psx_trace_after(psx->cpu);
++    } else {
++        psx_cpu_cycle(psx->cpu);
++    }
+ 
+     psx_cdrom_update(psx->cdrom, psx->cpu->last_cycles);
+     psx_gpu_update(psx->gpu, psx->cpu->last_cycles);
+     psx_pad_update(psx->pad, psx->cpu->last_cycles);
+     psx_timer_update(psx->timer, psx->cpu->last_cycles);
+     psx_dma_update(psx->dma, psx->cpu->last_cycles);
++
++    if (psx_trace_enabled)
++        psx_trace_spu(psx->spu, psx->cpu->last_cycles);
+ }
+ 
+ void psx_run_frame(psx_t* psx) {
+@@ -116,6 +126,8 @@ void atcons_tx(void* udata, unsigned char c) {
+ int psx_init(psx_t* psx, const char* bios_path, const char* exp_path) {
+     memset(psx, 0, sizeof(psx_t));
+ 
++    psx_trace_init();
++
+     psx->bios = psx_bios_create();
+     psx->ram = psx_ram_create();
+     psx->dma = psx_dma_create();
+@@ -172,7 +184,9 @@ int psx_init(psx_t* psx, const char* bios_path, const char* exp_path) {
+     psx_exp2_init(psx->exp2, atcons_tx, NULL);
+     psx_ic_init(psx->ic, psx->cpu);
+     psx_scratchpad_init(psx->scratchpad);
+-    psx_gpu_init(psx->gpu, psx->ic);
++    psx_gpu_init(psx->gpu, psx->ic);
++    psx_trace_set_vram(psx->gpu->vram);
++    psx_trace_set_ram(psx->ram->buf, psx->ram->size);
+     psx_spu_init(psx->spu, psx->ic);
+     psx_timer_init(psx->timer, psx->ic, psx->gpu);
+     psx_cdrom_init(psx->cdrom, psx->ic);
+diff --git a/psx/trace.c b/psx/trace.c
+new file mode 100644
+index 0000000..5f86bd5
+--- /dev/null
++++ b/psx/trace.c
+@@ -0,0 +1,182 @@
++#include "trace.h"
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <stdint.h>
++#include <string.h>
++
++#define TRACE_REGS 37
++
++int psx_trace_enabled = 0;
++int psx_trace_excode = 0xff;
++
++static FILE* trace_file;
++static unsigned long long trace_skip;
++static unsigned long long trace_count;
++static uint32_t trace_prev[TRACE_REGS];
++static uint32_t trace_spu_cycles;
++static uint16_t* trace_vram;
++static uint8_t* trace_ram;
++static size_t trace_ram_size;
++
++void psx_trace_set_vram(uint16_t* vram) {
++    trace_vram = vram;
++}
++
++void psx_trace_set_ram(uint8_t* ram, size_t size) {
++    trace_ram = ram;
++    trace_ram_size = size;
++}
++
++static void trace_dump_ram(void) {
++    const char* path = getenv("PSXE_TRACE_RAM");
++
++    if (!path || !*path || !trace_ram)
++        return;
++
++    FILE* f = fopen(path, "wb");
++
++    if (!f) {
++        perror(path);
++
++        return;
++    }
++
++    fwrite(trace_ram, 1, trace_ram_size, f);
++    fclose(f);
++}
++
++static void trace_dump_vram(void) {
++    const char* path = getenv("PSXE_TRACE_VRAM");
++
++    if (!path || !*path || !trace_vram)
++        return;
++
++    FILE* f = fopen(path, "wb");
++
++    if (!f) {
++        perror(path);
++
++        return;
++    }
++
++    for (int i = 0; i < 1024 * 512; i++) {
++        uint8_t b[2] = { trace_vram[i], trace_vram[i] >> 8 };
++
++        fwrite(b, 1, 2, f);
++    }
++
++    fclose(f);
++}
++
++// 33868800 Hz CPU / 44100 Hz audio
++#define TRACE_SPU_CYCLES 768
++
++static void trace_snapshot(psx_cpu_t* cpu, uint32_t* regs) {
++    memcpy(regs, cpu->r, 32 * sizeof(uint32_t));
++
++    regs[32] = cpu->hi;
++    regs[33] = cpu->lo;
++    regs[34] = cpu->cop0_r[COP0_SR];
++    regs[35] = cpu->cop0_r[COP0_CAUSE];
++    regs[36] = cpu->cop0_r[COP0_EPC];
++}
++
++static void trace_u32(uint32_t v) {
++    uint8_t b[4] = { v, v >> 8, v >> 16, v >> 24 };
++
++    fwrite(b, 1, 4, trace_file);
++}
++
++static unsigned long long trace_env(const char* name, unsigned long long def) {
++    const char* s = getenv(name);
++
++    return s ? strtoull(s, NULL, 0) : def;
++}
++
++void psx_trace_init(void) {
++    const char* path = getenv("PSXE_TRACE");
++
++    if (!path || !*path)
++        return;
++
++    trace_file = fopen(path, "wb");
++
++    if (!trace_file) {
++        perror(path);
++
++        exit(1);
++    }
++
++    setvbuf(trace_file, NULL, _IOFBF, 1 << 20);
++
++    trace_skip = trace_env("PSXE_TRACE_SKIP", 0);
++    trace_count = trace_env("PSXE_TRACE_COUNT", ~0ull);
++
++    fwrite("PSXTRACE", 1, 8, trace_file);
++    trace_u32(1);
++    trace_u32(0);
++
++    psx_trace_enabled = 1;
++}
++
++void psx_trace_spu(psx_spu_t* spu, uint32_t cycles) {
++    trace_spu_cycles += cycles;
++
++    while (trace_spu_cycles >= TRACE_SPU_CYCLES) {
++        trace_spu_cycles -= TRACE_SPU_CYCLES;
++
++        psx_spu_get_sample(spu);
++    }
++}
++
++void psx_trace_before(psx_cpu_t* cpu) {
++    psx_trace_excode = 0xff;
++
++    if (trace_skip)
++        return;
++
++    trace_snapshot(cpu, trace_prev);
++}
++
++void psx_trace_after(psx_cpu_t* cpu) {
++    if (trace_skip) {
++        trace_skip--;
++
++        return;
++    }
++
++    uint32_t regs[TRACE_REGS];
++    uint8_t changed[TRACE_REGS];
++    uint8_t n = 0;
++
++    trace_snapshot(cpu, regs);
++
++    for (int i = 0; i < TRACE_REGS; i++)
++        if (regs[i] != trace_prev[i])
++            changed[n++] = i;
++
++    trace_u32(cpu->saved_pc);
++    trace_u32(cpu->opcode);
++
++    uint8_t head[3] = {
++        psx_trace_excode,
++        cpu->last_cycles > 255 ? 255 : cpu->last_cycles,
++        n
++    };
++
++    fwrite(head, 1, 3, trace_file);
++
++    for (int i = 0; i < n; i++) {
++        fputc(changed[i], trace_file);
++        trace_u32(regs[changed[i]]);
++    }
++
++    if (--trace_count == 0) {
++        fclose(trace_file);
++        trace_dump_vram();
++        trace_dump_ram();
++
++        exit(0);
++    }
++}
+diff --git a/psx/trace.h b/psx/trace.h
+new file mode 100644
+index 0000000..4ffea51
+--- /dev/null
++++ b/psx/trace.h
+@@ -0,0 +1,55 @@
++/*
++    Instruction trace, for comparing psxe against another emulator one
++    instruction at a time.
++
++    Enabled by environment variables, read once at startup:
++
++      PSXE_TRACE=<path>     write the trace here
++      PSXE_TRACE_SKIP=<n>   run n instructions before recording
++      PSXE_TRACE_COUNT=<n>  record n instructions, then exit
++      PSXE_TRACE_VRAM=<path> on exit, write VRAM here: 1024x512 16-bit
++                            pixels, little-endian, row by row
++      PSXE_TRACE_RAM=<path> on exit, write main RAM here
++
++    The format, all little-endian:
++
++      header:  "PSXTRACE"  u32 version (1)  u32 reserved (0)
++      record:  u32 pc      address the instruction was fetched from
++               u32 insn    the instruction word
++               u8  excode  exception taken during this step, or 0xff
++               u8  cycles  cycles charged for the step, saturating at 255
++               u8  n       number of registers that changed
++               n x { u8 reg, u32 value }
++
++    reg is 0-31 for the general registers, then 32 HI, 33 LO, 34 COP0 SR,
++    35 COP0 CAUSE and 36 COP0 EPC. A value is the register after the step.
++    An interrupt is taken in place of executing the fetched instruction, so
++    its record has excode 0 and the fetched pc and insn.
++
++    While tracing, SPU samples are generated by the emulation, one every 768
++    cycles, rather than by the audio callback, which outputs silence instead.
++    Generating a sample advances the voices, which programs can see through
++    the SPU registers, and the callback runs on its own thread in real time,
++    so leaving it in charge would make what they see depend on the host.
++*/
++
++#ifndef PSX_TRACE_H
++#define PSX_TRACE_H
++
++#include "cpu.h"
++#include "dev/spu.h"
++
++extern int psx_trace_enabled;
++
++// Set by psx_cpu_exception to the code of the exception it takes, and reset
++// before each step.
++extern int psx_trace_excode;
++
++void psx_trace_init(void);
++void psx_trace_before(psx_cpu_t* cpu);
++void psx_trace_after(psx_cpu_t* cpu);
++void psx_trace_spu(psx_spu_t* spu, uint32_t cycles);
++void psx_trace_set_vram(uint16_t* vram);
++void psx_trace_set_ram(uint8_t* ram, size_t size);
++
++#endif

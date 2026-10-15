@@ -14,7 +14,7 @@ require (
 	github.com/mewmew/mips v0.1.0
 	github.com/spf13/cobra v1.10.2
 	go.bug.st/serial v1.0.0
-	go.chrisrx.dev/x v0.0.0-20260830171909-b2f0655227fa
+	go.chrisrx.dev/x v0.0.0-20261015142902-ad113d4a3a98
 )
 
 require (

@@ -75,7 +75,7 @@ To see it in action, use `eco2exe` on the provided test fixture:
 
 ```bash
 $ bin/eco2exe pkg/format/ecoff/testdata/main-ecoff psx.exe
-created "psx.exe": 36174751559112fbf3e6255be181c9fd
+created "psx.exe": 47fb1ad6d1aee3c8bdf71bdc2ecd144b
 ```
 
 and this will create a working PSX-EXE executable.

@@ -133,7 +133,7 @@
             version = "0.2.0";
             src = ./.;
 
-            vendorHash = "sha256-0FVOyrxTVvYVvEKKfcnUxxjy5MoU6LuxDk7LAVHJBwo=";
+            vendorHash = "sha256-kfZD9yBlwTQnP3ClkbijhH8GupenfrgKW8mzvIMEAwM=";
 
             # Matches the Makefile, which trims the build directory out of
             # recorded paths.
@@ -150,6 +150,70 @@
             };
           };
 
+          # psxe, a PlayStation emulator.
+          #
+          # The Makefile asks git for the version and commit, which a fetched
+          # source tree does not have, so both are passed in as make variables,
+          # which take precedence over the := assignments in the file. It also
+          # calls gcc by name, which is swapped for whatever compiler stdenv
+          # provides. There is no install target.
+          psxe = pkgs.stdenv.mkDerivation (final: {
+            pname = "psxe";
+            version = "0.10.5-alpha";
+
+            src = pkgs.fetchFromGitHub {
+              owner = "allkern";
+              repo = "psxe";
+              rev = final.version;
+              hash = "sha256-KH87tAtUZ9bCIbVjAMOFclQY9iPCxsfNWfguu9Ztsb0=";
+            };
+
+            nativeBuildInputs = [ pkgs.SDL2.dev ];
+            buildInputs = [ pkgs.SDL2 ];
+
+            # Adds an instruction trace, off unless PSXE_TRACE is set, for
+            # comparing psxe against another emulator one instruction at a
+            # time. psx/trace.h in the patch documents the variables and the
+            # format, which format/psxtrace reads.
+            #
+            # The interlace patch makes GPUSTAT bit 13 alternate every field,
+            # which the OpenBIOS shell waits on to pace its frames. Without
+            # it, the shell hangs after reading the root directory and never
+            # hands the disc to the BIOS.
+            #
+            # The frame limit patch paces emulated frames to the console's
+            # rate on top of the host display's vsync. With vsync alone,
+            # everything driven by VBLANK, such as music sequencing, runs too
+            # fast on displays above 60 Hz.
+            patches = [
+              ./nix/psxe-trace.patch
+              ./nix/psxe-interlace-field.patch
+              ./nix/psxe-frame-limit.patch
+            ];
+
+            postPatch = ''
+              substituteInPlace Makefile --replace-fail 'gcc $(SOURCES)' '$(CC) $(SOURCES)'
+            '';
+
+            makeFlags = [
+              "VERSION_TAG=${final.version}"
+              "COMMIT_HASH=${final.version}"
+              "OS_INFO=nix"
+            ];
+
+            installPhase = ''
+              runHook preInstall
+              install -Dm755 bin/psxe $out/bin/psxe
+              runHook postInstall
+            '';
+
+            meta = {
+              description = "Simple, fast and accurate PlayStation emulator";
+              homepage = "https://github.com/allkern/psxe";
+              license = pkgs.lib.licenses.mit;
+              mainProgram = "psxe";
+            };
+          });
         }
       );
 
@@ -170,6 +234,8 @@
               pkgs.go-task
               (mkTinygo pkgs)
               pkgs.mednafen
+              self.packages.${system}.psxe
+              pkgs.wasmtime
             ];
           };
 

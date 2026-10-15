@@ -1,0 +1,21 @@
+diff --git a/psx/dev/gpu.c b/psx/dev/gpu.c
+index e7c9bec..fa4fe09 100644
+--- a/psx/dev/gpu.c
++++ b/psx/dev/gpu.c
+@@ -1950,6 +1950,16 @@ void gpu_hblank_event(psx_gpu_t* gpu) {
+         if (gpu->event_cb_table[GPU_EVENT_VBLANK_END])
+             gpu->event_cb_table[GPU_EVENT_VBLANK_END](gpu);
+ 
++        // GPUSTAT bit 13 is the interlace field. It alternates every
++        // field while GP1(08h) bit 5 selects interlaced output, and
++        // reads as 1 otherwise. Software that paces itself on the field
++        // instead of the VBLANK IRQ, such as the OpenBIOS shell, waits
++        // forever if it never changes.
++        if (gpu->display_mode & 0x20)
++            gpu->gpustat ^= 1 << 13;
++        else
++            gpu->gpustat |= 1 << 13;
++
+         gpu->line = 0;
+     }
+ }

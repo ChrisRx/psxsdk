@@ -20,12 +20,13 @@ import (
 
 	"go.chrisrx.dev/psx/binutils"
 	"go.chrisrx.dev/psx/format/psx"
+	"go.chrisrx.dev/psx/internal/flags"
 )
 
 var opts struct {
-	StackAddr uint32
+	StackAddr flags.Address
 	StackSize uint32
-	GP0       uint32
+	GP0       flags.Address
 }
 
 func NewELF2ExeCommand() *cobra.Command {
@@ -51,10 +52,10 @@ instead.`,
 				FileHeader: psx.FileHeader{
 					Magic:     psx.ExecutableSignature,
 					PC0:       image.Entry,
-					GP0:       opts.GP0,
+					GP0:       uint32(opts.GP0),
 					TextAddr:  image.Addr,
 					TextSize:  image.Size(),
-					StackAddr: opts.StackAddr,
+					StackAddr: uint32(opts.StackAddr),
 					StackSize: opts.StackSize,
 				},
 				Sections: []*psx.Section{
@@ -83,9 +84,10 @@ instead.`,
 	// The BIOS sets $sp from these before jumping to the entry point. A
 	// program whose crt0 sets its own stack pointer does not depend on them,
 	// but a loader that honours them should be told something sane.
-	f.Uint32Var(&opts.StackAddr, "stack-addr", 0x801ffff0, "initial stack pointer")
+	opts.StackAddr = 0x801ffff0
+	f.Var(&opts.StackAddr, "stack-addr", "initial stack pointer")
 	f.Uint32Var(&opts.StackSize, "stack-size", 0, "stack size recorded in the header")
-	f.Uint32Var(&opts.GP0, "gp", 0, "initial value of $gp")
+	f.Var(&opts.GP0, "gp", "initial value of $gp")
 	return cmd
 }
 

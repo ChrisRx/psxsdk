@@ -1,0 +1,176 @@
+// The emulator's thread. It runs psx.wasm, which web/main.go builds, keeps
+// time, and draws onto the page's canvas, handed over as an OffscreenCanvas,
+// so that neither emulating nor drawing holds up the page.
+//
+// The page sends requests, each with an id that the reply, {id, error},
+// carries back:
+//
+//	{type: "init", canvas}              the canvas to draw on
+//	{type: "boot", bios, cue, files}    boots a disc, as psx.boot does, and
+//	                                    runs it
+//	{type: "reset"}                     boots the same disc again
+//	{type: "pause"}, {type: "resume"}   stops and starts running
+//	{type: "buttons", buttons}          the pad's buttons, as they change
+//	{type: "audio", on, port}           turns the sound on or off; port,
+//	                                    once, is audio.js's, to send it to
+//
+// It sends the page, unasked, {event: "stats", fps, tty} twice a second,
+// with what the BIOS printed meanwhile, and {event: "stopped", error} if
+// the emulator stops.
+"use strict";
+
+importScripts("wasm_exec.js");
+
+// A frame is 263 lines of 3413 GPU cycles at 53.693175MHz, as the emulator
+// times it: about 59.83 a second. At that rate the SPU makes exactly the
+// 44,100 samples a second the sound plays at.
+const FRAME_MS = (263 * 3413) / 53693.175;
+// Frames run at most before yielding, so requests are not held up; and how
+// far behind it may fall before giving up on catching up, after a stall.
+const BATCH = 2;
+const MAX_BEHIND = FRAME_MS * 4;
+const STATS_MS = 500;
+
+const ready = (async () => {
+  const go = new Go();
+  const { instance } = await WebAssembly.instantiateStreaming(fetch("psx.wasm"), go.importObject);
+  go.run(instance);
+  return self.psx;
+})();
+
+let psx = null;
+let ctx = null;
+let image = null; // the display's pixels, at its current size
+let booted = null; // the last boot's arguments, for a reset
+let audioPort = null; // where the sound goes, audio.js's worklet
+let buttons = 0;
+
+const clock = {
+  running: false,
+  next: 0,       // when the next frame is due
+  scheduled: false,
+  frames: 0,     // run since the last stats
+  since: 0,
+  tty: "",
+};
+
+// Yielding with a message rather than setTimeout(0), which browsers clamp
+// to 4ms once nested.
+const wake = new MessageChannel();
+wake.port1.onmessage = () => tick();
+
+function schedule() {
+  if (clock.scheduled || !clock.running) return;
+  clock.scheduled = true;
+  const wait = clock.next - performance.now();
+  if (wait > 1) setTimeout(() => tick(), wait);
+  else wake.port2.postMessage(null);
+}
+
+// tick runs the frames that are due, a batch at a time, draws the last,
+// sends its sound, and schedules the next.
+function tick() {
+  clock.scheduled = false;
+  if (!clock.running) return;
+  const now = performance.now();
+  if (now - clock.next > MAX_BEHIND) clock.next = now;
+
+  let ran = 0;
+  while (ran < BATCH && performance.now() >= clock.next) {
+    const res = psx.runFrame(image?.data);
+    if (res.error) {
+      stop(res.error);
+      return;
+    }
+    // A frame at a new size has nowhere to go; the next one does.
+    if (!image || image.width !== res.width || image.height !== res.height) {
+      image = res.width && res.height ? new ImageData(res.width, res.height) : null;
+      if (image && ctx) {
+        ctx.canvas.width = res.width;
+        ctx.canvas.height = res.height;
+      }
+    }
+    clock.next += FRAME_MS;
+    ran++;
+  }
+  if (ran > 0) {
+    if (image && ctx) ctx.putImageData(image, 0, 0);
+    const sound = psx.takeAudio();
+    if (sound && audioPort) audioPort.postMessage(sound.buffer, [sound.buffer]);
+    clock.frames += ran;
+  }
+
+  clock.tty += psx.takeTTY();
+  if (now - clock.since >= STATS_MS) {
+    const fps = (clock.frames * 1000) / (now - clock.since);
+    self.postMessage({ event: "stats", fps, tty: clock.tty });
+    clock.frames = 0;
+    clock.since = now;
+    clock.tty = "";
+  }
+  schedule();
+}
+
+function start() {
+  clock.running = true;
+  clock.next = clock.since = performance.now();
+  clock.frames = 0;
+  schedule();
+}
+
+function stop(error) {
+  clock.running = false;
+  if (error) self.postMessage({ event: "stopped", error });
+}
+
+function boot({ bios, cue, files }) {
+  stop();
+  const error = psx.boot(bios, cue, files);
+  audioPort?.postMessage("flush");
+  booted = error ? null : { bios, cue, files };
+  if (!error) {
+    psx.setButtons(buttons);
+    start();
+  }
+  return { error };
+}
+
+self.onmessage = async (e) => {
+  const msg = e.data;
+  let reply = { error: null };
+  try {
+    psx = await ready;
+    switch (msg.type) {
+      case "init":
+        ctx = msg.canvas.getContext("2d");
+        break;
+      case "boot":
+        reply = boot(msg);
+        break;
+      case "reset":
+        reply = booted ? boot(booted) : { error: "nothing to reset" };
+        break;
+      case "pause":
+        stop();
+        audioPort?.postMessage("flush");
+        break;
+      case "resume":
+        if (booted) start();
+        break;
+      case "buttons":
+        buttons = msg.buttons;
+        psx.setButtons(buttons);
+        break;
+      case "audio":
+        if (msg.port) audioPort = msg.port;
+        psx.setAudio(msg.on);
+        if (!msg.on) audioPort?.postMessage("flush");
+        break;
+      default:
+        reply = { error: `unknown request ${msg.type}` };
+    }
+  } catch (err) {
+    reply = { error: err.message ?? String(err) };
+  }
+  if (msg.id) self.postMessage({ id: msg.id, ...reply });
+};

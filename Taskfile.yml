@@ -5,6 +5,74 @@ tasks:
     cmds:
       - go test $(go list ./... | grep -v examples)
 
+  # Runs the example programs in the emulator, from the tests package. It
+  # needs a BIOS, from PSX_BIOS or bios.bin, and builds the discs with
+  # TinyGo, so it runs in the default dev shell rather than the ci one.
+  test:emu:
+    cmds:
+      - task: disc:check
+      - PSX_BIOS="${PSX_BIOS:-$PWD/bios.bin}" PSX_CHECK_DISC="$PWD/.build/check/check.cue" go test -v ./tests/...
+
+  # Builds the check example onto .build/check/check.cue.
+  disc:check:
+    cmds:
+      - task: disc
+        vars: { NAME: check }
+
+  # Builds the example NAME onto .build/NAME/NAME.cue, with the files in
+  # its disc directory, if it has one. The directory starts with a dot so
+  # that go list ./... leaves it alone.
+  disc:
+    requires:
+      vars: [NAME]
+    cmds:
+      - rm -rf .build/{{.NAME}}
+      - mkdir -p .build/{{.NAME}}/disc
+      - if [ -d examples/{{.NAME}}/disc ]; then cp -r examples/{{.NAME}}/disc/. .build/{{.NAME}}/disc/; fi
+      - tinygo build -target=playstation-yaroze -o .build/{{.NAME}}/prog.elf ./examples/{{.NAME}}
+      - go tool mips1fix .build/{{.NAME}}/prog.elf
+      - go tool eco2exe .build/{{.NAME}}/prog.elf .build/{{.NAME}}/prog.exe
+      - cp .build/{{.NAME}}/prog.exe .build/{{.NAME}}/disc/MAIN.EXE
+      - go tool mkpsxiso -o .build/{{.NAME}}/{{.NAME}}.bin --volume-id {{.NAME}}.exe --boot MAIN.EXE .build/{{.NAME}}/disc
+
+  # Builds the site for GitHub Pages into docs/, replacing what is there:
+  # every example's disc, the emulator compiled to WebAssembly from web/,
+  # and the page around it, from web/static, which includes the OpenBIOS
+  # image the examples boot with. Sony's BIOS must never be copied in.
+  site:
+    vars:
+      EXAMPLES:
+        # Every directory under examples with a main.go; examples/internal
+        # holds what they share, and is not one.
+        sh: for f in examples/*/main.go; do basename "$(dirname "$f")"; done
+    cmds:
+      - for: { var: EXAMPLES }
+        task: disc
+        vars: { NAME: '{{.ITEM}}' }
+      - rm -rf docs
+      - mkdir -p docs/examples
+      - for: { var: EXAMPLES }
+        cmd: mkdir -p docs/examples/{{.ITEM}} && cp .build/{{.ITEM}}/{{.ITEM}}.cue .build/{{.ITEM}}/{{.ITEM}}.bin docs/examples/{{.ITEM}}/
+      - |
+        {
+          printf '['
+          sep=''
+          for name in {{.EXAMPLES | splitLines | join " "}}; do
+            printf '%s\n  {"name": "%s", "cue": "examples/%s/%s.cue"}' "$sep" "$name" "$name" "$name"
+            sep=','
+          done
+          printf '\n]\n'
+        } > docs/examples.json
+      - GOEXPERIMENT=simd GOOS=js GOARCH=wasm go build -trimpath -ldflags=-s -o docs/psx.wasm ./web
+      - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" docs/
+      - cp web/static/* docs/
+      - touch docs/.nojekyll
+
+  # Serves docs/ on localhost:8000 to try the site.
+  site:serve:
+    cmds:
+      - go run ./web/serve -dir docs
+
   examples:check:
     cmds:
       - cp -r examples/check tmp
@@ -20,4 +88,5 @@ tasks:
       - go tool eco2exe tmp/prog.elf tmp/prog.exe
       - cp tmp/prog.exe tmp/disc/MAIN.EXE
       - go tool mkpsxiso -o tmp/check.bin --volume-id check.exe --boot MAIN.EXE tmp/disc
-      - mednafen -psx.region_default jp tmp/check.cue
+      # - psxe -a -b web/static/openbios.bin -L5 tmp/check.cue
+      - psxe -a -b bios.bin -L5 tmp/check.cue
