@@ -249,6 +249,19 @@
               pkgs.go-task
             ];
           };
+
+          # What building the site takes ("task site"): TinyGo for the
+          # examples' discs, and Go for the tools that finish them and for
+          # the emulator's WebAssembly build. The cross C toolchain is only
+          # for inspecting what TinyGo produces, and building it would add
+          # a GCC bootstrap to every deploy.
+          site = pkgs.mkShell {
+            packages = [
+              pkgs.go_1_27
+              pkgs.go-task
+              (mkTinygo pkgs)
+            ];
+          };
         }
       );
 

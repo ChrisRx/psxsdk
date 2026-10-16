@@ -49,22 +49,27 @@ tasks:
       - cp .build/{{.NAME}}/prog.exe .build/{{.NAME}}/disc/MAIN.EXE
       - go tool mkpsxiso -o .build/{{.NAME}}/{{.NAME}}.bin --volume-id {{.NAME}}.exe --boot MAIN.EXE .build/{{.NAME}}/disc
 
-  # Builds the site for GitHub Pages into docs/, replacing what is there:
-  # every example's disc, the emulator compiled to WebAssembly from web/,
-  # and the page around it, from web/static, which includes the OpenBIOS
-  # image the examples boot with. Sony's BIOS must never be copied in.
+  # Builds the site into .build/site, replacing what is there: every
+  # example's disc, the emulator compiled to WebAssembly from web/, and the
+  # page around it, from web/static, which includes the OpenBIOS image the
+  # examples boot with. Sony's BIOS must never be copied in.
+  #
+  # .github/workflows/pages.yml publishes this directory to GitHub Pages
+  # through the gh-pages branch, so it is never committed here. The
+  # .nojekyll file keeps Pages from running the branch through Jekyll.
   site:
     vars:
+      SITE: .build/site
       EXAMPLES:
         # Every directory under examples with a main.go; examples/internal
         # holds what they share, and is not one.
         sh: for f in examples/*/main.go; do basename "$(dirname "$f")"; done
     cmds:
       - task: discs
-      - rm -rf docs
-      - mkdir -p docs/examples
+      - rm -rf {{.SITE}}
+      - mkdir -p {{.SITE}}/examples
       - for: { var: EXAMPLES }
-        cmd: mkdir -p docs/examples/{{.ITEM}} && cp .build/{{.ITEM}}/{{.ITEM}}.cue .build/{{.ITEM}}/{{.ITEM}}.bin docs/examples/{{.ITEM}}/
+        cmd: mkdir -p {{.SITE}}/examples/{{.ITEM}} && cp .build/{{.ITEM}}/{{.ITEM}}.cue .build/{{.ITEM}}/{{.ITEM}}.bin {{.SITE}}/examples/{{.ITEM}}/
       - |
         {
           printf '['
@@ -74,16 +79,16 @@ tasks:
             sep=','
           done
           printf '\n]\n'
-        } > docs/examples.json
-      - GOEXPERIMENT=simd GOOS=js GOARCH=wasm go build -trimpath -ldflags=-s -o docs/psx.wasm ./web
-      - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" docs/
-      - cp -r web/static/. docs/
-      - touch docs/.nojekyll
+        } > {{.SITE}}/examples.json
+      - GOEXPERIMENT=simd GOOS=js GOARCH=wasm go build -trimpath -ldflags=-s -o {{.SITE}}/psx.wasm ./web
+      - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" {{.SITE}}/
+      - cp -r web/static/. {{.SITE}}/
+      - touch {{.SITE}}/.nojekyll
 
-  # Serves docs/ on localhost:8000 to try the site.
+  # Serves .build/site on localhost:8000 to try the site.
   site:serve:
     cmds:
-      - go run ./web/serve -dir docs
+      - go run ./web/serve -dir .build/site
 
   examples:check:
     cmds:

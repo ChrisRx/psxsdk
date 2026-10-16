@@ -1,0 +1,117 @@
+name: Pages
+
+# Builds the site, every example's disc and the emulator, and publishes it
+# through the gh-pages branch, which only this workflow writes to and which
+# GitHub Pages serves. A push to main deploys the site to the root. A pull
+# request builds the site, which catches a change that breaks an example,
+# and when it touches an example also deploys a preview to pr-preview/pr-N/
+# and comments the preview's address on the pull request. The preview is
+# removed when the pull request closes.
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+    types: [ opened, reopened, synchronize, closed ]
+  workflow_dispatch:
+
+jobs:
+
+  build:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    outputs:
+      examples: ${{ steps.changes.outputs.examples }}
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Check for example changes
+      id: changes
+      if: github.event_name == 'pull_request'
+      uses: dorny/paths-filter@v3
+      with:
+        filters: |
+          examples:
+            - 'examples/**'
+
+    - name: Install Nix
+      uses: cachix/install-nix-action@v31
+
+    - name: Cache Nix store
+      uses: DeterminateSystems/magic-nix-cache-action@v8
+
+    - name: Build site
+      run: nix develop .#site --command task site
+
+    - name: Upload site
+      uses: actions/upload-artifact@v4
+      with:
+        name: site
+        path: .build/site
+        include-hidden-files: true
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Writes to gh-pages are serialized with the preview job's, so two runs
+    # never push over each other.
+    concurrency:
+      group: gh-pages
+      cancel-in-progress: false
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download site
+      uses: actions/download-artifact@v4
+      with:
+        name: site
+        path: site
+
+    - name: Deploy to gh-pages
+      uses: JamesIves/github-pages-deploy-action@v4
+      with:
+        folder: site
+        branch: gh-pages
+        clean: true
+        clean-exclude: pr-preview/**
+        force: false
+
+  preview:
+    # Runs for a pull request from this repository that changed an example,
+    # and for any pull request closing, to remove its preview if it has one.
+    # A pull request from a fork has no permission to push, so none is
+    # attempted for it. The build job is skipped on close, which is what
+    # !cancelled() lets through.
+    if: >-
+      !cancelled()
+      && github.event_name == 'pull_request'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && (github.event.action == 'closed' || needs.build.outputs.examples == 'true')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: gh-pages
+      cancel-in-progress: false
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download site
+      if: github.event.action != 'closed'
+      uses: actions/download-artifact@v4
+      with:
+        name: site
+        path: site
+
+    - name: Deploy preview
+      uses: rossjrw/pr-preview-action@v1
+      with:
+        source-dir: site
+        preview-branch: gh-pages
+        umbrella-dir: pr-preview
+        action: auto

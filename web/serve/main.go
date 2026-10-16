@@ -1,5 +1,5 @@
 // Command serve serves a directory over HTTP on localhost, to try the site
-// built into docs/ (task site:serve) as GitHub Pages would serve it.
+// built into .build/site (task site:serve) as GitHub Pages would serve it.
 package main
 
 import (
@@ -10,7 +10,7 @@ import (
 
 func main() {
 	addr := flag.String("addr", "localhost:8000", "address to listen on")
-	dir := flag.String("dir", "docs", "directory to serve")
+	dir := flag.String("dir", ".build/site", "directory to serve")
 	flag.Parse()
 
 	// Browsers may keep a file for hours without asking again when nothing

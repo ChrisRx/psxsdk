@@ -1,8 +1,8 @@
 //go:build js && wasm
 
-// Command web runs the emulator in a browser, for the site built into docs/
-// (task site). It runs in the page's worker, static/worker.js, and exposes
-// a global psx object to it:
+// Command web runs the emulator in a browser, for the site GitHub Pages
+// serves (task site). It runs in the page's worker, static/worker.js, and
+// exposes a global psx object to it:
 //
 //	psx.boot(bios, cue, files)  boots a BIOS, a Uint8Array, with the disc
 //	                            whose cue sheet is named cue in files, an
