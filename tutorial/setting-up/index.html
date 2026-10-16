@@ -9,6 +9,7 @@
   <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
   <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" href="../../play/favicon.png" type="image/png">
   <link rel="stylesheet" href="../../assets/site.css">
   <link rel="stylesheet" href="../../assets/chroma.css">
 </head>
@@ -112,7 +113,7 @@
 </span></span></span><span class="line"><span class="cl"><span class="p">}</span><span class="w">
 </span></span></span></code></pre><p>It already has the shape every program has: set up the display, then draw a frame, wait for the screen, and swap, for ever. Three things about it are not how a program for a modern machine would read.</p>
 <p><strong>Everything is a package-level variable.</strong> The machine has two megabytes of RAM, no memory protection and, in this runtime, no garbage collector running, so memory a frame allocates is memory the program never gets back. Declaring the buffers once, as globals, is how the Net Yaroze programs this toolchain descends from did it too, and nothing in the tutorial allocates after startup.</p>
-<p><strong>The frame is a list before it is a picture.</strong> The GPU does not draw what it is told as it is told. A program sorts drawing commands into an ordering table, an array of linked lists indexed by depth, and then hands the table to the GPU, which walks it while the program goes on to the next frame. <code>GsClearOt</code> empties the table, <code>GsSortClear</code> sorts a command that clears the screen to a colour into it, and <code>GsDrawOt</code> starts the GPU on it. There are two tables, and two packet areas for the commands themselves, because the GPU is still drawing one frame while the program builds the next.</p>
+<p><strong>The frame is a list before it is a picture.</strong> The GPU does not draw what it is told as it is told. A program sorts drawing commands into an ordering table, an array of linked lists indexed by depth, and then hands the table to the GPU, which walks it while the program goes on to the next frame. <code>GsClearOt</code> empties the table, <code>GsSortClear</code> sorts a command that clears the screen to a color into it, and <code>GsDrawOt</code> starts the GPU on it. There are two tables, and two packet areas for the commands themselves, because the GPU is still drawing one frame while the program builds the next.</p>
 <p><strong>The text goes through the library's font.</strong> <code>FntLoad</code> puts the library's 8x8 font into video memory at a corner the display never shows, <code>FntOpen</code> opens a window of text at a position on the screen, and <code>FntPrint</code> writes into it. In C <code>FntPrint</code> is printf-like; here it takes a finished string, which <code>CString</code> copies into a buffer the program owns, with the NUL terminator the library expects.</p>
 <p>The build constraint on the first line keeps the file out of ordinary Go builds, which cannot compile it: the <code>yaroze</code> package is only there for TinyGo's PlayStation target. <code>go vet ./...</code> and editors then leave it alone.</p>
 <h2 id="building-it">Building it</h2>

@@ -9,6 +9,7 @@
   <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
   <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" href="../../play/favicon.png" type="image/png">
   <link rel="stylesheet" href="../../assets/site.css">
   <link rel="stylesheet" href="../../assets/chroma.css">
 </head>
@@ -45,10 +46,10 @@
         <p>The second program draws a cube and turns it with the directional buttons. The cube is a model, and its texture is a picture, and both are files on the disc that the program reads at startup, which is how a program gets anything bigger than its own code into memory.</p>
 <p>It starts from the module <a href="../../tutorial/setting-up/">setting up</a> made; a new directory with the same <code>go.mod</code> does as well.</p>
 <h2 id="the-files">The files</h2>
-<p>A model for the PlayStation is a TMD, the format Sony's tools wrote: a list of vertices and normals, and a list of polygons that index them, each with its colour or its texture coordinates. A texture is a TIM, a picture in one of the GPU's formats with the place in video memory it is to be loaded to, and its palette if it has one. Save these two beside the program, in a <code>data</code> directory:</p>
+<p>A model for the PlayStation is a TMD, the format Sony's tools wrote: a list of vertices and normals, and a list of polygons that index them, each with its color or its texture coordinates. A texture is a TIM, a picture in one of the GPU's formats with the place in video memory it is to be loaded to, and its palette if it has one. Save these two beside the program, in a <code>data</code> directory:</p>
 <ul>
 <li><a href="../../tutorial/cube/data/CUBE.TMD">CUBE.TMD</a>, a cube 128 units along each edge: eight vertices, six normals, and six textured polygons, one for each face.</li>
-<li><a href="../../tutorial/cube/data/CUBE.TIM">CUBE.TIM</a>, a 64 by 64 texture in 16 colours, with its palette.</li>
+<li><a href="../../tutorial/cube/data/CUBE.TIM">CUBE.TIM</a>, a 64 by 64 texture in 16 colors, with its palette.</li>
 </ul>
 <p>The texture comes from Sony's own Net Yaroze tutorials, by way of the <a href="../../examples/flying/">flying</a> example, which tiles the plane it flies over with it. The cube is written by <a href="../../tutorial/cube/mkcube.py">a short script</a>, which is the whole of the TMD format for a model this simple, and the program, its files and the script are in the repository at <a href="https://github.com/ChrisRx/psxsdk/tree/main/docs/tutorial/cube">docs/tutorial/cube</a>.</p>
 <h2 id="the-program">The program</h2>

@@ -1,6 +1,6 @@
 /* The page is drawn after the hardware the programs were written for: the
    grey PlayStation in light mode, the black Net Yaroze in dark mode, with
-   the four symbol colours kept for the buttons that carry them. Barlow is
+   the four symbol colors kept for the buttons that carry them. Barlow is
    served from fonts/, under the OFL. */
 
 @font-face { font-family: Barlow; font-weight: 400; font-display: swap; src: url(fonts/barlow-400.woff2) format("woff2"); }
