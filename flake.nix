@@ -76,7 +76,7 @@
               owner = "ChrisRx";
               repo = "tinygo";
               rev = "558e4cccb159b92b96181859e1a358e92f97d2aa";
-              hash = "sha256-JEZ1mIa1vLFOKLdNLY+Cl4GDbwzN0uwnhb8fvice9Mg=";
+              hash = "sha256-aU6oLgA/pZd+33vOAlF43s6N/ccuGCUCAN+Af9BxO+M=";
               fetchSubmodules = true;
               # cmsis-svd carries several GB of vendor data for parts that have
               # nothing to do with this, which nixpkgs drops for the same reason.
