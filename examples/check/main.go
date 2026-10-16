@@ -378,7 +378,7 @@ func main() {
 				line.WriteString("  ").WriteString(loadNote[i]).WriteString("\n")
 			}
 		}
-		line.WriteString("\nwritten in Go\n")
+		line.WriteString("\nwritten in Go!!!\n")
 		line.Print()
 		yaroze.FntFlush(-1)
 	}
