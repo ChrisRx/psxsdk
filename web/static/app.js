@@ -51,7 +51,7 @@ const INFO = {
     controls: "Up and down move the ship, Square and Circle turn it, and L2 fires. R1 and R2 change the view and L1 puts it back. Start pauses. Start and Select together quit.",
   },
   mdec: {
-    about: "Full-colour video played through the motion decoder.",
+    about: "Full-color video played through the motion decoder.",
     controls: "Start and Select together quit.",
   },
   cube: {

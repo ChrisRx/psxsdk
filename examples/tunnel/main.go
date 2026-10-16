@@ -5,7 +5,7 @@
 // endless tunnel, shooting waves of enemies. The tunnel is rings of four
 // scaled squares that slide towards the ship and go round to the far end
 // again; the near ones are subdivided so the perspective holds up. Fog,
-// three coloured lights, one of them always circling, and semi-transparent
+// three colored lights, one of them always circling, and semi-transparent
 // sprites for shots, explosions and pick-ups make it the most of the
 // machine's lighting any of the examples use. Its sound is a VAB: a tune
 // started once and left playing, and sound effects keyed on and off by

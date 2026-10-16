@@ -1,7 +1,7 @@
 // Command gen renders the mdec example's movie: spheres circling a mirrored
 // one over a chequered floor, ray traced, and encoded for the MDEC.
 //
-// The five spheres are 72 degrees apart, and each one's colour and height
+// The five spheres are 72 degrees apart, and each one's color and height
 // follow from where it is on its orbit, so after a fifth of a turn the scene
 // is as it started. The movie is that fifth of a turn, and loops without a
 // seam.
@@ -40,7 +40,7 @@ func cross(a, b vec) vec {
 type sphere struct {
 	centre vec
 	radius float64
-	colour vec
+	color  vec
 }
 
 var light = norm(vec{-0.5, 1, -0.6})
@@ -92,7 +92,7 @@ func trace(o, d vec, spheres []sphere, depth int) vec {
 	n := norm(sub(p, s.centre))
 	diffuse := math.Max(dot(n, light), 0)
 	specular := math.Pow(math.Max(dot(n, norm(sub(light, d))), 0), 40)
-	c := add(mul(s.colour, 0.15+0.75*diffuse), vec{specular, specular, specular})
+	c := add(mul(s.color, 0.15+0.75*diffuse), vec{specular, specular, specular})
 	if depth < 2 {
 		r := sub(d, mul(n, 2*dot(d, n)))
 		c = add(mul(c, 0.65), mul(trace(p, r, spheres, depth+1), 0.35))
@@ -100,7 +100,7 @@ func trace(o, d vec, spheres []sphere, depth int) vec {
 	return c
 }
 
-// hue is a fully saturated colour, h turns round the colour wheel.
+// hue is a fully saturated color, h turns round the color wheel.
 func hue(h float64) vec {
 	h = (h - math.Floor(h)) * 6
 	x := 1 - math.Abs(math.Mod(h, 2)-1)

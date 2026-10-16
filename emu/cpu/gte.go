@@ -119,7 +119,7 @@ func (g *GTE) Read(r uint32) uint32 {
 	return 0
 }
 
-// clampIR5 converts an IR value to the 5-bit colour component IRGB holds.
+// clampIR5 converts an IR value to the 5-bit color component IRGB holds.
 func clampIR5(ir int16) uint32 {
 	return uint32(min(max(int32(ir)>>7, 0), 0x1f))
 }

@@ -10,10 +10,10 @@ It starts from the module [setting up](setting-up.md) made; a new directory with
 
 ## The files
 
-A model for the PlayStation is a TMD, the format Sony's tools wrote: a list of vertices and normals, and a list of polygons that index them, each with its colour or its texture coordinates. A texture is a TIM, a picture in one of the GPU's formats with the place in video memory it is to be loaded to, and its palette if it has one. Save these two beside the program, in a `data` directory:
+A model for the PlayStation is a TMD, the format Sony's tools wrote: a list of vertices and normals, and a list of polygons that index them, each with its color or its texture coordinates. A texture is a TIM, a picture in one of the GPU's formats with the place in video memory it is to be loaded to, and its palette if it has one. Save these two beside the program, in a `data` directory:
 
 - [CUBE.TMD](cube/data/CUBE.TMD), a cube 128 units along each edge: eight vertices, six normals, and six textured polygons, one for each face.
-- [CUBE.TIM](cube/data/CUBE.TIM), a 64 by 64 texture in 16 colours, with its palette.
+- [CUBE.TIM](cube/data/CUBE.TIM), a 64 by 64 texture in 16 colors, with its palette.
 
 The texture comes from Sony's own Net Yaroze tutorials, by way of the [flying](../examples/flying.md) example, which tiles the plane it flies over with it. The cube is written by [a short script](cube/mkcube.py), which is the whole of the TMD format for a model this simple, and the program, its files and the script are in the repository at [docs/tutorial/cube](docs/tutorial/cube).
 

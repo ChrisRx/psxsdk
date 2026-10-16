@@ -4,7 +4,7 @@ import "math/bits"
 
 // The GTE's commands, ported from psxe. psxe computes in C's mixed integer
 // widths, and the conversions here are written out so that each value has
-// the width psxe gives it: 16-bit matrix entries and vectors, 8-bit colour
+// the width psxe gives it: 16-bit matrix entries and vectors, 8-bit color
 // components, 32-bit translations, 44-bit MAC accumulation.
 
 // unrTable is the GTE's table for the first step of its reciprocal.
@@ -69,7 +69,7 @@ func (m *matrix) el(row, col int) int64 {
 func lo(v uint32) int64 { return int64(int16(v)) }
 func hi(v uint32) int64 { return int64(int16(v >> 16)) }
 
-// byteOf is one of a colour register's bytes.
+// byteOf is one of a color register's bytes.
 func byteOf(v uint32, i uint) int64 { return int64(uint8(v >> (8 * i))) }
 
 func (g *GTE) clampMAC0(c *cmd, v int64) int64 {
@@ -191,7 +191,7 @@ func (g *GTE) divide(n, d uint16) uint32 {
 	return uint32(min(res, 0x1ffff))
 }
 
-// pushRGB pushes a colour onto the colour FIFO, with the code byte of RGBC.
+// pushRGB pushes a color onto the color FIFO, with the code byte of RGBC.
 func (g *GTE) pushRGB(mac1, mac2, mac3 int32) {
 	g.RGB[0] = g.RGB[1]
 	g.RGB[1] = g.RGB[2]
@@ -246,9 +246,9 @@ func (g *GTE) rtp(c *cmd, i int, dq bool) {
 	}
 }
 
-// lightColor is the light matrix stage the normal colour commands share:
-// the vertex's normal through the light matrix, then the light colours
-// through the colour matrix with the background colour.
+// lightColor is the light matrix stage the normal color commands share:
+// the vertex's normal through the light matrix, then the light colors
+// through the color matrix with the background color.
 func (g *GTE) lightColor(c *cmd, i int) {
 	vx, vy, vz := g.vertex(i)
 	l := &g.L
@@ -259,7 +259,7 @@ func (g *GTE) lightColor(c *cmd, i int) {
 	g.colorMatrix(c)
 }
 
-// colorMatrix is the background colour plus the colour matrix applied to
+// colorMatrix is the background color plus the color matrix applied to
 // IR1 to IR3.
 func (g *GTE) colorMatrix(c *cmd) {
 	lr := &g.LR
@@ -270,8 +270,8 @@ func (g *GTE) colorMatrix(c *cmd) {
 	g.setIR(c)
 }
 
-// depthCue interpolates the colour in RGBC, scaled by IR1 to IR3, towards
-// the far colour by IR0, and pushes the result.
+// depthCue interpolates the color in RGBC, scaled by IR1 to IR3, towards
+// the far color by IR0, and pushes the result.
 func (g *GTE) depthCue(c *cmd) {
 	rc, gc, bc := byteOf(g.RGBC, 0)<<4, byteOf(g.RGBC, 1)<<4, byteOf(g.RGBC, 2)<<4
 	ir1 := int64(g.clampIR(1, int64(g.clampMAC(c, 1, int64(g.FC[0])<<12-rc*int64(g.IR[1]))), false))
@@ -285,7 +285,7 @@ func (g *GTE) depthCue(c *cmd) {
 	g.pushRGB(g.MAC[1], g.MAC[2], g.MAC[3])
 }
 
-// colorScale multiplies the colour in RGBC by IR1 to IR3 and pushes it,
+// colorScale multiplies the color in RGBC by IR1 to IR3 and pushes it,
 // then sets IR1 to IR3 from the result.
 func (g *GTE) colorScale(c *cmd) {
 	g.MAC[1] = g.clampMAC(c, 1, (byteOf(g.RGBC, 0)*int64(g.IR[1]))<<4)
@@ -295,7 +295,7 @@ func (g *GTE) colorScale(c *cmd) {
 	g.setIR(c)
 }
 
-// interpolate moves the values a towards the far colour by IR0 and pushes
+// interpolate moves the values a towards the far color by IR0 and pushes
 // the result: the depth cueing of DPCS, DPCT and INTPL.
 func (g *GTE) interpolate(c *cmd, a1, a2, a3 int64) {
 	ir1 := int64(g.clampIR(1, int64(g.clampMAC(c, 1, int64(g.FC[0])<<12-a1)), false))
@@ -356,7 +356,7 @@ func (g *GTE) Command(op uint32) uint32 {
 		g.setIR(c)
 	case 0x10: // DPCS
 		g.interpolate(c, byteOf(g.RGBC, 0)<<16, byteOf(g.RGBC, 1)<<16, byteOf(g.RGBC, 2)<<16)
-	case 0x2a: // DPCT, on each colour of the FIFO in turn
+	case 0x2a: // DPCT, on each color of the FIFO in turn
 		for range 3 {
 			g.interpolate(c, byteOf(g.RGB[0], 0)<<16, byteOf(g.RGB[0], 1)<<16, byteOf(g.RGB[0], 2)<<16)
 		}
@@ -431,8 +431,8 @@ func (g *GTE) Command(op uint32) uint32 {
 	return cycles
 }
 
-// ncs is NCS for one vertex: the light matrix and colour matrix stages, and
-// the result pushed as a colour.
+// ncs is NCS for one vertex: the light matrix and color matrix stages, and
+// the result pushed as a color.
 func (g *GTE) ncs(c *cmd, i int) {
 	g.lightColor(c, i)
 	g.pushRGB(g.MAC[1], g.MAC[2], g.MAC[3])
@@ -481,7 +481,7 @@ func (g *GTE) mvmva(c *cmd) {
 	}
 
 	if c.cv == 2 {
-		// With the far colour as the translation the hardware gets it
+		// With the far color as the translation the hardware gets it
 		// wrong: the first column is computed only for its flags.
 		for i := 1; i <= 3; i++ {
 			g.MAC[i] = g.clampMAC(c, i, g.checkMAC(i, mx.el(i, 2)*vy)+mx.el(i, 3)*vz)

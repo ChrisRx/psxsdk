@@ -106,7 +106,7 @@ func Encode(img image.Image, qscale int) []uint16 {
 	var blk [64]float64
 	for mx := 0; mx < w; mx += 16 {
 		for my := 0; my < h; my += 16 {
-			// The chroma blocks are the colour difference averaged over
+			// The chroma blocks are the color difference averaged over
 			// each 2x2 pixels.
 			for _, plane := range [][]float64{crs, cbs} {
 				for y := range 8 {

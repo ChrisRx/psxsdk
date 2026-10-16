@@ -267,7 +267,7 @@ func padRead(n int) int {
 	return min(max(n, 1), maxObj-1)
 }
 
-// frame draws one complete frame of flat colour, with an optional caption.
+// frame draws one complete frame of flat color, with an optional caption.
 func frame(caption *byte) {
 	active := yaroze.GsGetActiveBuff()
 	yaroze.GsSetWorkBase(&gpuPacketArea[active][0])

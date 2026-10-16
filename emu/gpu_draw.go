@@ -16,7 +16,7 @@ type vertex struct {
 
 // Primitive attributes, from the top byte of the command.
 const (
-	attrRaw      = 0x01 // texture colours are not modulated
+	attrRaw      = 0x01 // texture colors are not modulated
 	attrTransp   = 0x02 // semi-transparent
 	attrTextured = 0x04
 	attrQuad     = 0x08
@@ -157,7 +157,7 @@ func (g *gpu) texelBilinear(tx, ty float32, tpx, tpy, clutx, cluty, depth uint32
 	return out | (s0|s1|s2|s3)&0x8000
 }
 
-// clamp255 saturates a colour component, and rounds it as roundf does,
+// clamp255 saturates a color component, and rounds it as roundf does,
 // half away from zero.
 func clamp255(v float32) uint32 {
 	switch {
@@ -173,7 +173,7 @@ func clamp255(v float32) uint32 {
 
 func rgb(r, g, b uint32) uint32 { return r | g<<8 | b<<16 }
 
-// modulate multiplies a texel by a colour, where 80h is full brightness.
+// modulate multiplies a texel by a color, where 80h is full brightness.
 func modulate(texel uint16, mod uint32) uint16 {
 	// psxe works this out in floats, as clamp255(t*m/128), but every step
 	// is exact: t*m is at most 248*255, and dividing by 128 only moves the
@@ -321,7 +321,7 @@ func (g *gpu) triangle(v0, v1, v2 vertex, d polyData) {
 	y1 := min(ymax-1, int(g.drawY2))
 	edges := [3]edgeStep{newEdgeStep(b, c), newEdgeStep(c, a), newEdgeStep(a, b)}
 
-	// A flat, opaque, untextured triangle draws one colour over each span.
+	// A flat, opaque, untextured triangle draws one color over each span.
 	flat := d.attrib&(attrShaded|attrTextured|attrTransp) == 0
 	flatColor := bgr555(d.v[0].c)
 
@@ -432,7 +432,7 @@ func (g *gpu) drawRect(d rectData) {
 	x0 := int16(clamp(int(d.v0.x)))
 	y0 := int16(clamp(int(d.v0.y)))
 
-	// A flat, opaque rectangle is one colour over the part of each row in
+	// A flat, opaque rectangle is one color over the part of each row in
 	// the drawing area, which is within a row of VRAM.
 	if !textured && !transp {
 		color := bgr555(d.v0.c)
@@ -476,7 +476,7 @@ func (g *gpu) drawRect(d rectData) {
 	}
 }
 
-// drawLine draws a line in one colour, with Bresenham's algorithm from
+// drawLine draws a line in one color, with Bresenham's algorithm from
 // whichever end makes it run forwards. The far end is not drawn.
 func (g *gpu) drawLine(v0, v1 vertex, color uint16) {
 	x0 := int(int16(int32(v0.x) + g.offX))

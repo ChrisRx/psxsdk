@@ -333,7 +333,7 @@ func FindTopLeftOfTexturePage(img *yaroze.GsIMAGE) (x, y, u, v int32) {
 	return x, y, u, v
 }
 
-// Sprite attribute bits for the colour depth of the texture.
+// Sprite attribute bits for the color depth of the texture.
 const (
 	sixteenBit = 1 << 25
 	eightBit   = 1 << 24

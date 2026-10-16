@@ -1,10 +1,10 @@
 package main
 
-// Ball texture and colour tables, converted from the check sample's
+// Ball texture and color tables, converted from the check sample's
 // balltex.h. The data is Sony's, from the Net Yaroze SDK.
 //
 // ball16x16 is a 16x16 4-bit texture and ballcolor is 32 palettes of 16
-// colours, giving the same ball in 32 shades.
+// colors, giving the same ball in 32 shades.
 
 var ball16x16 = [32]uint32{
 	0x00000000,

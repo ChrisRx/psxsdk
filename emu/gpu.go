@@ -288,8 +288,8 @@ func (g *gpu) polygon() {
 		return
 	}
 
-	// The words of each vertex: an optional colour, the position, and an
-	// optional texture coordinate. The first vertex's colour is the
+	// The words of each vertex: an optional color, the position, and an
+	// optional texture coordinate. The first vertex's color is the
 	// command word itself.
 	s, t := b2i(shaded), b2i(textured)
 	colorOff := s * (2 + t)
@@ -364,7 +364,7 @@ func (g *gpu) line() {
 		return
 	}
 	// Positions are not sign-extended from 11 bits here as they are for
-	// polygons, and a shaded line is drawn in its first colour.
+	// polygons, and a shaded line is drawn in its first color.
 	p0 := g.buf[1]
 	p1 := g.buf[2]
 	if shaded {
@@ -397,7 +397,7 @@ func (g *gpu) rectangle() {
 	}
 	dims := g.buf[2+b2i(textured)]
 	d.width, d.height = uint16(dims), uint16(dims>>16)
-	// An unmodulated textured rectangle is modulated by the neutral colour,
+	// An unmodulated textured rectangle is modulated by the neutral color,
 	// which leaves the texel as it was apart from its top bit.
 	if textured && d.attrib&attrRaw != 0 {
 		d.v0.c = 0x808080
@@ -406,7 +406,7 @@ func (g *gpu) rectangle() {
 	g.state = gpuRecvCmd
 }
 
-// fill fills a rectangle of VRAM with a colour, in units of 16 pixels
+// fill fills a rectangle of VRAM with a color, in units of 16 pixels
 // across.
 func (g *gpu) fill() {
 	if !g.expect(2) {

@@ -1,6 +1,6 @@
-// The mdec example: full-colour video through the motion decoder.
+// The mdec example: full-color video through the motion decoder.
 //
-// The GPU draws in 15-bit colour, but it can show 24-bit pictures, and the
+// The GPU draws in 15-bit color, but it can show 24-bit pictures, and the
 // MDEC, the PlayStation's motion decoder, is how games made them: it takes
 // pictures compressed much as JPEG compresses them, a 16x16 macroblock at a
 // time, and turns them into pixels, which a program copies into VRAM. Games

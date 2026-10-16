@@ -34,7 +34,7 @@ func bootExample(t *testing.T, name string) *emutest.Machine {
 const frameBudget = 30 * emutest.Second
 
 // TestMDECScreenshot checks a frame of the movie the MDEC decodes, shown in
-// 24-bit colour.
+// 24-bit color.
 func TestMDECScreenshot(t *testing.T) {
 	m := bootExample(t, "mdec")
 	m.RunUntilCount("main.shown", 86, frameBudget)

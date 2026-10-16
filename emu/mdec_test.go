@@ -17,7 +17,7 @@ import (
 )
 
 // mdecPattern is a picture with smooth gradients and hard edges in every
-// colour, w by h.
+// color, w by h.
 func mdecPattern(w, h int) *image.NRGBA {
 	img := image.NewNRGBA(image.Rect(0, 0, w, h))
 	for y := range h {

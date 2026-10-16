@@ -98,7 +98,7 @@ func TestLinks(t *testing.T) {
 	started := string(page(s, "guide/getting-started/").Content)
 	assert.Equal(t, true, strings.Contains(started, `href="../../guide/"`), started)
 	assert.Equal(t, true, strings.Contains(started, `href="../../"`), started)
-	// Code is highlighted into classes, so that one stylesheet per colour
+	// Code is highlighted into classes, so that one stylesheet per color
 	// scheme can style it.
 	assert.Equal(t, true, strings.Contains(started, `<span class="kd">func</span>`), started)
 }

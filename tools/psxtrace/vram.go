@@ -99,7 +99,7 @@ func readVRAM(path string) ([]uint16, error) {
 	return v, nil
 }
 
-// writePNG writes VRAM as 15-bit colour, marking the pixels in diff.
+// writePNG writes VRAM as 15-bit color, marking the pixels in diff.
 func writePNG(path string, v []uint16, diff []bool) error {
 	img := image.NewRGBA(image.Rect(0, 0, vramWidth, vramHeight))
 	for i, p := range v {

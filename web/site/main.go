@@ -610,11 +610,11 @@ func (s *Site) write(out, static string) error {
 	}
 
 	// The stylesheet and script, and the highlighting styles for both
-	// colour schemes, which chroma writes from its style definitions. Each
-	// is confined to its scheme: a style only colours the token types it
+	// color schemes, which chroma writes from its style definitions. Each
+	// is confined to its scheme: a style only colors the token types it
 	// has an entry for, so a rule from the light style left in force under
 	// the dark one would paint whatever the dark style leaves alone in a
-	// colour meant for a light background, and it would vanish.
+	// color meant for a light background, and it would vanish.
 	if err := copyFS(files, "assets", filepath.Join(out, "assets")); err != nil {
 		return err
 	}
