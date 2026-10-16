@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference · psxsdk</title>
+  
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/" aria-current="true">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/">Examples</a>
+      <a href="../../tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Guide">
+        <ul>
+          <li><a href="../../guide/">How it fits together</a></li>
+          <li><a href="../../guide/getting-started/">Getting started</a></li>
+          <li><a href="../../guide/writing-programs/">Writing programs in Go</a></li>
+          <li><a href="../../guide/emulator/">The emulator</a></li>
+          <li><a href="../../guide/packages/">Packages</a></li>
+          <li><a href="../../guide/background/">Background</a></li>
+          <li><a href="../../guide/reference/" aria-current="page">Reference</a></li>
+          <li><a href="../../guide/license/">License</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>Reference</h1>
+        <ul>
+<li><a href="https://problemkaputt.de/psx-spx.htm">Nocash PSX Specification</a> - comprehensive PSX hardware information</li>
+<li><a href="https://github.com/allkern/psxe">psxe</a> - the emulator <code>emu</code> was rewritten from, and is traced against</li>
+<li><a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a> - the open source BIOS the browser demo and tests boot</li>
+<li><a href="https://github.com/ChrisRx/mipsel-ecoff-toolchain">mipsel-ecoff-toolchain</a> - a compiler toolchain for Net Yaroze development on Linux</li>
+<li><a href="https://github.com/gwald/netyaroze_demo">gwald/netyaroze_demo</a> - Net Yaroze demo sources the examples are ported from</li>
+<li><a href="http://www.psxdev.net">psxdev.net</a> - a helpful and active PlayStation 1 development community</li>
+<li><a href="http://www.identicalsoftware.com/yaroze/">Identical Software</a> - a small collection of useful Net Yaroze software</li>
+<li><a href="http://hitmen.c02.at/html/psx_faq.html">Hitmen PSX FAQ</a></li>
+<li><a href="https://www.cebix.net/downloads/yarlinux.pdf">Net Yaroze for Linux</a> - an older guide to setting up the Net Yaroze on Linux</li>
+<li><a href="http://napalm-x.thegypsy.com/andrewk/psx/">Andrew Kieschnick/Napalm</a> - creator of eco2exe/exefixup, and the guide for the eco2exe in this repo</li>
+</ul>
+
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../guide/background/"><small>Previous</small>Background</a>
+        <a class="next" href="../../guide/license/"><small>Next</small>License</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

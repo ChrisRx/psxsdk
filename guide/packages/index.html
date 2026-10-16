@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Packages · psxsdk</title>
+  
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/" aria-current="true">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/">Examples</a>
+      <a href="../../tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Guide">
+        <ul>
+          <li><a href="../../guide/">How it fits together</a></li>
+          <li><a href="../../guide/getting-started/">Getting started</a></li>
+          <li><a href="../../guide/writing-programs/">Writing programs in Go</a></li>
+          <li><a href="../../guide/emulator/">The emulator</a></li>
+          <li><a href="../../guide/packages/" aria-current="page">Packages</a></li>
+          <li><a href="../../guide/background/">Background</a></li>
+          <li><a href="../../guide/reference/">Reference</a></li>
+          <li><a href="../../guide/license/">License</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>Packages</h1>
+        <table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/ChrisRx/psxsdk/tree/main/yaroze"><code>yaroze</code></a></td>
+<td>TinyGo bindings for the resident Net Yaroze library, and the host-side <code>libps</code> image <code>eco2exe</code> combines with</td>
+</tr>
+<tr>
+<td><a href="https://github.com/ChrisRx/psxsdk/tree/main/emu"><code>emu</code></a>, <a href="https://github.com/ChrisRx/psxsdk/tree/main/emu/cpu"><code>emu/cpu</code></a></td>
+<td>The emulator, and its R3000A and GTE</td>
+</tr>
+<tr>
+<td><a href="https://github.com/ChrisRx/psxsdk/tree/main/emu/emutest"><code>emu/emutest</code></a></td>
+<td>Running programs in the emulator from Go tests</td>
+</tr>
+<tr>
+<td><a href="https://github.com/ChrisRx/psxsdk/tree/main/binutils"><code>binutils</code></a></td>
+<td>Combining programs with <code>libps</code>, image layout, linker scripts</td>
+</tr>
+<tr>
+<td><a href="https://github.com/ChrisRx/psxsdk/tree/main/format/psx"><code>format/psx</code></a></td>
+<td>PSX-EXE executables</td>
+</tr>
+<tr>
+<td><a href="https://github.com/ChrisRx/psxsdk/tree/main/format/ecoff"><code>format/ecoff</code></a></td>
+<td>ECOFF objects, archives, symbols and relocations</td>
+</tr>
+<tr>
+<td><a href="https://github.com/ChrisRx/psxsdk/tree/main/format/cdrom"><code>format/cdrom</code></a></td>
+<td>CD-ROM sectors, with EDC and ECC</td>
+</tr>
+<tr>
+<td><a href="https://github.com/ChrisRx/psxsdk/tree/main/format/iso9660"><code>format/iso9660</code></a></td>
+<td>ISO 9660 with CD-XA extensions, reading and writing</td>
+</tr>
+<tr>
+<td><a href="https://github.com/ChrisRx/psxsdk/tree/main/format/psxdisc"><code>format/psxdisc</code></a></td>
+<td>Whole PlayStation discs: tracks, cue sheets, audio</td>
+</tr>
+<tr>
+<td><a href="https://github.com/ChrisRx/psxsdk/tree/main/format/mdec"><code>format/mdec</code></a></td>
+<td>MDEC bitstreams and movies</td>
+</tr>
+<tr>
+<td><a href="https://github.com/ChrisRx/psxsdk/tree/main/format/psxtrace"><code>format/psxtrace</code></a></td>
+<td>Instruction traces shared with psxe</td>
+</tr>
+</tbody>
+</table>
+
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../guide/emulator/"><small>Previous</small>The emulator</a>
+        <a class="next" href="../../guide/background/"><small>Next</small>Background</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

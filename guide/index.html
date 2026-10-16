@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How it fits together · psxsdk</title>
+  
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/site.css">
+  <link rel="stylesheet" href="../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../guide/" aria-current="true">Guide</a>
+      <a href="../tutorial/">Tutorial</a>
+      <a href="../examples/">Examples</a>
+      <a href="../tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Guide">
+        <ul>
+          <li><a href="../guide/" aria-current="page">How it fits together</a></li>
+          <li><a href="../guide/getting-started/">Getting started</a></li>
+          <li><a href="../guide/writing-programs/">Writing programs in Go</a></li>
+          <li><a href="../guide/emulator/">The emulator</a></li>
+          <li><a href="../guide/packages/">Packages</a></li>
+          <li><a href="../guide/background/">Background</a></li>
+          <li><a href="../guide/reference/">Reference</a></li>
+          <li><a href="../guide/license/">License</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>How it fits together</h1>
+        <pre><code>examples/check/main.go
+        |  tinygo build -target=playstation-yaroze
+        v
+    prog.elf  --mips1fix--&gt;  prog.elf  --eco2exe--&gt;  MAIN.EXE
+                                                        |
+                    data/... (disc.Register)  --------&gt; mkpsxiso
+                                                        v
+                                               check.bin + check.cue
+                                                        |
+                       +--------------------------------+---------------------------+
+                       v                                v                           v
+              emu (go test, emutest)          web (WebAssembly, Pages)      real hardware / psxe
+</code></pre>
+<p>A Net Yaroze program is only half a program: the rest is <code>libps</code>, the library the Net Yaroze boot disc leaves resident in RAM. <code>eco2exe</code> combines the two into a standalone PSX-EXE, so the result boots from an ordinary disc in an emulator or on a console that plays burned discs, with no Net Yaroze hardware involved.</p>
+
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <span></span>
+        <a class="next" href="../guide/getting-started/"><small>Next</small>Getting started</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../assets/search.js" defer></script>
+  <script src="../assets/player.js" defer></script>
+</body>
+</html>

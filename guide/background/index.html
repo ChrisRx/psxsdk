@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Background · psxsdk</title>
+  
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/" aria-current="true">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/">Examples</a>
+      <a href="../../tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Guide">
+        <ul>
+          <li><a href="../../guide/">How it fits together</a></li>
+          <li><a href="../../guide/getting-started/">Getting started</a></li>
+          <li><a href="../../guide/writing-programs/">Writing programs in Go</a></li>
+          <li><a href="../../guide/emulator/">The emulator</a></li>
+          <li><a href="../../guide/packages/">Packages</a></li>
+          <li><a href="../../guide/background/" aria-current="page">Background</a></li>
+          <li><a href="../../guide/reference/">Reference</a></li>
+          <li><a href="../../guide/license/">License</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>Background</h1>
+        <p>psxsdk started as software for using the Net Yaroze on Linux. When getting started with a Net Yaroze DTL-H3001, the development environment on modern computers, Linux in particular, was badly lacking. After getting a working compiler with <a href="https://github.com/ChrisRx/mipsel-ecoff-toolchain">mipsel-ecoff-toolchain</a>, the project grew to cover whatever else came out of making Net Yaroze development work on modern machines, and then to writing the programs themselves in Go and running them in an emulator that can check them. The Net Yaroze might not be the ideal PS1 development environment, but the ability to use it should not be lost to time.</p>
+<p>The goals have not changed:</p>
+<ul>
+<li>Software that is cross-platform and easy to build</li>
+<li>Modern languages with features that help the software last</li>
+<li>Libraries and tools that are well-defined and well-documented</li>
+<li>Source code for everything, always available</li>
+</ul>
+
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../guide/packages/"><small>Previous</small>Packages</a>
+        <a class="next" href="../../guide/reference/"><small>Next</small>Reference</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

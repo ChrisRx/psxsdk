@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>tunnel · psxsdk</title>
+  <meta name="description" content="The tunnel tutorial, in Go.">
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/" aria-current="true">Examples</a>
+      <a href="../../tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Examples">
+        <ul>
+          <li><a href="../../examples/">Examples</a></li>
+          <li><a href="../../examples/check/">check</a></li>
+          <li><a href="../../examples/chrome/">chrome</a></li>
+          <li><a href="../../examples/clone/">clone</a></li>
+          <li><a href="../../examples/dungeon/">dungeon</a></li>
+          <li><a href="../../examples/flying/">flying</a></li>
+          <li><a href="../../examples/mdec/">mdec</a></li>
+          <li><a href="../../examples/offscr/">offscr</a></li>
+          <li><a href="../../examples/tunnel/" aria-current="page">tunnel</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>tunnel</h1>
+        <iframe class="player" src="../../play/?embed#tunnel" title="tunnel, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
+<p class="muted"><a href="../../play/#tunnel">Open in the player</a>, with the keyboard and gamepad reference.</p>
+        <p>The tunnel tutorial, in Go.
+<p>A port of L. Evans&apos;s Net Yaroze game demo &quot;tunnel&quot; (Sony, 1997), the last
+of the tutorial series it was built up over: a ship flying down an
+endless tunnel, shooting waves of enemies. The tunnel is rings of four
+scaled squares that slide towards the ship and go round to the far end
+again; the near ones are subdivided so the perspective holds up. Fog,
+three coloured lights, one of them always circling, and semi-transparent
+sprites for shots, explosions and pick-ups make it the most of the
+machine&apos;s lighting any of the examples use. Its sound is a VAB: a tune
+started once and left playing, and sound effects keyed on and off by
+hand. The score is drawn in sprites cut from a font texture.
+<p>Enemies come in waves: helixes of fighters circling as they come, some
+switching direction or darting as one, lone attackers that jiggle, evade
+or circle while they fire, swarms of insect ships, and every so often a
+robot. Pick-ups give a life, faster shots or movement, or set the lights
+or the view swinging. The game gets faster every thousand frames.
+<p>The directional buttons and L1 and L2 move the ship, R1 fires, Select
+makes moves faster, Select and L2 step slowly, Start pauses, and Start and
+Select together quit.
+<p>Differences from the original:
+<ul>
+<li>The data is read off the disc to the addresses the original&apos;s batch
+script sent it to.
+<li>The random numbers are seeded with a constant. The original seeds
+them from the seconds of the time it was compiled.
+<li>Quitting returns to the BIOS. The original first saves the screen to
+RAM for the serial console to fetch, and calls exit.
+<li>The direction a shot is fired in is normalised in integers, exactly;
+the original uses floating point.
+<li>What the original prints to the serial console is left out, and so
+are its assertions.
+</ul>
+
+        <p class="source"><a href="https://github.com/ChrisRx/psxsdk/tree/main/examples/tunnel">Source on GitHub</a></p>
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../examples/offscr/"><small>Previous</small>offscr</a>
+        
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,284 @@
+/* The documentation, drawn after the player in play/style.css: the grey
+   PlayStation in light mode, the black Net Yaroze in dark, in Barlow, which
+   the player serves from its fonts/ directory. */
+
+@font-face { font-family: Barlow; font-weight: 400; font-display: swap; src: url(../play/fonts/barlow-400.woff2) format("woff2"); }
+@font-face { font-family: Barlow; font-weight: 500; font-display: swap; src: url(../play/fonts/barlow-500.woff2) format("woff2"); }
+@font-face { font-family: Barlow; font-weight: 600; font-display: swap; src: url(../play/fonts/barlow-600.woff2) format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 600; font-display: swap; src: url(../play/fonts/barlow-condensed-600.woff2) format("woff2"); }
+
+:root {
+  --bg: #e3e2dd;
+  --surface: #f1f0ec;
+  --surface-2: #e8e7e2;
+  --ink: #1b1b1d;
+  --muted: #65656a;
+  --line: #cac9c3;
+  --line-strong: #a8a7a1;
+  --accent: #3b63c9;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1b1e;
+    --surface: #252528;
+    --surface-2: #2c2c30;
+    --ink: #ebebe8;
+    --muted: #9b9ba1;
+    --line: #37373c;
+    --line-strong: #4b4b51;
+    --accent: #8fa8ff;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-padding-top: 72px; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 16px/1.55 Barlow, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+a { color: var(--accent); text-underline-offset: 2px; }
+.muted { color: var(--muted); }
+
+/* The header: name, sections, search, repository. */
+
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 10px 20px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+.brand {
+  font: 600 1.5rem/1 "Barlow Condensed", Barlow, system-ui, sans-serif;
+  letter-spacing: 0.005em;
+  color: var(--ink);
+  text-decoration: none;
+  margin-right: 8px;
+}
+.sections { display: flex; gap: 4px; flex-wrap: wrap; }
+.sections a {
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 500;
+}
+.sections a:hover { background: var(--surface-2); }
+.sections a[aria-current] { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.repo { margin-left: auto; font-weight: 500; text-decoration: none; }
+
+.search { position: relative; }
+.search input {
+  width: 200px;
+  padding: 6px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.95rem;
+}
+.search input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.results {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(440px, calc(100vw - 32px));
+  max-height: 70vh;
+  overflow: auto;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+.results a {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.results a:hover, .results a:focus { background: var(--surface-2); }
+.results b { font-weight: 600; }
+.results small { color: var(--muted); align-self: baseline; }
+.results span { grid-column: 1 / -1; color: var(--muted); font-size: 0.9rem; }
+.results .none { padding: 8px 10px; color: var(--muted); }
+
+/* Three columns: the section's pages, the page, its headings. */
+
+.layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 200px;
+  gap: 40px;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 32px 20px 48px;
+}
+.layout.front { grid-template-columns: minmax(0, 1fr) 200px; }
+.layout.front main { max-width: 760px; margin: 0 auto; }
+
+.side, .toc { font-size: 0.95rem; }
+.side nav, .toc nav { position: sticky; top: 76px; }
+.side ul, .toc ul { list-style: none; margin: 0; padding: 0; }
+.side li a {
+  display: block;
+  padding: 5px 10px;
+  border-radius: 6px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.side li a:hover { background: var(--surface-2); }
+.side li a[aria-current] { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); font-weight: 500; }
+
+.toc p { margin: 0 0 6px; font-weight: 600; font-size: 0.8rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.toc li a { display: block; padding: 3px 0; color: var(--muted); text-decoration: none; }
+.toc li a:hover { color: var(--ink); }
+.toc li.l3 a { padding-left: 14px; }
+
+/* The page. */
+
+article { min-width: 0; }
+article h1 {
+  margin: 0 0 20px;
+  font: 600 2.375rem/1.05 "Barlow Condensed", Barlow, system-ui, sans-serif;
+  letter-spacing: 0.005em;
+}
+article h2 {
+  margin: 2.2em 0 0.6em;
+  padding-top: 0.4em;
+  border-top: 1px solid var(--line);
+  font-size: 1.5rem;
+  line-height: 1.2;
+  font-weight: 600;
+}
+article h3 { margin: 1.8em 0 0.5em; font-size: 1.15rem; font-weight: 600; }
+article h4 { margin: 1.4em 0 0.4em; font-size: 1rem; font-weight: 600; }
+article p, article ul, article ol { margin: 0 0 1em; }
+article li { margin: 0.25em 0; }
+article hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
+article img { max-width: 100%; height: auto; }
+article blockquote {
+  margin: 1em 0;
+  padding: 0.6em 1em;
+  border-left: 3px solid var(--line-strong);
+  color: var(--muted);
+}
+
+article code, article kbd {
+  font: 0.9em/1.4 var(--mono);
+}
+article :not(pre) > code {
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+article pre {
+  margin: 0 0 1.2em;
+  padding: 14px 16px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+article pre code { background: none; padding: 0; font-size: inherit; }
+.chroma { background: var(--surface) !important; }
+
+article table {
+  width: 100%;
+  margin: 0 0 1.2em;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+article th, article td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+article th { font-weight: 600; background: var(--surface); }
+article td:first-child { white-space: nowrap; }
+
+/* The player, in an example's page. Its height is whatever the player
+   asks for, through player.js; until it does, room for the picture. */
+.player {
+  display: block;
+  width: 100%;
+  height: 560px;
+  margin: 0 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.source { margin-top: 2em; }
+
+.prevnext {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 48px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.prevnext a {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 500;
+}
+.prevnext a:hover { background: var(--surface); }
+.prevnext small { color: var(--muted); font-weight: 400; }
+.prevnext .next { margin-left: auto; text-align: right; }
+
+footer {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 20px 40px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 1100px) {
+  .layout, .layout.front { grid-template-columns: 200px minmax(0, 1fr); }
+  .toc { display: none; }
+}
+
+@media (max-width: 760px) {
+  .top { gap: 8px 12px; padding: 10px 16px; }
+  .brand { font-size: 1.3rem; }
+  .search input { width: 120px; }
+  .search input:focus { width: 180px; }
+  .repo { display: none; }
+  .layout, .layout.front { display: block; padding: 20px 16px 40px; }
+  .side { margin-bottom: 24px; }
+  .side nav { position: static; }
+  .side ul { display: flex; flex-wrap: wrap; gap: 4px; }
+  .side li a { padding: 5px 9px; border: 1px solid var(--line); }
+  article h1 { font-size: 1.9rem; }
+}

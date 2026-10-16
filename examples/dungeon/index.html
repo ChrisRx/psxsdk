@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>dungeon · psxsdk</title>
+  <meta name="description" content="The dungeon demo, in Go.">
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/" aria-current="true">Examples</a>
+      <a href="../../tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Examples">
+        <ul>
+          <li><a href="../../examples/">Examples</a></li>
+          <li><a href="../../examples/check/">check</a></li>
+          <li><a href="../../examples/chrome/">chrome</a></li>
+          <li><a href="../../examples/clone/">clone</a></li>
+          <li><a href="../../examples/dungeon/" aria-current="page">dungeon</a></li>
+          <li><a href="../../examples/flying/">flying</a></li>
+          <li><a href="../../examples/mdec/">mdec</a></li>
+          <li><a href="../../examples/offscr/">offscr</a></li>
+          <li><a href="../../examples/tunnel/">tunnel</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>dungeon</h1>
+        <iframe class="player" src="../../play/?embed#dungeon" title="dungeon, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
+<p class="muted"><a href="../../play/#dungeon">Open in the player</a>, with the keyboard and gamepad reference.</p>
+        <p>The dungeon demo, in Go.
+<p>A port of &quot;dungeon&quot; (Mizuki, 1996), a demo posted to the Japanese Net
+Yaroze members&apos; forum, in the form the LPGE team&apos;s copy of it took, with
+a ship added: a maze of stone walls, laid out at random in blocks of three
+cells, walked through in the first person. Only the cells around the
+viewpoint are given walls, a ceiling and a floor each frame, as objects
+in their own coordinate systems, and the nearest are subdivided. A line
+and two boxes in the corner show which way the viewpoint faces, and the
+library&apos;s font prints where it is. Walls stop the viewpoint, blue fog
+closes in behind them, and two lights follow the view, one from above
+and one from below.
+<p>The directional buttons turn and walk, L1 and R1 sidestep, L2 and R2
+look up and down, and Circle makes everything faster. Start switches to
+steering the ship, which sits near the start: the directional buttons and
+L1 and L2 move it along its own axes, the symbol buttons and R1 and R2
+spin it about them, and Select makes those faster. Start and Select
+together quit.
+<p>Differences from the original:
+<ul>
+<li>The data is read off the disc to the addresses the original&apos;s batch
+script sent it to. The cube model the script also sends, which the
+program never uses, is left out.
+<li>The objects a frame draws are bounded by their array&apos;s size, 256.
+The original goes on filling past its end when more of the maze is
+in view than that, over the coordinate systems next to it.
+<li>The checks for the edge of the maze come before the reads they
+guard, which the original makes a cell past the edge first.
+<li>Quitting returns to the BIOS. The original calls exit.
+</ul>
+
+        <p class="source"><a href="https://github.com/ChrisRx/psxsdk/tree/main/examples/dungeon">Source on GitHub</a></p>
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../examples/clone/"><small>Previous</small>clone</a>
+        <a class="next" href="../../examples/flying/"><small>Next</small>flying</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

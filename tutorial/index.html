@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tutorial · psxsdk</title>
+  <meta name="description" content="Writing a PlayStation program in Go from nothing: a project of your own, and a textured cube turned with the controller.">
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/site.css">
+  <link rel="stylesheet" href="../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../guide/">Guide</a>
+      <a href="../tutorial/" aria-current="true">Tutorial</a>
+      <a href="../examples/">Examples</a>
+      <a href="../tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Tutorial">
+        <ul>
+          <li><a href="../tutorial/" aria-current="page">Tutorial</a></li>
+          <li><a href="../tutorial/setting-up/">Setting up</a></li>
+          <li><a href="../tutorial/cube/">A cube from the disc</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>Tutorial</h1>
+        <p>The tutorial writes a PlayStation program in Go from nothing, outside this repository, the way a program of your own would be written. It assumes Go and nothing about the PlayStation. Where the machine's way of doing things differs from what a modern one would do, the page says why, because most of what looks strange about writing for it stops being strange once the reason is known.</p>
+<ol>
+<li><a href="../tutorial/setting-up/">Setting up</a>: a module of your own with the toolchain as a dependency, the smallest program that puts something on the screen, and the steps that turn it into a disc.</li>
+<li><a href="../tutorial/cube/">A cube from the disc</a>: a textured cube, loaded as a model and a texture off the CD, drawn in 3D and turned with the directional buttons.</li>
+</ol>
+
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <span></span>
+        <a class="next" href="../tutorial/setting-up/"><small>Next</small>Setting up</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../assets/search.js" defer></script>
+  <script src="../assets/player.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Getting started · psxsdk</title>
+  
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/" aria-current="true">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/">Examples</a>
+      <a href="../../tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Guide">
+        <ul>
+          <li><a href="../../guide/">How it fits together</a></li>
+          <li><a href="../../guide/getting-started/" aria-current="page">Getting started</a></li>
+          <li><a href="../../guide/writing-programs/">Writing programs in Go</a></li>
+          <li><a href="../../guide/emulator/">The emulator</a></li>
+          <li><a href="../../guide/packages/">Packages</a></li>
+          <li><a href="../../guide/background/">Background</a></li>
+          <li><a href="../../guide/reference/">Reference</a></li>
+          <li><a href="../../guide/license/">License</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>Getting started</h1>
+        <p>Everything is built with Go 1.27 or newer:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">git clone https://github.com/ChrisRx/psxsdk
+</span></span><span class="line"><span class="cl"><span class="nb">cd</span> psxsdk
+</span></span><span class="line"><span class="cl">go build -o bin/ ./tools/...
+</span></span><span class="line"><span class="cl">go <span class="nb">test</span> <span class="k">$(</span>go list ./... <span class="p">|</span> grep -v examples<span class="k">)</span>   <span class="c1"># or: task test</span>
+</span></span></code></pre><p>That is enough for the disc and executable tools, the emulator and the host-side tests. Building the examples additionally needs the TinyGo fork that carries the <code>playstation-yaroze</code> target. The Nix flake provides it, along with the cross binutils, <a href="https://taskfile.dev">go-task</a>, mednafen and a patched <a href="https://github.com/allkern/psxe">psxe</a> for comparison:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">nix develop            <span class="c1"># or: direnv allow</span>
+</span></span><span class="line"><span class="cl">task discs             <span class="c1"># every example onto .build/NAME/NAME.cue</span>
+</span></span><span class="line"><span class="cl">task test:emu          <span class="c1"># boot each disc in the emulator and compare screenshots</span>
+</span></span><span class="line"><span class="cl">task site site:serve   <span class="c1"># build the browser demo and serve it on localhost:8000</span>
+</span></span></code></pre><p><code>task test:emu</code> boots with the OpenBIOS image in <code>web/static</code>, or whatever <code>PSX_BIOS</code> names. The memory card test drives Sony's shell, which OpenBIOS does not have, and only runs when <code>PSX_SONY_BIOS</code> points at a Sony BIOS. No Sony BIOS is distributed here.</p>
+<p>The tools a disc build uses are also declared as Go tools, so inside the module they run without installing anything:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">go tool mkpsxiso -o game.bin --boot MAIN.EXE ./disc
+</span></span></code></pre>
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../guide/"><small>Previous</small>How it fits together</a>
+        <a class="next" href="../../guide/writing-programs/"><small>Next</small>Writing programs in Go</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

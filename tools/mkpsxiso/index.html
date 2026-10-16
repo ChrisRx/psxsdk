@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>mkpsxiso · psxsdk</title>
+  
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/">Examples</a>
+      <a href="../../tools/" aria-current="true">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Tools">
+        <ul>
+          <li><a href="../../tools/">Tools</a></li>
+          <li><a href="../../tools/eco2exe/">eco2exe</a></li>
+          <li><a href="../../tools/elf2exe/">elf2exe</a></li>
+          <li><a href="../../tools/mkpsxiso/" aria-current="page">mkpsxiso</a></li>
+          <li><a href="../../tools/dumpsxiso/">dumpsxiso</a></li>
+          <li><a href="../../tools/mdecenc/">mdecenc</a></li>
+          <li><a href="../../tools/psxemu/">psxemu</a></li>
+          <li><a href="../../tools/psxtrace/">psxtrace</a></li>
+          <li><a href="../../tools/ecoff2asm/">ecoff2asm and ecoffcmp</a></li>
+          <li><a href="../../tools/hdr2go/">hdr2go</a></li>
+          <li><a href="../../tools/mips1fix/">mips1fix</a></li>
+          <li><a href="../../tools/objdump/">objdump</a></li>
+          <li><a href="../../tools/sioload/">sioload</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>mkpsxiso</h1>
+        <p><code>mkpsxiso</code> builds a PlayStation disc image from a directory. A disc is a <code>.bin</code> of raw 2352-byte CD-ROM XA Mode 2 sectors plus a <code>.cue</code> naming its tracks, not a plain <code>.iso</code>, because the format also has to carry CD audio and streamed XA that will not fit in 2048-byte blocks.</p>
+<p>The common case is an executable plus the data it loads, so the directory <em>is</em> the interface and no layout file is involved:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">$ mkpsxiso -o game.bin --boot MAIN.EXE --volume-id MYGAME ./disc
+</span></span><span class="line"><span class="cl">created <span class="s2">&#34;game.bin&#34;</span>: <span class="m">789</span> blocks <span class="o">(</span><span class="m">150</span> of run-out<span class="o">)</span>, <span class="s2">&#34;game.cue&#34;</span>
+</span></span></code></pre><p>The tree is placed on the disc as it appears on disk. Names are folded to the restricted uppercase set ISO 9660 allows and given the <code>;1</code> version suffix that PlayStation programs use when opening files, so <code>data/sound/sample1.seq</code> becomes <code>\DATA\SOUND\SAMPLE1.SEQ;1</code>. <code>--boot</code> writes a <code>SYSTEM.CNF</code> naming the executable, unless the tree already has one. <code>-v</code> lists what was placed where:</p>
+<pre><code>  \MAIN.EXE;1                                1251328 bytes  LBA 23
+  \MUSIC.XA;1                                   9344 bytes  LBA 72  raw sectors
+  \SYSTEM.CNF;1                                   53 bytes  LBA 634
+  \DATA                                        &lt;dir&gt;        LBA 21
+  \DATA\SOUND\SAMPLE1.SEQ;1                     5000 bytes  LBA 636
+</code></pre>
+<p>The image ends with two seconds of empty sectors. A drive reads ahead of the sector it was asked for, and the console reads a file by asking for whole sectors, so a file that ends at the end of the track is one the console cannot finish reading: the request runs into the lead-out and fails, which looks like a file that is present and unreadable. Pressed discs carry a run-out for the same reason. <code>--padding</code> sets how many sectors, and <code>0</code> leaves none, which is fine for an image only ever read by an emulator:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">$ mkpsxiso --padding <span class="m">0</span> -o game.bin --boot MAIN.EXE ./disc
+</span></span><span class="line"><span class="cl">created <span class="s2">&#34;game.bin&#34;</span>: <span class="m">639</span> blocks, <span class="s2">&#34;game.cue&#34;</span>
+</span></span><span class="line"><span class="cl">$ mednafen game.cue
+</span></span><span class="line"><span class="cl"><span class="o">[</span>CDC<span class="o">]</span> In leadout area: <span class="m">639</span>
+</span></span></code></pre><p><code>--file DISC=HOST</code> places one more host file at a path on the disc, making the directories on the way, and may be repeated. With it an image needs no directory at all.</p>
+<h2 id="registered-files">Registered files</h2>
+<p>A program can declare the files it reads itself, with the <a href="https://github.com/ChrisRx/psxsdk/tree/main/disc"><code>disc</code></a> package, instead of a directory being kept in step with it by hand:</p>
+<pre class="chroma"><code><span class="line"><span class="cl"><span class="kn">import</span><span class="w"> </span><span class="s">&#34;go.chrisrx.dev/psx/disc&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="kd">var</span><span class="w"> </span><span class="nx">stone</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">disc</span><span class="p">.</span><span class="nf">Register</span><span class="p">(</span><span class="s">&#34;DATA/STONE.TIM&#34;</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;data/STONE.TIM&#34;</span><span class="p">)</span><span class="w">
+</span></span></span></code></pre><p><code>Register</code> is called with two constants in a package-level declaration: the path the file is to have on the disc, and the file on the host that goes there. TinyGo evaluates the call when it compiles the program, so each registration becomes a record of constant data in the executable. When <code>--boot</code> names an executable in the tree, <code>mkpsxiso</code> finds the records in it, places each file from the directory <code>--src</code> names, and once the image is laid out writes the file's first sector and its length back into the record before the executable goes onto the disc. <code>File.Read</code> then reads the file from that sector, through <code>CdControl</code> and <code>CdRead</code>, with no search of the directory, and a file that is missing or misnamed on the host fails the build rather than the program.</p>
+<pre class="chroma"><code><span class="line"><span class="cl">$ mkpsxiso -v -o game.bin --boot MAIN.EXE --file MAIN.EXE<span class="o">=</span>prog.exe --src ./examples/dungeon
+</span></span><span class="line"><span class="cl">  <span class="se">\M</span>AIN.EXE<span class="p">;</span><span class="m">1</span>                                <span class="m">1251328</span> bytes  LBA <span class="m">23</span>
+</span></span><span class="line"><span class="cl">  <span class="se">\S</span>YSTEM.CNF<span class="p">;</span><span class="m">1</span>                                   <span class="m">53</span> bytes  LBA <span class="m">634</span>
+</span></span><span class="line"><span class="cl">  <span class="se">\D</span>ATA                                        &lt;dir&gt;        LBA <span class="m">21</span>
+</span></span><span class="line"><span class="cl">  <span class="se">\D</span>ATA<span class="se">\S</span>TONE.TIM<span class="p">;</span><span class="m">1</span>                            <span class="m">33296</span> bytes  LBA <span class="m">635</span>
+</span></span><span class="line"><span class="cl">  <span class="se">\D</span>ATA<span class="se">\S</span>TONE.TIM<span class="p">;</span><span class="m">1</span>                            registered by <span class="se">\M</span>AIN.EXE<span class="p">;</span><span class="m">1</span> from data/STONE.TIM
+</span></span></code></pre><p>A registered path that the directory already holds is an error rather than a choice between the two, as is one path registered from two different host files. An executable not built onto a disc this way, or run from the serial loader, sees a zero sector and length, which <code>Placed</code> reports, and <code>Read</code> falls back to <code>CdReadFile</code> by name.</p>
+<p>Sony exported <code>CdRead</code> but not the <code>CdControl</code> that positions the drive for it, so the TinyGo target's link script provides <code>CdControl</code>, <code>CdControlB</code>, <code>CdIntToPos</code> and <code>CdPosToInt</code> at the addresses the library's own <code>CdReadFile</code> calls, and the <code>yaroze</code> package declares them.</p>
+<p>The volume descriptor fields are flags: <code>--volume-id</code>, <code>--system-id</code>, <code>--publisher</code>, <code>--preparer</code> and <code>--application</code>. <code>--date</code> sets the volume date, and leaving it unset records no date at all, so the same tree always produces the same bytes. <code>--file-times</code> records each file's own modification time instead, which is honest about the tree but makes the image depend on the mtimes in it.</p>
+<h2 id="streamed-media">Streamed media</h2>
+<p>Files named <code>.xa</code> or <code>.str</code> are streamed media: XA audio and video are produced as whole 2336-byte Mode 2 sectors with their subheaders already in place, saying which form each sector is and which interleaved channel it belongs to. Those are written through untouched rather than packed into logical blocks, and their directory records carry the CD-XA attributes that mark them Form 2. <code>--raw</code> adds patterns to the set and <code>--no-raw</code> empties it. A file taken for a stream that is not a whole number of sectors is an error rather than a file padded into nonsense.</p>
+<p>Every image is a CD-XA disc: the <code>CD-XA001</code> signature in the volume descriptor and the 14-byte attribute block on every directory record, which is what a PlayStation disc carries and what says a file holds a stream. <code>--no-xa</code> leaves both out, for comparing against a plain ISO 9660 writer.</p>
+<h2 id="audio-tracks">Audio tracks</h2>
+<p><code>--audio</code> appends a CD audio track, which a program plays by its number rather than opening as a file. Input is a WAV file or headerless samples, in both cases 44.1kHz 16-bit stereo, which is the only thing a CD holds. The two second pause the standard requires between the data track and the audio that follows it is inserted automatically, and the <code>.cue</code> describes the result:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">$ mkpsxiso -o game.bin --boot MAIN.EXE --audio track1.wav --audio track2.wav ./disc
+</span></span><span class="line"><span class="cl">created <span class="s2">&#34;game.bin&#34;</span>: <span class="m">789</span> blocks <span class="o">(</span><span class="m">150</span> of run-out<span class="o">)</span> and <span class="m">2</span> audio track<span class="o">(</span>s<span class="o">)</span>, <span class="m">15489</span> sectors in all, <span class="s2">&#34;game.cue&#34;</span>
+</span></span><span class="line"><span class="cl">$ cat game.cue
+</span></span><span class="line"><span class="cl">FILE <span class="s2">&#34;game.bin&#34;</span> BINARY
+</span></span><span class="line"><span class="cl">  TRACK <span class="m">01</span> MODE2/2352
+</span></span><span class="line"><span class="cl">    INDEX <span class="m">01</span> 00:00:00
+</span></span><span class="line"><span class="cl">  TRACK <span class="m">02</span> AUDIO
+</span></span><span class="line"><span class="cl">    INDEX <span class="m">00</span> 00:10:39
+</span></span><span class="line"><span class="cl">    INDEX <span class="m">01</span> 00:12:39
+</span></span><span class="line"><span class="cl">  TRACK <span class="m">03</span> AUDIO
+</span></span><span class="line"><span class="cl">    INDEX <span class="m">01</span> 01:44:00
+</span></span></code></pre><h2 id="plain-iso-9660">Plain ISO 9660</h2>
+<p><code>--iso</code> writes plain 2048-byte blocks instead. That cannot represent audio tracks or Form 2 sectors, and says so rather than writing an image missing either, but ordinary ISO 9660 tools can read it, which is how the filesystem is checked against an independent implementation:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">$ mkpsxiso --iso -o test.iso ./disc
+</span></span><span class="line"><span class="cl">$ xorriso -indev test.iso -find /
+</span></span></code></pre><p>Every image carries the 64-byte string that identifies it as a PlayStation disc, written into the system area at sector 4. This is format identification: without it mednafen cannot tell the image from any other CD-XA disc and rejects it outright with <em>&quot;Could not find a system that supports this CD&quot;</em>. It is not a protection bypass, and could not be: an unmodified console decides whether to boot from the wobble encoded in a pressed disc's lead-in groove, a physical property no file can reproduce.</p>
+<p>Booting on real hardware additionally wants Sony's licence data, which holds the logo shown at startup. That cannot be redistributed, so supply your own copy with <code>--license</code>; it replaces the whole system area.</p>
+
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../tools/elf2exe/"><small>Previous</small>elf2exe</a>
+        <a class="next" href="../../tools/dumpsxiso/"><small>Next</small>dumpsxiso</a>
+      </nav>
+    </main>
+    <aside class="toc">
+      <nav aria-label="On this page">
+        <p>On this page</p>
+        <ul>
+          <li class="l2"><a href="#registered-files">Registered files</a></li>
+          <li class="l2"><a href="#streamed-media">Streamed media</a></li>
+          <li class="l2"><a href="#audio-tracks">Audio tracks</a></li>
+          <li class="l2"><a href="#plain-iso-9660">Plain ISO 9660</a></li>
+        </ul>
+      </nav>
+    </aside>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

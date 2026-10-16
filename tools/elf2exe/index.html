@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>elf2exe · psxsdk</title>
+  
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/">Examples</a>
+      <a href="../../tools/" aria-current="true">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Tools">
+        <ul>
+          <li><a href="../../tools/">Tools</a></li>
+          <li><a href="../../tools/eco2exe/">eco2exe</a></li>
+          <li><a href="../../tools/elf2exe/" aria-current="page">elf2exe</a></li>
+          <li><a href="../../tools/mkpsxiso/">mkpsxiso</a></li>
+          <li><a href="../../tools/dumpsxiso/">dumpsxiso</a></li>
+          <li><a href="../../tools/mdecenc/">mdecenc</a></li>
+          <li><a href="../../tools/psxemu/">psxemu</a></li>
+          <li><a href="../../tools/psxtrace/">psxtrace</a></li>
+          <li><a href="../../tools/ecoff2asm/">ecoff2asm and ecoffcmp</a></li>
+          <li><a href="../../tools/hdr2go/">hdr2go</a></li>
+          <li><a href="../../tools/mips1fix/">mips1fix</a></li>
+          <li><a href="../../tools/objdump/">objdump</a></li>
+          <li><a href="../../tools/sioload/">sioload</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>elf2exe</h1>
+        <p><code>elf2exe</code> writes a linked program out as a PSX-EXE, for a program that is the
+whole of the machine rather than a Net Yaroze one.</p>
+<p>It is the plain conversion: the loadable image and the entry point go into the
+2048-byte header and nothing is added. <code>eco2exe</code> exists because a Net Yaroze
+program is only half a program, and has to be combined with the library the
+boot disc leaves resident in RAM; a program that brings its own crt0 and
+drives the hardware itself needs none of that.</p>
+<pre class="chroma"><code><span class="line"><span class="cl">$ elf2exe prog.elf MAIN.EXE
+</span></span><span class="line"><span class="cl">created <span class="s2">&#34;MAIN.EXE&#34;</span>: <span class="nv">load</span><span class="o">=</span>0x80010000 <span class="nv">entry</span><span class="o">=</span>0x80010000 <span class="m">8192</span> bytes, d00f145ee4fd44f1
+</span></span></code></pre><p>The input may be ELF or ECOFF, since only the loadable segments and the entry
+point are read. <code>--stack-addr</code> sets the stack pointer the BIOS installs before
+jumping to the entry point, which matters only for a program whose crt0 does
+not set its own.</p>
+
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../tools/eco2exe/"><small>Previous</small>eco2exe</a>
+        <a class="next" href="../../tools/mkpsxiso/"><small>Next</small>mkpsxiso</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

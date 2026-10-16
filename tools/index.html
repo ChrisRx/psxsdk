@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en" data-root="../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tools · psxsdk</title>
+  
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/site.css">
+  <link rel="stylesheet" href="../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../guide/">Guide</a>
+      <a href="../tutorial/">Tutorial</a>
+      <a href="../examples/">Examples</a>
+      <a href="../tools/" aria-current="true">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Tools">
+        <ul>
+          <li><a href="../tools/" aria-current="page">Tools</a></li>
+          <li><a href="../tools/eco2exe/">eco2exe</a></li>
+          <li><a href="../tools/elf2exe/">elf2exe</a></li>
+          <li><a href="../tools/mkpsxiso/">mkpsxiso</a></li>
+          <li><a href="../tools/dumpsxiso/">dumpsxiso</a></li>
+          <li><a href="../tools/mdecenc/">mdecenc</a></li>
+          <li><a href="../tools/psxemu/">psxemu</a></li>
+          <li><a href="../tools/psxtrace/">psxtrace</a></li>
+          <li><a href="../tools/ecoff2asm/">ecoff2asm and ecoffcmp</a></li>
+          <li><a href="../tools/hdr2go/">hdr2go</a></li>
+          <li><a href="../tools/mips1fix/">mips1fix</a></li>
+          <li><a href="../tools/objdump/">objdump</a></li>
+          <li><a href="../tools/sioload/">sioload</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>Tools</h1>
+        <table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../tools/eco2exe/">eco2exe</a></td>
+<td>Combine a Net Yaroze program with <code>libps</code> into a bootable PSX-EXE</td>
+</tr>
+<tr>
+<td><a href="../tools/elf2exe/">elf2exe</a></td>
+<td>Write a standalone ELF or ECOFF program as a PSX-EXE</td>
+</tr>
+<tr>
+<td><a href="../tools/mips1fix/">mips1fix</a></td>
+<td>Replace the MIPS II traps LLVM emits with nops so the code runs on an R3000A</td>
+</tr>
+<tr>
+<td><a href="../tools/mkpsxiso/">mkpsxiso</a></td>
+<td>Build a CD-XA disc image from a directory</td>
+</tr>
+<tr>
+<td><a href="../tools/dumpsxiso/">dumpsxiso</a></td>
+<td>List or extract a disc image</td>
+</tr>
+<tr>
+<td><a href="../tools/mdecenc/">mdecenc</a></td>
+<td>Encode pictures into an MDEC movie</td>
+</tr>
+<tr>
+<td><a href="../tools/hdr2go/">hdr2go</a></td>
+<td>Generate layout-checked Go bindings from a C header</td>
+</tr>
+<tr>
+<td><a href="../tools/psxemu/">psxemu</a></td>
+<td>Run the emulator headless, with traces, VRAM dumps and screenshots</td>
+</tr>
+<tr>
+<td><a href="../tools/psxtrace/">psxtrace</a></td>
+<td>Print and diff instruction traces, compare VRAM dumps</td>
+</tr>
+<tr>
+<td><a href="../tools/sioload/">sioload</a></td>
+<td>Upload an executable to a Net Yaroze over the serial cable</td>
+</tr>
+<tr>
+<td><a href="../tools/objdump/">objdump</a></td>
+<td>Display ECOFF object files, with disassembly</td>
+</tr>
+<tr>
+<td><a href="../tools/ecoff2asm/">ecoff2asm</a></td>
+<td>Convert ECOFF objects to GNU as source, for relinking the Net Yaroze library as ELF</td>
+</tr>
+<tr>
+<td><a href="../tools/ecoff2asm/">ecoffcmp</a></td>
+<td>Check ecoff2asm output against the original objects</td>
+</tr>
+<tr>
+<td>gteprog</td>
+<td>Write a GTE exercise program as a PSX-EXE, for comparing emulators</td>
+</tr>
+</tbody>
+</table>
+
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <span></span>
+        <a class="next" href="../tools/eco2exe/"><small>Next</small>eco2exe</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../assets/search.js" defer></script>
+  <script src="../assets/player.js" defer></script>
+</body>
+</html>

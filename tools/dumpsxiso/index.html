@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>dumpsxiso · psxsdk</title>
+  
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/">Examples</a>
+      <a href="../../tools/" aria-current="true">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Tools">
+        <ul>
+          <li><a href="../../tools/">Tools</a></li>
+          <li><a href="../../tools/eco2exe/">eco2exe</a></li>
+          <li><a href="../../tools/elf2exe/">elf2exe</a></li>
+          <li><a href="../../tools/mkpsxiso/">mkpsxiso</a></li>
+          <li><a href="../../tools/dumpsxiso/" aria-current="page">dumpsxiso</a></li>
+          <li><a href="../../tools/mdecenc/">mdecenc</a></li>
+          <li><a href="../../tools/psxemu/">psxemu</a></li>
+          <li><a href="../../tools/psxtrace/">psxtrace</a></li>
+          <li><a href="../../tools/ecoff2asm/">ecoff2asm and ecoffcmp</a></li>
+          <li><a href="../../tools/hdr2go/">hdr2go</a></li>
+          <li><a href="../../tools/mips1fix/">mips1fix</a></li>
+          <li><a href="../../tools/objdump/">objdump</a></li>
+          <li><a href="../../tools/sioload/">sioload</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>dumpsxiso</h1>
+        <p><code>dumpsxiso</code> reads a disc image back. With no <code>--output</code> it lists what the image holds, which is the quickest way to see whether a file landed under the name a program will ask for:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">$ dumpsxiso game.bin
+</span></span><span class="line"><span class="cl">volume MYGAME, <span class="m">789</span> blocks
+</span></span><span class="line"><span class="cl">  system      PLAYSTATION
+</span></span><span class="line"><span class="cl">  created     2026-10-14T00:00:00Z
+</span></span><span class="line"><span class="cl">  extension   CD-XA
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  <span class="se">\M</span>AIN.EXE<span class="p">;</span><span class="m">1</span>                              <span class="m">1251328</span> bytes  LBA <span class="m">23</span>
+</span></span><span class="line"><span class="cl">  <span class="se">\M</span>USIC.XA<span class="p">;</span><span class="m">1</span>                                 <span class="m">9344</span> bytes  LBA <span class="m">72</span>  raw sectors
+</span></span><span class="line"><span class="cl">  <span class="se">\S</span>YSTEM.CNF<span class="p">;</span><span class="m">1</span>                                 <span class="m">53</span> bytes  LBA <span class="m">634</span>
+</span></span><span class="line"><span class="cl">  <span class="se">\D</span>ATA                                      &lt;dir&gt;        LBA <span class="m">21</span>
+</span></span><span class="line"><span class="cl">  <span class="se">\D</span>ATA<span class="se">\S</span>OUND<span class="se">\S</span>AMPLE1.SEQ<span class="p">;</span><span class="m">1</span>                   <span class="m">5000</span> bytes  LBA <span class="m">636</span>
+</span></span></code></pre><p>With <code>--output</code> the tree is extracted to a directory, and what comes out can be handed straight back to <code>mkpsxiso</code>. A <code>.bin</code> of raw sectors and a <code>.iso</code> of 2048-byte blocks are both accepted; which one it is follows from the image itself. Streamed files come out as the 2336-byte sectors they went in as, recognised by their CD-XA attributes rather than their names.</p>
+<p>Reading a raw image checks every sector's error detection, so a damaged image is reported rather than quietly extracted. A sector of a filesystem is the kind that is meant to be read correctly or not at all, and a file recovered from a failing one is a file the console itself would refuse.</p>
+
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../tools/mkpsxiso/"><small>Previous</small>mkpsxiso</a>
+        <a class="next" href="../../tools/mdecenc/"><small>Next</small>mdecenc</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

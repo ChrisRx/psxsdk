@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>offscr · psxsdk</title>
+  <meta name="description" content="The offscr tutorial, in Go.">
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/" aria-current="true">Examples</a>
+      <a href="../../tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Examples">
+        <ul>
+          <li><a href="../../examples/">Examples</a></li>
+          <li><a href="../../examples/check/">check</a></li>
+          <li><a href="../../examples/chrome/">chrome</a></li>
+          <li><a href="../../examples/clone/">clone</a></li>
+          <li><a href="../../examples/dungeon/">dungeon</a></li>
+          <li><a href="../../examples/flying/">flying</a></li>
+          <li><a href="../../examples/mdec/">mdec</a></li>
+          <li><a href="../../examples/offscr/" aria-current="page">offscr</a></li>
+          <li><a href="../../examples/tunnel/">tunnel</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>offscr</h1>
+        <iframe class="player" src="../../play/?embed#offscr" title="offscr, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
+<p class="muted"><a href="../../play/#offscr">Open in the player</a>, with the keyboard and gamepad reference.</p>
+        <p>The offscr tutorial, in Go.
+<p>A port of L. Evans&apos;s Net Yaroze tutorial on retexturing at run time
+(Sony, 1997). A sphere, textured from a 16-bit image, sits over a square
+of floor. Every frame, after drawing the scene, the program points the
+drawing environment at the part of VRAM outside the two display buffers
+where the sphere&apos;s texture lives, draws a sprite there, and points it back:
+the sprite is painted onto the texture, and the sphere wears it from the
+next frame on. Four seconds in, it also copies a block of VRAM over
+another, the simplest way to change a texture. The sprite is also drawn on
+screen, in the top left, as it is.
+<p>The right-hand buttons move the sprite over the texture, the directional
+buttons and L1 and L2 move the sphere, Select makes either faster, Start
+pauses, and Start and Select together quit.
+<p>Differences from the original:
+<ul>
+<li>The data is read off the disc to the addresses the original&apos;s batch
+script sent it to.
+<li>What the original prints to the serial console, a line every frame
+and the drawing environment at the start, is left out. What it shows
+on screen is kept.
+<li>The second ordering tables, through which the sprite is drawn onto
+the texture, have the two entries their length of 1 gives them. The
+original declares them an entry long, so clearing one writes past
+its end into whatever follows; here that was the view.
+<li>Code the original never runs is left out: the sprite placement for
+objects drawn as sprites, of which it has none, and the palette copy
+it has commented out.
+</ul>
+
+        <p class="source"><a href="https://github.com/ChrisRx/psxsdk/tree/main/examples/offscr">Source on GitHub</a></p>
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../examples/mdec/"><small>Previous</small>mdec</a>
+        <a class="next" href="../../examples/tunnel/"><small>Next</small>tunnel</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

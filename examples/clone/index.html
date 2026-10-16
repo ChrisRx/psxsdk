@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>clone · psxsdk</title>
+  <meta name="description" content="The clone sample, in Go.">
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/" aria-current="true">Examples</a>
+      <a href="../../tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Examples">
+        <ul>
+          <li><a href="../../examples/">Examples</a></li>
+          <li><a href="../../examples/check/">check</a></li>
+          <li><a href="../../examples/chrome/">chrome</a></li>
+          <li><a href="../../examples/clone/" aria-current="page">clone</a></li>
+          <li><a href="../../examples/dungeon/">dungeon</a></li>
+          <li><a href="../../examples/flying/">flying</a></li>
+          <li><a href="../../examples/mdec/">mdec</a></li>
+          <li><a href="../../examples/offscr/">offscr</a></li>
+          <li><a href="../../examples/tunnel/">tunnel</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>clone</h1>
+        <iframe class="player" src="../../play/?embed#clone" title="clone, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
+<p class="muted"><a href="../../play/#clone">Open in the player</a>, with the keyboard and gamepad reference.</p>
+        <p>The clone sample, in Go.
+<p>A port of Sony&apos;s Net Yaroze demo &quot;clone&quot; (S. Ashley, 1997): a first-person
+maze shooter. Walk a fogged, textured maze, shoot the monsters before they
+shoot you, pick up first aid, find the pulsing exit, and do it again on
+the next of three levels. A heart beats louder as monsters get closer.
+<p>It puts much of the machine to work at once: the GTE and the 3D library,
+with fog and subdivision, models built in memory, sprites, lines, filled
+boxes and text, a palette rewritten every frame, and sound effects played
+straight on SPU voices, which the check example&apos;s sequenced music does
+not use.
+<p>Controls: the d-pad walks and turns, L1 and R1 sidestep, X fires, and
+circle shows the map of where you have been. Hold Start and Select
+together to quit.
+<p>Differences from the original:
+<ul>
+<li>The sound bank, maps and textures are read off the disc. On a Net
+Yaroze the loader&apos;s batch script sent them from the PC to fixed
+addresses; they are loaded to the same addresses.
+<li>Every object has a real coordinate system. The original points them
+all at WORLD, the library&apos;s nil coordinate system, and writes each
+object&apos;s transformation through that pointer, which in C silently
+overwrites the kernel&apos;s memory at address 0. They share one here, as
+they shared that address there.
+<li>Reading the map outside its bounds reads as no walls. The original
+reads whatever memory is next to the map, which Go does not allow.
+<li>The heartbeat&apos;s volume starts from zero. The original compares against
+a variable it never sets.
+<li>It shows a loading message, and a report if the data is missing,
+where the original would hang or exit.
+</ul>
+<p>Nothing allocates after startup.
+
+        <p class="source"><a href="https://github.com/ChrisRx/psxsdk/tree/main/examples/clone">Source on GitHub</a></p>
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../examples/chrome/"><small>Previous</small>chrome</a>
+        <a class="next" href="../../examples/dungeon/"><small>Next</small>dungeon</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

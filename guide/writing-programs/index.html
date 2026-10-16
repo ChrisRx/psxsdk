@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Writing programs in Go · psxsdk</title>
+  
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/" aria-current="true">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/">Examples</a>
+      <a href="../../tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Guide">
+        <ul>
+          <li><a href="../../guide/">How it fits together</a></li>
+          <li><a href="../../guide/getting-started/">Getting started</a></li>
+          <li><a href="../../guide/writing-programs/" aria-current="page">Writing programs in Go</a></li>
+          <li><a href="../../guide/emulator/">The emulator</a></li>
+          <li><a href="../../guide/packages/">Packages</a></li>
+          <li><a href="../../guide/background/">Background</a></li>
+          <li><a href="../../guide/reference/">Reference</a></li>
+          <li><a href="../../guide/license/">License</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>Writing programs in Go</h1>
+        <p>The <a href="https://github.com/ChrisRx/psxsdk/tree/main/yaroze"><code>yaroze</code></a> package binds the Net Yaroze library for TinyGo. Nothing in it is implemented in Go: each function is a bodyless declaration resolved by the linker against the fixed addresses of the resident library, exactly as a C program's calls are. The bindings are generated from the SDK's <code>libps.h</code> by <a href="../../tools/hdr2go/"><code>hdr2go</code></a>, and every struct's size is asserted against clang's layout at compile time, so a struct that disagrees with the C one by a byte fails to build rather than producing a disc that draws nothing. Names are kept as the header spells them, so Sony's documentation reads across directly.</p>
+<pre class="chroma"><code><span class="line"><span class="cl"><span class="kn">import</span><span class="w"> </span><span class="s">&#34;go.chrisrx.dev/psx/yaroze&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nx">yaroze</span><span class="p">.</span><span class="nf">ResetGraph</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nx">yaroze</span><span class="p">.</span><span class="nf">GsInitGraph</span><span class="p">(</span><span class="mi">320</span><span class="p">,</span><span class="w"> </span><span class="mi">240</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nx">yaroze</span><span class="p">.</span><span class="nf">FntLoad</span><span class="p">(</span><span class="mi">960</span><span class="p">,</span><span class="w"> </span><span class="mi">256</span><span class="p">)</span><span class="w">
+</span></span></span></code></pre><p>The <a href="../../examples/">examples</a> are ports of Sony's Net Yaroze samples and demos, each putting a different part of the machine to work, and the <a href="../../tutorial/">tutorial</a> starts from nothing.</p>
+
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../guide/getting-started/"><small>Previous</small>Getting started</a>
+        <a class="next" href="../../guide/emulator/"><small>Next</small>The emulator</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

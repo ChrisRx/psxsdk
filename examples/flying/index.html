@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>flying · psxsdk</title>
+  <meta name="description" content="The flying tutorial, in Go.">
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/" aria-current="true">Examples</a>
+      <a href="../../tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Examples">
+        <ul>
+          <li><a href="../../examples/">Examples</a></li>
+          <li><a href="../../examples/check/">check</a></li>
+          <li><a href="../../examples/chrome/">chrome</a></li>
+          <li><a href="../../examples/clone/">clone</a></li>
+          <li><a href="../../examples/dungeon/">dungeon</a></li>
+          <li><a href="../../examples/flying/" aria-current="page">flying</a></li>
+          <li><a href="../../examples/mdec/">mdec</a></li>
+          <li><a href="../../examples/offscr/">offscr</a></li>
+          <li><a href="../../examples/tunnel/">tunnel</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>flying</h1>
+        <iframe class="player" src="../../play/?embed#flying" title="flying, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
+<p class="muted"><a href="../../play/#flying">Open in the player</a>, with the keyboard and gamepad reference.</p>
+        <p>The flying tutorial, in Go.
+<p>A port of L. Evans&apos;s Net Yaroze tutorial &quot;flying&quot; (Sony, 1996), the
+eighteenth in the &quot;3-D object manipulation&quot; series: a ship flying over a
+plane of tiles under a field of stars, with enemy ships that turn to face
+it and shoot. One enemy at a time appears somewhere on the plane, either
+sitting and tracking or giving chase, and goes down after ten hits in a
+burst of spinning sprites, for a score. A scanner in the corner shows
+where it is, pulsing. The view follows the ship from any of nine places,
+from close behind to high above to either side. The library&apos;s font prints
+the ship&apos;s position and the score, and the star field slides as the ship
+turns.
+<p>Up and down move the ship forwards and back, Square and Circle turn it,
+L2 fires, R1 and R2 step through the views and L1 goes back to the first.
+Holding Select moves the viewpoint instead, by the directional buttons,
+Triangle and Cross, and R1 and R2 change the projection; Select and L2
+step slowly. Start pauses, and Start and Select together quit. When the
+ship runs out of health, the score is shown until Start is pressed, and
+the program ends.
+<p>Differences from the original:
+<ul>
+<li>The data is read off the disc to the addresses the original&apos;s batch
+script sent it to. The cube and sphere models the script also sends,
+which the program never uses, are left out.
+<li>After the score is shown, the program returns to the BIOS. The
+original goes on to a reset that starts with a failing assertion,
+which prints a message to the serial console and exits.
+<li>The bouncing spheres, which the original has switched off, and the
+level changes, which nothing in it reaches, are left out, and so are
+its assertions and what it prints to the serial console.
+</ul>
+
+        <p class="source"><a href="https://github.com/ChrisRx/psxsdk/tree/main/examples/flying">Source on GitHub</a></p>
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../examples/dungeon/"><small>Previous</small>dungeon</a>
+        <a class="next" href="../../examples/mdec/"><small>Next</small>mdec</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

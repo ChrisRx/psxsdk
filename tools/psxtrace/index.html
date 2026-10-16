@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>psxtrace · psxsdk</title>
+  
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/">Examples</a>
+      <a href="../../tools/" aria-current="true">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Tools">
+        <ul>
+          <li><a href="../../tools/">Tools</a></li>
+          <li><a href="../../tools/eco2exe/">eco2exe</a></li>
+          <li><a href="../../tools/elf2exe/">elf2exe</a></li>
+          <li><a href="../../tools/mkpsxiso/">mkpsxiso</a></li>
+          <li><a href="../../tools/dumpsxiso/">dumpsxiso</a></li>
+          <li><a href="../../tools/mdecenc/">mdecenc</a></li>
+          <li><a href="../../tools/psxemu/">psxemu</a></li>
+          <li><a href="../../tools/psxtrace/" aria-current="page">psxtrace</a></li>
+          <li><a href="../../tools/ecoff2asm/">ecoff2asm and ecoffcmp</a></li>
+          <li><a href="../../tools/hdr2go/">hdr2go</a></li>
+          <li><a href="../../tools/mips1fix/">mips1fix</a></li>
+          <li><a href="../../tools/objdump/">objdump</a></li>
+          <li><a href="../../tools/sioload/">sioload</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>psxtrace</h1>
+        <p><code>psxtrace</code> reads the traces <code>psxemu</code> and psxe write. <code>dump</code> prints one as text, <code>diff</code> reports the first record two traces disagree on, and <code>vram</code> compares two VRAM dumps or converts one to an image:</p>
+<pre class="chroma"><code><span class="line"><span class="cl"><span class="nv">PSXE_TRACE</span><span class="o">=</span>psxe.trace <span class="nv">PSXE_TRACE_COUNT</span><span class="o">=</span><span class="m">1000000</span> psxe -a -b bios.bin
+</span></span><span class="line"><span class="cl">psxemu --bios bios.bin --trace emu.trace --count <span class="m">1000000</span>
+</span></span><span class="line"><span class="cl">psxtrace diff psxe.trace emu.trace
+</span></span></code></pre>
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../tools/psxemu/"><small>Previous</small>psxemu</a>
+        <a class="next" href="../../tools/ecoff2asm/"><small>Next</small>ecoff2asm and ecoffcmp</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

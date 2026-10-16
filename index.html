@@ -1,114 +1,70 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-root="">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>psxsdk examples</title>
-  <meta name="description" content="Play the psxsdk example programs in an emulator written in Go, compiled to WebAssembly.">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>psxsdk</title>
+  <meta name="description" content="A Go toolchain for the original PlayStation, built around the Net Yaroze: write programs in Go, build them into discs, run them in an emulator.">
   <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
-  <link rel="preload" href="fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css">
+  <link rel="preload" href="play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/site.css">
+  <link rel="stylesheet" href="assets/chroma.css">
 </head>
 <body>
   <header class="top">
-    <h1>psxsdk examples</h1>
-    <p>PlayStation programs written in Go with <a href="https://github.com/ChrisRx/psxsdk">psxsdk</a>, running in an emulator that is also written in Go, compiled to WebAssembly.</p>
+    <a class="brand" href="">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="guide/">Guide</a>
+      <a href="tutorial/">Tutorial</a>
+      <a href="examples/">Examples</a>
+      <a href="tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
   </header>
 
-  <main>
-    <nav aria-label="Examples">
-      <ul id="examples"><li class="muted">Loading…</li></ul>
-    </nav>
+  <div class="layout front">
 
-    <section class="player" aria-label="Player">
-      <div id="stage" class="stage">
-        <div class="screen">
-          <canvas id="screen" width="320" height="240" aria-label="Emulator display"></canvas>
-          <div id="overlay" class="overlay">Pick an example to start it.</div>
-          <button id="exit-full" class="exit-full" type="button" aria-label="Exit fullscreen">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12m0-12L6 18"/></svg>
-          </button>
-        </div>
+    <main>
+      <article>
+        <h1>psxsdk</h1>
+        <p>psxsdk is a Go toolchain for the original PlayStation, built around the Net Yaroze. It covers the whole path from source to screen:</p>
+<ul>
+<li><strong>Write</strong> PlayStation programs in Go, compiled with <a href="https://github.com/ChrisRx/tinygo">TinyGo</a> against generated bindings for the Net Yaroze library.</li>
+<li><strong>Build</strong> them into bootable discs with tools that convert executables and write CD-XA images, including streamed XA/STR files and CD audio tracks.</li>
+<li><strong>Run</strong> them in a PlayStation emulator written in Go, which drives the test suite headless and runs in a browser as WebAssembly.</li>
+</ul>
+<p><strong><a href="examples/">Try the examples in your browser</a></strong>: eight Net Yaroze demos ported to Go, booting from the discs this repo builds, in the emulator this repo contains, with the open source <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>. Touch controls are included for phones.</p>
+<h2 id="start-here">Start here</h2>
+<ul>
+<li><a href="guide/">How it fits together</a>, the path from a Go source file to a running disc.</li>
+<li><a href="guide/getting-started/">Getting started</a>, to build the tools and the examples.</li>
+<li><a href="tutorial/">The tutorial</a>, which writes a first program and puts it on a disc.</li>
+<li><a href="examples/">The examples</a>, eight ports running in the browser, with their sources.</li>
+<li><a href="tools/">The tools</a>, for converting executables, writing discs and inspecting the result.</li>
+</ul>
 
-        <!-- The touch controller, shown on touchscreens. Each pad is one
-             touch area, so a thumb can roll between its buttons; buttons
-             carry their pad bit's name. -->
-        <div class="controller" aria-hidden="true">
-          <div class="pad pad-left">
-            <div class="shoulders">
-              <div class="shoulder" data-button="l2">L2</div>
-              <div class="shoulder" data-button="l1">L1</div>
-            </div>
-            <div class="dish" data-dpad>
-              <svg class="dpad" viewBox="0 0 120 120">
-                <path data-button="up" d="M43 4h34a3 3 0 0 1 3 3v31L60 58 40 38V7a3 3 0 0 1 3-3z"/>
-                <path data-button="right" d="M116 43v34a3 3 0 0 1-3 3H82L62 60l20-20h31a3 3 0 0 1 3 3z"/>
-                <path data-button="down" d="M77 116H43a3 3 0 0 1-3-3V82l20-20 20 20v31a3 3 0 0 1-3 3z"/>
-                <path data-button="left" d="M4 77V43a3 3 0 0 1 3-3h31l20 20-20 20H7a3 3 0 0 1-3-3z"/>
-                <circle class="pivot" cx="60" cy="60" r="7"/>
-              </svg>
-            </div>
-          </div>
-          <div class="pad pad-mid">
-            <div class="small" data-button="select">Select</div>
-            <div class="small" data-button="start">Start</div>
-          </div>
-          <div class="pad pad-right">
-            <div class="shoulders">
-              <div class="shoulder" data-button="r1">R1</div>
-              <div class="shoulder" data-button="r2">R2</div>
-            </div>
-            <div class="dish face">
-              <div class="face-button triangle" data-button="triangle"><svg viewBox="0 0 24 24"><path d="M12 4.5 20.5 19h-17z"/></svg></div>
-              <div class="face-button square" data-button="square"><svg viewBox="0 0 24 24"><path d="M5.5 5.5h13v13h-13z"/></svg></div>
-              <div class="face-button circle" data-button="circle"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/></svg></div>
-              <div class="face-button cross" data-button="cross"><svg viewBox="0 0 24 24"><path d="m5.5 5.5 13 13m0-13-13 13"/></svg></div>
-            </div>
-          </div>
-        </div>
-      </div>
+      </article>
+    </main>
+    <aside class="toc">
+      <nav aria-label="On this page">
+        <p>On this page</p>
+        <ul>
+          <li class="l2"><a href="#start-here">Start here</a></li>
+        </ul>
+      </nav>
+    </aside>
+  </div>
 
-      <div class="bar">
-        <button id="pause" type="button" disabled>Pause</button>
-        <button id="reset" type="button" disabled>Reset</button>
-        <button id="sound" type="button" aria-pressed="false">Mute</button>
-        <button id="fullscreen" type="button">Fullscreen</button>
-        <span id="status" class="status" aria-live="polite"></span>
-      </div>
-      <p id="hint" class="hint"></p>
-
-      <details id="keys" class="panel">
-        <summary>Keyboard and gamepad</summary>
-        <table class="keys">
-          <tr><th>Directions</th><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd></td></tr>
-          <tr><th>Cross, Circle</th><td><kbd>Z</kbd> <kbd>X</kbd></td></tr>
-          <tr><th>Square, Triangle</th><td><kbd>A</kbd> <kbd>S</kbd></td></tr>
-          <tr><th>L1, R1</th><td><kbd>Q</kbd> <kbd>W</kbd></td></tr>
-          <tr><th>L2, R2</th><td><kbd>1</kbd> <kbd>2</kbd></td></tr>
-          <tr><th>Start, Select</th><td><kbd>Enter</kbd> <kbd>Backspace</kbd></td></tr>
-        </table>
-        <p class="muted">A gamepad with the standard layout works as it is. On a touchscreen, a controller appears under the picture, and beside it in landscape.</p>
-      </details>
-
-      <details class="panel">
-        <summary>BIOS</summary>
-        <p>The examples boot with the <a href="https://github.com/pcsx-redux/nugget/tree/main/openbios">OpenBIOS</a> from PCSX-Redux (<a href="OPENBIOS-LICENSE.txt">MIT license</a>). You can use your own BIOS image instead. It stays in this browser.</p>
-        <p><span id="bios-name">Using OpenBIOS.</span></p>
-        <p>
-          <label class="file">Choose a BIOS image… <input id="bios-file" type="file"></label>
-          <button id="bios-clear" type="button" hidden>Use OpenBIOS</button>
-        </p>
-      </details>
-
-      <details class="panel">
-        <summary>Console</summary>
-        <pre id="tty" class="tty"></pre>
-      </details>
-    </section>
-  </main>
-
-  <script src="app.js"></script>
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="assets/search.js" defer></script>
+  <script src="assets/player.js" defer></script>
 </body>
 </html>

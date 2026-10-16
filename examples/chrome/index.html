@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>chrome · psxsdk</title>
+  <meta name="description" content="The chrome sample, in Go.">
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/" aria-current="true">Examples</a>
+      <a href="../../tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Examples">
+        <ul>
+          <li><a href="../../examples/">Examples</a></li>
+          <li><a href="../../examples/check/">check</a></li>
+          <li><a href="../../examples/chrome/" aria-current="page">chrome</a></li>
+          <li><a href="../../examples/clone/">clone</a></li>
+          <li><a href="../../examples/dungeon/">dungeon</a></li>
+          <li><a href="../../examples/flying/">flying</a></li>
+          <li><a href="../../examples/mdec/">mdec</a></li>
+          <li><a href="../../examples/offscr/">offscr</a></li>
+          <li><a href="../../examples/tunnel/">tunnel</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>chrome</h1>
+        <iframe class="player" src="../../play/?embed#chrome" title="chrome, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
+<p class="muted"><a href="../../play/#chrome">Open in the player</a>, with the keyboard and gamepad reference.</p>
+        <p>The chrome sample, in Go.
+<p>A port of Sony&apos;s Net Yaroze demo &quot;chrome&quot; (S. Ashley, 1997): a textured
+torus, turning, whose texture coordinates are worked out again every frame
+from its normals as the torus turns, so the texture reads as a reflection
+of the world rather than paint on the surface. That is chrome, or
+environment, mapping. It puts the GTE, the 3D library and lighting
+through their paces, which the check example does not touch.
+<p>Differences from the original:
+<ul>
+<li>The texture and model are read off the disc. On a Net Yaroze the
+loader&apos;s batch script sent them from the PC to fixed addresses; they
+are loaded to the same addresses.
+<li>The torus has a coordinate system of its own. The original points the
+object at WORLD, the library&apos;s nil coordinate system, and then writes
+its transformation through that pointer every frame, which in C
+silently overwrites the kernel&apos;s memory at address 0.
+<li>A loading message, and a report if the data is missing, rather than a
+black screen.
+</ul>
+<p>Hold Start and Select together to quit.
+
+        <p class="source"><a href="https://github.com/ChrisRx/psxsdk/tree/main/examples/chrome">Source on GitHub</a></p>
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../examples/check/"><small>Previous</small>check</a>
+        <a class="next" href="../../examples/clone/"><small>Next</small>clone</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

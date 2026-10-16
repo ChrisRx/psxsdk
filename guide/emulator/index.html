@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The emulator · psxsdk</title>
+  
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/" aria-current="true">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/">Examples</a>
+      <a href="../../tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Guide">
+        <ul>
+          <li><a href="../../guide/">How it fits together</a></li>
+          <li><a href="../../guide/getting-started/">Getting started</a></li>
+          <li><a href="../../guide/writing-programs/">Writing programs in Go</a></li>
+          <li><a href="../../guide/emulator/" aria-current="page">The emulator</a></li>
+          <li><a href="../../guide/packages/">Packages</a></li>
+          <li><a href="../../guide/background/">Background</a></li>
+          <li><a href="../../guide/reference/">Reference</a></li>
+          <li><a href="../../guide/license/">License</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>The emulator</h1>
+        <p><a href="https://github.com/ChrisRx/psxsdk/tree/main/emu"><code>emu</code></a> is a rewrite in Go of <a href="https://github.com/allkern/psxe">psxe</a> by Allkern (Lisandro Alarcón), written with psxe as a guide and used under its MIT license (see <a href="https://github.com/ChrisRx/psxsdk/tree/main/emu/PSXE-LICENSE.txt"><code>emu/PSXE-LICENSE.txt</code></a>). It emulates the CPU, GTE, GPU, SPU (with reverb and gaussian interpolation), CD-ROM drive including XA and CD audio, MDEC, DMA, timers, controllers and memory cards. It was written to be driven from tests rather than played: it runs headless and deterministically, counting emulated cycles with no reference to the wall clock, so a run takes the same course however loaded the host is.</p>
+<p><a href="https://github.com/ChrisRx/psxsdk/tree/main/emu/emutest"><code>emu/emutest</code></a> wraps it for Go tests. A test boots a machine, runs it against budgets, presses buttons, and asserts on what was printed, what is in memory or what is on screen:</p>
+<pre class="chroma"><code><span class="line"><span class="cl"><span class="nx">m</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">emutest</span><span class="p">.</span><span class="nf">Boot</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span><span class="w"> </span><span class="nx">emutest</span><span class="p">.</span><span class="nf">BIOS</span><span class="p">(</span><span class="nx">emutest</span><span class="p">.</span><span class="nf">BIOSFromEnv</span><span class="p">(</span><span class="nx">t</span><span class="p">)),</span><span class="w"> </span><span class="nx">emutest</span><span class="p">.</span><span class="nf">Disc</span><span class="p">(</span><span class="s">&#34;check.cue&#34;</span><span class="p">))</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nx">m</span><span class="p">.</span><span class="nf">RunUntilTTY</span><span class="p">(</span><span class="s">&#34;Execute !&#34;</span><span class="p">,</span><span class="w"> </span><span class="mi">10</span><span class="o">*</span><span class="nx">emutest</span><span class="p">.</span><span class="nx">Second</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nx">m</span><span class="p">.</span><span class="nf">RunFrames</span><span class="p">(</span><span class="mi">60</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nx">m</span><span class="p">.</span><span class="nf">Hold</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nx">emu</span><span class="p">.</span><span class="nx">ButtonSelect</span><span class="p">,</span><span class="w"> </span><span class="mi">10</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nx">m</span><span class="p">.</span><span class="nf">RunUntilTTY</span><span class="p">(</span><span class="s">&#34;End of Main&#34;</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="o">*</span><span class="nx">emutest</span><span class="p">.</span><span class="nx">Second</span><span class="p">)</span><span class="w">
+</span></span></span></code></pre><p>A program that runs an illegal instruction or makes a misaligned access fails the test there, with the registers, the instructions leading up to it and the program's output. The <a href="https://github.com/ChrisRx/psxsdk/tree/main/tests"><code>tests</code></a> package uses this to boot every example and compare screenshots against golden images.</p>
+<p>The emulator follows psxe closely so the two can be compared one instruction at a time: the flake builds psxe with a patch that writes an instruction trace, <code>psxemu --trace</code> writes the same format, and <code>psxtrace diff</code> reports the first record where they disagree.</p>
+<p><a href="https://github.com/ChrisRx/psxsdk/tree/main/web"><code>web</code></a> compiles the emulator to WebAssembly (using Go's SIMD support for pixel conversion) and runs it in a worker behind the page in <code>web/static</code>. The Pages workflow builds every example's disc and publishes the site on each push to <code>main</code>, and publishes a preview for any pull request that changes an example.</p>
+
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../guide/writing-programs/"><small>Previous</small>Writing programs in Go</a>
+        <a class="next" href="../../guide/packages/"><small>Next</small>Packages</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>
