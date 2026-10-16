@@ -41,11 +41,29 @@ func TestMDECScreenshot(t *testing.T) {
 	emutest.Golden(t, m.Display(), "mdec.png")
 }
 
-// TestTODScreenshot checks the hand partway through its animation.
-func TestTODScreenshot(t *testing.T) {
-	m := bootExample(t, "tod")
-	m.RunUntilCount("main.frameNumber", 270, frameBudget)
-	emutest.Golden(t, m.Display(), "tod.png")
+// TestDungeonScreenshot checks the maze after a turn to the left and a walk
+// up to a wall, with the compass turned to match. The program prints the
+// count of horizontal syncs VSync returns, which is the BIOS's to make, so
+// this golden is OpenBIOS's by that one line.
+func TestDungeonScreenshot(t *testing.T) {
+	m := bootExample(t, "dungeon")
+	m.RunUntilCount("main.frameNumber", 60, frameBudget)
+	m.Hold(1, emu.ButtonLeft, 40)
+	m.Hold(1, emu.ButtonUp, 150)
+	m.RunFrames(10)
+	emutest.Golden(t, m.Display(), "dungeon.png")
+}
+
+// TestFlyingScreenshot checks the ship over the plane after a turn and a
+// run forwards, with the star field slid round and the scanner in the
+// corner.
+func TestFlyingScreenshot(t *testing.T) {
+	m := bootExample(t, "flying")
+	m.RunUntilCount("main.frameNumber", 60, frameBudget)
+	m.Hold(1, emu.ButtonSquare, 20)
+	m.Hold(1, emu.ButtonUp, 60)
+	m.RunFrames(10)
+	emutest.Golden(t, m.Display(), "flying.png")
 }
 
 // TestOffscrScreenshot checks the sphere wearing the texture the sprite is
@@ -65,24 +83,4 @@ func TestTunnelScreenshot(t *testing.T) {
 	m := bootExample(t, "tunnel")
 	m.RunUntilCount("main.frameNumber", 166, frameBudget)
 	emutest.Golden(t, m.Display(), "tunnel.png")
-}
-
-// TestSolarCirclingView works the solar system's menus with the pad: into
-// the menus with Start, back round to Select object, along its submenus to
-// the views, and on to the second of them, circling the sun.
-func TestSolarCirclingView(t *testing.T) {
-	m := bootExample(t, "solar")
-	m.RunUntilCount("main.frameNumber", 121, frameBudget)
-	m.Hold(1, emu.ButtonStart, 10)
-	m.Hold(1, emu.ButtonSquare, 10) // the main menu round to Select object
-	m.Hold(1, emu.ButtonCross, 10)  // down to its submenu
-	for range 4 {
-		m.Hold(1, emu.ButtonRight, 10) // along to Change views
-	}
-	m.Hold(1, emu.ButtonCross, 10)
-	m.Hold(1, emu.ButtonCross, 10) // down to the view
-	m.Hold(1, emu.ButtonLeft, 10)  // the external view
-	m.Hold(1, emu.ButtonLeft, 10)  // the circling view
-	m.RunFrames(60)
-	emutest.Golden(t, m.Display(), "solar-circling.png")
 }

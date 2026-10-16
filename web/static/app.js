@@ -42,6 +42,14 @@ const INFO = {
     about: "A first-person maze shooter, three levels deep, a Net Yaroze demo.",
     controls: "Up and down walk, left and right turn, L1 and R1 sidestep. Cross fires, Circle shows the map. Start and Select together quit.",
   },
+  dungeon: {
+    about: "A random maze of stone walls walked in the first person, a Japanese Net Yaroze demo.",
+    controls: "The directions turn and walk, L1 and R1 sidestep, L2 and R2 look up and down, and Circle speeds everything up. Start switches to steering the ship instead; Start and Select together quit.",
+  },
+  flying: {
+    about: "A ship over a plane of tiles, hunted by enemies that track and shoot, a Net Yaroze tutorial.",
+    controls: "Up and down move the ship, Square and Circle turn it, and L2 fires. R1 and R2 change the view and L1 puts it back. Start pauses. Start and Select together quit.",
+  },
   mdec: {
     about: "Full-colour video played through the motion decoder.",
     controls: "Start and Select together quit.",
@@ -49,14 +57,6 @@ const INFO = {
   offscr: {
     about: "A sprite painted onto a sphere's texture while it runs, a Net Yaroze tutorial.",
     controls: "The directions, L1 and L2 move the ship, and the symbol buttons move the sprite; hold Select to move faster. Start pauses. Start and Select together quit.",
-  },
-  solar: {
-    about: "A solar system to fly a shuttle through and take apart in menus, a Net Yaroze tutorial.",
-    controls: "Start switches between flying and the menus. Flying, the directions turn the shuttle and L1 and L2 move it. In the menus, Triangle and Cross pick a line, Square and Circle pick a menu, and the directions, L1 and L2 change the line; hold Select to go faster. Start and Select together quit.",
-  },
-  tod: {
-    about: "A jointed hand playing rock, paper, scissors from a TOD animation.",
-    controls: "The directions, L1 and L2 move the viewpoint, and Start puts it back. A symbol button restarts the animation. Select quits.",
   },
   tunnel: {
     about: "A ship down an endless tunnel, shooting waves of enemies, a Net Yaroze game demo.",

@@ -2,9 +2,9 @@
   {"name": "check", "cue": "examples/check/check.cue"},
   {"name": "chrome", "cue": "examples/chrome/chrome.cue"},
   {"name": "clone", "cue": "examples/clone/clone.cue"},
+  {"name": "dungeon", "cue": "examples/dungeon/dungeon.cue"},
+  {"name": "flying", "cue": "examples/flying/flying.cue"},
   {"name": "mdec", "cue": "examples/mdec/mdec.cue"},
   {"name": "offscr", "cue": "examples/offscr/offscr.cue"},
-  {"name": "solar", "cue": "examples/solar/solar.cue"},
-  {"name": "tod", "cue": "examples/tod/tod.cue"},
   {"name": "tunnel", "cue": "examples/tunnel/tunnel.cue"}
 ]

@@ -6,12 +6,14 @@ tasks:
       - go test $(go list ./... | grep -v examples)
 
   # Runs the example programs in the emulator, from the tests package. It
-  # needs a BIOS, from PSX_BIOS or bios.bin, and builds the discs with
-  # TinyGo, so it runs in the default dev shell rather than the ci one.
+  # needs a BIOS, from PSX_BIOS or the OpenBIOS image the site ships, and
+  # builds the discs with TinyGo, so it runs in the default dev shell rather
+  # than the ci one. The memory card test drives Sony's shell, which OpenBIOS
+  # does not have, and runs only with Sony's BIOS in PSX_SONY_BIOS.
   test:emu:
     cmds:
       - task: discs
-      - PSX_BIOS="${PSX_BIOS:-$PWD/bios.bin}" PSX_DISCS="$PWD/.build" go test -v ./tests/...
+      - PSX_BIOS="${PSX_BIOS:-$PWD/web/static/openbios.bin}" PSX_DISCS="$PWD/.build" go test -v ./tests/...
 
   # Builds the check example onto .build/check/check.cue.
   disc:check:
@@ -98,5 +100,4 @@ tasks:
       - go tool eco2exe tmp/prog.elf tmp/prog.exe
       - cp tmp/prog.exe tmp/disc/MAIN.EXE
       - go tool mkpsxiso -o tmp/check.bin --volume-id check.exe --boot MAIN.EXE tmp/disc
-      # - psxe -a -b web/static/openbios.bin -L5 tmp/check.cue
-      - psxe -a -b bios.bin -L5 tmp/check.cue
+      - psxe -a -b web/static/openbios.bin -L5 tmp/check.cue

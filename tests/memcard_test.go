@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"os"
 	"testing"
 
 	"go.chrisrx.dev/x/assert"
@@ -14,8 +15,16 @@ import (
 // frame starting "MC", and fifteen free directory frames, each starting
 // A0h. That takes the card's flag, reads and writes, with their checksums
 // and acknowledges, all working as Sony's BIOS expects.
+//
+// Only Sony's BIOS has that screen: OpenBIOS halts on a boot failure when
+// there is no disc, before any shell. So the BIOS comes from PSX_SONY_BIOS
+// rather than PSX_BIOS, and the test is skipped without it.
 func TestBIOSFormatsMemoryCard(t *testing.T) {
-	m := emutest.Boot(t, emutest.BIOS(emutest.BIOSFromEnv(t)))
+	path := os.Getenv("PSX_SONY_BIOS")
+	if path == "" {
+		t.Skip("PSX_SONY_BIOS is not set")
+	}
+	m := emutest.Boot(t, emutest.BIOS(path))
 	card, err := emu.NewMemoryCard(nil)
 	if !assert.NoError(t, err) {
 		t.FailNow()
