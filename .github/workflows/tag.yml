@@ -1,0 +1,58 @@
+# Tags a new version once Build/Test has passed on main and Go code has
+# changed since the last tag, so that go get sees it: a Go module is fetched
+# by tag, and a tutorial that says "go get go.chrisrx.dev/psx" gets whatever
+# the newest tag holds. It only tags; nothing is released.
+#
+# The bump is a patch unless a commit since the last tag says otherwise:
+# #minor or #major in a message bumps that part, and #none skips the tag.
+name: Tag
+
+on:
+  workflow_run:
+    workflows: [ "Build/Test" ]
+    types: [ completed ]
+    branches: [ "main" ]
+
+jobs:
+  tag:
+    # Only a push to main that passed, not a pull request's run.
+    if: >-
+      github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        # The commit that was tested, not whatever main has moved on to,
+        # with the whole history for the last tag and the messages since.
+        ref: ${{ github.event.workflow_run.head_sha }}
+        fetch-depth: 0
+
+    - name: Check for Go changes since the last tag
+      id: changes
+      run: |
+        last=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+        if [ -z "$last" ]; then
+          echo "no tag yet"
+          echo "go=true" >> "$GITHUB_OUTPUT"
+        elif git diff --quiet "$last" HEAD -- '*.go' go.mod go.sum; then
+          echo "no Go changes since $last"
+          echo "go=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "Go changes since $last:"
+          git diff --stat "$last" HEAD -- '*.go' go.mod go.sum | tail -1
+          echo "go=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Bump the version
+      if: steps.changes.outputs.go == 'true'
+      uses: anothrNick/github-tag-action@1.75.0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        DEFAULT_BUMP: patch
+        TAG_PREFIX: v
+        RELEASE_BRANCHES: main
+        TAG_CONTEXT: repo
+        BRANCH_HISTORY: compare
