@@ -51,7 +51,7 @@ func openAudioDisc(t *testing.T, n int) *Disc {
 
 // playingDrive is a drive with CD audio on, playing from lba.
 func playingDrive(t *testing.T, d *Disc, lba uint32, mode uint8) *cdrom {
-	c := newCDROM(&ic{setIRQ: func(bool) {}}, new(uint64), nil)
+	c := newCDROM(&ic{setIRQ: func(bool) {}}, new(uint64), new(bool), nil)
 	c.insert(d)
 	c.audioOn = true
 	c.mode = mode

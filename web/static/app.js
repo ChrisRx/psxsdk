@@ -27,6 +27,43 @@ const PAD_BUTTONS = [
   BUTTON.up, BUTTON.down, BUTTON.left, BUTTON.right,
 ];
 
+// What each example is, and what the pad does in it, from its package
+// documentation. An example that is not here is listed by name alone.
+const INFO = {
+  check: {
+    about: "Bouncing balls, with music, after the SDK's own first sample.",
+    controls: "Up and down change how many balls bounce. L1 pauses. Select quits.",
+  },
+  chrome: {
+    about: "A chrome-mapped torus turning, a Net Yaroze demo of environment mapping.",
+    controls: "Start and Select together quit.",
+  },
+  clone: {
+    about: "A first-person maze shooter, three levels deep, a Net Yaroze demo.",
+    controls: "Up and down walk, left and right turn, L1 and R1 sidestep. Cross fires, Circle shows the map. Start and Select together quit.",
+  },
+  mdec: {
+    about: "Full-colour video played through the motion decoder.",
+    controls: "Start and Select together quit.",
+  },
+  offscr: {
+    about: "A sprite painted onto a sphere's texture while it runs, a Net Yaroze tutorial.",
+    controls: "The directions, L1 and L2 move the ship, and the symbol buttons move the sprite; hold Select to move faster. Start pauses. Start and Select together quit.",
+  },
+  solar: {
+    about: "A solar system to fly a shuttle through and take apart in menus, a Net Yaroze tutorial.",
+    controls: "Start switches between flying and the menus. Flying, the directions turn the shuttle and L1 and L2 move it. In the menus, Triangle and Cross pick a line, Square and Circle pick a menu, and the directions, L1 and L2 change the line; hold Select to go faster. Start and Select together quit.",
+  },
+  tod: {
+    about: "A jointed hand playing rock, paper, scissors from a TOD animation.",
+    controls: "The directions, L1 and L2 move the viewpoint, and Start puts it back. A symbol button restarts the animation. Select quits.",
+  },
+  tunnel: {
+    about: "A ship down an endless tunnel, shooting waves of enemies, a Net Yaroze game demo.",
+    controls: "The directions, L1 and L2 move the ship, and R1 fires; hold Select to move faster. Start pauses. Start and Select together quit.",
+  },
+};
+
 const $ = (id) => document.getElementById(id);
 const canvas = $("screen");
 const overlay = $("overlay");
@@ -41,6 +78,7 @@ const state = {
   openBIOS: null,
   running: false,
   keys: 0,
+  touches: new Map(), // pointer id to {dpad, bits}, for each finger on the touch controls
   buttons: 0,     // the buttons last sent to the emulator
 };
 
@@ -193,8 +231,12 @@ async function start(example) {
   setRunning(false);
   state.current = example;
   for (const a of document.querySelectorAll("#examples a")) {
-    a.setAttribute("aria-current", String(a.dataset.name === example.name));
+    const current = a.dataset.name === example.name;
+    a.setAttribute("aria-current", String(current));
+    // In the row of chips on a narrow screen, bring the current one into view.
+    if (current && narrow.matches) a.scrollIntoView({ block: "nearest", inline: "center" });
   }
+  $("hint").textContent = INFO[example.name]?.controls ?? "";
   tty.textContent = "";
   status.textContent = "";
   showOverlay(`Loading ${example.name}…`);
@@ -222,12 +264,22 @@ function gamepadButtons() {
   return bits;
 }
 
-// sendButtons tells the emulator the pad's buttons, if they have changed.
+function touchButtons() {
+  let bits = 0;
+  for (const t of state.touches.values()) bits |= t.bits;
+  return bits;
+}
+
+const padButtons = [...document.querySelectorAll(".pad [data-button]")];
+
+// sendButtons tells the emulator the pad's buttons, if they have changed,
+// and shows them pressed on the touch controls, whatever pressed them.
 function sendButtons() {
-  const buttons = state.keys | gamepadButtons();
+  const buttons = state.keys | touchButtons() | gamepadButtons();
   if (buttons === state.buttons) return;
   state.buttons = buttons;
   worker.postMessage({ type: "buttons", buttons });
+  for (const el of padButtons) el.classList.toggle("on", (buttons & BUTTON[el.dataset.button]) !== 0);
 }
 
 // loop polls the gamepads, which only the page can read, once a frame.
@@ -253,10 +305,109 @@ addEventListener("keyup", (e) => {
   state.keys &= ~bit;
   sendButtons();
 });
-addEventListener("blur", () => {
+// Losing the page lets everything go, so nothing stays pressed.
+function releaseAll() {
   state.keys = 0;
+  state.touches.clear();
   sendButtons();
+}
+addEventListener("blur", releaseAll);
+document.addEventListener("visibilitychange", () => { if (document.hidden) releaseAll(); });
+
+// Touch controls. Each half of the pad is one touch area: a finger
+// presses whichever button is under it as it moves, so it can roll from
+// one button to the next. A finger that lands on the D-pad steers it by
+// its direction from the centre until lifted, wherever it strays, with a
+// diagonal pressing two directions.
+const DPAD_DEAD = 0.2;   // of the D-pad's radius, from its centre
+const DPAD_AXIS = 0.38;  // about sin(22.5°): beyond it, a direction is pressed
+
+function dpadButtons(dpad, x, y) {
+  const r = dpad.getBoundingClientRect();
+  const dx = x - (r.left + r.width / 2);
+  const dy = y - (r.top + r.height / 2);
+  const d = Math.hypot(dx, dy);
+  if (d < (r.width / 2) * DPAD_DEAD) return 0;
+  let bits = 0;
+  if (dx / d > DPAD_AXIS) bits |= BUTTON.right;
+  if (dx / d < -DPAD_AXIS) bits |= BUTTON.left;
+  if (dy / d > DPAD_AXIS) bits |= BUTTON.down;
+  if (dy / d < -DPAD_AXIS) bits |= BUTTON.up;
+  return bits;
+}
+
+function touchAt(touch, x, y) {
+  if (touch.dpad) return dpadButtons(touch.dpad, x, y);
+  const el = document.elementFromPoint(x, y)?.closest(".pad [data-button]");
+  return el ? BUTTON[el.dataset.button] : 0;
+}
+
+function track(e) {
+  const touch = state.touches.get(e.pointerId);
+  if (!touch) return;
+  const bits = touchAt(touch, e.clientX, e.clientY);
+  if (bits & ~touch.bits) navigator.vibrate?.(8);
+  touch.bits = bits;
+  sendButtons();
+}
+
+function release(e) {
+  if (!state.touches.delete(e.pointerId)) return;
+  sendButtons();
+}
+
+for (const pad of document.querySelectorAll(".pad")) {
+  pad.addEventListener("pointerdown", (e) => {
+    if (e.target.closest("button")) return;
+    pad.setPointerCapture(e.pointerId);
+    state.touches.set(e.pointerId, { dpad: e.target.closest("[data-dpad]"), bits: 0 });
+    track(e);
+  });
+  pad.addEventListener("pointermove", track);
+  pad.addEventListener("contextmenu", (e) => e.preventDefault());
+}
+// A finger lifting anywhere releases what it pressed, should its pad not
+// have captured it.
+addEventListener("pointerup", release, { capture: true });
+addEventListener("pointercancel", release, { capture: true });
+
+// The touch controls show on a touchscreen, or once one is used.
+const coarse = matchMedia("(pointer: coarse)");
+const narrow = matchMedia("(max-width: 759px)");
+const showTouch = () => document.body.classList.add("touch");
+if (coarse.matches) showTouch();
+coarse.addEventListener("change", () => { if (coarse.matches) showTouch(); });
+addEventListener("pointerdown", (e) => { if (e.pointerType === "touch") showTouch(); }, { capture: true });
+
+// Fullscreen: the browser's own where it has one for the page, and
+// otherwise the stage covering the viewport, as on iPhones.
+const stage = $("stage");
+
+function showFullscreen(full) {
+  stage.classList.toggle("full", full);
+  document.body.classList.toggle("has-full", full);
+  $("fullscreen").textContent = full ? "Exit fullscreen" : "Fullscreen";
+}
+
+async function fullscreen(full) {
+  showFullscreen(full);
+  try {
+    if (full && stage.requestFullscreen && !document.fullscreenElement) {
+      await stage.requestFullscreen({ navigationUI: "hide" });
+    } else if (!full && document.fullscreenElement) {
+      await document.exitFullscreen();
+    }
+  } catch { /* the stage covers the viewport instead */ }
+}
+
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement) showFullscreen(false);
 });
+addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && stage.classList.contains("full")) fullscreen(false);
+});
+$("fullscreen").addEventListener("click", () => fullscreen(!stage.classList.contains("full")));
+$("exit-full").addEventListener("click", () => fullscreen(false));
 
 $("pause").addEventListener("click", () => pause(state.running));
 $("reset").addEventListener("click", reset);
@@ -272,8 +423,8 @@ const sound = {
 };
 
 function showSound() {
-  $("sound").textContent = sound.on ? "Sound on" : "Sound off";
-  $("sound").setAttribute("aria-pressed", String(sound.on));
+  $("sound").textContent = sound.on ? "Mute" : "Unmute";
+  $("sound").setAttribute("aria-pressed", String(!sound.on));
 }
 
 async function setUpSound() {
@@ -303,7 +454,9 @@ async function startSound() {
   if (sound.on) await sound.ctx.resume();
 }
 
-for (const type of ["pointerdown", "keydown"]) {
+// Which events count as an interaction differs between browsers, so the
+// first of each kind is tried; starting again is harmless.
+for (const type of ["pointerdown", "pointerup", "click", "keydown"]) {
   addEventListener(type, () => { if (sound.on) startSound().catch(() => {}); }, { capture: true, once: true });
 }
 
@@ -372,11 +525,21 @@ async function init() {
     const li = document.createElement("li");
     const a = document.createElement("a");
     a.href = `#${encodeURIComponent(x.name)}`;
-    a.textContent = x.name;
     a.dataset.name = x.name;
+    const name = document.createElement("b");
+    name.textContent = x.name;
+    a.append(name);
+    if (INFO[x.name]) {
+      const about = document.createElement("small");
+      about.textContent = INFO[x.name].about;
+      a.append(about);
+    }
     li.append(a);
     return li;
   }));
+
+  // With a keyboard, the keys are worth seeing before starting.
+  if (!coarse.matches) $("keys").open = true;
 
   const example = exampleFromHash();
   if (example) start(example);

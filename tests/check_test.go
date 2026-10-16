@@ -1,8 +1,10 @@
 // Package tests runs the example programs in the emulator.
 //
-// The programs are built with TinyGo onto disc images first, which the
-// tests are given by environment variable, along with a BIOS; without them
-// they are skipped. task test:emu builds the discs and runs them.
+// The programs are built with TinyGo onto disc images first, each into a
+// directory of its own under the one PSX_DISCS names, as task disc does
+// under .build. The tests are given that and a BIOS by environment variable;
+// without them they are skipped. task test:emu builds the discs and runs
+// them.
 package tests
 
 import (
@@ -17,13 +19,17 @@ import (
 	"go.chrisrx.dev/psx/emu/emutest"
 )
 
-// disc returns the disc image named by the environment variable, or skips
-// the test.
-func disc(t *testing.T, env string) string {
+// disc returns the cue sheet of the named example's disc, or skips the
+// test if there is none.
+func disc(t *testing.T, name string) string {
 	t.Helper()
-	path := os.Getenv(env)
-	if path == "" {
-		t.Skipf("%s is not set", env)
+	dir := os.Getenv("PSX_DISCS")
+	if dir == "" {
+		t.Skip("PSX_DISCS is not set")
+	}
+	path := filepath.Join(dir, name, name+".cue")
+	if _, err := os.Stat(path); err != nil {
+		t.Skipf("no disc for %s: %v", name, err)
 	}
 	return path
 }
@@ -37,7 +43,7 @@ func disc(t *testing.T, env string) string {
 //
 // That message is Sony's BIOS's.
 func TestCheckQuitReturnsToBIOS(t *testing.T) {
-	cue := disc(t, "PSX_CHECK_DISC")
+	cue := disc(t, "check")
 	m := emutest.Boot(t,
 		emutest.BIOS(emutest.BIOSFromEnv(t)),
 		emutest.Disc(cue),
@@ -59,7 +65,7 @@ func TestCheckQuitReturnsToBIOS(t *testing.T) {
 // with a golden image: the balls where a second of bouncing leaves them,
 // and the text overlay. Run it with -update-golden to accept a change.
 func TestCheckScreenshot(t *testing.T) {
-	cue := disc(t, "PSX_CHECK_DISC")
+	cue := disc(t, "check")
 	m := emutest.Boot(t,
 		emutest.BIOS(emutest.BIOSFromEnv(t)),
 		emutest.Disc(cue),
@@ -75,7 +81,7 @@ func TestCheckScreenshot(t *testing.T) {
 // need, and checks the two machines end up the same and made the same sound.
 // check keeps every device busy, which the BIOS alone does not.
 func TestCheckRunMatchesStep(t *testing.T) {
-	cue := disc(t, "PSX_CHECK_DISC")
+	cue := disc(t, "check")
 	bios, err := os.ReadFile(emutest.BIOSFromEnv(t))
 	if !assert.NoError(t, err) {
 		t.FailNow()

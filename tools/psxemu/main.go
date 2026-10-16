@@ -3,7 +3,10 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"image/png"
+	"io/fs"
 	"log"
 	"os"
 	"runtime/pprof"
@@ -24,6 +27,8 @@ var opts struct {
 	Count      uint64
 	CPUProfile string
 	VRAM       string
+	PNG        string
+	Card       string
 }
 
 func main() {
@@ -53,6 +58,8 @@ choose which instructions, as PSXE_TRACE_SKIP and PSXE_TRACE_COUNT do:
 	f.Uint64Var(&opts.Count, "count", 0, "instructions to run, after --skip; 0 runs until interrupted")
 	f.StringVar(&opts.CPUProfile, "cpuprofile", "", "write a CPU profile of the run here, for go tool pprof")
 	f.StringVar(&opts.VRAM, "vram", "", "at the end, write VRAM here, as psxe does with PSXE_TRACE_VRAM")
+	f.StringVar(&opts.PNG, "png", "", "at the end, write what the display shows here")
+	f.StringVar(&opts.Card, "card", "", "memory card image for slot 1, made blank if it does not exist, and written back at the end")
 	cmd.MarkFlagRequired("bios")
 
 	if err := cmd.Execute(); err != nil {
@@ -94,6 +101,21 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 		defer d.Close()
 		m.InsertDisc(d)
+	}
+
+	var card *emu.MemoryCard
+	if opts.Card != "" {
+		data, err := os.ReadFile(opts.Card)
+		if errors.Is(err, fs.ErrNotExist) {
+			data, err = nil, nil
+		}
+		if err != nil {
+			return err
+		}
+		if card, err = emu.NewMemoryCard(data); err != nil {
+			return err
+		}
+		m.InsertCard(1, card)
 	}
 
 	// An executable is loaded in the middle of the run, when the BIOS
@@ -158,6 +180,21 @@ func run(cmd *cobra.Command, args []string) error {
 			binary.LittleEndian.PutUint16(buf[2*i:], p)
 		}
 		if err := os.WriteFile(opts.VRAM, buf, 0o644); err != nil {
+			return err
+		}
+	}
+	if opts.PNG != "" {
+		f, err := os.Create(opts.PNG)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		if err := png.Encode(f, m.Display()); err != nil {
+			return err
+		}
+	}
+	if card != nil {
+		if err := os.WriteFile(opts.Card, card.Data(), 0o644); err != nil {
 			return err
 		}
 	}

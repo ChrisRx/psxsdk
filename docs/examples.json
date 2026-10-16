@@ -1,5 +1,10 @@
 [
   {"name": "check", "cue": "examples/check/check.cue"},
   {"name": "chrome", "cue": "examples/chrome/chrome.cue"},
-  {"name": "clone", "cue": "examples/clone/clone.cue"}
+  {"name": "clone", "cue": "examples/clone/clone.cue"},
+  {"name": "mdec", "cue": "examples/mdec/mdec.cue"},
+  {"name": "offscr", "cue": "examples/offscr/offscr.cue"},
+  {"name": "solar", "cue": "examples/solar/solar.cue"},
+  {"name": "tod", "cue": "examples/tod/tod.cue"},
+  {"name": "tunnel", "cue": "examples/tunnel/tunnel.cue"}
 ]

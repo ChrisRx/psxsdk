@@ -217,13 +217,17 @@ type Clock struct {
 	Sample       *uint32
 	SampleCycles uint32
 
-	// Run stops after any step while Busy is true or once Err is set.
+	// Run stops after every step while Busy is true.
 	Busy *bool
-	Err  *error
 
 	// With Hooked, Run stops before the instruction at Hook, in any segment.
 	Hook   uint32
 	Hooked bool
+
+	// Run reads the rest once, when it starts. A device that changes any
+	// of it, or fails, sets Wake, and Run stops after that step so the
+	// machine can read it again.
+	Wake *bool
 }
 
 // Step fetches and executes one instruction, or takes an interrupt in its
@@ -239,7 +243,27 @@ func (c *CPU) Step() { c.Run(1, nil) }
 // The steps are run here rather than by calling a function for each, which
 // costs a good deal under wasm.
 func (c *CPU) Run(n uint64, k *Clock) uint64 {
-	for i := uint64(1); ; i++ {
+	// The step at which the devices next have something to do: due in
+	// cycles, for the drive, the pad and the SPU's sample, and stepsDue in
+	// steps, for the timers, or straight away while DMA is busy.
+	var total0, due, stepsDue uint64
+	if n > 1 {
+		total0 = c.TotalCycles
+		due = min(*k.Due[0], *k.Due[1])
+		if *k.Sample < k.SampleCycles {
+			due = min(due, total0+uint64(k.SampleCycles-*k.Sample))
+		} else {
+			due = total0
+		}
+		stepsDue = 1
+		if !*k.Busy && *k.StepsDue > *k.Steps {
+			stepsDue = *k.StepsDue - *k.Steps
+		}
+		*k.Wake = false
+	}
+
+	i := uint64(1)
+	for ; ; i++ {
 		c.LastCycles = 0
 		c.Excode = NoException
 
@@ -337,7 +361,22 @@ func (c *CPU) Run(n uint64, k *Clock) uint64 {
 				}
 				c.loadD = t
 				if a, ok := c.window.inWindow(addr); ok {
-					c.loadV = c.window.read(a, op)
+					// Read here rather than in a function, which wasm would
+					// not inline.
+					*c.window.Charge = c.window.Delay
+					m := c.window.Mem[a&uint32(len(c.window.Mem)-1):]
+					switch op {
+					case 0x20:
+						c.loadV = uint32(int32(int8(m[0])))
+					case 0x21:
+						c.loadV = uint32(int32(int16(binary.LittleEndian.Uint16(m))))
+					case 0x23:
+						c.loadV = binary.LittleEndian.Uint32(m)
+					case 0x24:
+						c.loadV = uint32(m[0])
+					case 0x25:
+						c.loadV = uint32(binary.LittleEndian.Uint16(m))
+					}
 					break
 				}
 				switch op {
@@ -367,7 +406,16 @@ func (c *CPU) Run(n uint64, k *Clock) uint64 {
 					break
 				}
 				if a, ok := c.window.inWindow(addr); ok {
-					c.window.write(a, op, t)
+					*c.window.Charge = c.window.Delay
+					m := c.window.Mem[a&uint32(len(c.window.Mem)-1):]
+					switch op {
+					case 0x28:
+						m[0] = uint8(t)
+					case 0x29:
+						binary.LittleEndian.PutUint16(m, uint16(t))
+					default:
+						binary.LittleEndian.PutUint32(m, t)
+					}
 					break
 				}
 				switch op {
@@ -391,52 +439,20 @@ func (c *CPU) Run(n uint64, k *Clock) uint64 {
 		}
 
 		if i >= n {
-			return i
+			break
 		}
 		video := float32(*k.Video + float32(float32(c.LastCycles)*k.VideoRate))
-		if c.TotalCycles >= *k.Due[0] || c.TotalCycles >= *k.Due[1] ||
-			video >= *k.VideoEdge || *k.Steps+1 >= *k.StepsDue ||
-			*k.Sample+c.LastCycles >= k.SampleCycles ||
-			*k.Busy || *k.Err != nil ||
+		if c.TotalCycles >= due || video >= *k.VideoEdge || i >= stepsDue || *k.Wake ||
 			k.Hooked && c.PC&0x3fffffff == k.Hook {
-			return i
+			break
 		}
 		*k.Video = video
-		*k.Steps++
-		*k.Sample += c.LastCycles
 	}
-}
-
-// read loads from the window at a, as the bus's Read8, Read16 or Read32
-// would, by the load's opcode: lb, lh, lw, lbu or lhu. Like them, it charges
-// the window's delay, which an unmapped fetch after it would see.
-func (w *Window) read(a, op uint32) uint32 {
-	*w.Charge = w.Delay
-	m := w.Mem[a&uint32(len(w.Mem)-1):]
-	switch op {
-	case 0x20:
-		return uint32(int32(int8(m[0])))
-	case 0x21:
-		return uint32(int32(int16(binary.LittleEndian.Uint16(m))))
-	case 0x23:
-		return binary.LittleEndian.Uint32(m)
-	case 0x24:
-		return uint32(m[0])
+	if n > 1 {
+		// Every step but the last is counted here; the machine counts the
+		// last.
+		*k.Steps += i - 1
+		*k.Sample += uint32(c.TotalCycles - uint64(c.LastCycles) - total0)
 	}
-	return uint32(binary.LittleEndian.Uint16(m))
-}
-
-// write stores to the window at a, as the bus's Write8, Write16 or Write32
-// would, by the store's opcode: sb, sh or sw.
-func (w *Window) write(a, op, v uint32) {
-	*w.Charge = w.Delay
-	m := w.Mem[a&uint32(len(w.Mem)-1):]
-	switch op {
-	case 0x28:
-		m[0] = uint8(v)
-	case 0x29:
-		binary.LittleEndian.PutUint16(m, uint16(v))
-	default:
-		binary.LittleEndian.PutUint32(m, v)
-	}
+	return i
 }

@@ -180,6 +180,16 @@ func (m *Machine) RunUntilFunc(name string, budget Cycles) {
 	m.RunUntil(func() bool { return m.CPU.PC == addr }, budget, "reaching "+name)
 }
 
+// RunUntilCount runs until the word at the symbol name, a counter the program
+// keeps, reaches n. A program's own frame counter puts a test at the same
+// point in its life whichever BIOS started it, where a count of frames since
+// the BIOS did would not.
+func (m *Machine) RunUntilCount(name string, n uint32, budget Cycles) {
+	m.tb.Helper()
+	addr := m.Sym(name)
+	m.RunUntil(func() bool { return m.Read32(addr) >= n }, budget, fmt.Sprintf("%s reaching %d", name, n))
+}
+
 // TTY returns everything printed so far.
 func (m *Machine) TTY() string { return m.tty.String() }
 

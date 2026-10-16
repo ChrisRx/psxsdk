@@ -162,6 +162,7 @@ type cdrom struct {
 	cycles *uint64
 	synced uint64
 	due    uint64
+	wake   *bool // set when due changes
 
 	pendingLBA, lba   uint32
 	speedSwitchDelay  int
@@ -177,13 +178,15 @@ type cdrom struct {
 }
 
 // newCDROM returns a drive with nothing in it, counting cycles from the
-// given clock and reporting an error that stops the run to stop.
-func newCDROM(ic *ic, cycles *uint64, stop func(error)) *cdrom {
+// given clock, setting wake when it changes what it has due, and reporting
+// an error that stops the run to stop.
+func newCDROM(ic *ic, cycles *uint64, wake *bool, stop func(error)) *cdrom {
 	c := &cdrom{
 		ic:            ic,
 		stop:          stop,
 		cycles:        cycles,
 		due:           ^uint64(0),
+		wake:          wake,
 		data:          newCDQueue(sectorSize),
 		response:      newCDQueue(32),
 		parameters:    newCDQueue(32),
@@ -389,6 +392,7 @@ func (c *cdrom) sync() {
 // deliver. Idle, or playing, which the drive does on its own, it has
 // nothing to do until a command.
 func (c *cdrom) schedule() {
+	*c.wake = true
 	switch {
 	case c.delay > 0:
 		c.due = c.synced + uint64(c.delay)

@@ -10,14 +10,26 @@ tasks:
   # TinyGo, so it runs in the default dev shell rather than the ci one.
   test:emu:
     cmds:
-      - task: disc:check
-      - PSX_BIOS="${PSX_BIOS:-$PWD/bios.bin}" PSX_CHECK_DISC="$PWD/.build/check/check.cue" go test -v ./tests/...
+      - task: discs
+      - PSX_BIOS="${PSX_BIOS:-$PWD/bios.bin}" PSX_DISCS="$PWD/.build" go test -v ./tests/...
 
   # Builds the check example onto .build/check/check.cue.
   disc:check:
     cmds:
       - task: disc
         vars: { NAME: check }
+
+  # Builds every example's disc, each onto .build/NAME/NAME.cue: every
+  # directory under examples with a main.go, since examples/internal holds
+  # what they share and is not one.
+  discs:
+    vars:
+      EXAMPLES:
+        sh: for f in examples/*/main.go; do basename "$(dirname "$f")"; done
+    cmds:
+      - for: { var: EXAMPLES }
+        task: disc
+        vars: { NAME: '{{.ITEM}}' }
 
   # Builds the example NAME onto .build/NAME/NAME.cue, with the files in
   # its disc directory, if it has one. The directory starts with a dot so
@@ -46,9 +58,7 @@ tasks:
         # holds what they share, and is not one.
         sh: for f in examples/*/main.go; do basename "$(dirname "$f")"; done
     cmds:
-      - for: { var: EXAMPLES }
-        task: disc
-        vars: { NAME: '{{.ITEM}}' }
+      - task: discs
       - rm -rf docs
       - mkdir -p docs/examples
       - for: { var: EXAMPLES }
@@ -65,7 +75,7 @@ tasks:
         } > docs/examples.json
       - GOEXPERIMENT=simd GOOS=js GOARCH=wasm go build -trimpath -ldflags=-s -o docs/psx.wasm ./web
       - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" docs/
-      - cp web/static/* docs/
+      - cp -r web/static/. docs/
       - touch docs/.nojekyll
 
   # Serves docs/ on localhost:8000 to try the site.

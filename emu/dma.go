@@ -55,18 +55,20 @@ type dma struct {
 	// active is whether an update has anything to do. Only the register
 	// writes, which start transfers and change DICR, and update itself
 	// change what it reads, so a write sets it and update clears it once
-	// nothing is pending and DICR has settled.
+	// nothing is pending and DICR has settled. wake is set alongside it,
+	// for the CPU to hand back to the machine.
 	active bool
+	wake   *bool
 
 	bus  *Bus
 	ic   *ic
 	stop func(error)
 }
 
-// newDMA returns a DMA controller with every channel idle, reporting an
-// error that stops the run to stop.
-func newDMA(bus *Bus, ic *ic, stop func(error)) *dma {
-	return &dma{bus: bus, ic: ic, stop: stop, dpcr: 0x07654321}
+// newDMA returns a DMA controller with every channel idle, setting wake
+// when it becomes active and reporting an error that stops the run to stop.
+func newDMA(bus *Bus, ic *ic, wake *bool, stop func(error)) *dma {
+	return &dma{bus: bus, ic: ic, wake: wake, stop: stop, dpcr: 0x07654321}
 }
 
 func (d *dma) madr(ch int) *uint32 { return &d.regs[ch*3] }
@@ -144,7 +146,7 @@ func (d *dma) writeDICR(v uint32) {
 }
 
 func (d *dma) Write32(off, v uint32) {
-	d.active = true
+	d.active, *d.wake = true, true
 	if off < 0x70 {
 		p, ch, r := d.reg(off)
 		if p == nil {
@@ -165,7 +167,7 @@ func (d *dma) Write32(off, v uint32) {
 }
 
 func (d *dma) Write16(off uint32, v uint16) {
-	d.active = true
+	d.active, *d.wake = true, true
 	switch off {
 	case 0x74:
 		// psxe's switch falls through, so the value lands in both halves.
@@ -177,7 +179,7 @@ func (d *dma) Write16(off uint32, v uint16) {
 }
 
 func (d *dma) Write8(off uint32, v uint8) {
-	d.active = true
+	d.active, *d.wake = true, true
 	switch off {
 	case 0x74, 0x75, 0x76, 0x77:
 		d.writeDICR(uint32(v) << (8 * (off - 0x74)))

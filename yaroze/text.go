@@ -69,6 +69,12 @@ func (b *Buffer) WriteInt(v int) *Buffer {
 	return b
 }
 
+// Bytes returns what the buffer holds, without the terminator. It is the
+// buffer's storage, good until the next write.
+func (b *Buffer) Bytes() []byte {
+	return b.buf[:b.n]
+}
+
 // CString terminates the buffer and returns a pointer the library can take.
 func (b *Buffer) CString() *byte {
 	b.buf[b.n] = 0

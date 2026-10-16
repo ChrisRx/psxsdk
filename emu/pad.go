@@ -100,10 +100,11 @@ const (
 // share, as psxe models it: the first byte of a transfer picks a pad or a
 // memory card, and each byte after it is exchanged with that device. psxe
 // connects a digital pad to port 1 and nothing else; its memory card
-// support is disabled.
+// support is disabled, so a card is only there once InsertCard puts one in.
 type sio0 struct {
-	pads [2]*Pad
-	dest [2]int
+	pads  [2]*Pad
+	cards [2]*MemoryCard
+	dest  [2]int
 
 	mode, ctrl, baud, stat uint16
 	cyclesUntilIRQ         int
@@ -116,14 +117,15 @@ type sio0 struct {
 	cycles *uint64
 	synced uint64
 	due    uint64
+	wake   *bool // set when due changes
 
 	ic *ic
 }
 
 // newSIO0 returns the port with the given pads connected, counting cycles
-// from the given clock.
-func newSIO0(ic *ic, cycles *uint64, pads [2]*Pad) *sio0 {
-	return &sio0{ic: ic, cycles: cycles, due: ^uint64(0), pads: pads}
+// from the given clock and setting wake when it changes what it has due.
+func newSIO0(ic *ic, cycles *uint64, wake *bool, pads [2]*Pad) *sio0 {
+	return &sio0{ic: ic, cycles: cycles, due: ^uint64(0), wake: wake, pads: pads}
 }
 
 func (s *sio0) slot() int { return int(s.ctrl>>13) & 1 }
@@ -148,9 +150,16 @@ func (s *sio0) rx() uint32 {
 		}
 		return uint32(v)
 	}
-	// A memory card, of which there are none.
-	s.dest[slot] = 0
-	return 0xffffffff
+	c := s.cards[slot]
+	if c == nil {
+		s.dest[slot] = 0
+		return 0xffffffff
+	}
+	v := c.read()
+	if !c.ready {
+		s.dest[slot] = 0
+	}
+	return uint32(v)
 }
 
 func (s *sio0) tx(v uint16) {
@@ -163,7 +172,7 @@ func (s *sio0) tx(v uint16) {
 			return
 		}
 		s.dest[slot] = int(v)
-		if v == joyDestPad && s.pads[slot] == nil || v == joyDestCard {
+		if v == joyDestPad && s.pads[slot] == nil || v == joyDestCard && s.cards[slot] == nil {
 			return
 		}
 		if s.ctrl&joyAckIRQ != 0 {
@@ -183,7 +192,22 @@ func (s *sio0) tx(v uint16) {
 			s.dest[slot] = 0
 		}
 	} else {
-		s.dest[slot] = 0
+		c := s.cards[slot]
+		if c == nil {
+			s.dest[slot] = 0
+			return
+		}
+		c.write(uint8(v))
+		// psxe acknowledges a card's byte later than a pad's, and leaves
+		// ending the transfer to the read.
+		if s.ctrl&joyAckIRQ != 0 {
+			s.irqBit = true
+			s.cyclesUntilIRQ = 2 * joyIRQDelay
+			return
+		}
+		if !c.ready {
+			s.dest[slot] = 0
+		}
 		return
 	}
 	if s.ctrl&joyAckIRQ != 0 {
@@ -193,9 +217,15 @@ func (s *sio0) tx(v uint16) {
 }
 
 func (s *sio0) writeCtrl(v uint16) {
+	slot := s.slot()
 	s.ctrl = v
 	if s.ctrl&joyOutput == 0 {
 		s.ctrl &^= joySlot
+		// Deselecting ends a card's transfer: the card in the slot that
+		// was selected, as psxe has it.
+		if c := s.cards[slot]; c != nil {
+			c.reset()
+		}
 	}
 	// Acknowledging clears the error and interrupt bits of JOY_STAT.
 	if s.ctrl&joyAck != 0 {
@@ -260,6 +290,7 @@ func (s *sio0) sync() {
 
 // schedule works out when the count runs out, if one is running.
 func (s *sio0) schedule() {
+	*s.wake = true
 	s.due = ^uint64(0)
 	if s.cyclesUntilIRQ > 0 {
 		s.due = s.synced + uint64(s.cyclesUntilIRQ)

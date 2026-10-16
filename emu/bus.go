@@ -316,14 +316,3 @@ type rom struct{ memory }
 func (rom) Write32(uint32, uint32) {}
 func (rom) Write16(uint32, uint16) {}
 func (rom) Write8(uint32, uint8)   {}
-
-// unmapped answers every read with zero and ignores writes. It stands in for
-// the devices not emulated yet.
-type unmapped struct{}
-
-func (unmapped) Read32(uint32) uint32   { return 0 }
-func (unmapped) Read16(uint32) uint16   { return 0 }
-func (unmapped) Read8(uint32) uint8     { return 0 }
-func (unmapped) Write32(uint32, uint32) {}
-func (unmapped) Write16(uint32, uint16) {}
-func (unmapped) Write8(uint32, uint8)   {}

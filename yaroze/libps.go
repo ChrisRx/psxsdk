@@ -87,3 +87,49 @@ func PushMatrix()
 
 //export PopMatrix
 func PopMatrix()
+
+// Rand and Srand are the C library's rand and srand, which the library
+// carries resident: a pseudo-random number from 0 to 32767, and the seed
+// for them. They take capitals so that Go can see them.
+
+//export rand
+func Rand() int32
+
+//export srand
+func Srand(seed uint32)
+
+// The library's own state that programs read and change directly: variables
+// in the resident library, at the addresses symusr.S gives them. TinyGo only
+// gives a //go:extern variable its C name where it is used in the package
+// that declares it, so each is reached through a function returning its
+// address, under its C name.
+
+//go:extern GsDRAWENV
+var gsDRAWENV DRAWENV
+
+//go:extern GsWSMATRIX
+var gsWSMATRIX MATRIX
+
+// GsDRAWENV returns the drawing environment the library draws with, which a
+// program changes and then registers with PutDrawEnv.
+func GsDRAWENV() *DRAWENV { return &gsDRAWENV }
+
+// GsWSMATRIX returns the world-screen matrix GsSetRefView2 and GsSetView2
+// last worked out.
+func GsWSMATRIX() *MATRIX { return &gsWSMATRIX }
+
+// GsInitGraph's interlace and offset modes.
+const (
+	GsNONINTER = 0
+	GsINTER    = 1
+	GsOFSGTE   = 0
+	GsOFSGPU   = 4
+)
+
+// Attribute bits of GsDOBJ2 and GsSPRITE.
+const (
+	GsLOFF = 1 << 6  // no lighting
+	GsDIV1 = 1 << 9  // subdivide polygons 2x2
+	GsALON = 1 << 30 // semi-transparent
+	GsDOFF = 1 << 31 // not drawn
+)

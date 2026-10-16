@@ -3,8 +3,8 @@
 // with no reference to the wall clock.
 //
 // It follows psxe closely, so that the two can be compared instruction by
-// instruction with a trace (see format/psxtrace). Devices not ported yet are
-// mapped as reading zero.
+// instruction with a trace (see format/psxtrace). Where psxe reads past a
+// buffer, or leaves out what a device needs to work, the departure is marked.
 package emu
 
 import (
@@ -43,6 +43,7 @@ type Machine struct {
 	tmr  *timers
 	cd   *cdrom
 	sio  *sio0
+	mdec *mdec
 
 	// spuCycles counts towards the next SPU sample.
 	spuCycles uint32
@@ -52,6 +53,10 @@ type Machine struct {
 
 	// fail is where the devices report an error.
 	fail failure
+
+	// wake is set by a device that changes when it next needs the machine,
+	// or fails, so that the CPU hands back to run.
+	wake bool
 
 	trace     *psxtrace.Writer
 	traceRegs [psxtrace.NumRegs]uint32
@@ -66,6 +71,7 @@ func New(bios []byte) (*Machine, error) {
 
 	m := &Machine{Bus: &Bus{}}
 	m.CPU = cpu.New(m.Bus)
+	m.fail.wake = &m.wake
 
 	mc2 := newMC2()
 	m.ram = &ram{memory: make(memory, RAMSize), mc2: mc2}
@@ -74,13 +80,14 @@ func New(bios []byte) (*Machine, error) {
 	// The CD-ROM drive and the pad count CPU cycles towards their events,
 	// so their clock is the CPU's.
 	cycles := &m.CPU.TotalCycles
-	m.dma = newDMA(m.Bus, m.ic, m.fail.report)
+	m.dma = newDMA(m.Bus, m.ic, &m.wake, m.fail.report)
 	m.spu = newSPU(m.ic)
 	m.gpu = newGPU(m.ic, m.fail.report)
-	m.tmr = &timers{gpu: m.gpu, ic: m.ic, steps: &m.steps}
+	m.tmr = &timers{gpu: m.gpu, ic: m.ic, steps: &m.steps, wake: &m.wake}
 	m.gpu.timers = m.tmr
-	m.cd = newCDROM(m.ic, cycles, m.fail.report)
-	m.sio = newSIO0(m.ic, cycles, [2]*Pad{newDigitalPad(), nil})
+	m.cd = newCDROM(m.ic, cycles, &m.wake, m.fail.report)
+	m.sio = newSIO0(m.ic, cycles, &m.wake, [2]*Pad{newDigitalPad(), nil})
+	m.mdec = newMDEC(m.fail.report)
 
 	// The order is psxe's, which only matters where ranges overlap.
 	m.Bus.setMaps([]mapping{
@@ -99,7 +106,7 @@ func New(bios []byte) (*Machine, error) {
 		{base: 0x1f801100, size: 0x30, dev: m.tmr},
 		{base: 0x1f801800, size: 0x4, dev: m.cd},
 		{base: 0x1f801040, size: 0x10, dev: m.sio},
-		{base: 0x1f801820, size: 0x8, dev: unmapped{}}, // MDEC
+		{base: 0x1f801820, size: 0x8, dev: m.mdec},
 	})
 	// Most accesses are to RAM, and code runs from RAM and the BIOS. The
 	// first 4MB of RAM's window is populated whatever RAM_SIZE says, so it
@@ -186,8 +193,8 @@ func (m *Machine) LoadEXE(exe *psx.File) error {
 // starts at, as large as the display mode makes it, worked out as psxe's
 // frontend does. With the display turned off, it is black.
 //
-// The 24-bit display mode, used for video, is not decoded; it shows as
-// 15-bit pixels.
+// In 24-bit mode, which video is shown in, VRAM holds three bytes to a pixel,
+// red, green and blue, from the display area's left edge.
 func (m *Machine) Display() *image.RGBA {
 	return m.DisplayInto(nil)
 }
@@ -216,6 +223,10 @@ func (m *Machine) DisplayInto(img *image.RGBA) *image.RGBA {
 		draw.Draw(img, img.Rect, image.Black, image.Point{}, draw.Src)
 		return img
 	}
+	if g.displayMode&0x10 != 0 {
+		m.display24(img, width, height)
+		return img
+	}
 	var wrapped [vramWidth]uint16
 	for y := range height {
 		vy := (int(g.dispY) + y) & (vramHeight - 1)
@@ -230,6 +241,29 @@ func (m *Machine) DisplayInto(img *image.RGBA) *image.RGBA {
 		rgba15(img.Pix[y*img.Stride:y*img.Stride+4*width], src[:width])
 	}
 	return img
+}
+
+// display24 draws a 24-bit display area. psxe's frontend hands VRAM to SDL
+// as rows of 24-bit pixels from the display area on; a row running off the
+// right of VRAM wraps to its left here, as in 15-bit mode.
+func (m *Machine) display24(img *image.RGBA, width, height int) {
+	g := m.gpu
+	var row [vramWidth * 2]byte
+	x0 := (int(g.dispX) & (vramWidth - 1)) * 2
+	for y := range height {
+		vy := (int(g.dispY) + y) & (vramHeight - 1)
+		for i, p := range g.vram[vy*vramWidth : (vy+1)*vramWidth] {
+			row[2*i], row[2*i+1] = byte(p), byte(p>>8)
+		}
+		dst := img.Pix[y*img.Stride:]
+		for x := range width {
+			s := x0 + 3*x
+			dst[4*x+0] = row[s%len(row)]
+			dst[4*x+1] = row[(s+1)%len(row)]
+			dst[4*x+2] = row[(s+2)%len(row)]
+			dst[4*x+3] = 0xff
+		}
+	}
 }
 
 // Frames returns how many frames have been displayed, counted at each
@@ -266,6 +300,12 @@ func (m *Machine) SetCDAudio(on bool) {
 // connects a digital pad to port 1 only.
 func (m *Machine) Pad(port int) *Pad {
 	return m.sio.pads[port-1]
+}
+
+// InsertCard puts a memory card in slot 1 or 2, or with nil, takes out
+// the one there. A machine starts with none, as psxe does.
+func (m *Machine) InsertCard(slot int, c *MemoryCard) {
+	m.sio.cards[slot-1] = c
 }
 
 // InsertDisc puts a disc in the drive.
@@ -313,8 +353,9 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 		Due:   [2]*uint64{&cd.due, &sio.due},
 		Video: &gpu.cycles, VideoEdge: &gpu.edge, VideoRate: gpuCyclesPerCPU,
 		Sample: &m.spuCycles, SampleCycles: spuSampleCycles,
-		Busy: &dma.active, Err: &m.fail.err,
+		Busy: &dma.active,
 		Hook: 0xb4, Hooked: tty,
+		Wake: &m.wake,
 	}
 
 	var i uint64
@@ -375,15 +416,19 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 
 // failure is where the devices report an error that stops the run: what
 // psxe does not implement, or asserts on. They share one, through report,
-// so a step checks one place. The first reported is kept until the machine
-// returns it; a second in the same step is dropped, the machine being past
-// emulating by then anyway.
-type failure struct{ err error }
+// which also sets wake so that the CPU hands back to the machine. The first
+// reported is kept until the machine returns it; a second in the same step
+// is dropped, the machine being past emulating by then anyway.
+type failure struct {
+	err  error
+	wake *bool
+}
 
 func (f *failure) report(err error) {
 	if f.err == nil {
 		f.err = err
 	}
+	*f.wake = true
 }
 
 // take returns the error reported, and clears it.

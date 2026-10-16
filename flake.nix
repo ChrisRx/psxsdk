@@ -75,7 +75,7 @@
             src = pkgs.fetchFromGitHub {
               owner = "ChrisRx";
               repo = "tinygo";
-              rev = "140a09560423413ee521416f19c5a5a007449a54";
+              rev = "558e4cccb159b92b96181859e1a358e92f97d2aa";
               hash = "sha256-JEZ1mIa1vLFOKLdNLY+Cl4GDbwzN0uwnhb8fvice9Mg=";
               fetchSubmodules = true;
               # cmsis-svd carries several GB of vendor data for parts that have
@@ -236,6 +236,7 @@
               pkgs.mednafen
               self.packages.${system}.psxe
               pkgs.wasmtime
+              pkgs.python3
             ];
           };
 

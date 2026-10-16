@@ -41,6 +41,7 @@ type timers struct {
 	steps  *uint64
 	synced uint64
 	due    uint64
+	wake   *bool // set when due changes
 }
 
 func (tm *timers) mode(i int) uint16 {
@@ -291,6 +292,7 @@ func (t *timer) settled() bool {
 // changing past its target, or advanced a step at a time, is checked at the
 // next step.
 func (tm *timers) schedule() {
+	*tm.wake = true
 	tm.due = ^uint64(0)
 	for i := range tm.t {
 		t := &tm.t[i]
