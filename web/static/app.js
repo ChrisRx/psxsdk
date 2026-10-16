@@ -54,6 +54,10 @@ const INFO = {
     about: "Full-colour video played through the motion decoder.",
     controls: "Start and Select together quit.",
   },
+  cube: {
+    about: "A textured cube read off the disc, the program the tutorial writes.",
+    controls: "The directions turn the cube.",
+  },
   offscr: {
     about: "A sprite painted onto a sphere's texture while it runs, a Net Yaroze tutorial.",
     controls: "The directions, L1 and L2 move the ship, and the symbol buttons move the sprite; hold Select to move faster. Start pauses. Start and Select together quit.",
@@ -511,6 +515,19 @@ addEventListener("hashchange", () => {
 });
 
 async function init() {
+  // Embedded in a page of the documentation, which supplies its own
+  // heading and picks the example through the hash, the page is only the
+  // player.
+  if (new URLSearchParams(location.search).has("embed")) {
+    document.documentElement.classList.add("embed");
+    // The page around the frame sizes it to fit, so that the player never
+    // scrolls inside it: it is told the height whenever that changes, as
+    // it does when the touch controller appears.
+    const report = () => parent.postMessage({ type: "psx-player-height", height: document.documentElement.scrollHeight }, "*");
+    new ResizeObserver(report).observe(document.body);
+    report();
+  }
+
   state.bios = (await store.get("bios")) ?? null;
   showBIOS();
 

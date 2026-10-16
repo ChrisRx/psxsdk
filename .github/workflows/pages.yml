@@ -4,7 +4,7 @@ name: Pages
 # through the gh-pages branch, which only this workflow writes to and which
 # GitHub Pages serves. A push to main deploys the site to the root. A pull
 # request builds the site, which catches a change that breaks an example,
-# and when it touches an example also deploys a preview to pr-preview/pr-N/
+# and when it touches the site also deploys a preview to pr-preview/pr-N/
 # and comments the preview's address on the pull request. The preview is
 # removed when the pull request closes.
 on:
@@ -21,18 +21,20 @@ jobs:
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     outputs:
-      examples: ${{ steps.changes.outputs.examples }}
+      site: ${{ steps.changes.outputs.site }}
     steps:
     - uses: actions/checkout@v4
 
-    - name: Check for example changes
+    - name: Check for changes to the site
       id: changes
       if: github.event_name == 'pull_request'
       uses: dorny/paths-filter@v3
       with:
         filters: |
-          examples:
+          site:
+            - 'docs/**'
             - 'examples/**'
+            - 'web/**'
 
     - name: Install Nix
       uses: cachix/install-nix-action@v31
@@ -89,7 +91,7 @@ jobs:
       !cancelled()
       && github.event_name == 'pull_request'
       && github.event.pull_request.head.repo.full_name == github.repository
-      && (github.event.action == 'closed' || needs.build.outputs.examples == 'true')
+      && (github.event.action == 'closed' || needs.build.outputs.site == 'true')
     needs: build
     runs-on: ubuntu-latest
     permissions:

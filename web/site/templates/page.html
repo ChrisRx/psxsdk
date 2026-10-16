@@ -1,0 +1,85 @@
+{{- $root := .Page.Root -}}
+{{- $page := .Page -}}
+{{- $site := .Site -}}
+<!doctype html>
+<html lang="en" data-root="{{$root}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{if $page.URL}}{{$page.Title}} · {{$site.Name}}{{else}}{{$site.Name}}{{end}}</title>
+  {{if $page.Description}}<meta name="description" content="{{$page.Description}}">{{end}}
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="{{$root}}play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="{{$root}}play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="{{$root}}assets/site.css">
+  <link rel="stylesheet" href="{{$root}}assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="{{$root}}">{{$site.Name}}</a>
+    <nav class="sections" aria-label="Sections">
+      {{- range $site.Sections}}
+      <a href="{{$root}}{{.URL}}"{{if eq . $page.Section}} aria-current="true"{{end}}>{{.Title}}</a>
+      {{- end}}
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="{{$site.Repo}}">GitHub</a>
+  </header>
+
+  <div class="layout{{if not $page.Section}} front{{end}}">
+    {{- with $page.Section}}
+    <aside class="side">
+      <nav aria-label="{{.Title}}">
+        <ul>
+          {{- range .Pages}}
+          <li><a href="{{$root}}{{.URL}}"{{if eq . $page}} aria-current="page"{{end}}>{{.Title}}</a></li>
+          {{- end}}
+        </ul>
+      </nav>
+    </aside>
+    {{- end}}
+
+    <main>
+      <article>
+        <h1>{{$page.Title}}</h1>
+        {{- if $page.Embed}}
+        {{player $root $page.Embed}}
+        {{- end}}
+        {{$page.Content}}
+        {{- if $page.Source}}
+        <p class="source"><a href="{{$site.Repo}}/tree/main/{{$page.Source}}">Source on GitHub</a></p>
+        {{- end}}
+      </article>
+      {{- with prevnext $page}}
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        {{with .Prev}}<a class="prev" href="{{$root}}{{.URL}}"><small>Previous</small>{{.Title}}</a>{{else}}<span></span>{{end}}
+        {{with .Next}}<a class="next" href="{{$root}}{{.URL}}"><small>Next</small>{{.Title}}</a>{{end}}
+      </nav>
+      {{- end}}
+    </main>
+
+    {{- if $page.TOC}}
+    <aside class="toc">
+      <nav aria-label="On this page">
+        <p>On this page</p>
+        <ul>
+          {{- range $page.TOC}}
+          <li class="l{{.Level}}"><a href="#{{.ID}}">{{.Text}}</a></li>
+          {{- end}}
+        </ul>
+      </nav>
+    </aside>
+    {{- end}}
+  </div>
+
+  <footer>
+    <p><a href="{{$site.Repo}}">{{$site.Name}}</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="{{$root}}assets/search.js" defer></script>
+  <script src="{{$root}}assets/player.js" defer></script>
+</body>
+</html>

@@ -13,6 +13,7 @@ tasks:
   test:emu:
     cmds:
       - task: discs
+      - task: disc:tutorial
       - PSX_BIOS="${PSX_BIOS:-$PWD/web/static/openbios.bin}" PSX_DISCS="$PWD/.build" go test -v ./tests/...
 
   # Builds the check example onto .build/check/check.cue.
@@ -33,25 +34,36 @@ tasks:
         task: disc
         vars: { NAME: '{{.ITEM}}' }
 
-  # Builds the example NAME onto .build/NAME/NAME.cue, with the files its
-  # program registers, which mkpsxiso reads out of the executable and takes
-  # from the example's directory. The output directory starts with a dot so
-  # that go list ./... leaves it alone.
+  # Builds the program in DIR, examples/NAME unless told otherwise, onto
+  # .build/NAME/NAME.cue, with the files it registers, which mkpsxiso reads
+  # out of the executable and takes from DIR. The output directory starts
+  # with a dot so that go list ./... leaves it alone.
   disc:
     requires:
       vars: [NAME]
+    vars:
+      DIR: '{{.DIR | default (printf "examples/%s" .NAME)}}'
     cmds:
       - rm -rf .build/{{.NAME}}
       - mkdir -p .build/{{.NAME}}
-      - tinygo build -target=playstation-yaroze -o .build/{{.NAME}}/prog.elf ./examples/{{.NAME}}
+      - tinygo build -target=playstation-yaroze -o .build/{{.NAME}}/prog.elf ./{{.DIR}}
       - go tool mips1fix .build/{{.NAME}}/prog.elf
       - go tool eco2exe .build/{{.NAME}}/prog.elf .build/{{.NAME}}/prog.exe
-      - go tool mkpsxiso -o .build/{{.NAME}}/{{.NAME}}.bin --volume-id {{.NAME}}.exe --boot MAIN.EXE --file MAIN.EXE=.build/{{.NAME}}/prog.exe --src examples/{{.NAME}}
+      - go tool mkpsxiso -o .build/{{.NAME}}/{{.NAME}}.bin --volume-id {{.NAME}}.exe --boot MAIN.EXE --file MAIN.EXE=.build/{{.NAME}}/prog.exe --src {{.DIR}}
 
-  # Builds the site into .build/site, replacing what is there: every
-  # example's disc, the emulator compiled to WebAssembly from web/, and the
-  # page around it, from web/static, which includes the OpenBIOS image the
-  # examples boot with. Sony's BIOS must never be copied in.
+  # Builds the tutorial's program onto .build/cube/cube.cue, so that it
+  # runs in the player like the examples and in the emulator tests.
+  disc:tutorial:
+    cmds:
+      - task: disc
+        vars: { NAME: cube, DIR: docs/tutorial/cube }
+
+  # Builds the site into .build/site, replacing what is there: the
+  # documentation from docs/ and the examples' package comments, rendered
+  # by web/site, and under play/ the player from web/static, which includes
+  # the OpenBIOS image the examples boot with, every example's disc and the
+  # tutorial's, and the emulator compiled to WebAssembly from web/. Sony's
+  # BIOS must never be copied in.
   #
   # .github/workflows/pages.yml publishes this directory to GitHub Pages
   # through the gh-pages branch, so it is never committed here. The
@@ -59,16 +71,20 @@ tasks:
   site:
     vars:
       SITE: .build/site
+      PLAY: .build/site/play
       EXAMPLES:
         # Every directory under examples with a main.go; examples/internal
-        # holds what they share, and is not one.
-        sh: for f in examples/*/main.go; do basename "$(dirname "$f")"; done
+        # holds what they share, and is not one. The tutorial's program
+        # joins them in the player.
+        sh: for f in examples/*/main.go; do basename "$(dirname "$f")"; done; echo cube
     cmds:
       - task: discs
+      - task: disc:tutorial
       - rm -rf {{.SITE}}
-      - mkdir -p {{.SITE}}/examples
+      - go run ./web/site -out {{.SITE}}
+      - mkdir -p {{.PLAY}}/examples
       - for: { var: EXAMPLES }
-        cmd: mkdir -p {{.SITE}}/examples/{{.ITEM}} && cp .build/{{.ITEM}}/{{.ITEM}}.cue .build/{{.ITEM}}/{{.ITEM}}.bin {{.SITE}}/examples/{{.ITEM}}/
+        cmd: mkdir -p {{.PLAY}}/examples/{{.ITEM}} && cp .build/{{.ITEM}}/{{.ITEM}}.cue .build/{{.ITEM}}/{{.ITEM}}.bin {{.PLAY}}/examples/{{.ITEM}}/
       - |
         {
           printf '['
@@ -78,11 +94,16 @@ tasks:
             sep=','
           done
           printf '\n]\n'
-        } > {{.SITE}}/examples.json
-      - GOEXPERIMENT=simd GOOS=js GOARCH=wasm go build -trimpath -ldflags=-s -o {{.SITE}}/psx.wasm ./web
-      - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" {{.SITE}}/
-      - cp -r web/static/. {{.SITE}}/
+        } > {{.PLAY}}/examples.json
+      - GOEXPERIMENT=simd GOOS=js GOARCH=wasm go build -trimpath -ldflags=-s -o {{.PLAY}}/psx.wasm ./web
+      - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" {{.PLAY}}/
       - touch {{.SITE}}/.nojekyll
+
+  # Renders the documentation alone into .build/site, over whatever is
+  # there, which is enough to look at a page while writing it.
+  site:docs:
+    cmds:
+      - go run ./web/site -out .build/site
 
   # Serves .build/site on localhost:8000 to try the site.
   site:serve:

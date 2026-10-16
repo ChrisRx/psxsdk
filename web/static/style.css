@@ -470,3 +470,12 @@ body.has-full { overflow: hidden; }
   .shoulder.on, .small.on, .face-button.on, .dpad path.on { transform: none; }
   .panel summary::before { transition: none; }
 }
+
+/* Embedded in the documentation (?embed): the picture, its buttons and the
+   hint alone. The heading, the list of examples and the panels are the
+   page's to provide, and the page sizes the frame to what is left, so
+   nothing here may scroll. */
+.embed, .embed body { overflow: hidden; }
+.embed body { padding: 8px; }
+.embed .top, .embed main > nav, .embed .panel { display: none; }
+.embed .hint { margin-bottom: 0; }
