@@ -32,6 +32,7 @@
 package main
 
 import (
+	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/examples/internal/demo"
 	"go.chrisrx.dev/psx/examples/internal/lpge"
 	"go.chrisrx.dev/psx/yaroze"
@@ -54,14 +55,14 @@ const (
 )
 
 var files = []demo.File{
-	{Name: "\\DATA\\WALL0.TMD;1", Addr: wall0Addr},
-	{Name: "\\DATA\\WALL1.TMD;1", Addr: wall1Addr},
-	{Name: "\\DATA\\WALL2.TMD;1", Addr: wall2Addr},
-	{Name: "\\DATA\\WALL3.TMD;1", Addr: wall3Addr},
-	{Name: "\\DATA\\TEN.TMD;1", Addr: tenAddr},
-	{Name: "\\DATA\\YUKA.TMD;1", Addr: yukaAddr},
-	{Name: "\\DATA\\THESHIP.TMD;1", Addr: shipAddr},
-	{Name: "\\DATA\\STONE.TIM;1", Addr: stoneAddr},
+	{File: disc.Register("DATA/WALL0.TMD", "data/WALL0.TMD"), Addr: wall0Addr},
+	{File: disc.Register("DATA/WALL1.TMD", "data/WALL1.TMD"), Addr: wall1Addr},
+	{File: disc.Register("DATA/WALL2.TMD", "data/WALL2.TMD"), Addr: wall2Addr},
+	{File: disc.Register("DATA/WALL3.TMD", "data/WALL3.TMD"), Addr: wall3Addr},
+	{File: disc.Register("DATA/TEN.TMD", "data/TEN.TMD"), Addr: tenAddr},
+	{File: disc.Register("DATA/YUKA.TMD", "data/YUKA.TMD"), Addr: yukaAddr},
+	{File: disc.Register("DATA/THESHIP.TMD", "data/THESHIP.TMD"), Addr: shipAddr},
+	{File: disc.Register("DATA/STONE.TIM", "data/STONE.TIM"), Addr: stoneAddr},
 }
 
 // The maze: cells fact across, in a grid worldX by worldZ, each a wall or

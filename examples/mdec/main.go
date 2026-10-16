@@ -15,12 +15,13 @@
 // Hold Start and Select together to quit.
 package main
 
-//go:generate go run ./gen -o disc/DATA/MOVIE.MDC
+//go:generate go run ./gen -o data/MOVIE.MDC
 
 import (
 	"runtime/volatile"
 	"unsafe"
 
+	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/examples/internal/demo"
 	"go.chrisrx.dev/psx/yaroze"
 )
@@ -30,7 +31,7 @@ import (
 const movieAddr = 0x80090000
 
 var files = []demo.File{
-	{Name: "\\DATA\\MOVIE.MDC;1", Addr: movieAddr},
+	{File: disc.Register("DATA/MOVIE.MDC", "data/MOVIE.MDC"), Addr: movieAddr},
 }
 
 // The movie's layout; see format/mdec.

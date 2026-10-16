@@ -33,6 +33,7 @@
 package main
 
 import (
+	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/examples/internal/demo"
 	"go.chrisrx.dev/psx/examples/internal/lpge"
 	"go.chrisrx.dev/psx/yaroze"
@@ -66,14 +67,14 @@ const (
 )
 
 var files = []demo.File{
-	{Name: "\\DATA\\TEN.TMD;1", Addr: squareModelAddr},
-	{Name: "\\DATA\\THESHIP.TMD;1", Addr: shipModelAddr},
-	{Name: "\\DATA\\WAVE09.TIM;1", Addr: mainTIMAddr},
-	{Name: "\\DATA\\SPBACK.TIM;1", Addr: starsTIMAddr},
-	{Name: "\\DATA\\RADAR4.TIM;1", Addr: circleTIMAddr},
-	{Name: "\\DATA\\DOTS.TIM;1", Addr: dotsTIMAddr},
-	{Name: "\\DATA\\FIRE3.TIM;1", Addr: fireTIMAddr},
-	{Name: "\\DATA\\MULTI2.TIM;1", Addr: multipleTIMAddr},
+	{File: disc.Register("DATA/TEN.TMD", "data/TEN.TMD"), Addr: squareModelAddr},
+	{File: disc.Register("DATA/THESHIP.TMD", "data/THESHIP.TMD"), Addr: shipModelAddr},
+	{File: disc.Register("DATA/WAVE09.TIM", "data/WAVE09.TIM"), Addr: mainTIMAddr},
+	{File: disc.Register("DATA/SPBACK.TIM", "data/SPBACK.TIM"), Addr: starsTIMAddr},
+	{File: disc.Register("DATA/RADAR4.TIM", "data/RADAR4.TIM"), Addr: circleTIMAddr},
+	{File: disc.Register("DATA/DOTS.TIM", "data/DOTS.TIM"), Addr: dotsTIMAddr},
+	{File: disc.Register("DATA/FIRE3.TIM", "data/FIRE3.TIM"), Addr: fireTIMAddr},
+	{File: disc.Register("DATA/MULTI2.TIM", "data/MULTI2.TIM"), Addr: multipleTIMAddr},
 }
 
 var (

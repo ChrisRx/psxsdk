@@ -36,6 +36,7 @@
 package main
 
 import (
+	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/examples/internal/demo"
 	"go.chrisrx.dev/psx/examples/internal/lpge"
 	"go.chrisrx.dev/psx/yaroze"
@@ -62,16 +63,16 @@ const (
 )
 
 var files = []demo.File{
-	{Name: "\\DATA\\TEN.TMD;1", Addr: squareModelAddr},
-	{Name: "\\DATA\\THESHIP.TMD;1", Addr: shipModelAddr},
-	{Name: "\\DATA\\WAVE09.TIM;1", Addr: mainTIMAddr},
-	{Name: "\\DATA\\FIRE7.TIM;1", Addr: fireTIMAddr},
-	{Name: "\\DATA\\ENEMY.TMD;1", Addr: multipleModelAddr},
-	{Name: "\\DATA\\MULTI3.TIM;1", Addr: multipleTIMAddr},
-	{Name: "\\DATA\\MASCOTS2.TIM;1", Addr: mascotsTIMAddr},
-	{Name: "\\DATA\\ASCII2.TIM;1", Addr: asciiTIMAddr},
-	{Name: "\\DATA\\LEWIS.VH;1", Addr: vhAddr},
-	{Name: "\\DATA\\LEWIS.VB;1", Addr: vbAddr},
+	{File: disc.Register("DATA/TEN.TMD", "data/TEN.TMD"), Addr: squareModelAddr},
+	{File: disc.Register("DATA/THESHIP.TMD", "data/THESHIP.TMD"), Addr: shipModelAddr},
+	{File: disc.Register("DATA/WAVE09.TIM", "data/WAVE09.TIM"), Addr: mainTIMAddr},
+	{File: disc.Register("DATA/FIRE7.TIM", "data/FIRE7.TIM"), Addr: fireTIMAddr},
+	{File: disc.Register("DATA/ENEMY.TMD", "data/ENEMY.TMD"), Addr: multipleModelAddr},
+	{File: disc.Register("DATA/MULTI3.TIM", "data/MULTI3.TIM"), Addr: multipleTIMAddr},
+	{File: disc.Register("DATA/MASCOTS2.TIM", "data/MASCOTS2.TIM"), Addr: mascotsTIMAddr},
+	{File: disc.Register("DATA/ASCII2.TIM", "data/ASCII2.TIM"), Addr: asciiTIMAddr},
+	{File: disc.Register("DATA/LEWIS.VH", "data/LEWIS.VH"), Addr: vhAddr},
+	{File: disc.Register("DATA/LEWIS.VB", "data/LEWIS.VB"), Addr: vbAddr},
 }
 
 var (

@@ -13,6 +13,10 @@ var (
 	ExecutableSignature = [8]byte{'P', 'S', '-', 'X', ' ', 'E', 'X', 'E'}
 )
 
+// HeaderSize is the length of the header, one disc sector, after which the
+// text follows at TextAddr.
+const HeaderSize = 2048
+
 type FileHeader struct {
 	Magic     [8]byte
 	Text      uint32

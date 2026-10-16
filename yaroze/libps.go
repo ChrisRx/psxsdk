@@ -118,6 +118,52 @@ func GsDRAWENV() *DRAWENV { return &gsDRAWENV }
 // last worked out.
 func GsWSMATRIX() *MATRIX { return &gsWSMATRIX }
 
+// The CD-ROM calls the resident library has beyond what libps.h declares,
+// which together read a file whose sector is already known, as package disc
+// records it, without the search of the directory CdReadFile makes. CdRead
+// is in symusr.o; the other four are at the addresses the library's own
+// CdReadFile calls, which the TinyGo target's link script provides, since
+// Sony exported CdRead but not the CdControl that positions the drive for
+// it. Signatures are libcd's.
+
+// Commands and modes for CdControl and CdRead, from libcd.h.
+const (
+	CdlSetloc    = 0x02 // the parameter is the CdlLOC to read from next
+	CdlModeSpeed = 0x80 // read at double speed, as CdReadFile does
+)
+
+// CdControl issues a command to the drive and returns without waiting for
+// it to complete. param is the command's parameter, if it takes one, and
+// result receives the drive's reply when it is not nil. It returns 0 if the
+// command could not be issued.
+//
+//export CdControl
+func CdControl(com uint8, param *uint8, result *uint8) int32
+
+// CdControlB is CdControl waiting for the command to complete.
+//
+//export CdControlB
+func CdControlB(com uint8, param *uint8, result *uint8) int32
+
+// CdRead reads sectors into buf from the position the last CdlSetloc gave,
+// in the given mode, and returns 0 if the read could not be started. The
+// read goes on in the background, and CdReadSync waits for it.
+//
+//export CdRead
+func CdRead(sectors int32, buf *uint32, mode int32) int32
+
+// CdIntToPos converts a sector number to the position the drive takes, in
+// binary coded minutes, seconds and sectors, writing it to p and returning
+// p.
+//
+//export CdIntToPos
+func CdIntToPos(i int32, p *CdlLOC) *CdlLOC
+
+// CdPosToInt converts a position back to its sector number.
+//
+//export CdPosToInt
+func CdPosToInt(p *CdlLOC) int32
+
 // GsInitGraph's interlace and offset modes.
 const (
 	GsNONINTER = 0

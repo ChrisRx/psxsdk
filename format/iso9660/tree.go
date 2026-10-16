@@ -90,21 +90,34 @@ type Dir struct {
 	number uint16 // 1-based index in the path table
 }
 
-// AddFile appends a file backed by a path on the host filesystem.
-func (d *Dir) AddFile(name, path string) error {
+// AddFile appends and returns a file backed by a path on the host filesystem.
+func (d *Dir) AddFile(name, path string) (*Entry, error) {
 	fi, err := os.Stat(path)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if fi.Size() > 0xffffffff {
-		return fmt.Errorf("%s: %d bytes is larger than a disc file can be", path, fi.Size())
+		return nil, fmt.Errorf("%s: %d bytes is larger than a disc file can be", path, fi.Size())
 	}
-	d.Entries = append(d.Entries, &Entry{
+	e := &Entry{
 		Name:     FileIdentifier(name),
 		Size:     uint32(fi.Size()),
 		Open:     func() (io.ReadCloser, error) { return os.Open(path) },
 		Modified: fi.ModTime(),
-	})
+	}
+	d.Entries = append(d.Entries, e)
+	return e, nil
+}
+
+// Find returns the file in d called name, given with or without its ";1"
+// version suffix and in any case, or nil if there is none.
+func (d *Dir) Find(name string) *Entry {
+	id := FileIdentifier(strings.TrimSuffix(strings.ToUpper(name), ";1"))
+	for _, e := range d.Entries {
+		if e.Name == id {
+			return e
+		}
+	}
 	return nil
 }
 
@@ -113,6 +126,17 @@ func (d *Dir) AddDir(name string) *Dir {
 	sub := &Dir{Name: NormalizeName(name), parent: d}
 	d.Dirs = append(d.Dirs, sub)
 	return sub
+}
+
+// Mkdir returns the subdirectory called name, adding it if there is none.
+func (d *Dir) Mkdir(name string) *Dir {
+	id := NormalizeName(name)
+	for _, sub := range d.Dirs {
+		if sub.Name == id {
+			return sub
+		}
+	}
+	return d.AddDir(name)
 }
 
 // FromDirectory builds a disc tree mirroring a directory on the host
@@ -147,7 +171,7 @@ func addTree(d *Dir, path string) error {
 				return err
 			}
 		case e.Type().IsRegular():
-			if err := d.AddFile(e.Name(), full); err != nil {
+			if _, err := d.AddFile(e.Name(), full); err != nil {
 				return err
 			}
 		default:

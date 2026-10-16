@@ -33,21 +33,20 @@ tasks:
         task: disc
         vars: { NAME: '{{.ITEM}}' }
 
-  # Builds the example NAME onto .build/NAME/NAME.cue, with the files in
-  # its disc directory, if it has one. The directory starts with a dot so
+  # Builds the example NAME onto .build/NAME/NAME.cue, with the files its
+  # program registers, which mkpsxiso reads out of the executable and takes
+  # from the example's directory. The output directory starts with a dot so
   # that go list ./... leaves it alone.
   disc:
     requires:
       vars: [NAME]
     cmds:
       - rm -rf .build/{{.NAME}}
-      - mkdir -p .build/{{.NAME}}/disc
-      - if [ -d examples/{{.NAME}}/disc ]; then cp -r examples/{{.NAME}}/disc/. .build/{{.NAME}}/disc/; fi
+      - mkdir -p .build/{{.NAME}}
       - tinygo build -target=playstation-yaroze -o .build/{{.NAME}}/prog.elf ./examples/{{.NAME}}
       - go tool mips1fix .build/{{.NAME}}/prog.elf
       - go tool eco2exe .build/{{.NAME}}/prog.elf .build/{{.NAME}}/prog.exe
-      - cp .build/{{.NAME}}/prog.exe .build/{{.NAME}}/disc/MAIN.EXE
-      - go tool mkpsxiso -o .build/{{.NAME}}/{{.NAME}}.bin --volume-id {{.NAME}}.exe --boot MAIN.EXE .build/{{.NAME}}/disc
+      - go tool mkpsxiso -o .build/{{.NAME}}/{{.NAME}}.bin --volume-id {{.NAME}}.exe --boot MAIN.EXE --file MAIN.EXE=.build/{{.NAME}}/prog.exe --src examples/{{.NAME}}
 
   # Builds the site into .build/site, replacing what is there: every
   # example's disc, the emulator compiled to WebAssembly from web/, and the
@@ -92,7 +91,7 @@ tasks:
 
   examples:check:
     cmds:
-      - cp -r examples/check tmp
+      - mkdir -p tmp
       - defer: rm -rf tmp
       - tinygo build -target=playstation-yaroze -o tmp/prog.elf ./examples/check
       - go tool mips1fix tmp/prog.elf
@@ -103,6 +102,5 @@ tasks:
           { text = $1 - window
             printf "%7d\t%7d\t%7d\t%7d\n", text, $2, $3, text + $2 + $3 }'
       - go tool eco2exe tmp/prog.elf tmp/prog.exe
-      - cp tmp/prog.exe tmp/disc/MAIN.EXE
-      - go tool mkpsxiso -o tmp/check.bin --volume-id check.exe --boot MAIN.EXE tmp/disc
+      - go tool mkpsxiso -o tmp/check.bin --volume-id check.exe --boot MAIN.EXE --file MAIN.EXE=tmp/prog.exe --src examples/check
       - psxe -a -b web/static/openbios.bin -L5 tmp/check.cue

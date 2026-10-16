@@ -12,13 +12,17 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/format/iso9660"
+	"go.chrisrx.dev/psx/format/psx"
 	"go.chrisrx.dev/psx/format/psxdisc"
 	"go.chrisrx.dev/psx/internal/flags"
 )
 
 var opts struct {
 	Output      string
+	Files       []string
+	Src         string
 	VolumeID    string
 	SystemID    string
 	Publisher   string
@@ -89,14 +93,25 @@ func parseDate(s string) (time.Time, error) {
 
 func main() {
 	cmd := &cobra.Command{
-		Use:   "mkpsxiso [flags] <directory>",
+		Use:   "mkpsxiso [flags] [directory]",
 		Short: "build a PlayStation disc image from a directory",
 		Long: `mkpsxiso builds a PlayStation disc image from a directory tree.
 
 The tree is placed on the disc as it appears on disk, so the common case of
 an executable plus the data it loads needs no layout file at all. Names are
 folded to the restricted uppercase set ISO 9660 permits and given the ";1"
-version suffix that PlayStation programs use when opening them.
+version suffix that PlayStation programs use when opening them. --file places
+one more host file at a path on the disc, and may be repeated; with it an
+image can be built with no directory at all.
+
+A program built with the disc package registers the files it reads, each
+with the host file to place at its path, and carries the registrations in its
+executable. When --boot names an executable in the tree, the files it
+registers are added to the image, from the directory --src names, and the
+executable goes onto the disc with each registration filled in with the
+sector and length its file was given, which is how the program then finds the
+file without searching for it. --file MAIN.EXE=prog.exe is a whole image for a
+program that registers everything else.
 
 Files named .xa or .str are taken to be streamed media, which is produced as
 whole 2336-byte Mode 2 sectors with their subheaders already in place, and are
@@ -120,13 +135,15 @@ leaves none.
 By default it writes a .bin of raw 2352-byte Mode 2 sectors along with a .cue
 sheet. --iso writes plain 2048-byte blocks instead, which cannot represent
 audio or streamed tracks but can be read by ordinary ISO 9660 tools.`,
-		Args:         cobra.ExactArgs(1),
+		Args:         cobra.MaximumNArgs(1),
 		RunE:         run,
 		SilenceUsage: true,
 	}
 
 	f := cmd.Flags()
 	f.StringVarP(&opts.Output, "output", "o", "psx.bin", "image to write")
+	f.StringArrayVar(&opts.Files, "file", nil, "DISC=HOST: also place the host file at that path on the disc; may be repeated")
+	f.StringVar(&opts.Src, "src", ".", "directory the files the boot executable registers are relative to")
 	f.StringVar(&opts.VolumeID, "volume-id", "UNTITLED", "disc label")
 	f.StringVar(&opts.SystemID, "system-id", "PLAYSTATION", "target system recorded in the volume descriptor")
 	f.StringVar(&opts.Publisher, "publisher", "", "publisher recorded in the volume descriptor")
@@ -229,9 +246,34 @@ func describe(w io.Writer, d *iso9660.Dir, prefix string) {
 }
 
 func run(cmd *cobra.Command, args []string) error {
-	root, err := iso9660.FromDirectory(args[0])
-	if err != nil {
-		return err
+	root := &iso9660.Dir{}
+	if len(args) == 1 {
+		var err error
+		if root, err = iso9660.FromDirectory(args[0]); err != nil {
+			return err
+		}
+	} else if len(opts.Files) == 0 {
+		return fmt.Errorf("nothing to put on the disc: give a directory, or --file")
+	}
+	for _, spec := range opts.Files {
+		path, host, ok := strings.Cut(spec, "=")
+		if !ok || path == "" || host == "" {
+			return fmt.Errorf("--file %q: want a path on the disc, \"=\", and a host file", spec)
+		}
+		if _, err := place(root, path, host); err != nil {
+			return err
+		}
+	}
+
+	// The files the boot executable registers join the tree now, so that
+	// they are laid out with everything else, and its records are filled in
+	// once they have been.
+	var prog *program
+	if opts.Boot != "" {
+		var err error
+		if prog, err = loadProgram(root, filepath.Base(opts.Boot), opts.Src); err != nil {
+			return err
+		}
 	}
 
 	if !opts.NoRaw {
@@ -254,7 +296,7 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	case hasSystemCNF(root):
 		if stackSet {
-			return fmt.Errorf("%s provides its own SYSTEM.CNF, which is used as is, so --stack would have no effect; set STACK there instead", args[0])
+			return fmt.Errorf("the tree provides its own SYSTEM.CNF, which is used as is, so --stack would have no effect; set STACK there instead")
 		}
 	default:
 		addSystemCNF(root, systemCNF(iso9660.FileIdentifier(filepath.Base(opts.Boot)), uint32(opts.Stack)))
@@ -293,6 +335,9 @@ func run(cmd *cobra.Command, args []string) error {
 	w, err := iso9660.NewWriter(root, isoOpts)
 	if err != nil {
 		return err
+	}
+	if prog != nil {
+		prog.patch()
 	}
 
 	tracks, err := audioTracks(opts.Audio)
@@ -350,6 +395,9 @@ func run(cmd *cobra.Command, args []string) error {
 
 	if opts.Verbose {
 		describe(os.Stdout, root, "")
+		if prog != nil {
+			prog.describe(os.Stdout)
+		}
 		for _, t := range layout.Tracks {
 			if t.Audio {
 				fmt.Printf("  %-40s %8d sectors  track %d\n", t.Name, t.Sectors, t.Number)
@@ -368,6 +416,135 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println()
 	return nil
+}
+
+// splitDiscPath breaks a path on the disc, written from the root with either
+// separator and with or without the ";1" suffix, into the directories on the
+// way and the file's own name, neither yet folded to ISO 9660 form.
+func splitDiscPath(path string) (dirs []string, name string, err error) {
+	parts := strings.Split(strings.Trim(strings.ReplaceAll(path, "\\", "/"), "/"), "/")
+	for _, p := range parts {
+		if p == "" {
+			return nil, "", fmt.Errorf("%q is not a path on the disc", path)
+		}
+	}
+	name = strings.TrimSuffix(strings.ToUpper(parts[len(parts)-1]), ";1")
+	return parts[:len(parts)-1], name, nil
+}
+
+// discPath is a path as it will read on the disc, for messages.
+func discPath(path string) string {
+	dirs, name, err := splitDiscPath(path)
+	if err != nil {
+		return path
+	}
+	out := ""
+	for _, d := range dirs {
+		out += "\\" + iso9660.NormalizeName(d)
+	}
+	return out + "\\" + iso9660.FileIdentifier(name)
+}
+
+// place adds the host file to the tree at path, making the directories on the
+// way. A path something already occupies is an error rather than a choice
+// between the two: whichever won, the program would be reading the other.
+func place(root *iso9660.Dir, path, host string) (*iso9660.Entry, error) {
+	dirs, name, err := splitDiscPath(path)
+	if err != nil {
+		return nil, err
+	}
+	d := root
+	for _, dir := range dirs {
+		d = d.Mkdir(dir)
+	}
+	if d.Find(name) != nil {
+		return nil, fmt.Errorf("%s is already on the disc", discPath(path))
+	}
+	return d.AddFile(name, host)
+}
+
+// A program is the boot executable, held in memory so that the records of
+// the files it registers, found as package disc describes, can be filled in
+// once the image is laid out.
+type program struct {
+	entry *iso9660.Entry
+	data  []byte // the PSX-EXE as a whole
+	image []byte // its text, within data
+	files []registered
+}
+
+// A registered file is one the program asked for, and where it went.
+type registered struct {
+	disc.Record
+	entry *iso9660.Entry
+}
+
+// loadProgram reads the executable called name in the root of the tree and
+// places the files it registers, each relative to src. It returns nil if
+// the tree holds no such file, since --boot may name one it does not.
+func loadProgram(root *iso9660.Dir, name, src string) (*program, error) {
+	e := root.Find(name)
+	if e == nil {
+		return nil, nil
+	}
+	rc, err := e.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close()
+	data, err := io.ReadAll(rc)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", e.Name, err)
+	}
+	exe, err := psx.ParseFile(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("%s is not a PSX-EXE: %w", e.Name, err)
+	}
+	p := &program{entry: e, data: data}
+	p.image = data[psx.HeaderSize : psx.HeaderSize+int(exe.TextSize)]
+
+	// A file registered twice from the same host file, as two packages
+	// might, is one file with two records to fill in. From different host
+	// files it is a mistake, since only one can be at the path.
+	placed := map[string]registered{}
+	for _, r := range disc.Find(p.image, exe.TextAddr) {
+		key := discPath(r.Name)
+		if prev, ok := placed[key]; ok {
+			if prev.Src != r.Src {
+				return nil, fmt.Errorf("%s registers %s from both %s and %s", e.Name, key, prev.Src, r.Src)
+			}
+			p.files = append(p.files, registered{Record: r, entry: prev.entry})
+			continue
+		}
+		entry, err := place(root, r.Name, filepath.Join(src, filepath.FromSlash(r.Src)))
+		if err != nil {
+			return nil, fmt.Errorf("%s registers %s: %w", e.Name, r.Name, err)
+		}
+		reg := registered{Record: r, entry: entry}
+		placed[key] = reg
+		p.files = append(p.files, reg)
+	}
+	return p, nil
+}
+
+// patch writes each registered file's sector and length into its record, and
+// has the executable written to the disc from the patched copy. It is called
+// after layout, when the entries know their addresses.
+func (p *program) patch() {
+	for _, f := range p.files {
+		f.Patch(p.image, f.entry.LBA, f.entry.Size)
+	}
+	data := p.data
+	p.entry.Open = func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(data)), nil
+	}
+}
+
+// describe lists the files the program registered and where they came from.
+func (p *program) describe(w io.Writer) {
+	for _, f := range p.files {
+		fmt.Fprintf(w, "  %-40s registered by \\%s from %s\n", discPath(f.Name), p.entry.Name, f.Src)
+	}
 }
 
 // firstRaw returns the path of the first file of raw sectors in the tree, or

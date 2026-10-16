@@ -23,6 +23,7 @@
 package main
 
 import (
+	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/examples/internal/demo"
 	"go.chrisrx.dev/psx/yaroze"
 )
@@ -39,8 +40,8 @@ const (
 )
 
 var files = []demo.File{
-	{Name: "\\DATA\\TEXTURE.TIM;1", Addr: textureTIM},
-	{Name: "\\DATA\\TORUS.TMD;1", Addr: torusTMD},
+	{File: disc.Register("DATA/TEXTURE.TIM", "data/TEXTURE.TIM"), Addr: textureTIM},
+	{File: disc.Register("DATA/TORUS.TMD", "data/TORUS.TMD"), Addr: torusTMD},
 }
 
 // Ordering tables and GPU packet space, one set per display buffer.

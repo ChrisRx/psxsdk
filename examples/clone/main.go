@@ -38,6 +38,7 @@ package main
 import (
 	"unsafe"
 
+	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/examples/internal/demo"
 	"go.chrisrx.dev/psx/yaroze"
 )
@@ -102,28 +103,28 @@ const (
 )
 
 var files = []demo.File{
-	{Name: "\\DATA\\SFX.VH;1", Addr: vhAddr},
-	{Name: "\\DATA\\SFX.VB;1", Addr: vbAddr},
-	{Name: "\\DATA\\MAP1.DAT;1", Addr: map1Addr},
-	{Name: "\\DATA\\MAP2.DAT;1", Addr: map2Addr},
-	{Name: "\\DATA\\MAP3.DAT;1", Addr: map3Addr},
-	{Name: "\\DATA\\STATUS.TIM;1", Addr: statusTIM},
-	{Name: "\\DATA\\STONE07.TIM;1", Addr: roofTIM},
-	{Name: "\\DATA\\STONE01.TIM;1", Addr: wallTIM},
-	{Name: "\\DATA\\WALL03.TIM;1", Addr: floorTIM},
-	{Name: "\\DATA\\ALBIOD_1.TIM;1", Addr: man1TIM},
-	{Name: "\\DATA\\ALBIOD_2.TIM;1", Addr: man2TIM},
-	{Name: "\\DATA\\BULLET.TIM;1", Addr: bulletTIM},
-	{Name: "\\DATA\\BLOOD.TIM;1", Addr: bloodTIM},
-	{Name: "\\DATA\\ALBIOD_3.TIM;1", Addr: deadmanTIM},
-	{Name: "\\DATA\\RICOCHET.TIM;1", Addr: ricochetTIM},
-	{Name: "\\DATA\\FIRSTAID.TIM;1", Addr: healthTIM},
-	{Name: "\\DATA\\BULLET2.TIM;1", Addr: bullet2TIM},
-	{Name: "\\DATA\\ESTONE07.TIM;1", Addr: eroofTIM},
-	{Name: "\\DATA\\ESTONE01.TIM;1", Addr: ewallTIM},
-	{Name: "\\DATA\\EWAVE01.TIM;1", Addr: efloorTIM},
-	{Name: "\\DATA\\FSTONE01.TIM;1", Addr: fwallTIM},
-	{Name: "\\DATA\\FACE.TIM;1", Addr: faceTIM},
+	{File: disc.Register("DATA/SFX.VH", "data/SFX.VH"), Addr: vhAddr},
+	{File: disc.Register("DATA/SFX.VB", "data/SFX.VB"), Addr: vbAddr},
+	{File: disc.Register("DATA/MAP1.DAT", "data/MAP1.DAT"), Addr: map1Addr},
+	{File: disc.Register("DATA/MAP2.DAT", "data/MAP2.DAT"), Addr: map2Addr},
+	{File: disc.Register("DATA/MAP3.DAT", "data/MAP3.DAT"), Addr: map3Addr},
+	{File: disc.Register("DATA/STATUS.TIM", "data/STATUS.TIM"), Addr: statusTIM},
+	{File: disc.Register("DATA/STONE07.TIM", "data/STONE07.TIM"), Addr: roofTIM},
+	{File: disc.Register("DATA/STONE01.TIM", "data/STONE01.TIM"), Addr: wallTIM},
+	{File: disc.Register("DATA/WALL03.TIM", "data/WALL03.TIM"), Addr: floorTIM},
+	{File: disc.Register("DATA/ALBIOD_1.TIM", "data/ALBIOD_1.TIM"), Addr: man1TIM},
+	{File: disc.Register("DATA/ALBIOD_2.TIM", "data/ALBIOD_2.TIM"), Addr: man2TIM},
+	{File: disc.Register("DATA/BULLET.TIM", "data/BULLET.TIM"), Addr: bulletTIM},
+	{File: disc.Register("DATA/BLOOD.TIM", "data/BLOOD.TIM"), Addr: bloodTIM},
+	{File: disc.Register("DATA/ALBIOD_3.TIM", "data/ALBIOD_3.TIM"), Addr: deadmanTIM},
+	{File: disc.Register("DATA/RICOCHET.TIM", "data/RICOCHET.TIM"), Addr: ricochetTIM},
+	{File: disc.Register("DATA/FIRSTAID.TIM", "data/FIRSTAID.TIM"), Addr: healthTIM},
+	{File: disc.Register("DATA/BULLET2.TIM", "data/BULLET2.TIM"), Addr: bullet2TIM},
+	{File: disc.Register("DATA/ESTONE07.TIM", "data/ESTONE07.TIM"), Addr: eroofTIM},
+	{File: disc.Register("DATA/ESTONE01.TIM", "data/ESTONE01.TIM"), Addr: ewallTIM},
+	{File: disc.Register("DATA/EWAVE01.TIM", "data/EWAVE01.TIM"), Addr: efloorTIM},
+	{File: disc.Register("DATA/FSTONE01.TIM", "data/FSTONE01.TIM"), Addr: fwallTIM},
+	{File: disc.Register("DATA/FACE.TIM", "data/FACE.TIM"), Addr: faceTIM},
 }
 
 // Map square flags.

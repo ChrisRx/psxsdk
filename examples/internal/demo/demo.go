@@ -11,6 +11,7 @@ package demo
 import (
 	"unsafe"
 
+	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -82,9 +83,12 @@ func PadRead() uint32 {
 }
 
 // A File is a data file a demo loads at a fixed address. On a Net Yaroze it
-// was sent from the PC by the loader's batch script; here it is on the disc.
+// was sent from the PC by the loader's batch script; here it is on the disc,
+// put there by mkpsxiso from the declaration that registers it:
+//
+//	{File: disc.Register("DATA/WALL0.TMD", "data/WALL0.TMD"), Addr: wall0Addr}
 type File struct {
-	Name string // its path on the disc, as CdSearchFile takes it
+	disc.File
 	Addr uintptr
 }
 
@@ -93,24 +97,24 @@ type File struct {
 // hang.
 const readTimeout = 300
 
-var (
-	fileInfo yaroze.CdlFILE
-	pathBuf  [64]byte
-)
+var pathBuf [64]byte
 
 // Load reads files off the disc to their addresses, calling progress, if it
 // is not nil, before each. It returns the name of the first that could not
 // be found or read, or "" if they all arrived.
+//
+// Each is read from the sector mkpsxiso recorded when it placed the file,
+// so no directory is searched. A program it did not place, one sent over
+// the serial cable say, reads them by name instead.
 func Load(files []File, progress func(name string)) string {
-	for _, f := range files {
+	for i := range files {
+		f := &files[i]
 		if progress != nil {
 			progress(f.Name)
 		}
-		name := yaroze.CString(pathBuf[:], f.Name)
-		if yaroze.CdSearchFile(&fileInfo, name) == nil {
+		if !f.Read(At(f.Addr), pathBuf[:]) {
 			return f.Name
 		}
-		yaroze.CdReadFile(name, At(f.Addr), int32(fileInfo.Size))
 		done := false
 		for range readTimeout {
 			if yaroze.CdReadSync(1, nil) <= 0 {

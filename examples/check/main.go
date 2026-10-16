@@ -22,6 +22,7 @@ package main
 import (
 	"unsafe"
 
+	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -97,20 +98,21 @@ func padRaw() uint32 {
 }
 
 // The files the sample loads off the disc.
+// The sound data, registered with mkpsxiso by these declarations: see
+// package disc.
 var dataFiles = [...]struct {
-	name string
+	disc.File
 	addr uintptr
 }{
-	{"\\DATA\\SOUND\\STD0.VH;1", vhAddr},
-	{"\\DATA\\SOUND\\STD0.VB;1", vbAddr},
-	{"\\DATA\\SOUND\\SAMPLE1.SEQ;1", seqAddr},
+	{disc.Register("DATA/SOUND/STD0.VH", "data/STD0.VH"), vhAddr},
+	{disc.Register("DATA/SOUND/STD0.VB", "data/STD0.VB"), vbAddr},
+	{disc.Register("DATA/SOUND/SAMPLE1.SEQ", "data/SAMPLE1.SEQ"), seqAddr},
 }
 
 var (
-	fileInfo [len(dataFiles)]yaroze.CdlFILE
-	pathBuf  [64]byte
-	lineBuf  [128]byte
-	line     yaroze.Buffer
+	pathBuf [64]byte
+	lineBuf [128]byte
+	line    yaroze.Buffer
 
 	loadNote [len(dataFiles)]string
 
@@ -138,22 +140,22 @@ func byteAt(p *uint8, n uintptr) uint8 {
 	return *(*uint8)(unsafe.Add(unsafe.Pointer(p), n))
 }
 
-// loadDataFiles finds and reads the sound data. It reports whether every
-// file arrived, so the caller can skip sound rather than feed the sequencer
-// an empty buffer.
+// loadDataFiles reads the sound data. It reports whether every file
+// arrived, so the caller can skip sound rather than feed the sequencer an
+// empty buffer.
 func loadDataFiles() bool {
 	ok := true
 	for i := range dataFiles {
-		name := yaroze.CString(pathBuf[:], dataFiles[i].name)
+		f := &dataFiles[i]
+		status("reading sound data\n")
 
-		if yaroze.CdSearchFile(&fileInfo[i], name) == nil {
+		// From the sector mkpsxiso recorded, or by name in an executable
+		// it did not place.
+		if !f.Read(at(f.addr), pathBuf[:]) {
 			loadNote[i] = "not found"
 			ok = false
 			continue
 		}
-
-		status("reading sound data\n")
-		yaroze.CdReadFile(name, at(dataFiles[i].addr), int32(fileInfo[i].Size))
 
 		// Bounded, unlike the C original, and with the wait visible so a
 		// drive that never finishes shows up as a stalled counter rather

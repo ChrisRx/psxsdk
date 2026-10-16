@@ -29,7 +29,7 @@ examples/check/main.go
         v
     prog.elf  --mips1fix-->  prog.elf  --eco2exe-->  MAIN.EXE
                                                         |
-                                    disc/DATA/...  ---> mkpsxiso
+                    data/... (disc.Register)  --------> mkpsxiso
                                                         v
                                                check.bin + check.cue
                                                         |
@@ -93,7 +93,7 @@ The examples are ports of Sony's Net Yaroze samples and demos, chosen to put a d
 | [tunnel](examples/tunnel) | L. Evans, 1997 | endless tunnel shooter, three lights, VAB sound effects |
 | [mdec](examples/mdec) | new | full-colour video through the motion decoder, driven by its registers |
 
-Each example's `disc/` directory holds the files it reads off the CD, and `task disc NAME=check` builds one. The header comment of each `main.go` notes where the port departs from the original and why.
+Each example's `data/` directory holds the files it reads off the CD, each registered in its `main.go` with the [`disc`](disc) package so that `mkpsxiso` places it, and `task disc NAME=check` builds one. The header comment of each `main.go` notes where the port departs from the original and why.
 
 ## The emulator
 
@@ -197,6 +197,33 @@ created "game.bin": 639 blocks, "game.cue"
 $ mednafen game.cue
 [CDC] In leadout area: 639
 ```
+
+`--file DISC=HOST` places one more host file at a path on the disc, making the directories on the way, and may be repeated. With it an image needs no directory at all.
+
+##### Registered files
+
+A program can declare the files it reads itself, with the [`disc`](disc) package, instead of a directory being kept in step with it by hand:
+
+```go
+import "go.chrisrx.dev/psx/disc"
+
+var stone = disc.Register("DATA/STONE.TIM", "data/STONE.TIM")
+```
+
+`Register` is called with two constants in a package-level declaration: the path the file is to have on the disc, and the file on the host that goes there. TinyGo evaluates the call when it compiles the program, so each registration becomes a record of constant data in the executable. When `--boot` names an executable in the tree, `mkpsxiso` finds the records in it, places each file from the directory `--src` names, and once the image is laid out writes the file's first sector and its length back into the record before the executable goes onto the disc. `File.Read` then reads the file from that sector, through `CdControl` and `CdRead`, with no search of the directory, and a file that is missing or misnamed on the host fails the build rather than the program.
+
+```bash
+$ mkpsxiso -v -o game.bin --boot MAIN.EXE --file MAIN.EXE=prog.exe --src ./examples/dungeon
+  \MAIN.EXE;1                                1251328 bytes  LBA 23
+  \SYSTEM.CNF;1                                   53 bytes  LBA 634
+  \DATA                                        <dir>        LBA 21
+  \DATA\STONE.TIM;1                            33296 bytes  LBA 635
+  \DATA\STONE.TIM;1                            registered by \MAIN.EXE;1 from data/STONE.TIM
+```
+
+A registered path that the directory already holds is an error rather than a choice between the two, as is one path registered from two different host files. An executable not built onto a disc this way, or run from the serial loader, sees a zero sector and length, which `Placed` reports, and `Read` falls back to `CdReadFile` by name.
+
+Sony exported `CdRead` but not the `CdControl` that positions the drive for it, so the TinyGo target's link script provides `CdControl`, `CdControlB`, `CdIntToPos` and `CdPosToInt` at the addresses the library's own `CdReadFile` calls, and the `yaroze` package declares them.
 
 The volume descriptor fields are flags: `--volume-id`, `--system-id`, `--publisher`, `--preparer` and `--application`. `--date` sets the volume date, and leaving it unset records no date at all, so the same tree always produces the same bytes. `--file-times` records each file's own modification time instead, which is honest about the tree but makes the image depend on the mtimes in it.
 
