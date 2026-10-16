@@ -1,85 +1,149 @@
 # psxsdk
 
-[![PkgGoDev](https://pkg.go.dev/badge/github.com/ChrisRx/psxsdk)](https://pkg.go.dev/github.com/ChrisRx/psxsdk)
-[![Build Status](https://cloud.drone.io/api/badges/ChrisRx/psxsdk/status.svg)](https://cloud.drone.io/ChrisRx/psxsdk)
+[![PkgGoDev](https://pkg.go.dev/badge/go.chrisrx.dev/psx)](https://pkg.go.dev/go.chrisrx.dev/psx)
+[![Build/Test](https://github.com/ChrisRx/psxsdk/actions/workflows/go.yml/badge.svg)](https://github.com/ChrisRx/psxsdk/actions/workflows/go.yml)
+[![Pages](https://github.com/ChrisRx/psxsdk/actions/workflows/pages.yml/badge.svg)](https://github.com/ChrisRx/psxsdk/actions/workflows/pages.yml)
 
-psxsdk is a collection of tools and libraries for Playstation 1 development.
+psxsdk is a Go toolchain for the original PlayStation, built around the Net Yaroze. It covers the whole path from source to screen:
 
-- [What is psxsdk](#what-is-psxsdk)
+- **Write** PlayStation programs in Go, compiled with [TinyGo](https://github.com/ChrisRx/tinygo) against generated bindings for the Net Yaroze library.
+- **Build** them into bootable discs with tools that convert executables and write CD-XA images, including streamed XA/STR files and CD audio tracks.
+- **Run** them in a PlayStation emulator written in Go, which drives the test suite headless and runs in a browser as WebAssembly.
+
+**[Try the examples in your browser](https://chrisrx.github.io/psxsdk/)**: eight Net Yaroze demos ported to Go, booting from the discs this repo builds, in the emulator this repo contains, with the open source [OpenBIOS](https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios). Touch controls are included for phones.
+
+- [How it fits together](#how-it-fits-together)
 - [Getting started](#getting-started)
-- [What's included](#whats-included)
-  - [eco2exe](#eco2exe)
-  - [elf2exe](#elf2exe)
-  - [mkpsxiso](#mkpsxiso)
-  - [dumpsxiso](#dumpsxiso)
-  - [hdr2go](#hdr2go)
-  - [mips1fix](#mips1fix)
-  - [objdump](#objdump)
-  - [sioload](#sioload)
+- [Writing programs in Go](#writing-programs-in-go)
+- [The emulator](#the-emulator)
+- [Tools](#tools)
+- [Packages](#packages)
+- [Background](#background)
 - [Reference](#reference)
 
-## What is psxsdk
+## How it fits together
 
-psxsdk was initially creating software to use the Net Yaroze on linux, but the scope has grown to include any PS1 development software that comes out of getting the Net Yaroze development environment working on modern computers. While not a complete SDK, and no specific goal to create one, psxsdk will include any software I create while working on Net Yaroze and standard Playstation development.
+```
+examples/check/main.go
+        |  tinygo build -target=playstation-yaroze
+        v
+    prog.elf  --mips1fix-->  prog.elf  --eco2exe-->  MAIN.EXE
+                                                        |
+                                    disc/DATA/...  ---> mkpsxiso
+                                                        v
+                                               check.bin + check.cue
+                                                        |
+                       +--------------------------------+---------------------------+
+                       v                                v                           v
+              emu (go test, emutest)          web (WebAssembly, Pages)      real hardware / psxe
+```
 
-When getting started with a Net Yaroze DTL-H3001, I found that the development environment on modern computers and popular development platforms (linux), were incredibly lacking. After some initial successes with [mipself-ecoff-toolchain](https://github.com/ChrisRx/mipsel-ecoff-toolchain) with creating a working compiler toolchain, I started looking for other opportunities to make Net Yaroze development better for myself and others. While the Net Yaroze might not be the ideal PS1 development environment, I'm compelled to work on this because I do not want the ability to use the Net Yaroze to be lost to time.
-
-With this said, some of the major goals of this project:
-
- * Create software that is cross-platform and easy to build
- * Use modern languages (such as Go and Rust) with features that will help ensure longevity of the software being developed
- * Ensure that libraries and tools are well-defined and well-documented
- * Source code for everything will always be available
+A Net Yaroze program is only half a program: the rest is `libps`, the library the Net Yaroze boot disc leaves resident in RAM. `eco2exe` combines the two into a standalone PSX-EXE, so the result boots from an ordinary disc in an emulator or on a console that plays burned discs, with no Net Yaroze hardware involved.
 
 ## Getting started
 
-There are pre-built binaries available for linux, macOS, and Windows that can be found [here](https://github.com/ChrisRx/psxsdk/releases/latest). Building from source is incredibly easy with Go and the only requirement for building is [Go 1.27](https://golang.org/dl/#stable) (or higher).
-
-First, download and build all of the psxsdk example binaries:
+Everything is built with Go 1.27 or newer:
 
 ```bash
 git clone https://github.com/ChrisRx/psxsdk
 cd psxsdk
-make
+go build -o bin/ ./tools/...
+go test $(go list ./... | grep -v examples)   # or: task test
 ```
 
-If successful there should now be several binaries in your `bin/` directory. Running any of these will print the command help:
+That is enough for the disc and executable tools, the emulator and the host-side tests. Building the examples additionally needs the TinyGo fork that carries the `playstation-yaroze` target. The Nix flake provides it, along with the cross binutils, [go-task](https://taskfile.dev), mednafen and a patched [psxe](https://github.com/allkern/psxe) for comparison:
 
 ```bash
-$ bin/sioload
-Error: accepts 1 arg(s), received 0
-Usage:
-  sioload [flags] <file>
-
-Flags:
-  -b, --baud int             baud rate (default 115200)
-  -d, --device-name string   serial device name (e.g. /dev/ttyUSB0)
-      --exec                 execute uploaded file
-  -h, --help                 help for sioload
-      --stdout               output response to stdout
-
-2020/01/10 12:55:29 accepts 1 arg(s), received 0
+nix develop            # or: direnv allow
+task discs             # every example onto .build/NAME/NAME.cue
+task test:emu          # boot each disc in the emulator and compare screenshots
+task site site:serve   # build the browser demo and serve it on localhost:8000
 ```
 
-## What's included
+`task test:emu` boots with the OpenBIOS image in `web/static`, or whatever `PSX_BIOS` names. The memory card test drives Sony's shell, which OpenBIOS does not have, and only runs when `PSX_SONY_BIOS` points at a Sony BIOS. No Sony BIOS is distributed here.
 
-The included tools are more so examples at this stage, but are still good at showing what has been accomplished so far, and what ultimately can be created to aid in PSX development.
+The tools a disc build uses are also declared as Go tools, so inside the module they run without installing anything:
+
+```bash
+go tool mkpsxiso -o game.bin --boot MAIN.EXE ./disc
+```
+
+## Writing programs in Go
+
+The [`yaroze`](yaroze) package binds the Net Yaroze library for TinyGo. Nothing in it is implemented in Go: each function is a bodyless declaration resolved by the linker against the fixed addresses of the resident library, exactly as a C program's calls are. The bindings are generated from the SDK's `libps.h` by [`hdr2go`](#hdr2go), and every struct's size is asserted against clang's layout at compile time, so a struct that disagrees with the C one by a byte fails to build rather than producing a disc that draws nothing. Names are kept as the header spells them, so Sony's documentation reads across directly.
+
+```go
+import "go.chrisrx.dev/psx/yaroze"
+
+yaroze.ResetGraph(0)
+yaroze.GsInitGraph(320, 240, 4, 0, 0)
+yaroze.FntLoad(960, 256)
+```
+
+The examples are ports of Sony's Net Yaroze samples and demos, chosen to put a different part of the machine to work each:
+
+| Example | Original | What it exercises |
+| --- | --- | --- |
+| [check](examples/check) | Sony SDK sample | sprites, controller, CD reads, sequenced music |
+| [chrome](examples/chrome) | S. Ashley, 1997 | GTE, 3D library, lighting, environment mapping |
+| [clone](examples/clone) | S. Ashley, 1997 | first-person maze shooter: fog, subdivision, SPU voices |
+| [dungeon](examples/dungeon) | Mizuki, 1996 | first-person maze built per frame, fog, two lights |
+| [flying](examples/flying) | L. Evans, 1996 | ship over a tiled plane, enemies, scanner, nine cameras |
+| [offscr](examples/offscr) | L. Evans, 1997 | drawing into a texture at run time |
+| [tunnel](examples/tunnel) | L. Evans, 1997 | endless tunnel shooter, three lights, VAB sound effects |
+| [mdec](examples/mdec) | new | full-colour video through the motion decoder, driven by its registers |
+
+Each example's `disc/` directory holds the files it reads off the CD, and `task disc NAME=check` builds one. The header comment of each `main.go` notes where the port departs from the original and why.
+
+## The emulator
+
+[`emu`](emu) is a rewrite in Go of [psxe](https://github.com/allkern/psxe) by Allkern (Lisandro Alarcón), written with psxe as a guide and used under its MIT license (see [`emu/PSXE-LICENSE.txt`](emu/PSXE-LICENSE.txt)). It emulates the CPU, GTE, GPU, SPU (with reverb and gaussian interpolation), CD-ROM drive including XA and CD audio, MDEC, DMA, timers, controllers and memory cards. It was written to be driven from tests rather than played: it runs headless and deterministically, counting emulated cycles with no reference to the wall clock, so a run takes the same course however loaded the host is.
+
+[`emu/emutest`](emu/emutest) wraps it for Go tests. A test boots a machine, runs it against budgets, presses buttons, and asserts on what was printed, what is in memory or what is on screen:
+
+```go
+m := emutest.Boot(t, emutest.BIOS(emutest.BIOSFromEnv(t)), emutest.Disc("check.cue"))
+m.RunUntilTTY("Execute !", 10*emutest.Second)
+m.RunFrames(60)
+m.Hold(1, emu.ButtonSelect, 10)
+m.RunUntilTTY("End of Main", 5*emutest.Second)
+```
+
+A program that runs an illegal instruction or makes a misaligned access fails the test there, with the registers, the instructions leading up to it and the program's output. The [`tests`](tests) package uses this to boot every example and compare screenshots against golden images.
+
+The emulator follows psxe closely so the two can be compared one instruction at a time: the flake builds psxe with a patch that writes an instruction trace, `psxemu --trace` writes the same format, and `psxtrace diff` reports the first record where they disagree.
+
+[`web`](web) compiles the emulator to WebAssembly (using Go's SIMD support for pixel conversion) and runs it in a worker behind the page in `web/static`. The Pages workflow builds every example's disc and publishes the site on each push to `main`, and publishes a preview for any pull request that changes an example.
+
+## Tools
+
+| Tool | Purpose |
+| --- | --- |
+| [eco2exe](#eco2exe) | Combine a Net Yaroze program with `libps` into a bootable PSX-EXE |
+| [elf2exe](#elf2exe) | Write a standalone ELF or ECOFF program as a PSX-EXE |
+| [mips1fix](#mips1fix) | Replace the MIPS II traps LLVM emits with nops so the code runs on an R3000A |
+| [mkpsxiso](#mkpsxiso) | Build a CD-XA disc image from a directory |
+| [dumpsxiso](#dumpsxiso) | List or extract a disc image |
+| [mdecenc](#mdecenc) | Encode pictures into an MDEC movie |
+| [hdr2go](#hdr2go) | Generate layout-checked Go bindings from a C header |
+| [psxemu](#psxemu) | Run the emulator headless, with traces, VRAM dumps and screenshots |
+| [psxtrace](#psxtrace) | Print and diff instruction traces, compare VRAM dumps |
+| [sioload](#sioload) | Upload an executable to a Net Yaroze over the serial cable |
+| [objdump](#objdump) | Display ECOFF object files, with disassembly |
+| [ecoff2asm](#ecoff2asm-and-ecoffcmp) | Convert ECOFF objects to GNU as source, for relinking the Net Yaroze library as ELF |
+| [ecoffcmp](#ecoff2asm-and-ecoffcmp) | Check ecoff2asm output against the original objects |
+| gteprog | Write a GTE exercise program as a PSX-EXE, for comparing emulators |
 
 #### eco2exe
 
-The `eco2exe` tool takes a Net Yaroze compiled program (an ECOFF executable) and creates a working PSX-EXE executable ready to be used in an emulator (if it supports running bare PSX-EXEs), or compiled into a burnable ISO to be loaded by a real Playstation (if it can play burned games).
+The `eco2exe` tool takes a Net Yaroze program and creates a working PSX-EXE executable ready to be used in an emulator (if it supports running bare PSX-EXEs), or built into a disc image to be loaded by a real PlayStation (if it can play burned discs). The input may be the ECOFF produced by the SDK's own toolchain or the ELF produced by TinyGo or a current mipsel-none-elf toolchain.
 
-It does this by parsing the compiled program, combining it with the Net Yaroze development library (aka `libps.exe`) and then converting the combined program to the PSX-EXE executable format. The executable is patched when combining with the Net Yaroze library to ensure it boots properly.
-
-To see it in action, use `eco2exe` on the provided test fixture:
+It does this by parsing the compiled program, combining it with the Net Yaroze development library (aka `libps.exe`) and then converting the combined program to the PSX-EXE executable format. The executable is patched with a startup stub that initializes the library before jumping to the program's entry point.
 
 ```bash
-$ bin/eco2exe pkg/format/ecoff/testdata/main-ecoff psx.exe
-created "psx.exe": 47fb1ad6d1aee3c8bdf71bdc2ecd144b
+$ eco2exe prog.elf MAIN.EXE
+created "MAIN.EXE": 47fb1ad6d1aee3c8bdf71bdc2ecd144b
 ```
-
-and this will create a working PSX-EXE executable.
-
 
 *Note: The Net Yaroze development library itself is relatively small, so it has been embedded in the `eco2exe` binary, meaning it doesn't need to be provided by the user!*
 
@@ -95,7 +159,7 @@ boot disc leaves resident in RAM; a program that brings its own crt0 and
 drives the hardware itself needs none of that.
 
 ```bash
-$ bin/elf2exe prog.elf MAIN.EXE
+$ elf2exe prog.elf MAIN.EXE
 created "MAIN.EXE": load=0x80010000 entry=0x80010000 8192 bytes, d00f145ee4fd44f1
 ```
 
@@ -111,7 +175,7 @@ not set its own.
 The common case is an executable plus the data it loads, so the directory *is* the interface and no layout file is involved:
 
 ```bash
-$ bin/mkpsxiso -o game.bin --boot MAIN.EXE --volume-id MYGAME ./disc
+$ mkpsxiso -o game.bin --boot MAIN.EXE --volume-id MYGAME ./disc
 created "game.bin": 789 blocks (150 of run-out), "game.cue"
 ```
 
@@ -128,7 +192,7 @@ The tree is placed on the disc as it appears on disk. Names are folded to the re
 The image ends with two seconds of empty sectors. A drive reads ahead of the sector it was asked for, and the console reads a file by asking for whole sectors, so a file that ends at the end of the track is one the console cannot finish reading: the request runs into the lead-out and fails, which looks like a file that is present and unreadable. Pressed discs carry a run-out for the same reason. `--padding` sets how many sectors, and `0` leaves none, which is fine for an image only ever read by an emulator:
 
 ```bash
-$ bin/mkpsxiso --padding 0 -o game.bin --boot MAIN.EXE ./disc
+$ mkpsxiso --padding 0 -o game.bin --boot MAIN.EXE ./disc
 created "game.bin": 639 blocks, "game.cue"
 $ mednafen game.cue
 [CDC] In leadout area: 639
@@ -147,7 +211,7 @@ Every image is a CD-XA disc: the `CD-XA001` signature in the volume descriptor a
 `--audio` appends a CD audio track, which a program plays by its number rather than opening as a file. Input is a WAV file or headerless samples, in both cases 44.1kHz 16-bit stereo, which is the only thing a CD holds. The two second pause the standard requires between the data track and the audio that follows it is inserted automatically, and the `.cue` describes the result:
 
 ```bash
-$ bin/mkpsxiso -o game.bin --boot MAIN.EXE --audio track1.wav --audio track2.wav ./disc
+$ mkpsxiso -o game.bin --boot MAIN.EXE --audio track1.wav --audio track2.wav ./disc
 created "game.bin": 789 blocks (150 of run-out) and 2 audio track(s), 15489 sectors in all, "game.cue"
 $ cat game.cue
 FILE "game.bin" BINARY
@@ -165,11 +229,11 @@ FILE "game.bin" BINARY
 `--iso` writes plain 2048-byte blocks instead. That cannot represent audio tracks or Form 2 sectors, and says so rather than writing an image missing either, but ordinary ISO 9660 tools can read it, which is how the filesystem is checked against an independent implementation:
 
 ```bash
-$ bin/mkpsxiso --iso -o test.iso ./disc
+$ mkpsxiso --iso -o test.iso ./disc
 $ xorriso -indev test.iso -find /
 ```
 
-Every image carries the 64-byte string that identifies it as a PlayStation disc, written into the system area at sector 4. This is format identification: without it mednafen cannot tell the image from any other CD-XA disc and rejects it outright with *"Could not find a system that supports this CD"*. It is not a protection bypass, and could not be — an unmodified console decides whether to boot from the wobble encoded in a pressed disc's lead-in groove, a physical property no file can reproduce.
+Every image carries the 64-byte string that identifies it as a PlayStation disc, written into the system area at sector 4. This is format identification: without it mednafen cannot tell the image from any other CD-XA disc and rejects it outright with *"Could not find a system that supports this CD"*. It is not a protection bypass, and could not be: an unmodified console decides whether to boot from the wobble encoded in a pressed disc's lead-in groove, a physical property no file can reproduce.
 
 Booting on real hardware additionally wants Sony's licence data, which holds the logo shown at startup. That cannot be redistributed, so supply your own copy with `--license`; it replaces the whole system area.
 
@@ -178,7 +242,7 @@ Booting on real hardware additionally wants Sony's licence data, which holds the
 `dumpsxiso` reads a disc image back. With no `--output` it lists what the image holds, which is the quickest way to see whether a file landed under the name a program will ask for:
 
 ```bash
-$ bin/dumpsxiso game.bin
+$ dumpsxiso game.bin
 volume MYGAME, 789 blocks
   system      PLAYSTATION
   created     2026-10-14T00:00:00Z
@@ -194,6 +258,40 @@ volume MYGAME, 789 blocks
 With `--output` the tree is extracted to a directory, and what comes out can be handed straight back to `mkpsxiso`. A `.bin` of raw sectors and a `.iso` of 2048-byte blocks are both accepted; which one it is follows from the image itself. Streamed files come out as the 2336-byte sectors they went in as, recognised by their CD-XA attributes rather than their names.
 
 Reading a raw image checks every sector's error detection, so a damaged image is reported rather than quietly extracted. A sector of a filesystem is the kind that is meant to be read correctly or not at all, and a file recovered from a failing one is a file the console itself would refuse.
+
+#### mdecenc
+
+`mdecenc` encodes PNG, JPEG or GIF pictures, in the order given, into a movie of run-length codes the MDEC decodes as they are, laid out as [`format/mdec`](format/mdec) describes. Every picture must be the same size, and each is extended to a multiple of 16 pixels each way. `-q` sets the quantization scale, from 1 to 63, where higher is smaller and blurrier.
+
+```bash
+$ mdecenc -o MOVIE.MDC frame*.png
+```
+
+The [mdec example](examples/mdec) plays one, rendered by its own ray tracer in `examples/mdec/gen`.
+
+#### psxemu
+
+`psxemu` boots a BIOS in the emulator headless, printing what it writes to the TTY, with a disc in the drive or a PSX-EXE loaded at the shell:
+
+```bash
+$ psxemu --bios openbios.bin --disc .build/check/check.cue --png screen.png
+```
+
+`--trace`, `--skip` and `--count` write an instruction trace in the format the patched psxe writes with `PSXE_TRACE`. `--vram` dumps VRAM at the end, `--png` saves what the display shows, `--card` attaches a memory card image to slot 1, and `--cpuprofile` profiles the run for `go tool pprof`.
+
+#### psxtrace
+
+`psxtrace` reads the traces `psxemu` and psxe write. `dump` prints one as text, `diff` reports the first record two traces disagree on, and `vram` compares two VRAM dumps or converts one to an image:
+
+```bash
+PSXE_TRACE=psxe.trace PSXE_TRACE_COUNT=1000000 psxe -a -b bios.bin
+psxemu --bios bios.bin --trace emu.trace --count 1000000
+psxtrace diff psxe.trace emu.trace
+```
+
+#### ecoff2asm and ecoffcmp
+
+The Net Yaroze library and SDK objects are ECOFF, a format current binutils no longer links. `ecoff2asm` converts ECOFF objects and archives to GNU as source, along with an ld script of `PROVIDE` definitions for every absolute symbol, which is how the `libps` entry points are described. `ecoffcmp` checks the conversion: it assembles the output and compares its `.text` against the original word by word, masking only the immediate fields where ECOFF and ELF keep relocation addends in different places.
 
 #### hdr2go
 
@@ -211,7 +309,7 @@ clang -target mipsel-none-elf -march=mips1 -msoft-float -std=gnu89 -fsyntax-only
     -Xclang -ast-dump=json                  hdr.c   # structure and types
 clang ... -Xclang -fdump-record-layouts-complete hdr.c  # offsets and sizes
 
-$ bin/hdr2go --layouts layouts.txt --header libps.h --package libps \
+$ hdr2go --layouts layouts.txt --header libps.h --package libps \
     --out libps/zz_generated.go < ast.json
 30 structs, 2 aliases, 166 functions (named=31 known=33 sizes=35)
 ```
@@ -257,7 +355,7 @@ produce something that compiles and then passes nothing.
 LLVM emits a `teq` after every integer division to catch division by zero. That instruction arrived with MIPS II; a MIPS I core takes a reserved instruction exception instead, and the program stops with no indication of why. GCC does not have the problem, branching around a `break` instead.
 
 ```bash
-$ bin/mips1fix prog.o
+$ mips1fix prog.o
   .text+0x1c50: teq (0x00a001f4) -> nop
   patched 1 trap instruction(s)
 ```
@@ -270,10 +368,10 @@ A trap and a nop are the same width, so nothing moves and no relocation or symbo
 
 `objdump` displays information from ECOFF object files. It is similar in functionality to the objdump included in [GNU Binutils](https://www.gnu.org/software/binutils/) (although not intended to be exactly the same).
 
-This was built while reverse engineering the Net Yaroze development static library, in an attempt to convert it from the aging ECOFF format to a more modern (and supported) format like ELF (stay tuned!). The test fixtures can be used to show how it works:
+This was built while reverse engineering the Net Yaroze development static library, as the first step towards converting it from the aging ECOFF format to ELF (see [ecoff2asm](#ecoff2asm-and-ecoffcmp)):
 
 ```bash
-$ bin/objdump pkg/format/ecoff/testdata/puts.o
+$ objdump puts.o
 MIPSEL-BE ECOFF executable - start=0x00000000 size=96 sections=2
 
 Sections:
@@ -328,25 +426,55 @@ puts:
 
 #### sioload
 
-The linux version of siocons, found on the [psxdev.net forums](http://www.psxdev.net/forum/viewtopic.php?f=67&t=1078) (and floating around other places), did not initially work when loading a Net Yaroze executable. Even after figuring out a way to make it work, it didn't work for all baud rates, didn't work consistently, and had several huge bugs in how it loaded binaries (it loaded the sections incorrectly in a way that still worked), so I started working on a replacement.
+The linux version of siocons, found on the [psxdev.net forums](http://www.psxdev.net/forum/viewtopic.php?f=67&t=1078) (and floating around other places), did not initially work when loading a Net Yaroze executable. Even after figuring out a way to make it work, it didn't work for all baud rates, didn't work consistently, and had several huge bugs in how it loaded binaries (it loaded the sections incorrectly in a way that still worked), so `sioload` was written as a replacement.
 
-`sioload` isn't a full-feature siocons replacement, but was the initial result of implementing a serial executable loader in Go. Unless specified it finds the first available serial port and defaults to a baud rate of 115200. Usage should be simply:
+`sioload` isn't a full-feature siocons replacement, but a serial executable loader in Go. Unless specified it finds the first available serial port and defaults to a baud rate of 115200:
 
 ```bash
-$ bin/sioload pkg/format/ecoff/testdata/main-ecoff
+$ sioload --exec main-ecoff
 ```
 
-I am pleased to report that it has been working very consistently (so far) and for all tested baud rates! I am using a Net Yaroze DTL-H3050 serial communications cable connected via usb using a [TRENDnet USB to Serial converter](https://www.amazon.com/dp/B0007T27H8/ref=cm_sw_em_r_mt_dp_U_FHmgEbZAAPNX5).
+It has been reliable at every baud rate tested, using a Net Yaroze DTL-H3050 serial cable through a [TRENDnet USB to Serial converter](https://www.amazon.com/dp/B0007T27H8/ref=cm_sw_em_r_mt_dp_U_FHmgEbZAAPNX5).
+
+## Packages
+
+| Package | Purpose |
+| --- | --- |
+| [`yaroze`](yaroze) | TinyGo bindings for the resident Net Yaroze library, and the host-side `libps` image `eco2exe` combines with |
+| [`emu`](emu), [`emu/cpu`](emu/cpu) | The emulator, and its R3000A and GTE |
+| [`emu/emutest`](emu/emutest) | Running programs in the emulator from Go tests |
+| [`binutils`](binutils) | Combining programs with `libps`, image layout, linker scripts |
+| [`format/psx`](format/psx) | PSX-EXE executables |
+| [`format/ecoff`](format/ecoff) | ECOFF objects, archives, symbols and relocations |
+| [`format/cdrom`](format/cdrom) | CD-ROM sectors, with EDC and ECC |
+| [`format/iso9660`](format/iso9660) | ISO 9660 with CD-XA extensions, reading and writing |
+| [`format/psxdisc`](format/psxdisc) | Whole PlayStation discs: tracks, cue sheets, audio |
+| [`format/mdec`](format/mdec) | MDEC bitstreams and movies |
+| [`format/psxtrace`](format/psxtrace) | Instruction traces shared with psxe |
+
+## Background
+
+psxsdk started as software for using the Net Yaroze on Linux. When getting started with a Net Yaroze DTL-H3001, the development environment on modern computers, Linux in particular, was badly lacking. After getting a working compiler with [mipsel-ecoff-toolchain](https://github.com/ChrisRx/mipsel-ecoff-toolchain), the project grew to cover whatever else came out of making Net Yaroze development work on modern machines, and then to writing the programs themselves in Go and running them in an emulator that can check them. The Net Yaroze might not be the ideal PS1 development environment, but the ability to use it should not be lost to time.
+
+The goals have not changed:
+
+* Software that is cross-platform and easy to build
+* Modern languages with features that help the software last
+* Libraries and tools that are well-defined and well-documented
+* Source code for everything, always available
 
 ## Reference
 
-- [mipsel-ecoff-toolchain](https://github.com/ChrisRx/mipsel-ecoff-toolchain) - a compiler toolchain for Net Yaroze development on linux
-- [psxdev.net](http://www.psxdev.net) - a helpful/active Playstation 1 development community, with relatively active forums
-- [Identical Software](http://www.identicalsoftware.com/yaroze/) - a small collection of useful Net Yaroze related software
 - [Nocash PSX Specification](https://problemkaputt.de/psx-spx.htm) - comprehensive PSX hardware information
+- [psxe](https://github.com/allkern/psxe) - the emulator `emu` was rewritten from, and is traced against
+- [OpenBIOS](https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios) - the open source BIOS the browser demo and tests boot
+- [mipsel-ecoff-toolchain](https://github.com/ChrisRx/mipsel-ecoff-toolchain) - a compiler toolchain for Net Yaroze development on Linux
+- [gwald/netyaroze_demo](https://github.com/gwald/netyaroze_demo) - Net Yaroze demo sources the examples are ported from
+- [psxdev.net](http://www.psxdev.net) - a helpful and active PlayStation 1 development community
+- [Identical Software](http://www.identicalsoftware.com/yaroze/) - a small collection of useful Net Yaroze software
 - [Hitmen PSX FAQ](http://hitmen.c02.at/html/psx_faq.html)
-- [Net Yaroze for Linux](https://www.cebix.net/downloads/yarlinux.pdf) - older guide for setting up Net Yaroze on linux
-- [Andrew Kieschnick/Napalm](http://napalm-x.thegypsy.com/andrewk/psx/) - creator of eco2exe/exefixup and used as a guide for building the eco2exe in this repo
+- [Net Yaroze for Linux](https://www.cebix.net/downloads/yarlinux.pdf) - an older guide to setting up the Net Yaroze on Linux
+- [Andrew Kieschnick/Napalm](http://napalm-x.thegypsy.com/andrewk/psx/) - creator of eco2exe/exefixup, and the guide for the eco2exe in this repo
 
 ## TODO
 
@@ -354,7 +482,15 @@ I am pleased to report that it has been working very consistently (so far) and f
 - [x] Net Yaroze executable serial loader (sioload)
 - [x] PSX ISO builder (mkpsxiso), with CD-XA attributes, streamed XA/STR files and CD audio tracks
 - [x] PSX ISO reader and extractor (dumpsxiso)
-- [ ] Document code and add godoc badge to README.md
+- [x] Go bindings for the Net Yaroze library, and examples in Go
+- [x] Emulator, headless test harness and browser demo
+- [ ] Document code
 - [ ] Tests for all packages
 - [ ] Include collected PDFs and other Net Yaroze documents in repo
-- [ ] Add initial references/links
+
+## License
+
+[MIT](LICENSE). Two parts carry their own notices:
+
+- The emulator in `emu` is derived from [psxe](https://github.com/allkern/psxe), Copyright (c) 2024 Allkern (Lisandro Alarcón), under the MIT license in [`emu/PSXE-LICENSE.txt`](emu/PSXE-LICENSE.txt).
+- The OpenBIOS image in `web/static` is under the license in [`web/static/OPENBIOS-LICENSE.txt`](web/static/OPENBIOS-LICENSE.txt).

@@ -237,6 +237,7 @@
               self.packages.${system}.psxe
               pkgs.wasmtime
               pkgs.python3
+              pkgs.gh
             ];
           };
 
