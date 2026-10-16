@@ -3,8 +3,11 @@
 # by tag, and a tutorial that says "go get go.chrisrx.dev/psx" gets whatever
 # the newest tag holds. It only tags; nothing is released.
 #
-# The bump is a patch unless a commit since the last tag says otherwise:
-# #minor or #major in a message bumps that part, and #none skips the tag.
+# The bump is a patch unless a commit since the last tag says otherwise
+# with a marker in its message: the minor or major token bumps that part,
+# and the none token skips the tag. The tokens are a hash sign followed by
+# the word. The highest marker found wins, and a message that only mentions
+# one counts all the same, which is why they are not spelled out here.
 name: Tag
 
 on:
