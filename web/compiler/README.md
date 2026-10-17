@@ -60,13 +60,18 @@ In the page, `compile-worker.js` fetches all of that once and
 `pipeline.js` runs each build: the compiler, then `mips1fix`, `eco2exe`
 and `mkpsxiso` compiled to wasip1 by the Go toolchain, through `wasi.js`,
 a WASI host over an in-memory file system. The output is a disc the
-player boots like an example.
+player boots like an example. The data files the page holds beside the
+program (`assets.js`), uploaded or copied from an example's data, which
+the `site` task publishes under `examples/NAME/data/` and lists in
+`examples.json`, go into the build's `data/` for mkpsxiso to put on the
+disc where the program registers them with package disc.
 
 ## In the workflows
 
 The Compiler workflow (`.github/workflows/compiler.yml`) builds the two
 modules when this directory, the flake or the fork's revision changes, or
-on request, caches them under a key made of those (`key.sh`), and
+on request, caches them under a key made of those, less the Markdown
+(`key.sh`), and
 publishes them as a release named by the key (`release.sh`), which is kept
 where the cache drops an entry unused for a week. The Pages workflow
 restores that cache, downloads the release when it misses, or builds the
@@ -80,7 +85,8 @@ the compiler in the browser is the TinyGo the examples were built with.
 ## Limits
 
 - The compiler is around 75MB, 22MB compressed, and the sysroot with the cache 3MB.
-- A program is one file, with no data files on the disc. It cannot use cgo,
+- A program is one file, with its data files under `data/`, kept in the
+  browser that added them. It cannot use cgo,
   or anything whose C is not already in the cache: there is no clang.
   Only the ELF flavor of lld is linked in, for the same reason of size.
 - The cache and the sysroot are made together, by the `playground` task,

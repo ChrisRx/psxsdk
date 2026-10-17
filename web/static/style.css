@@ -549,8 +549,28 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   grid-template-columns: minmax(0, 1fr) 7px var(--side);
 }
 
-.pg-code { position: relative; min-width: 0; min-height: 0; background: var(--code-bg); }
-.pg-code .editor { position: absolute; inset: 0; }
+.pg-code { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--code-bg); }
+.pg-code .editor { flex: 1; min-height: 0; }
+.pg-code.dropping { outline: 2px dashed var(--accent); outline-offset: -4px; }
+
+/* The data files beside the program, under the editor. */
+.pg-assets { flex: none; border-top: 1px solid var(--line); background: var(--surface); font-size: 0.875rem; }
+.pg-assets summary { padding: 6px 12px; cursor: pointer; font-weight: 600; }
+.pg-assets-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 12px 8px; }
+.pg-assets-bar select {
+  padding: 2px 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.pg-assets-bar [hidden] { display: none; }
+#asset-status { min-width: 0; overflow-wrap: anywhere; }
+.pg-assets-list { max-height: 30vh; margin: 0; padding: 0 12px 8px; overflow: auto; list-style: none; }
+.pg-assets-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 3px 0; border-top: 1px solid var(--line); }
+.pg-assets-list code { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pg-assets-list:empty { display: none; }
 
 .pg-split {
   cursor: col-resize;

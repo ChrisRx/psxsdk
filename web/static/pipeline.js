@@ -71,8 +71,10 @@ export class Pipeline {
 	// build compiles source, the text of a main package in one file, and
 	// returns {ok, log, files, elf}, where files holds prog.cue and prog.bin
 	// when ok, and elf is the executable, for its symbols. log is called
-	// with each line of output as it comes.
-	async build(source, log) {
+	// with each line of output as it comes. assets, a list of {path, data},
+	// are the files beside main.go, such as data/CUBE.TIM, that the program
+	// registers with package disc and mkpsxiso puts on the disc.
+	async build(source, log, assets = []) {
 		const fs = new FileSystem();
 		fs.root.children.set("sysroot", this.sysroot);
 		fs.mkdir("/tmp");
@@ -80,6 +82,7 @@ export class Pipeline {
 		fs.lookup([], "/tmp/cache").node.children.set("tinygo", this.cache);
 		fs.mkdir("/work/prog");
 		fs.put("/work/prog/main.go", new TextEncoder().encode(source));
+		for (const { path, data } of assets) fs.put("/work/prog/" + path, data);
 		const replaces = this.env.modules.map((m) => `replace ${m.path} => /sysroot/${m.dir}`).join("\n");
 		const requires = this.env.modules.map((m) => `require ${m.path} v0.0.0`).join("\n");
 		fs.put("/work/go.mod", new TextEncoder().encode(`module play\n\ngo ${this.env.GOVERSION.replace(/^go/, "").split(".").slice(0, 2).join(".")}\n\n${requires}\n\n${replaces}\n`));

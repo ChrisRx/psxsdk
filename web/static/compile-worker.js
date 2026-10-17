@@ -2,8 +2,8 @@
 // the sysroot the first time it is asked to build, keeps them, and builds
 // each program it is sent with pipeline.js.
 //
-// The page sends {type: "build", id, source}, the text of a main package,
-// or {type: "load", id} to fetch the compiler ahead of the first build,
+// The page sends {type: "build", id, source, assets}, the text of a main
+// package and the files beside it as {path, data}, or {type: "load", id} to fetch the compiler ahead of the first build,
 // answered by {id, ok} or {id, ok: false, error}. While loading or
 // building, the worker sends {id, event: "log", text} for each line of
 // output, and when done {id, ok, files, elf} with prog.cue and prog.bin and
@@ -92,7 +92,7 @@ self.onmessage = async (e) => {
 			self.postMessage({ id: msg.id, ok: true });
 			return;
 		}
-		const result = await loaded.build(msg.source, log);
+		const result = await loaded.build(msg.source, log, msg.assets ?? []);
 		if (!result.ok) {
 			self.postMessage({ id: msg.id, ok: false, error: "the build failed" });
 			return;

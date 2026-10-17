@@ -29,6 +29,19 @@
   <main id="pg" class="pg">
     <section class="pg-code" aria-label="Program">
       <div id="editor"></div>
+      <details id="assets" class="pg-assets">
+        <summary>Data files <span id="asset-count" class="muted"></span></summary>
+        <div class="pg-assets-bar">
+          <button id="add-assets" class="small-button" type="button" title="Add files from this computer under data/, as the program registers them">Add files…</button>
+          <input id="asset-files" type="file" multiple hidden>
+          <select id="example-data" aria-label="Add an example's data files" disabled>
+            <option value="">Add an example's data…</option>
+          </select>
+          <button id="clear-assets" class="small-button" type="button" hidden>Remove all</button>
+          <span id="asset-status" class="muted" aria-live="polite">Files dropped on the editor are added too.</span>
+        </div>
+        <ul id="asset-list" class="pg-assets-list"></ul>
+      </details>
     </section>
 
     <div id="split" class="pg-split" role="separator" aria-orientation="vertical" aria-label="Resize the editor" tabindex="0"></div>
@@ -79,6 +92,7 @@
 
   <script src="app.js"></script>
   <script src="editor.js"></script>
+  <script src="assets.js"></script>
   <script src="playground.js"></script>
 </body>
 </html>

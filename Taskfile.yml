@@ -100,14 +100,23 @@ tasks:
       - go run ./web/site -out {{.SITE}}
       - cp emu/openbios/openbios.bin emu/openbios/OPENBIOS-LICENSE.txt {{.PLAY}}/
       - mkdir -p {{.PLAY}}/examples
+      # Each example's disc, and its data files as well, which the
+      # playground offers to start a program from.
       - for: { var: EXAMPLES }
-        cmd: mkdir -p {{.PLAY}}/examples/{{.ITEM}} && cp .build/{{.ITEM}}/{{.ITEM}}.cue .build/{{.ITEM}}/{{.ITEM}}.bin {{.PLAY}}/examples/{{.ITEM}}/
+        cmd: |
+          mkdir -p {{.PLAY}}/examples/{{.ITEM}}
+          cp .build/{{.ITEM}}/{{.ITEM}}.cue .build/{{.ITEM}}/{{.ITEM}}.bin {{.PLAY}}/examples/{{.ITEM}}/
+          src=examples/{{.ITEM}}; [ -d "$src" ] || src=docs/tutorial/{{.ITEM}}
+          if [ -d "$src/data" ]; then cp -R "$src/data" {{.PLAY}}/examples/{{.ITEM}}/; fi
       - |
         {
           printf '['
           sep=''
           for name in {{.EXAMPLES | splitLines | join " "}}; do
-            printf '%s\n  {"name": "%s", "cue": "examples/%s/%s.cue"}' "$sep" "$name" "$name" "$name"
+            src=examples/$name; [ -d "$src" ] || src=docs/tutorial/$name
+            data=
+            if [ -d "$src/data" ]; then data=$(cd "$src" && find data -type f | LC_ALL=C sort | sed 's/.*/"&"/' | paste -sd, - | sed 's/,/, /g'); fi
+            printf '%s\n  {"name": "%s", "cue": "examples/%s/%s.cue", "data": [%s]}' "$sep" "$name" "$name" "$name" "$data"
             sep=','
           done
           printf '\n]\n'
