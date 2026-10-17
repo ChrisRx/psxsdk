@@ -10,7 +10,7 @@ psxsdk is a Go toolchain for the original PlayStation, built around the Net Yaro
 - **Build** them into bootable discs with tools that convert executables and write CD-XA images, including streamed XA/STR files and CD audio tracks.
 - **Run** them in a PlayStation emulator written in Go, which drives the test suite headless and runs in a browser as WebAssembly.
 
-**[Try the examples in your browser](examples/index.md)**: sixteen Net Yaroze programs ported to Go, booting from the discs this repo builds, in the emulator this repo contains, with the open source [OpenBIOS](https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios). Touch controls are included for phones.
+**[Try the examples in your browser](examples/index.md)**: sixteen Net Yaroze programs ported to Go, booting from the discs this repo builds, in the emulator this repo contains, with the open source [OpenBIOS](https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios). Touch controls are included for phones. Or [write your own](/play/) in the playground, which builds it in the browser with TinyGo compiled to WebAssembly.
 
 ## Start here
 

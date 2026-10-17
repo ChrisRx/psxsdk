@@ -13,6 +13,8 @@ const (
 	dmaOTC
 )
 
+var dmaNames = [7]string{"MDEC in", "MDEC out", "GPU", "CD-ROM", "SPU", "PIO", "OTC"}
+
 // CHCR bits.
 const (
 	chcrToDevice = 1 << 0
@@ -41,6 +43,7 @@ var (
 // the moment it is started, and raises its completion flag on the next step,
 // or for the MDEC channels, a step per word later.
 type dma struct {
+	log *logger
 	// regs is MADR, BCR and CHCR for each channel in turn.
 	regs [7 * 3]uint32
 	dpcr uint32
@@ -191,6 +194,9 @@ func (d *dma) start(ch int) {
 	chcr := *d.chcr(ch)
 	if chcr&chcrBusy == 0 {
 		return
+	}
+	if d.log.on(LevelTrace) {
+		d.log.log(LevelTrace, fmt.Sprintf("DMA %s: MADR %08x BCR %08x CHCR %08x", dmaNames[ch], *d.madr(ch), *d.bcr(ch), chcr))
 	}
 	switch ch {
 	case dmaMDECIn:

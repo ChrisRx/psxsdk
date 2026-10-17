@@ -2,6 +2,7 @@ package emu
 
 import (
 	"fmt"
+	"log/slog"
 	"math"
 )
 
@@ -42,6 +43,7 @@ const (
 // that move pixels around VRAM directly, and transfers to and from the CPU,
 // are emulated.
 type gpu struct {
+	log  *logger
 	vram [vramWidth * vramHeight]uint16
 
 	state         int
@@ -197,10 +199,15 @@ func (g *gpu) push(v uint32) {
 func (g *gpu) gp1(v uint32) {
 	switch v >> 24 {
 	case 0x03: // display enable
+		was := g.gpustat & gpustatDisplayOff
 		g.gpustat = g.gpustat&^gpustatDisplayOff | (v<<23)&gpustatDisplayOff
+		if g.gpustat&gpustatDisplayOff != was && g.log.on(slog.LevelInfo) {
+			g.log.log(slog.LevelInfo, map[bool]string{true: "display off", false: "display on"}[v&1 != 0])
+		}
 	case 0x05: // start of display area in VRAM
 		g.dispX = v & 0x3ff
 		g.dispY = v >> 10 & 0x1ff
+		g.log.log(LevelTrace, fmt.Sprintf("display area at %d,%d in VRAM", g.dispX, g.dispY))
 	case 0x06: // horizontal display range
 		g.dispX1 = v & 0xfff
 		g.dispX2 = v >> 12 & 0xfff
@@ -208,6 +215,9 @@ func (g *gpu) gp1(v uint32) {
 		g.dispY1 = v & 0x1ff
 		g.dispY2 = v >> 10 & 0x1ff
 	case 0x08: // display mode
+		if v&0xffffff != g.displayMode && g.log.on(slog.LevelInfo) {
+			g.log.log(slog.LevelInfo, "display mode "+describeDisplayMode(v))
+		}
 		g.displayMode = v & 0xffffff
 	case 0x10: // information request
 		g.gp1InfoReq = v & 7
@@ -581,4 +591,30 @@ func (g *gpu) hblank() {
 		}
 		g.scanline = 0
 	}
+}
+
+// describeDisplayMode says what a GP1(08h) display mode is, as
+// "320x240 NTSC 15-bit".
+func describeDisplayMode(v uint32) string {
+	w := [4]int{256, 320, 512, 640}[v&3]
+	if v&0x40 != 0 {
+		w = 368
+	}
+	h := 240
+	if v&0x24 == 0x24 {
+		h = 480
+	}
+	tv := "NTSC"
+	if v&8 != 0 {
+		tv = "PAL"
+	}
+	depth := "15-bit"
+	if v&0x10 != 0 {
+		depth = "24-bit"
+	}
+	s := fmt.Sprintf("%dx%d %s %s", w, h, tv, depth)
+	if v&0x20 != 0 {
+		s += " interlaced"
+	}
+	return s
 }

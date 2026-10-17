@@ -1,0 +1,2049 @@
+diff --git a/builder/build.go b/builder/build.go
+index d41062c5..9d684c02 100644
+--- a/builder/build.go
++++ b/builder/build.go
+@@ -29,7 +29,6 @@ import (
+ 	"sync"
+ 	"time"
+ 
+-	"github.com/gofrs/flock"
+ 	"github.com/tinygo-org/tinygo/compileopts"
+ 	"github.com/tinygo-org/tinygo/compiler"
+ 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
+@@ -1732,19 +1731,6 @@ func patchRP2040BootCRC(executable string) error {
+ 	return replaceElfSection(executable, ".boot2", bytes)
+ }
+ 
+-// lock may acquire a lock at the specified path.
+-// It returns a function to release the lock.
+-// If flock is not supported, it does nothing.
+-func lock(path string) func() {
+-	flock := flock.New(path)
+-	err := flock.Lock()
+-	if err != nil {
+-		return func() {}
+-	}
+-
+-	return func() { flock.Close() }
+-}
+-
+ func b2u8(b bool) uint8 {
+ 	if b {
+ 		return 1
+diff --git a/builder/buildid.go b/builder/buildid.go
+index e5edd05e..8e12ea11 100644
+--- a/builder/buildid.go
++++ b/builder/buildid.go
+@@ -1,3 +1,5 @@
++//go:build !wasm
++
+ package builder
+ 
+ import (
+diff --git a/builder/buildid_wasm.go b/builder/buildid_wasm.go
+new file mode 100644
+index 00000000..91ef747b
+--- /dev/null
++++ b/builder/buildid_wasm.go
+@@ -0,0 +1,20 @@
++//go:build wasm
++
++package builder
++
++import (
++	"os"
++
++	"github.com/tinygo-org/tinygo/goenv"
++)
++
++// ReadBuildID returns the build ID of the compiler, which tells its cache
++// entries apart from those of other builds of it. A WebAssembly build cannot
++// read its own module, so the host names it in TINYGO_BUILD_ID, and failing
++// that it is the TinyGo version.
++func ReadBuildID() ([]byte, error) {
++	if id := os.Getenv("TINYGO_BUILD_ID"); id != "" {
++		return []byte(id), nil
++	}
++	return []byte("tinygo-wasm " + goenv.Version()), nil
++}
+diff --git a/builder/config.go b/builder/config.go
+index 8aa23633..703570d5 100644
+--- a/builder/config.go
++++ b/builder/config.go
+@@ -3,7 +3,6 @@ package builder
+ import (
+ 	"errors"
+ 	"fmt"
+-	"runtime"
+ 
+ 	"github.com/tinygo-org/tinygo/compileopts"
+ 	"github.com/tinygo-org/tinygo/goenv"
+@@ -45,15 +44,9 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
+ 
+ 	// Check that the Go toolchain version isn't too new, if we haven't been
+ 	// compiled with the latest Go version.
+-	// This may be a bit too aggressive: if the newer version doesn't change the
+-	// Go language we will most likely be able to compile it.
+-	buildMajor, buildMinor, _, err := goenv.Parse(runtime.Version())
+-	if err != nil {
++	if err := checkBuildToolchain(gorootMajor, gorootMinor); err != nil {
+ 		return nil, err
+ 	}
+-	if buildMajor != 1 || buildMinor < gorootMinor {
+-		return nil, fmt.Errorf("cannot compile with Go toolchain version go%d.%d (TinyGo was built using toolchain version %s)", gorootMajor, gorootMinor, runtime.Version())
+-	}
+ 
+ 	config := &compileopts.Config{
+ 		Options:        options,
+diff --git a/builder/lock.go b/builder/lock.go
+new file mode 100644
+index 00000000..e39986d4
+--- /dev/null
++++ b/builder/lock.go
+@@ -0,0 +1,18 @@
++//go:build !wasm
++
++package builder
++
++import "github.com/gofrs/flock"
++
++// lock may acquire a lock at the specified path.
++// It returns a function to release the lock.
++// If flock is not supported, it does nothing.
++func lock(path string) func() {
++	flock := flock.New(path)
++	err := flock.Lock()
++	if err != nil {
++		return func() {}
++	}
++
++	return func() { flock.Close() }
++}
+diff --git a/builder/lock_wasm.go b/builder/lock_wasm.go
+new file mode 100644
+index 00000000..2ce69b09
+--- /dev/null
++++ b/builder/lock_wasm.go
+@@ -0,0 +1,9 @@
++//go:build wasm
++
++package builder
++
++// lock does nothing: a WebAssembly build of the compiler is the only process
++// touching its cache, and the file locks it would take are not there.
++func lock(path string) func() {
++	return func() {}
++}
+diff --git a/builder/toolchain_exec.go b/builder/toolchain_exec.go
+new file mode 100644
+index 00000000..3eacbc6d
+--- /dev/null
++++ b/builder/toolchain_exec.go
+@@ -0,0 +1,25 @@
++//go:build !wasm
++
++package builder
++
++import (
++	"fmt"
++	"runtime"
++
++	"github.com/tinygo-org/tinygo/goenv"
++)
++
++// checkBuildToolchain checks that the Go toolchain version isn't newer than
++// the one TinyGo was compiled with.
++// This may be a bit too aggressive: if the newer version doesn't change the
++// Go language we will most likely be able to compile it.
++func checkBuildToolchain(gorootMajor, gorootMinor int) error {
++	buildMajor, buildMinor, _, err := goenv.Parse(runtime.Version())
++	if err != nil {
++		return err
++	}
++	if buildMajor != 1 || buildMinor < gorootMinor {
++		return fmt.Errorf("cannot compile with Go toolchain version go%d.%d (TinyGo was built using toolchain version %s)", gorootMajor, gorootMinor, runtime.Version())
++	}
++	return nil
++}
+diff --git a/builder/toolchain_wasm.go b/builder/toolchain_wasm.go
+new file mode 100644
+index 00000000..f8d88482
+--- /dev/null
++++ b/builder/toolchain_wasm.go
+@@ -0,0 +1,11 @@
++//go:build wasm
++
++package builder
++
++// checkBuildToolchain accepts any Go toolchain version: a WebAssembly build
++// of the compiler was itself compiled by TinyGo, whose runtime.Version is
++// TinyGo's version rather than a Go release, and the GOROOT it is given is
++// the one its host prepared for it.
++func checkBuildToolchain(gorootMajor, gorootMinor int) error {
++	return nil
++}
+diff --git a/builder/tools-builtin.go b/builder/tools-builtin.go
+index 61f16dfe..99543d4f 100644
+--- a/builder/tools-builtin.go
++++ b/builder/tools-builtin.go
+@@ -35,7 +35,7 @@ func RunTool(tool string, args ...string) error {
+ 		defer C.free(unsafe.Pointer(cflag))
+ 	}
+ 
+-	var ok C.bool
++	var ok C._Bool
+ 	switch tool {
+ 	case "clang":
+ 		ok = C.tinygo_clang_driver(C.int(len(args)), (**C.char)(buf))
+diff --git a/builder/tools.go b/builder/tools.go
+index 79577e23..ff1b7e18 100644
+--- a/builder/tools.go
++++ b/builder/tools.go
+@@ -1,93 +1,14 @@
+ package builder
+ 
+ import (
+-	"bytes"
+ 	"fmt"
+ 	"go/scanner"
+ 	"go/token"
+-	"os"
+-	"os/exec"
+ 	"regexp"
+ 	"strconv"
+ 	"strings"
+ )
+ 
+-// runCCompiler invokes a C compiler with the given arguments.
+-func runCCompiler(flags ...string) error {
+-	// Find the right command to run Clang.
+-	var cmd *exec.Cmd
+-	if hasBuiltinTools {
+-		// Compile this with the internal Clang compiler.
+-		cmd = exec.Command(os.Args[0], append([]string{"clang"}, flags...)...)
+-	} else {
+-		// Compile this with an external invocation of the Clang compiler.
+-		name, err := LookupCommand("clang")
+-		if err != nil {
+-			return err
+-		}
+-		cmd = exec.Command(name, flags...)
+-	}
+-
+-	cmd.Stdout = os.Stdout
+-	cmd.Stderr = os.Stderr
+-
+-	// Make sure the command doesn't use any environmental variables.
+-	// Most importantly, it should not use C_INCLUDE_PATH and the like.
+-	cmd.Env = []string{}
+-
+-	// Let some environment variables through. One important one is the
+-	// temporary directory, especially on Windows it looks like Clang breaks if
+-	// the temporary directory has not been set.
+-	// See: https://github.com/tinygo-org/tinygo/issues/4557
+-	// Also see: https://github.com/llvm/llvm-project/blob/release/18.x/llvm/lib/Support/Unix/Path.inc#L1435
+-	for _, env := range os.Environ() {
+-		// We could parse the key and look it up in a map, but since there are
+-		// only a few keys iterating through them is easier and maybe even
+-		// faster.
+-		for _, prefix := range []string{"TMPDIR=", "TMP=", "TEMP=", "TEMPDIR="} {
+-			if strings.HasPrefix(env, prefix) {
+-				cmd.Env = append(cmd.Env, env)
+-				break
+-			}
+-		}
+-	}
+-
+-	return cmd.Run()
+-}
+-
+-// link invokes a linker with the given name and flags.
+-func link(linker string, flags []string, env ...string) error {
+-	// We only support LLD.
+-	if linker != "ld.lld" && linker != "wasm-ld" {
+-		return fmt.Errorf("unexpected: linker %s should be ld.lld or wasm-ld", linker)
+-	}
+-
+-	var cmd *exec.Cmd
+-	if hasBuiltinTools {
+-		cmd = exec.Command(os.Args[0], append([]string{linker}, flags...)...)
+-	} else {
+-		name, err := LookupCommand(linker)
+-		if err != nil {
+-			return err
+-		}
+-		cmd = exec.Command(name, flags...)
+-	}
+-	var buf bytes.Buffer
+-	cmd.Stdout = os.Stdout
+-	cmd.Stderr = &buf
+-	cmd.Env = append(os.Environ(), env...)
+-	err := cmd.Run()
+-	if err != nil {
+-		if buf.Len() == 0 {
+-			// The linker failed but there was no output.
+-			// Therefore, show some output anyway.
+-			return fmt.Errorf("failed to run linker: %w", err)
+-		}
+-		return parseLLDErrors(buf.String())
+-	}
+-	return nil
+-}
+-
+ // Split LLD errors into individual erros (including errors that continue on the
+ // next line, using a ">>>" prefix). If possible, replace the raw errors with a
+ // more user-friendly version (and one that's more in a Go style).
+diff --git a/builder/tools_exec.go b/builder/tools_exec.go
+new file mode 100644
+index 00000000..109fc271
+--- /dev/null
++++ b/builder/tools_exec.go
+@@ -0,0 +1,87 @@
++//go:build !wasm
++
++package builder
++
++import (
++	"bytes"
++	"fmt"
++	"os"
++	"os/exec"
++	"strings"
++)
++
++// runCCompiler invokes a C compiler with the given arguments.
++func runCCompiler(flags ...string) error {
++	// Find the right command to run Clang.
++	var cmd *exec.Cmd
++	if hasBuiltinTools {
++		// Compile this with the internal Clang compiler.
++		cmd = exec.Command(os.Args[0], append([]string{"clang"}, flags...)...)
++	} else {
++		// Compile this with an external invocation of the Clang compiler.
++		name, err := LookupCommand("clang")
++		if err != nil {
++			return err
++		}
++		cmd = exec.Command(name, flags...)
++	}
++
++	cmd.Stdout = os.Stdout
++	cmd.Stderr = os.Stderr
++
++	// Make sure the command doesn't use any environmental variables.
++	// Most importantly, it should not use C_INCLUDE_PATH and the like.
++	cmd.Env = []string{}
++
++	// Let some environment variables through. One important one is the
++	// temporary directory, especially on Windows it looks like Clang breaks if
++	// the temporary directory has not been set.
++	// See: https://github.com/tinygo-org/tinygo/issues/4557
++	// Also see: https://github.com/llvm/llvm-project/blob/release/18.x/llvm/lib/Support/Unix/Path.inc#L1435
++	for _, env := range os.Environ() {
++		// We could parse the key and look it up in a map, but since there are
++		// only a few keys iterating through them is easier and maybe even
++		// faster.
++		for _, prefix := range []string{"TMPDIR=", "TMP=", "TEMP=", "TEMPDIR="} {
++			if strings.HasPrefix(env, prefix) {
++				cmd.Env = append(cmd.Env, env)
++				break
++			}
++		}
++	}
++
++	return cmd.Run()
++}
++
++// link invokes a linker with the given name and flags.
++func link(linker string, flags []string, env ...string) error {
++	// We only support LLD.
++	if linker != "ld.lld" && linker != "wasm-ld" {
++		return fmt.Errorf("unexpected: linker %s should be ld.lld or wasm-ld", linker)
++	}
++
++	var cmd *exec.Cmd
++	if hasBuiltinTools {
++		cmd = exec.Command(os.Args[0], append([]string{linker}, flags...)...)
++	} else {
++		name, err := LookupCommand(linker)
++		if err != nil {
++			return err
++		}
++		cmd = exec.Command(name, flags...)
++	}
++	var buf bytes.Buffer
++	cmd.Stdout = os.Stdout
++	cmd.Stderr = &buf
++	cmd.Env = append(os.Environ(), env...)
++	err := cmd.Run()
++	if err != nil {
++		if buf.Len() == 0 {
++			// The linker failed but there was no output.
++			// Therefore, show some output anyway.
++			return fmt.Errorf("failed to run linker: %w", err)
++		}
++		return parseLLDErrors(buf.String())
++	}
++	return nil
++}
+diff --git a/builder/tools_wasm.go b/builder/tools_wasm.go
+new file mode 100644
+index 00000000..d3624d3c
+--- /dev/null
++++ b/builder/tools_wasm.go
+@@ -0,0 +1,40 @@
++//go:build wasm
++
++package builder
++
++import (
++	"errors"
++	"fmt"
++)
++
++// runCCompiler invokes the C compiler with the given arguments, in-process,
++// since a WebAssembly build of the compiler cannot start processes. The
++// build that ships leaves clang out, which is half of its size, and relies
++// on its cache instead: the host fills the cache with the full build before
++// shipping, so the C and assembly files the targets need are already
++// compiled. Reaching clang there means a file is not.
++func runCCompiler(flags ...string) error {
++	if !hasBuiltinTools {
++		return errors.New("this build of the compiler has no C compiler")
++	}
++	if err := RunTool("clang", flags...); err != nil {
++		return errors.New("this build of the compiler cannot compile C or assembly, and the file is not in its cache")
++	}
++	return nil
++}
++
++// link invokes the linker with the given flags, in-process like the C
++// compiler. The environment is not needed: there is no process to pass it
++// to, and the in-process linker does not read it.
++func link(linker string, flags []string, env ...string) error {
++	if linker != "ld.lld" && linker != "wasm-ld" {
++		return fmt.Errorf("unexpected: linker %s should be ld.lld or wasm-ld", linker)
++	}
++	if !hasBuiltinTools {
++		return errors.New("this build of the compiler has no linker")
++	}
++	if err := RunTool(linker, flags...); err != nil {
++		return LinkerError{"failed to link: " + err.Error()}
++	}
++	return nil
++}
+diff --git a/cgo/cgo.go b/cgo/cgo.go
+index 01ca089b..8f9d6fa5 100644
+--- a/cgo/cgo.go
++++ b/cgo/cgo.go
+@@ -1,3 +1,5 @@
++//go:build !wasm
++
+ // Package cgo implements CGo by modifying a loaded AST. It does this by parsing
+ // the `import "C"` statements found in the source code with libclang and
+ // generating stub function and global declarations.
+@@ -551,6 +553,19 @@ func (p *cgoPackage) parseCGoPreprocessorLines(text string, pos token.Pos) strin
+ 			}
+ 			p.makePathsAbsolute(flags)
+ 			p.cflags = append(p.cflags, flags...)
++		case "CXXFLAGS":
++			// C++ files are not compiled here, so the flags for them are
++			// checked and dropped, rather than rejected: the Go toolchain
++			// accepts the line, and packages written for it carry one.
++			flags, err := shlex.Split(value)
++			if err != nil {
++				p.addErrorAfter(pos, text[:lineStart+colon+1], "failed to parse flags in #cgo line: "+err.Error())
++				continue
++			}
++			if err := checkCompilerFlags(name, flags); err != nil {
++				p.addErrorAfter(pos, text[:lineStart+colon+1], err.Error())
++				continue
++			}
+ 		case "LDFLAGS":
+ 			flags, err := shlex.Split(value)
+ 			if err != nil {
+@@ -1427,6 +1442,12 @@ func (f *cgoFile) walker(cursor *astutil.Cursor, names map[string]clangCursor) b
+ 			return true
+ 		}
+ 		if x.Name == "C" {
++			if node.Sel.Name == "unsigned" {
++				// C.unsigned is C.uint: unsigned and unsigned int are
++				// the same type in C, and the Go toolchain's cgo treats
++				// them as one.
++				node.Sel.Name = "uint"
++			}
+ 			name := "_Cgo_" + node.Sel.Name
+ 			if found, ok := names[node.Sel.Name]; ok {
+ 				name = f.getASTDeclName(node.Sel.Name, found, false)
+diff --git a/cgo/const.go b/cgo/const.go
+index 9e7b06b4..9d5e910a 100644
+--- a/cgo/const.go
++++ b/cgo/const.go
+@@ -1,3 +1,5 @@
++//go:build !wasm
++
+ package cgo
+ 
+ // This file implements a parser of a subset of the C language, just enough to
+diff --git a/cgo/libclang.go b/cgo/libclang.go
+index 5a434ce8..49a99296 100644
+--- a/cgo/libclang.go
++++ b/cgo/libclang.go
+@@ -1,3 +1,5 @@
++//go:build !wasm
++
+ package cgo
+ 
+ // This file parses a fragment of C with libclang and stores the result for AST
+diff --git a/cgo/libclang_stubs.c b/cgo/libclang_stubs.c
+index e8098fac..cc2fd8bb 100644
+--- a/cgo/libclang_stubs.c
++++ b/cgo/libclang_stubs.c
+@@ -1,3 +1,5 @@
++//go:build !wasm
++
+ 
+ // This file implements some small trampoline functions. The signatures
+ // are slightly different from the ones defined in libclang.go, but they
+diff --git a/cgo/process_wasm.go b/cgo/process_wasm.go
+new file mode 100644
+index 00000000..90be0ce8
+--- /dev/null
++++ b/cgo/process_wasm.go
+@@ -0,0 +1,22 @@
++//go:build wasm
++
++package cgo
++
++import (
++	"go/ast"
++	"go/scanner"
++	"go/token"
++)
++
++// Process would parse the `import "C"` fragments of files with libclang and
++// add the declarations they need to the AST. A WebAssembly build of the
++// compiler leaves libclang out, which takes a good part of clang with it,
++// and TinyGo's cgo passes structs in a way wasm's C ABI does not accept
++// anyway, so packages that use cgo cannot be built by it.
++func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cflags []string, goos string) ([]*ast.File, []string, []string, []string, map[string][]byte, []error) {
++	var pos token.Position
++	if len(files) > 0 {
++		pos = fset.Position(files[0].Package)
++	}
++	return nil, nil, nil, nil, nil, []error{scanner.Error{Pos: pos, Msg: "cgo is not supported by this build of the compiler"}}
++}
+diff --git a/cgo/security.go b/cgo/security.go
+index 081081f1..b1a49189 100644
+--- a/cgo/security.go
++++ b/cgo/security.go
+@@ -1,3 +1,5 @@
++//go:build !wasm
++
+ // Copyright 2018 The Go Authors. All rights reserved.
+ // Use of this source code is governed by a BSD-style
+ // license that can be found in the LICENSE file.
+diff --git a/cgo/sync.go b/cgo/sync.go
+index 9d3398be..9d3a64e7 100644
+--- a/cgo/sync.go
++++ b/cgo/sync.go
+@@ -1,3 +1,5 @@
++//go:build !wasm
++
+ package cgo
+ 
+ import (
+diff --git a/cmd/tinygo-sysroot/main.go b/cmd/tinygo-sysroot/main.go
+new file mode 100644
+index 00000000..8aed4152
+--- /dev/null
++++ b/cmd/tinygo-sysroot/main.go
+@@ -0,0 +1,315 @@
++// Command tinygo-sysroot gathers everything a WebAssembly build of the TinyGo
++// compiler (cmd/tinygo-wasm) reads while building programs for one target,
++// into a directory tree that a host can hand it as its file system:
++//
++//	tinygo-sysroot -target=playstation-yaroze -o sysroot ./examples/...
++//
++// The tree holds, under goroot/, the standard library packages the named
++// programs and their dependencies use, from the GOROOT merged with TinyGo's
++// changes, with only the files the target selects; under mod/<module>/, the
++// packages of every other module they use; under tinygo/, the target
++// definitions and the C headers the compiler needs; and in env.json, the
++// environment the compiler has to be started with.
++//
++// It runs where the go command and this TinyGo's native build are, since it
++// asks them what the compiler in the browser cannot.
++package main
++
++import (
++	"encoding/json"
++	"flag"
++	"fmt"
++	"io"
++	"os"
++	"os/exec"
++	"path"
++	"path/filepath"
++	"sort"
++	"strings"
++
++	"github.com/tinygo-org/tinygo/builder"
++	"github.com/tinygo-org/tinygo/compileopts"
++	"github.com/tinygo-org/tinygo/goenv"
++	"github.com/tinygo-org/tinygo/loader"
++)
++
++// listedPackage is what `go list -json` reports of a package, the fields
++// that name files to copy.
++type listedPackage struct {
++	Dir        string
++	ImportPath string
++	Name       string
++	Standard   bool
++	Module     *struct {
++		Path  string
++		Main  bool
++		Dir   string
++		GoMod string
++	}
++	GoFiles        []string
++	CgoFiles       []string
++	CFiles         []string
++	HFiles         []string
++	SFiles         []string
++	EmbedFiles     []string
++	IgnoredGoFiles []string
++	Error          *struct{ Err string }
++}
++
++// environment is written to env.json: what the wasm compiler needs in its
++// environment, with paths relative to the sysroot's root.
++type environment struct {
++	GOROOT     string `json:"GOROOT"`
++	GOVERSION  string `json:"GOVERSION"`
++	GOTOOLTAGS string `json:"GOTOOLTAGS"`
++	TINYGOROOT string `json:"TINYGOROOT"`
++	GOMODCACHE string `json:"GOMODCACHE"`
++	Target     string `json:"target"`
++	Modules    []struct {
++		Path string `json:"path"`
++		Dir  string `json:"dir"`
++	} `json:"modules"`
++}
++
++func main() {
++	target := flag.String("target", "", "target the programs are built for")
++	out := flag.String("o", "", "directory to write the sysroot into")
++	tags := flag.String("tags", "", "a space-separated list of extra build tags")
++	flag.Parse()
++	if *target == "" || *out == "" || flag.NArg() == 0 {
++		fmt.Fprintln(os.Stderr, "usage: tinygo-sysroot -target=TARGET -o DIR PACKAGES...")
++		os.Exit(2)
++	}
++	if err := run(*target, *out, strings.Fields(*tags), flag.Args()); err != nil {
++		fmt.Fprintln(os.Stderr, "error:", err)
++		os.Exit(1)
++	}
++}
++
++func run(target, out string, tags, patterns []string) error {
++	config, err := builder.NewConfig(&compileopts.Options{
++		GOOS:   goenv.Get("GOOS"),
++		GOARCH: goenv.Get("GOARCH"),
++		GOARM:  goenv.Get("GOARM"),
++		GOMIPS: goenv.Get("GOMIPS"),
++		Target: target,
++		Tags:   tags,
++	})
++	if err != nil {
++		return err
++	}
++
++	// Ask the go command for the packages, as the compiler's loader does.
++	cmd, err := loader.List(config, []string{"-json", "-deps", "-e"}, patterns)
++	if err != nil {
++		return err
++	}
++	cmd.Stderr = os.Stderr
++	output, err := cmd.Output()
++	if err != nil {
++		return fmt.Errorf("go list: %w", err)
++	}
++	var packages []*listedPackage
++	decoder := json.NewDecoder(strings.NewReader(string(output)))
++	for {
++		pkg := &listedPackage{}
++		if err := decoder.Decode(pkg); err == io.EOF {
++			break
++		} else if err != nil {
++			return err
++		}
++		if pkg.Error != nil {
++			return fmt.Errorf("%s: %s", pkg.ImportPath, pkg.Error.Err)
++		}
++		packages = append(packages, pkg)
++	}
++
++	env := environment{
++		GOROOT:     "goroot",
++		TINYGOROOT: "tinygo",
++		GOMODCACHE: "modcache",
++		Target:     target,
++	}
++	env.GOVERSION, err = goenv.GorootVersionString()
++	if err != nil {
++		return err
++	}
++	env.GOTOOLTAGS, err = toolTags(config)
++	if err != nil {
++		return err
++	}
++
++	modules := make(map[string]string) // module path -> directory in the sysroot
++	for _, pkg := range packages {
++		var dst string
++		switch {
++		case pkg.Standard:
++			dst = filepath.Join(out, "goroot", "src", filepath.FromSlash(pkg.ImportPath))
++		case pkg.Module != nil:
++			moddir := filepath.Join("mod", filepath.FromSlash(pkg.Module.Path))
++			modules[pkg.Module.Path] = moddir
++			rel, err := filepath.Rel(pkg.Module.Dir, pkg.Dir)
++			if err != nil {
++				return err
++			}
++			dst = filepath.Join(out, moddir, rel)
++			if err := copyFile(pkg.Module.GoMod, filepath.Join(out, moddir, "go.mod")); err != nil {
++				return err
++			}
++		default:
++			return fmt.Errorf("%s: neither standard nor in a module", pkg.ImportPath)
++		}
++		var files []string
++		files = append(files, pkg.GoFiles...)
++		files = append(files, pkg.CgoFiles...)
++		files = append(files, pkg.CFiles...)
++		files = append(files, pkg.HFiles...)
++		files = append(files, pkg.SFiles...)
++		files = append(files, pkg.EmbedFiles...)
++		if pkg.ImportPath == "unsafe" {
++			files = append(files, "unsafe.go")
++		}
++		for _, f := range files {
++			if err := copyFile(filepath.Join(pkg.Dir, f), filepath.Join(dst, f)); err != nil {
++				return err
++			}
++		}
++		if len(files) == 0 {
++			// A package with every file excluded still has to exist to be
++			// found, as go/build reports it as having no Go files rather
++			// than as missing.
++			if err := os.MkdirAll(dst, 0o777); err != nil {
++				return err
++			}
++			for _, f := range pkg.IgnoredGoFiles {
++				if err := copyFile(filepath.Join(pkg.Dir, f), filepath.Join(dst, f)); err != nil {
++					return err
++				}
++			}
++		}
++	}
++	for _, p := range sortedKeys(modules) {
++		env.Modules = append(env.Modules, struct {
++			Path string `json:"path"`
++			Dir  string `json:"dir"`
++		}{p, filepath.ToSlash(modules[p])})
++	}
++
++	// The target definitions, link scripts and sources that come with
++	// TinyGo, and clang's own headers, under the names the compiler looks
++	// for them by.
++	tinygoroot := goenv.Get("TINYGOROOT")
++	if err := copyTree(filepath.Join(tinygoroot, "targets"), filepath.Join(out, "tinygo", "targets")); err != nil {
++		return err
++	}
++	// The two files the compiler checks to recognize its root by.
++	for _, f := range []string{"src/runtime/internal/sys/zversion.go", "src/device/arm/arm.go"} {
++		if err := copyFile(filepath.Join(tinygoroot, f), filepath.Join(out, "tinygo", f)); err != nil {
++			return err
++		}
++	}
++	for _, f := range config.ExtraFiles() {
++		if err := copyFile(filepath.Join(tinygoroot, f), filepath.Join(out, "tinygo", f)); err != nil {
++			return err
++		}
++	}
++	if config.Target.LinkerScript != "" {
++		if err := copyFile(filepath.Join(tinygoroot, config.Target.LinkerScript), filepath.Join(out, "tinygo", config.Target.LinkerScript)); err != nil {
++			return err
++		}
++	}
++	resourceDir := goenv.ClangResourceDir(false)
++	if resourceDir == "" {
++		return fmt.Errorf("the clang resource directory is not known; build with -ldflags=-X=github.com/tinygo-org/tinygo/goenv.clangResourceDir=DIR")
++	}
++	if err := copyHeaders(filepath.Join(resourceDir, "include"), filepath.Join(out, "tinygo", "lib", "clang", "include")); err != nil {
++		return err
++	}
++
++	data, err := json.MarshalIndent(env, "", "\t")
++	if err != nil {
++		return err
++	}
++	return os.WriteFile(filepath.Join(out, "env.json"), append(data, '\n'), 0o666)
++}
++
++// toolTags asks the go command which tags it sets for the target besides the
++// GOOS, GOARCH and release ones: the experiments on by default, and the
++// architecture variant.
++func toolTags(config *compileopts.Config) (string, error) {
++	cmd := exec.Command(filepath.Join(goenv.Get("GOROOT"), "bin", "go"), "list", "-f", "{{join context.ToolTags \" \"}}", "runtime")
++	cmd.Env = append(os.Environ(), "GOOS="+config.GOOS(), "GOARCH="+config.GOARCH(), "GOMIPS="+goenv.Get("GOMIPS"), "GOARM="+goenv.Get("GOARM"))
++	cmd.Stderr = os.Stderr
++	output, err := cmd.Output()
++	if err != nil {
++		return "", fmt.Errorf("go list: %w", err)
++	}
++	return strings.TrimSpace(string(output)), nil
++}
++
++// copyFile copies src to dst, following symlinks, creating the directories
++// on the way.
++func copyFile(src, dst string) error {
++	data, err := os.ReadFile(src)
++	if err != nil {
++		return err
++	}
++	if err := os.MkdirAll(filepath.Dir(dst), 0o777); err != nil {
++		return err
++	}
++	return os.WriteFile(dst, data, 0o666)
++}
++
++// copyTree copies every regular file under src to the same place under dst.
++func copyTree(src, dst string) error {
++	return filepath.Walk(src, func(p string, info os.FileInfo, err error) error {
++		if err != nil {
++			return err
++		}
++		if info.IsDir() {
++			return nil
++		}
++		rel, err := filepath.Rel(src, p)
++		if err != nil {
++			return err
++		}
++		return copyFile(p, filepath.Join(dst, rel))
++	})
++}
++
++// copyHeaders copies the C standard headers from clang's resource
++// directory, which is what C and assembly compiled for a target without a
++// libc include, and leaves the intrinsics for every architecture behind.
++func copyHeaders(src, dst string) error {
++	entries, err := os.ReadDir(src)
++	if err != nil {
++		return err
++	}
++	for _, e := range entries {
++		name := e.Name()
++		if e.IsDir() || path.Ext(name) != ".h" {
++			continue
++		}
++		standard := strings.HasPrefix(name, "std") || strings.HasPrefix(name, "__std")
++		switch name {
++		case "limits.h", "float.h", "inttypes.h", "iso646.h", "tgmath.h", "varargs.h", "unwind.h":
++			standard = true
++		}
++		if !standard {
++			continue
++		}
++		if err := copyFile(filepath.Join(src, name), filepath.Join(dst, name)); err != nil {
++			return err
++		}
++	}
++	return nil
++}
++
++func sortedKeys(m map[string]string) []string {
++	keys := make([]string, 0, len(m))
++	for k := range m {
++		keys = append(keys, k)
++	}
++	sort.Strings(keys)
++	return keys
++}
+diff --git a/cmd/tinygo-wasm/main.go b/cmd/tinygo-wasm/main.go
+new file mode 100644
+index 00000000..36acb8e6
+--- /dev/null
++++ b/cmd/tinygo-wasm/main.go
+@@ -0,0 +1,93 @@
++// Command tinygo-wasm is the TinyGo compiler as a WebAssembly program: the
++// build command alone, for compiling a program in a browser.
++//
++// It takes the build flags that matter there and the package to build:
++//
++//	tinygo-wasm -target=playstation-yaroze -o prog.elf ./prog
++//
++// Everything the compiler needs, the Go standard library, TinyGo's own
++// source tree and the modules the program imports, has to be in the file
++// system it runs against, since there is no go command to ask.
++package main
++
++import (
++	"flag"
++	"fmt"
++	"os"
++	"strings"
++	"time"
++
++	"github.com/tinygo-org/tinygo/builder"
++	"github.com/tinygo-org/tinygo/compileopts"
++	"github.com/tinygo-org/tinygo/goenv"
++)
++
++func main() {
++	target := flag.String("target", "", "target to build for")
++	output := flag.String("o", "", "output file")
++	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
++	tags := flag.String("tags", "", "a space-separated list of extra build tags")
++	work := flag.Bool("work", false, "print the name of the temporary build directory and do not delete it")
++	printCommands := flag.Bool("x", false, "print commands")
++	printIR := flag.Bool("printir", false, "print LLVM IR")
++	verifyIR := flag.Bool("verifyir", false, "run extra verification steps on LLVM IR")
++	interpTimeout := flag.Duration("interp-timeout", 180*time.Second, "interp optimization pass timeout")
++	flag.Parse()
++	if flag.NArg() != 1 {
++		fmt.Fprintln(os.Stderr, "usage: tinygo-wasm -target=TARGET -o OUTPUT PACKAGE")
++		os.Exit(2)
++	}
++
++	options := &compileopts.Options{
++		GOOS:      goenv.Get("GOOS"),
++		GOARCH:    goenv.Get("GOARCH"),
++		GOARM:     goenv.Get("GOARM"),
++		GOMIPS:    goenv.Get("GOMIPS"),
++		Target:    *target,
++		Opt:       *opt,
++		Work:      *work,
++		PrintIR:   *printIR,
++		VerifyIR:  *verifyIR,
++		Semaphore: make(chan struct{}, 1),
++		Debug:     true,
++		Tags:      strings.Fields(*tags),
++
++		InterpTimeout: *interpTimeout,
++		// There is no git to ask, and the program is not in a repository.
++		BuildVCS: "false",
++	}
++	if *printCommands {
++		options.PrintCommands = func(cmd string, args ...string) {
++			fmt.Fprintln(os.Stderr, cmd, strings.Join(args, " "))
++		}
++	}
++
++	config, err := builder.NewConfig(options)
++	if err != nil {
++		fmt.Fprintln(os.Stderr, "error:", err)
++		os.Exit(1)
++	}
++
++	tmpdir, err := os.MkdirTemp("", "tinygo")
++	if err != nil {
++		fmt.Fprintln(os.Stderr, "error:", err)
++		os.Exit(1)
++	}
++	if !*work {
++		defer os.RemoveAll(tmpdir)
++	} else {
++		fmt.Fprintln(os.Stderr, "WORK="+tmpdir)
++	}
++
++	result, err := builder.Build(flag.Arg(0), *output, tmpdir, config)
++	if err != nil {
++		fmt.Fprintln(os.Stderr, "error:", err)
++		os.Exit(1)
++	}
++	if result.Binary != "" && result.Binary != *output {
++		if err := os.Rename(result.Binary, *output); err != nil {
++			fmt.Fprintln(os.Stderr, "error:", err)
++			os.Exit(1)
++		}
++	}
++}
+diff --git a/goenv/goenv.go b/goenv/goenv.go
+index cecb5a85..9962679e 100644
+--- a/goenv/goenv.go
++++ b/goenv/goenv.go
+@@ -4,7 +4,6 @@ package goenv
+ 
+ import (
+ 	"bytes"
+-	"encoding/json"
+ 	"errors"
+ 	"fmt"
+ 	"io/fs"
+@@ -62,43 +61,6 @@ var goEnvVars struct {
+ var goEnvVarsOnce sync.Once
+ var goEnvVarsErr error // error returned from cmd.Run
+ 
+-// Make sure goEnvVars is fresh. This can be called multiple times, the first
+-// time will update all environment variables in goEnvVars.
+-func readGoEnvVars() error {
+-	goEnvVarsOnce.Do(func() {
+-		cmd := exec.Command("go", "env", "-json", "GOPATH", "GOROOT", "GOVERSION")
+-		output, err := cmd.Output()
+-		if err != nil {
+-			// Check for "command not found" error.
+-			if execErr, ok := err.(*exec.Error); ok {
+-				goEnvVarsErr = fmt.Errorf("could not find '%s' command: %w", execErr.Name, execErr.Err)
+-				return
+-			}
+-			// It's perhaps a bit ugly to handle this error here, but I couldn't
+-			// think of a better place further up in the call chain.
+-			if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() != 0 {
+-				if len(exitErr.Stderr) != 0 {
+-					// The 'go' command exited with an error message. Print that
+-					// message and exit, so we behave in a similar way.
+-					os.Stderr.Write(exitErr.Stderr)
+-					os.Exit(exitErr.ExitCode())
+-				}
+-			}
+-			// Other errors. Not sure whether there are any, but just in case.
+-			goEnvVarsErr = err
+-			return
+-		}
+-		err = json.Unmarshal(output, &goEnvVars)
+-		if err != nil {
+-			// This should never happen if we have a sane Go toolchain
+-			// installed.
+-			goEnvVarsErr = fmt.Errorf("unexpected error while unmarshalling `go env` output: %w", err)
+-		}
+-	})
+-
+-	return goEnvVarsErr
+-}
+-
+ // Get returns a single environment variable, possibly calculating it on-demand.
+ // The empty string is returned for unknown environment variables.
+ func Get(name string) string {
+diff --git a/goenv/goenv_exec.go b/goenv/goenv_exec.go
+new file mode 100644
+index 00000000..c2da0c8d
+--- /dev/null
++++ b/goenv/goenv_exec.go
+@@ -0,0 +1,47 @@
++//go:build !wasm
++
++package goenv
++
++import (
++	"encoding/json"
++	"fmt"
++	"os"
++	"os/exec"
++)
++
++// Make sure goEnvVars is fresh. This can be called multiple times, the first
++// time will update all environment variables in goEnvVars.
++func readGoEnvVars() error {
++	goEnvVarsOnce.Do(func() {
++		cmd := exec.Command("go", "env", "-json", "GOPATH", "GOROOT", "GOVERSION")
++		output, err := cmd.Output()
++		if err != nil {
++			// Check for "command not found" error.
++			if execErr, ok := err.(*exec.Error); ok {
++				goEnvVarsErr = fmt.Errorf("could not find '%s' command: %w", execErr.Name, execErr.Err)
++				return
++			}
++			// It's perhaps a bit ugly to handle this error here, but I couldn't
++			// think of a better place further up in the call chain.
++			if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() != 0 {
++				if len(exitErr.Stderr) != 0 {
++					// The 'go' command exited with an error message. Print that
++					// message and exit, so we behave in a similar way.
++					os.Stderr.Write(exitErr.Stderr)
++					os.Exit(exitErr.ExitCode())
++				}
++			}
++			// Other errors. Not sure whether there are any, but just in case.
++			goEnvVarsErr = err
++			return
++		}
++		err = json.Unmarshal(output, &goEnvVars)
++		if err != nil {
++			// This should never happen if we have a sane Go toolchain
++			// installed.
++			goEnvVarsErr = fmt.Errorf("unexpected error while unmarshalling `go env` output: %w", err)
++		}
++	})
++
++	return goEnvVarsErr
++}
+diff --git a/goenv/goenv_wasm.go b/goenv/goenv_wasm.go
+new file mode 100644
+index 00000000..7e074f1c
+--- /dev/null
++++ b/goenv/goenv_wasm.go
+@@ -0,0 +1,28 @@
++//go:build wasm
++
++package goenv
++
++import (
++	"errors"
++	"os"
++)
++
++// Make sure goEnvVars is fresh. This can be called multiple times, the first
++// time will update all environment variables in goEnvVars.
++//
++// A WebAssembly build of the compiler has no go command to ask, so the values
++// come from the environment it was started with: GOROOT names the directory
++// holding the standard library sources, already merged with TinyGo's, and
++// GOVERSION the Go release they came from, as "go1.27.2". GOPATH may be
++// unset.
++func readGoEnvVars() error {
++	goEnvVarsOnce.Do(func() {
++		goEnvVars.GOROOT = os.Getenv("GOROOT")
++		goEnvVars.GOPATH = os.Getenv("GOPATH")
++		goEnvVars.GOVERSION = os.Getenv("GOVERSION")
++		if goEnvVars.GOROOT == "" || goEnvVars.GOVERSION == "" {
++			goEnvVarsErr = errors.New("GOROOT and GOVERSION must be set in the environment")
++		}
++	})
++	return goEnvVarsErr
++}
+diff --git a/loader/goroot.go b/loader/goroot.go
+index 0aab0a0e..42abe52a 100644
+--- a/loader/goroot.go
++++ b/loader/goroot.go
+@@ -32,9 +32,10 @@ import (
+ 
+ var gorootCreateMutex sync.Mutex
+ 
+-// GetCachedGoroot creates a new GOROOT by merging both the standard GOROOT and
+-// the GOROOT from TinyGo using lots of symbolic links.
+-func GetCachedGoroot(config *compileopts.Config) (string, error) {
++// mergeGoroot creates a new GOROOT by merging both the standard Go GOROOT and
++// the GOROOT from TinyGo using symlinks. GetCachedGoroot is this, except where
++// the merged tree has to be supplied ready-made.
++func mergeGoroot(config *compileopts.Config) (string, error) {
+ 	goroot := goenv.Get("GOROOT")
+ 	if goroot == "" {
+ 		return "", errors.New("could not determine GOROOT")
+@@ -238,6 +239,8 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
+ 		"crypto/x509/internal/macos/": false,
+ 		"device/":                     false,
+ 		"examples/":                   false,
++		"hash/":                       true,
++		"hash/maphash/":               false,
+ 		"internal/":                   true,
+ 		"internal/abi/":               false,
+ 		"internal/binary/":            false,
+diff --git a/loader/goroot_exec.go b/loader/goroot_exec.go
+new file mode 100644
+index 00000000..e611f0a1
+--- /dev/null
++++ b/loader/goroot_exec.go
+@@ -0,0 +1,11 @@
++//go:build !wasm
++
++package loader
++
++import "github.com/tinygo-org/tinygo/compileopts"
++
++// GetCachedGoroot returns a GOROOT holding the standard library with TinyGo's
++// changes merged in, creating it under the cache directory if needed.
++func GetCachedGoroot(config *compileopts.Config) (string, error) {
++	return mergeGoroot(config)
++}
+diff --git a/loader/goroot_wasm.go b/loader/goroot_wasm.go
+new file mode 100644
+index 00000000..4c7664cd
+--- /dev/null
++++ b/loader/goroot_wasm.go
+@@ -0,0 +1,28 @@
++//go:build wasm
++
++package loader
++
++import (
++	"errors"
++	"os"
++
++	"github.com/tinygo-org/tinygo/compileopts"
++	"github.com/tinygo-org/tinygo/goenv"
++)
++
++// GetCachedGoroot returns the GOROOT the compiler was started with, which for
++// a WebAssembly build already has TinyGo's changes merged in: the host
++// prepares the tree, since this build has no symlinks to merge one with. The
++// tinygo-sysroot command writes such a tree.
++func GetCachedGoroot(config *compileopts.Config) (string, error) {
++	goroot := goenv.Get("GOROOT")
++	if goroot == "" {
++		return "", errors.New("could not determine GOROOT")
++	}
++	// Merging would have made the cache directory; the compiled packages
++	// written there later expect it to exist.
++	if err := os.MkdirAll(goenv.Get("GOCACHE"), 0o777); err != nil {
++		return "", err
++	}
++	return goroot, nil
++}
+diff --git a/loader/list_exec.go b/loader/list_exec.go
+new file mode 100644
+index 00000000..3aa8e1c5
+--- /dev/null
++++ b/loader/list_exec.go
+@@ -0,0 +1,38 @@
++//go:build !wasm
++
++package loader
++
++import (
++	"bytes"
++	"fmt"
++	"os"
++	"os/exec"
++
++	"github.com/tinygo-org/tinygo/compileopts"
++)
++
++// listPackages runs `go list` with the given extra arguments on pkgs and
++// returns what it printed: the JSON of each package, one after the other.
++// Standard library tests run it from wd, in the merged GOROOT, so that the
++// package there is the one found.
++func listPackages(config *compileopts.Config, extraArgs, pkgs []string, wd string) ([]byte, error) {
++	cmd, err := List(config, extraArgs, pkgs)
++	if err != nil {
++		return nil, err
++	}
++	if config.TestConfig.StandardPackage {
++		cmd.Dir = wd
++		cmd.Env = append(cmd.Env, "GOWORK=off")
++	}
++	buf := &bytes.Buffer{}
++	cmd.Stdout = buf
++	cmd.Stderr = os.Stderr
++	err = cmd.Run()
++	if err != nil {
++		if exitErr, ok := err.(*exec.ExitError); ok {
++			os.Exit(exitErr.ExitCode())
++		}
++		return nil, fmt.Errorf("failed to run `go list`: %s", err)
++	}
++	return buf.Bytes(), nil
++}
+diff --git a/loader/list_wasm.go b/loader/list_wasm.go
+new file mode 100644
+index 00000000..c6df1696
+--- /dev/null
++++ b/loader/list_wasm.go
+@@ -0,0 +1,499 @@
++//go:build wasm
++
++package loader
++
++import (
++	"bytes"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"go/build"
++	"go/parser"
++	"go/token"
++	"io/fs"
++	"os"
++	"path"
++	"path/filepath"
++	"sort"
++	"strconv"
++	"strings"
++
++	"github.com/tinygo-org/tinygo/compileopts"
++	"github.com/tinygo-org/tinygo/goenv"
++	"golang.org/x/mod/modfile"
++	"golang.org/x/mod/module"
++)
++
++// listPackages does for a WebAssembly build of the compiler what running
++// `go list -json -deps -e` does elsewhere: it finds the packages named by
++// pkgs and everything they import, and returns the JSON `go list` would have
++// printed for them, dependencies first.
++//
++// There is no go command here, so the work it would do is done directly,
++// with go/build selecting each package's files for the target and the main
++// module's go.mod naming the modules it depends on. Those modules are found
++// in the module cache under GOMODCACHE (GOPATH/pkg/mod when unset), laid out
++// as the go command lays it out, or where a replace directive points.
++// Standard library packages come from GOROOT, which is the merged tree.
++//
++// The go command adds tags for its default experiments and the GOARCH
++// variant when it selects files; those are not knowable here, so the host
++// passes what `go list -f '{{context.ToolTags}}'` printed in GOTOOLTAGS.
++func listPackages(config *compileopts.Config, extraArgs, pkgs []string, wd string) ([]byte, error) {
++	if config.TestConfig.CompileTestBinary || config.TestConfig.StandardPackage {
++		return nil, errors.New("tests cannot be built by this build of the compiler")
++	}
++	goroot, err := GetCachedGoroot(config)
++	if err != nil {
++		return nil, err
++	}
++
++	ctx := build.Default
++	ctx.GOROOT = goroot
++	ctx.GOPATH = ""
++	ctx.GOOS = config.GOOS()
++	ctx.GOARCH = config.GOARCH()
++	ctx.CgoEnabled = true
++	ctx.Compiler = "gc"
++	ctx.BuildTags = config.BuildTags()
++	ctx.ToolTags = strings.Fields(os.Getenv("GOTOOLTAGS"))
++	ctx.ReleaseTags = nil
++	for i := 1; i <= config.GoMinorVersion; i++ {
++		ctx.ReleaseTags = append(ctx.ReleaseTags, "go"+strconv.Itoa(i))
++	}
++	ctx.Dir = wd
++
++	l := &lister{
++		ctx:      &ctx,
++		goroot:   goroot,
++		packages: make(map[string]*PackageJSON),
++	}
++	// The main module is the one holding the package named by a directory
++	// argument, or else the working directory.
++	moduleStart := wd
++	for _, arg := range pkgs {
++		if build.IsLocalImport(arg) || filepath.IsAbs(arg) {
++			moduleStart = arg
++			if !filepath.IsAbs(moduleStart) {
++				moduleStart = filepath.Join(wd, moduleStart)
++			}
++			break
++		}
++	}
++	if err := l.loadModules(filepath.Clean(moduleStart)); err != nil {
++		return nil, err
++	}
++
++	// Resolve the arguments: Go files, directories or import paths.
++	var roots []*PackageJSON
++	var files []string
++	for _, arg := range pkgs {
++		if strings.HasSuffix(arg, ".go") {
++			files = append(files, arg)
++			continue
++		}
++		pkg := l.loadArgument(arg, wd)
++		roots = append(roots, pkg)
++	}
++	if len(files) > 0 {
++		pkg, err := l.loadFiles(files, wd)
++		if err != nil {
++			return nil, err
++		}
++		roots = append(roots, pkg)
++	}
++
++	// Walk the dependencies, dependencies first, as `go list -deps` prints
++	// them. The go command adds the runtime to every program it links, so
++	// it is a dependency of every main package here too.
++	for _, root := range roots {
++		if root.Name == "main" && !hasString(root.Imports, "runtime") {
++			root.Imports = append(root.Imports, "runtime")
++			sort.Strings(root.Imports)
++		}
++		l.visit(root, nil)
++	}
++
++	buf := &bytes.Buffer{}
++	enc := json.NewEncoder(buf)
++	enc.SetIndent("", "\t")
++	for _, pkg := range l.sorted {
++		if err := enc.Encode(pkg); err != nil {
++			return nil, err
++		}
++	}
++	return buf.Bytes(), nil
++}
++
++// A lister resolves packages as the go command would, for one listing.
++type lister struct {
++	ctx      *build.Context
++	goroot   string
++	modules  []*moduleInfo // the main module first
++	packages map[string]*PackageJSON
++	sorted   []*PackageJSON
++}
++
++// A moduleInfo is a module the listing can take packages from, and where its
++// files are.
++type moduleInfo struct {
++	Path      string
++	Version   string
++	Dir       string
++	GoMod     string
++	GoVersion string
++	Main      bool
++}
++
++// loadModules finds the main module's go.mod from wd upwards and works out
++// where each module it requires lives.
++func (l *lister) loadModules(wd string) error {
++	dir := wd
++	var gomod string
++	for {
++		candidate := filepath.Join(dir, "go.mod")
++		if _, err := os.Stat(candidate); err == nil {
++			gomod = candidate
++			break
++		}
++		parent := filepath.Dir(dir)
++		if parent == dir {
++			return errors.New("go.mod file not found in current directory or any parent directory")
++		}
++		dir = parent
++	}
++	data, err := os.ReadFile(gomod)
++	if err != nil {
++		return err
++	}
++	f, err := modfile.Parse(gomod, data, nil)
++	if err != nil {
++		return err
++	}
++	if f.Module == nil {
++		return fmt.Errorf("%s: no module directive", gomod)
++	}
++	main := &moduleInfo{
++		Path:  f.Module.Mod.Path,
++		Dir:   dir,
++		GoMod: gomod,
++		Main:  true,
++	}
++	if f.Go != nil {
++		main.GoVersion = f.Go.Version
++	}
++	l.modules = append(l.modules, main)
++
++	modcache := os.Getenv("GOMODCACHE")
++	if modcache == "" {
++		modcache = filepath.Join(goenv.Get("GOPATH"), "pkg", "mod")
++	}
++	replaced := make(map[module.Version]module.Version)
++	for _, r := range f.Replace {
++		replaced[r.Old] = r.New
++	}
++	for _, r := range f.Require {
++		m := &moduleInfo{Path: r.Mod.Path, Version: r.Mod.Version}
++		target := r.Mod
++		if new, ok := replaced[r.Mod]; ok {
++			target = new
++		} else if new, ok := replaced[module.Version{Path: r.Mod.Path}]; ok {
++			target = new
++		}
++		if target.Version == "" {
++			// A replacement by a directory, relative to the main module.
++			m.Dir = target.Path
++			if !filepath.IsAbs(m.Dir) {
++				m.Dir = filepath.Join(dir, m.Dir)
++			}
++		} else {
++			escaped, err := module.EscapePath(target.Path)
++			if err != nil {
++				return err
++			}
++			m.Dir = filepath.Join(modcache, escaped+"@"+target.Version)
++		}
++		m.GoMod = filepath.Join(m.Dir, "go.mod")
++		l.modules = append(l.modules, m)
++	}
++	return nil
++}
++
++// moduleFor returns the module whose path is the longest prefix of
++// importPath, and the directory of the package within it.
++func (l *lister) moduleFor(importPath string) (*moduleInfo, string) {
++	var best *moduleInfo
++	for _, m := range l.modules {
++		if importPath == m.Path || strings.HasPrefix(importPath, m.Path+"/") {
++			if best == nil || len(m.Path) > len(best.Path) {
++				best = m
++			}
++		}
++	}
++	if best == nil {
++		return nil, ""
++	}
++	return best, filepath.Join(best.Dir, filepath.FromSlash(strings.TrimPrefix(importPath, best.Path)))
++}
++
++// loadArgument resolves a command line argument: a directory, relative to wd
++// or absolute, or an import path.
++func (l *lister) loadArgument(arg, wd string) *PackageJSON {
++	if build.IsLocalImport(arg) || filepath.IsAbs(arg) {
++		dir := arg
++		if !filepath.IsAbs(dir) {
++			dir = filepath.Join(wd, dir)
++		}
++		dir = filepath.Clean(dir)
++		main := l.modules[0]
++		rel, err := filepath.Rel(main.Dir, dir)
++		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
++			return &PackageJSON{
++				ImportPath: "command-line-arguments",
++				Dir:        dir,
++				Error:      listError(fmt.Sprintf("directory %s outside main module %s", dir, main.Path)),
++			}
++		}
++		importPath := main.Path
++		if rel != "." {
++			importPath = path.Join(main.Path, filepath.ToSlash(rel))
++		}
++		return l.loadDir(importPath, dir, main)
++	}
++	return l.resolve(arg, wd)
++}
++
++// loadFiles makes the package `go list` calls command-line-arguments out of
++// Go files named on the command line, which all have to be in one directory.
++func (l *lister) loadFiles(files []string, wd string) (*PackageJSON, error) {
++	dir := ""
++	for i, f := range files {
++		if !filepath.IsAbs(f) {
++			f = filepath.Join(wd, f)
++		}
++		files[i] = f
++		if dir == "" {
++			dir = filepath.Dir(f)
++		} else if filepath.Dir(f) != dir {
++			return nil, errors.New("named files must all be in one directory")
++		}
++	}
++	pkg := &PackageJSON{ImportPath: "command-line-arguments", Dir: dir}
++	l.setModule(pkg, l.modules[0])
++	imports := make(map[string]bool)
++	fset := token.NewFileSet()
++	for _, f := range files {
++		parsed, err := parser.ParseFile(fset, f, nil, parser.ImportsOnly)
++		if err != nil {
++			return nil, err
++		}
++		pkg.Name = parsed.Name.Name
++		cgo := false
++		for _, imp := range parsed.Imports {
++			p, _ := strconv.Unquote(imp.Path.Value)
++			imports[p] = true
++			if p == "C" {
++				cgo = true
++			}
++		}
++		if cgo {
++			pkg.CgoFiles = append(pkg.CgoFiles, filepath.Base(f))
++		} else {
++			pkg.GoFiles = append(pkg.GoFiles, filepath.Base(f))
++		}
++	}
++	pkg.Imports = sortedKeys(imports)
++	addCgoImports(pkg)
++	return pkg, nil
++}
++
++// loadDir reads the package in dir, which belongs to module m under
++// importPath.
++func (l *lister) loadDir(importPath, dir string, m *moduleInfo) *PackageJSON {
++	bp, err := l.ctx.ImportDir(dir, 0)
++	pkg := l.fromBuild(importPath, bp, err)
++	l.setModule(pkg, m)
++	pkg.Root = m.Dir
++	return pkg
++}
++
++// resolve finds the package importPath names when imported from fromDir: in
++// one of the modules, or else in the standard library.
++func (l *lister) resolve(importPath, fromDir string) *PackageJSON {
++	if m, dir := l.moduleFor(importPath); m != nil {
++		return l.loadDir(importPath, dir, m)
++	}
++	bp, err := l.ctx.Import(importPath, fromDir, 0)
++	resolved := importPath
++	if bp != nil && bp.ImportPath != "" {
++		// A package vendored into the standard library is listed under the
++		// path it was found at.
++		resolved = bp.ImportPath
++	}
++	pkg := l.fromBuild(resolved, bp, err)
++	if bp != nil && bp.Goroot {
++		pkg.Standard = true
++		pkg.Root = l.goroot
++	}
++	return pkg
++}
++
++// fromBuild makes the listing of a package from what go/build read of it.
++func (l *lister) fromBuild(importPath string, bp *build.Package, err error) *PackageJSON {
++	pkg := &PackageJSON{ImportPath: importPath}
++	if bp != nil {
++		pkg.Dir = bp.Dir
++		pkg.Name = bp.Name
++		pkg.GoFiles = bp.GoFiles
++		pkg.CgoFiles = bp.CgoFiles
++		pkg.CFiles = bp.CFiles
++		pkg.Imports = bp.Imports
++		pkg.EmbedFiles = resolveEmbeds(bp.Dir, bp.EmbedPatterns)
++	}
++	if err != nil {
++		var noGo *build.NoGoError
++		if errors.As(err, &noGo) && bp != nil && bp.Name != "" {
++			// Only files excluded by build constraints: not an error for a
++			// listing, as the package may still have what it needs.
++		} else {
++			pkg.Error = listError(err.Error())
++		}
++	}
++	if importPath == "unsafe" {
++		pkg.Name = "unsafe"
++		pkg.Error = nil
++	}
++	addCgoImports(pkg)
++	return pkg
++}
++
++// setModule records which module pkg came from.
++func (l *lister) setModule(pkg *PackageJSON, m *moduleInfo) {
++	pkg.Module.Path = m.Path
++	pkg.Module.Main = m.Main
++	pkg.Module.Dir = m.Dir
++	pkg.Module.GoMod = m.GoMod
++	pkg.Module.GoVersion = m.GoVersion
++	pkg.Module.Version = m.Version
++}
++
++// visit adds pkg and, before it, everything it imports to the listing. The
++// stack is the chain of imports that led here, for error reports.
++func (l *lister) visit(pkg *PackageJSON, stack []string) {
++	if _, ok := l.packages[pkg.ImportPath]; ok {
++		return
++	}
++	l.packages[pkg.ImportPath] = pkg
++	stack = append(stack, pkg.ImportPath)
++	if pkg.Error != nil {
++		pkg.Error.ImportStack = append([]string(nil), stack...)
++	} else {
++		for i, imp := range pkg.Imports {
++			if imp == "C" {
++				continue
++			}
++			dep, ok := l.packages[imp]
++			if !ok {
++				dep = l.resolve(imp, pkg.Dir)
++				if dep.ImportPath != imp {
++					if pkg.ImportMap == nil {
++						pkg.ImportMap = make(map[string]string)
++					}
++					pkg.ImportMap[imp] = dep.ImportPath
++					pkg.Imports[i] = dep.ImportPath
++				}
++				l.visit(dep, stack)
++			}
++		}
++	}
++	l.sorted = append(l.sorted, pkg)
++}
++
++// addCgoImports adds the imports the go command gives a package that uses
++// cgo.
++func addCgoImports(pkg *PackageJSON) {
++	if len(pkg.CgoFiles) == 0 {
++		return
++	}
++	for _, imp := range []string{"runtime", "syscall", "unsafe"} {
++		if !hasString(pkg.Imports, imp) {
++			pkg.Imports = append(pkg.Imports, imp)
++		}
++	}
++	sort.Strings(pkg.Imports)
++}
++
++// resolveEmbeds lists the files the //go:embed patterns of a package in dir
++// match, relative to dir, as `go list` reports them in EmbedFiles. A pattern
++// matching a directory takes every file under it except those whose names
++// start with . or _.
++func resolveEmbeds(dir string, patterns []string) []string {
++	if len(patterns) == 0 {
++		return nil
++	}
++	files := make(map[string]bool)
++	for _, pattern := range patterns {
++		pattern = strings.TrimPrefix(pattern, "all:")
++		matches, err := fs.Glob(os.DirFS(dir), pattern)
++		if err != nil {
++			continue
++		}
++		for _, match := range matches {
++			info, err := os.Stat(filepath.Join(dir, match))
++			if err != nil {
++				continue
++			}
++			if !info.IsDir() {
++				files[match] = true
++				continue
++			}
++			fs.WalkDir(os.DirFS(dir), match, func(p string, d fs.DirEntry, err error) error {
++				if err != nil {
++					return nil
++				}
++				name := d.Name()
++				if p != match && (strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_")) {
++					if d.IsDir() {
++						return fs.SkipDir
++					}
++					return nil
++				}
++				if !d.IsDir() {
++					files[p] = true
++				}
++				return nil
++			})
++		}
++	}
++	return sortedKeys(files)
++}
++
++func listError(msg string) *struct {
++	ImportStack []string
++	Pos         string
++	Err         string
++} {
++	return &struct {
++		ImportStack []string
++		Pos         string
++		Err         string
++	}{Err: msg}
++}
++
++func hasString(list []string, s string) bool {
++	for _, x := range list {
++		if x == s {
++			return true
++		}
++	}
++	return false
++}
++
++func sortedKeys(m map[string]bool) []string {
++	keys := make([]string, 0, len(m))
++	for k := range m {
++		keys = append(keys, k)
++	}
++	sort.Strings(keys)
++	return keys
++}
+diff --git a/loader/loader.go b/loader/loader.go
+index feec2f23..13ce8698 100644
+--- a/loader/loader.go
++++ b/loader/loader.go
+@@ -14,7 +14,6 @@ import (
+ 	"go/types"
+ 	"io"
+ 	"os"
+-	"os/exec"
+ 	"path"
+ 	"path/filepath"
+ 	"runtime"
+@@ -140,27 +139,13 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
+ 	if config.TestConfig.CompileTestBinary {
+ 		extraArgs = append(extraArgs, "-test")
+ 	}
+-	cmd, err := List(config, extraArgs, []string{inputPkg})
++	listed, err := listPackages(config, extraArgs, []string{inputPkg}, wd)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+-	if config.TestConfig.StandardPackage {
+-		cmd.Dir = wd
+-		cmd.Env = append(cmd.Env, "GOWORK=off")
+-	}
+-	buf := &bytes.Buffer{}
+-	cmd.Stdout = buf
+-	cmd.Stderr = os.Stderr
+-	err = cmd.Run()
+-	if err != nil {
+-		if exitErr, ok := err.(*exec.ExitError); ok {
+-			os.Exit(exitErr.ExitCode())
+-		}
+-		return nil, fmt.Errorf("failed to run `go list`: %s", err)
+-	}
+ 
+ 	// Parse the returned json from `go list`.
+-	decoder := json.NewDecoder(buf)
++	decoder := json.NewDecoder(bytes.NewReader(listed))
+ 	var pkgErrors []error
+ 	for {
+ 		pkg := &Package{
+diff --git a/src/hash/maphash/maphash.go b/src/hash/maphash/maphash.go
+new file mode 100644
+index 00000000..a0d9a071
+--- /dev/null
++++ b/src/hash/maphash/maphash.go
+@@ -0,0 +1,242 @@
++// Package maphash provides hash functions on byte sequences and comparable
++// values, with the API of the standard library's package.
++//
++// The standard implementation reaches into internal/runtime/maps and
++// internal/abi for the map hasher, which TinyGo's runtime does not have, so
++// this version hashes bytes itself and hashes comparable values through the
++// runtime's interface hash, the same hash that map[any] keys use.
++package maphash
++
++import (
++	"hash"
++	"unsafe"
++)
++
++// A Seed is a random value that selects the specific hash function computed
++// by a Hash.
++type Seed struct {
++	s uint64
++}
++
++// Bytes returns the hash of b with the given seed.
++func Bytes(seed Seed, b []byte) uint64 {
++	if seed.s == 0 {
++		panic("maphash: use of uninitialized Seed")
++	}
++	return hashBytes(b, seed.s)
++}
++
++// String returns the hash of s with the given seed.
++func String(seed Seed, s string) uint64 {
++	return Bytes(seed, unsafe.Slice(unsafe.StringData(s), len(s)))
++}
++
++// A Hash computes a seeded hash of a byte sequence.
++type Hash struct {
++	_     [0]func()
++	seed  Seed
++	state Seed
++	buf   [bufSize]byte
++	n     int
++}
++
++const bufSize = 128
++
++func (h *Hash) initSeed() {
++	if h.seed.s == 0 {
++		seed := MakeSeed()
++		h.seed = seed
++		h.state = seed
++	}
++}
++
++// WriteByte adds b to the sequence of bytes hashed by h.
++func (h *Hash) WriteByte(b byte) error {
++	if h.n == len(h.buf) {
++		h.flush()
++	}
++	h.buf[h.n] = b
++	h.n++
++	return nil
++}
++
++// Write adds b to the sequence of bytes hashed by h.
++func (h *Hash) Write(b []byte) (int, error) {
++	size := len(b)
++	if h.n > 0 && h.n+len(b) > len(h.buf) {
++		k := copy(h.buf[h.n:], b)
++		h.n = len(h.buf)
++		b = b[k:]
++		h.flush()
++	}
++	if len(b) > len(h.buf) {
++		h.initSeed()
++		h.state.s = hashBytes(b, h.state.s)
++		return size, nil
++	}
++	h.n += copy(h.buf[h.n:], b)
++	return size, nil
++}
++
++// WriteString adds the bytes of s to the sequence of bytes hashed by h.
++func (h *Hash) WriteString(s string) (int, error) {
++	return h.Write(unsafe.Slice(unsafe.StringData(s), len(s)))
++}
++
++// Seed returns h's seed value.
++func (h *Hash) Seed() Seed {
++	h.initSeed()
++	return h.seed
++}
++
++// SetSeed sets h to use seed, and resets any data written.
++func (h *Hash) SetSeed(seed Seed) {
++	if seed.s == 0 {
++		panic("maphash: use of uninitialized Seed")
++	}
++	h.seed = seed
++	h.state = seed
++	h.n = 0
++}
++
++// Reset discards all bytes added to h.
++func (h *Hash) Reset() {
++	h.initSeed()
++	h.state = h.seed
++	h.n = 0
++}
++
++func (h *Hash) flush() {
++	if h.n != len(h.buf) {
++		panic("maphash: flush of partially full buffer")
++	}
++	h.initSeed()
++	h.state.s = hashBytes(h.buf[:h.n], h.state.s)
++	h.n = 0
++}
++
++// Sum64 returns h's current 64-bit value.
++func (h *Hash) Sum64() uint64 {
++	h.initSeed()
++	return hashBytes(h.buf[:h.n], h.state.s)
++}
++
++// MakeSeed returns a new random seed.
++func MakeSeed() Seed {
++	var s uint64
++	for {
++		s = runtime_fastrand64()
++		if s != 0 {
++			break
++		}
++	}
++	return Seed{s: s}
++}
++
++// Sum appends the hash's current 64-bit value to b.
++func (h *Hash) Sum(b []byte) []byte {
++	x := h.Sum64()
++	return append(b,
++		byte(x>>0), byte(x>>8), byte(x>>16), byte(x>>24),
++		byte(x>>32), byte(x>>40), byte(x>>48), byte(x>>56))
++}
++
++// Size returns h's hash value size, 8 bytes.
++func (h *Hash) Size() int { return 8 }
++
++// BlockSize returns h's block size.
++func (h *Hash) BlockSize() int { return len(h.buf) }
++
++// Clone implements hash.Cloner.
++func (h *Hash) Clone() (hash.Cloner, error) {
++	r := *h
++	return &r, nil
++}
++
++// Comparable returns the hash of comparable value v with the given seed,
++// such that Comparable(s, v1) == Comparable(s, v2) if v1 == v2.
++func Comparable[T comparable](seed Seed, v T) uint64 {
++	if seed.s == 0 {
++		panic("maphash: use of uninitialized Seed")
++	}
++	return comparableHash(any(v), seed.s)
++}
++
++// WriteComparable adds x to the data hashed by h.
++func WriteComparable[T comparable](h *Hash, x T) {
++	h.initSeed()
++	v := comparableHash(any(x), h.state.s)
++	var b [8]byte
++	for i := range b {
++		b[i] = byte(v >> (8 * i))
++	}
++	h.Write(b[:])
++}
++
++// comparableHash hashes an interface value through the runtime, as a
++// map[any] would, folding two 32-bit hashes with different seeds into one
++// 64-bit value.
++func comparableHash(v any, seed uint64) uint64 {
++	lo := runtime_hashmapInterfaceHash(v, uintptr(uint32(seed)))
++	hi := runtime_hashmapInterfaceHash(v, uintptr(uint32(seed>>32)^0x9e3779b9))
++	return uint64(hi)<<32 | uint64(lo)
++}
++
++// hashBytes is a 64-bit multiply-rotate hash over b, seeded with seed. The
++// quality bar is the same as the standard package's: good distribution, no
++// cryptographic strength.
++func hashBytes(b []byte, seed uint64) uint64 {
++	const (
++		m1 = 0xa0761d6478bd642f
++		m2 = 0xe7037ed1a0b428db
++		m3 = 0x8ebc6af09c88c6e3
++		m4 = 0x589965cc75374cc3
++	)
++	h := seed ^ (uint64(len(b)) * m1)
++	for len(b) >= 8 {
++		h = mix(h^load64(b), m2)
++		b = b[8:]
++	}
++	if len(b) > 0 {
++		var tail uint64
++		for i, c := range b {
++			tail |= uint64(c) << (8 * i)
++		}
++		h = mix(h^tail, m3)
++	}
++	return mix(h, m4)
++}
++
++func load64(b []byte) uint64 {
++	return uint64(b[0]) | uint64(b[1])<<8 | uint64(b[2])<<16 | uint64(b[3])<<24 |
++		uint64(b[4])<<32 | uint64(b[5])<<40 | uint64(b[6])<<48 | uint64(b[7])<<56
++}
++
++func mix(a, b uint64) uint64 {
++	a *= b
++	a ^= a >> 32
++	a *= 0x9fb21c651e98df25
++	a ^= a >> 29
++	return a
++}
++
++//go:linkname runtime_fastrand64 runtime.fastrand64
++func runtime_fastrand64() uint64
++
++//go:linkname runtime_hashmapInterfaceHash runtime.hashmapInterfaceHash
++func runtime_hashmapInterfaceHash(itf interface{}, seed uintptr) uint32
++
++// Hasher is a type that implements hashing and equality for type T.
++type Hasher[T any] interface {
++	// Hash updates hash to reflect the contents of value.
++	Hash(hash *Hash, value T)
++	// Equal reports whether two values are equal.
++	Equal(x, y T) bool
++}
++
++// ComparableHasher is an implementation of Hasher for comparable types,
++// using Comparable for hashing and == for equality.
++type ComparableHasher[T comparable] struct{}
++
++func (ComparableHasher[T]) Hash(h *Hash, v T) { WriteComparable(h, v) }
++func (ComparableHasher[T]) Equal(x, y T) bool { return x == y }
+diff --git a/src/runtime/runtime.go b/src/runtime/runtime.go
+index 85684dd0..558ec31d 100644
+--- a/src/runtime/runtime.go
++++ b/src/runtime/runtime.go
+@@ -183,3 +183,9 @@ func getAuxv() []uintptr {
+ func cgo_errno() uintptr {
+ 	return uintptr(*libc_errno_location())
+ }
++
++// GOTOOLDIR returns the directory the Go runtime's would: the tool directory
++// under GOROOT. There are no tools there, but go/build reads it at init.
++func GOTOOLDIR() string {
++	return goroot + "/pkg/tool/" + GOOS + "_" + GOARCH
++}

@@ -4,9 +4,12 @@
 // serves (task site). It runs in the page's worker, static/worker.js, and
 // exposes a global psx object to it:
 //
-//	psx.boot(bios, cue, files)  boots a BIOS, a Uint8Array, with the disc
+//	psx.boot(bios, cue, files, elf)
+//	                            boots a BIOS, a Uint8Array, with the disc
 //	                            whose cue sheet is named cue in files, an
-//	                            object of Uint8Arrays by file name. It
+//	                            object of Uint8Arrays by file name. elf, if
+//	                            given, is the program's ELF executable, whose
+//	                            symbols name addresses in the log. It
 //	                            returns an error message, or null.
 //	psx.runFrame(pixels)        runs to the next vertical blank, copies the
 //	                            display as RGBA into pixels, a
@@ -14,8 +17,16 @@
 //	                            and returns {width, height}, or {error}.
 //	psx.setButtons(buttons)     sets the buttons held on the pad in port 1,
 //	                            as emu's Button bits.
-//	psx.takeTTY()               returns what the BIOS has printed since the
-//	                            last call.
+//	psx.takeOutput()            returns what the BIOS and the program have
+//	                            printed since the last call, and what the
+//	                            emulator has logged, in the order it came:
+//	                            an array of {level, text}, where level is ""
+//	                            for printed text and otherwise the log
+//	                            record's level, as "ERROR" or "DEBUG".
+//	psx.setLogLevel(level)      logs at level and above, one of "trace",
+//	                            "debug", "info", "warn" and "error", or with
+//	                            "off", stops logging, which is how a machine
+//	                            starts. It holds for machines booted later.
 //	psx.setAudio(on)            turns the sound on or off, now and for
 //	                            machines booted later.
 //	psx.takeAudio()             returns the sound made since the last
@@ -25,10 +36,12 @@
 package main
 
 import (
-	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"image"
+	"log/slog"
+	"strings"
 	"syscall/js"
 	"testing/fstest"
 
@@ -43,7 +56,11 @@ var (
 	machine *emu.Machine
 	disc    *emu.Disc
 	frame   *image.RGBA
-	tty     bytes.Buffer
+	syms    []emu.Symbol
+
+	out      output
+	logLevel slog.LevelVar
+	logging  bool
 
 	audioOn bool
 	sound   []int16
@@ -52,19 +69,28 @@ var (
 
 func main() {
 	js.Global().Set("psx", js.ValueOf(map[string]any{
-		"boot":       js.FuncOf(boot),
-		"runFrame":   js.FuncOf(runFrame),
-		"setButtons": js.FuncOf(setButtons),
-		"takeTTY":    js.FuncOf(takeTTY),
-		"setAudio":   js.FuncOf(setAudio),
-		"takeAudio":  js.FuncOf(takeAudio),
+		"boot":        js.FuncOf(boot),
+		"runFrame":    js.FuncOf(runFrame),
+		"setButtons":  js.FuncOf(setButtons),
+		"takeOutput":  js.FuncOf(takeOutput),
+		"setLogLevel": js.FuncOf(setLogLevel),
+		"setAudio":    js.FuncOf(setAudio),
+		"takeAudio":   js.FuncOf(takeAudio),
 	}))
 	select {}
 }
 
 func boot(_ js.Value, args []js.Value) any {
-	if len(args) != 3 {
+	if len(args) < 3 {
 		return "boot takes a BIOS, a cue sheet name and the disc's files"
+	}
+	syms = nil
+	if len(args) > 3 && args[3].Truthy() {
+		s, err := emu.SymbolsFromELF(bytesFromJS(args[3]))
+		if err != nil {
+			return fmt.Sprintf("reading the program's symbols: %v", err)
+		}
+		syms = s
 	}
 	bios := bytesFromJS(args[0])
 	fsys := fstest.MapFS{}
@@ -86,8 +112,12 @@ func boot(_ js.Value, args []js.Value) any {
 	if disc != nil {
 		disc.Close()
 	}
-	tty.Reset()
-	m.TTY = &tty
+	out.reset()
+	m.TTY = ttyWriter{}
+	m.SetSymbols(syms)
+	if logging {
+		m.SetLogger(slog.New(handler{}))
+	}
 	m.SetAudio(audioOn)
 	m.InsertDisc(d)
 	machine, disc = m, d
@@ -125,10 +155,144 @@ func setButtons(_ js.Value, args []js.Value) any {
 	return nil
 }
 
-func takeTTY(js.Value, []js.Value) any {
-	s := tty.String()
-	tty.Reset()
-	return s
+func takeOutput(js.Value, []js.Value) any {
+	chunks := out.take()
+	arr := make([]any, len(chunks))
+	for i, c := range chunks {
+		arr[i] = map[string]any{"level": c.level, "text": c.text}
+	}
+	return arr
+}
+
+func setLogLevel(_ js.Value, args []js.Value) any {
+	name := "off"
+	if len(args) > 0 {
+		name = args[0].String()
+	}
+	levels := map[string]slog.Level{
+		"trace": emu.LevelTrace, "debug": slog.LevelDebug, "info": slog.LevelInfo,
+		"warn": slog.LevelWarn, "error": slog.LevelError,
+	}
+	level, ok := levels[name]
+	logging = ok
+	if ok {
+		logLevel.Set(level)
+	}
+	if machine != nil {
+		if logging {
+			machine.SetLogger(slog.New(handler{}))
+		} else {
+			machine.SetLogger(nil)
+		}
+	}
+	return nil
+}
+
+// A chunk of output: printed text, with no level, or a log record.
+type chunk struct {
+	level, text string
+}
+
+// output is what has been printed and logged since it was last taken,
+// with a run of the same log record collapsed into one and a count, and
+// with no more kept than a page can show, should logging at a low level
+// flood it.
+type output struct {
+	chunks  []chunk
+	lines   int
+	dropped int
+	last    string // the last log record, for collapsing repeats
+	repeats int
+}
+
+const maxLines = 2000
+
+func (o *output) reset() { *o = output{} }
+
+func (o *output) add(c chunk) {
+	if o.lines >= maxLines {
+		if c.level != "" {
+			o.dropped++
+		}
+		return
+	}
+	o.lines += strings.Count(c.text, "\n")
+	if n := len(o.chunks); n > 0 && c.level == "" && o.chunks[n-1].level == "" {
+		o.chunks[n-1].text += c.text
+		return
+	}
+	o.chunks = append(o.chunks, c)
+}
+
+func (o *output) flushRepeats() {
+	if o.repeats > 0 {
+		o.add(chunk{"REPEAT", fmt.Sprintf("    (and %d times more)\n", o.repeats)})
+		o.repeats = 0
+	}
+}
+
+func (o *output) take() []chunk {
+	o.flushRepeats()
+	if o.dropped > 0 {
+		o.chunks = append(o.chunks, chunk{"WARN", fmt.Sprintf("WARN %d log records left out, too many to show\n", o.dropped)})
+	}
+	chunks := o.chunks
+	o.chunks, o.lines, o.dropped = nil, 0, 0
+	return chunks
+}
+
+// ttyWriter is the machine's TTY, which adds to the output. The Net
+// Yaroze library's putchar ends a line with a carriage return too, one
+// character a write, which a page would show as a line break of its own,
+// so carriage returns are left out.
+type ttyWriter struct{}
+
+func (ttyWriter) Write(p []byte) (int, error) {
+	text := strings.ReplaceAll(string(p), "\r", "")
+	if text == "" {
+		return len(p), nil
+	}
+	out.flushRepeats()
+	out.last = ""
+	out.add(chunk{"", text})
+	return len(p), nil
+}
+
+// handler is a slog.Handler that adds each record to the output as a line
+// of its own, with its attributes on the lines under it.
+type handler struct{}
+
+func (handler) Enabled(_ context.Context, l slog.Level) bool { return l >= logLevel.Level() }
+func (h handler) WithAttrs([]slog.Attr) slog.Handler         { return h }
+func (h handler) WithGroup(string) slog.Handler              { return h }
+
+func (handler) Handle(_ context.Context, r slog.Record) error {
+	level := r.Level.String()
+	if r.Level == emu.LevelTrace {
+		level = "TRACE"
+	}
+	var b strings.Builder
+	b.WriteString(level)
+	b.WriteByte(' ')
+	b.WriteString(r.Message)
+	b.WriteByte('\n')
+	r.Attrs(func(a slog.Attr) bool {
+		b.WriteString("    ")
+		b.WriteString(a.Key)
+		b.WriteString(": ")
+		b.WriteString(strings.ReplaceAll(a.Value.String(), "\n", "\n      "))
+		b.WriteByte('\n')
+		return true
+	})
+	text := b.String()
+	if text == out.last {
+		out.repeats++
+		return nil
+	}
+	out.flushRepeats()
+	out.last = text
+	out.add(chunk{level, text})
+	return nil
 }
 
 func bytesFromJS(v js.Value) []byte {

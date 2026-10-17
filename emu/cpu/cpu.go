@@ -220,9 +220,10 @@ type Clock struct {
 	// Run stops after every step while Busy is true.
 	Busy *bool
 
-	// With Hooked, Run stops before the instruction at Hook, in any segment.
-	Hook   uint32
-	Hooked bool
+	// With Hooked, Run stops before an instruction whose address, masked
+	// with HookMask, is Hook. The mask leaves the segment out.
+	Hook, HookMask uint32
+	Hooked         bool
 
 	// Run reads the rest once, when it starts. A device that changes any
 	// of it, or fails, sets Wake, and Run stops after that step so the
@@ -275,6 +276,7 @@ func (c *CPU) Run(n uint64, k *Clock) uint64 {
 		// psxe takes the address error and then carries on to fetch from the
 		// vector within the same step.
 		if c.SavedPC&3 != 0 {
+			c.COP0[BadVAddr] = c.SavedPC
 			c.exception(ExcAdEL)
 		}
 
@@ -356,6 +358,7 @@ func (c *CPU) Run(n uint64, k *Clock) uint64 {
 					c.pendingLoad()
 				}
 				if addr&(accessSize[op&3]-1) != 0 {
+					c.COP0[BadVAddr] = addr
 					c.exception(ExcAdEL)
 					break
 				}
@@ -402,6 +405,7 @@ func (c *CPU) Run(n uint64, k *Clock) uint64 {
 					break
 				}
 				if addr&(accessSize[op&3]-1) != 0 {
+					c.COP0[BadVAddr] = addr
 					c.exception(ExcAdES)
 					break
 				}
@@ -443,7 +447,7 @@ func (c *CPU) Run(n uint64, k *Clock) uint64 {
 		}
 		video := float32(*k.Video + float32(float32(c.LastCycles)*k.VideoRate))
 		if c.TotalCycles >= due || video >= *k.VideoEdge || i >= stepsDue || *k.Wake ||
-			k.Hooked && c.PC&0x3fffffff == k.Hook {
+			k.Hooked && c.PC&k.HookMask == k.Hook {
 			break
 		}
 		*k.Video = video

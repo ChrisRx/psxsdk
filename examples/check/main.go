@@ -242,7 +242,7 @@ func main() {
 	// that takes a while or does not finish. Bringing the display up first
 	// costs nothing and turns a black screen into a report.
 	yaroze.SetVideoMode(yaroze.MODE_NTSC)
-	yaroze.GsInitGraph(frameX, frameY, 4, 0, 0)
+	yaroze.GsInitGraph(frameX, frameY, yaroze.GsOFSGPU, 0, 0)
 	yaroze.GsDefDispBuff(0, 0, 0, frameY)
 	screen.Init(otTags[:], packetArea[:])
 

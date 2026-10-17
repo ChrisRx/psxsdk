@@ -1,0 +1,200 @@
+--- a/clang/include/clang/Support/Compiler.h
++++ b/clang/include/clang/Support/Compiler.h
+@@ -54,7 +54,7 @@
+ #define CLANG_ABI LLVM_ATTRIBUTE_VISIBILITY_DEFAULT
+ #define CLANG_TEMPLATE_ABI LLVM_ATTRIBUTE_VISIBILITY_DEFAULT
+ #define CLANG_EXPORT_TEMPLATE
+-#elif defined(__MACH__) || defined(__WASM__) || defined(__EMSCRIPTEN__)
++#elif defined(__MACH__) || defined(__WASM__) || defined(__wasm__) || defined(__EMSCRIPTEN__) // __wasm__ is how the compiler spells it
+ #define CLANG_ABI LLVM_ATTRIBUTE_VISIBILITY_DEFAULT
+ #define CLANG_TEMPLATE_ABI
+ #define CLANG_EXPORT_TEMPLATE
+--- a/clang/lib/Frontend/CompilerInvocation.cpp
++++ b/clang/lib/Frontend/CompilerInvocation.cpp
+@@ -84,7 +84,9 @@
+ #include <cstddef>
+ #include <cstring>
+ #include <ctime>
++#ifndef __wasi__ // this libc++ has no <fstream>
+ #include <fstream>
++#endif
+ #include <limits>
+ #include <memory>
+ #include <optional>
+@@ -4524,6 +4526,7 @@
+       Diags.Report(diag::err_cc1_unbounded_vscale_min);
+   }
+ 
++#ifndef __wasi__ // no <fstream>; the seed file option is not supported
+   if (const Arg *A = Args.getLastArg(OPT_frandomize_layout_seed_file_EQ)) {
+     std::ifstream SeedFile(A->getValue(0));
+ 
+@@ -4533,6 +4536,7 @@
+ 
+     std::getline(SeedFile, Opts.RandstructSeed);
+   }
++#endif
+ 
+   if (const Arg *A = Args.getLastArg(OPT_frandomize_layout_seed_EQ))
+     Opts.RandstructSeed = A->getValue(0);
+--- a/clang/lib/Frontend/LayoutOverrideSource.cpp
++++ b/clang/lib/Frontend/LayoutOverrideSource.cpp
+@@ -11,7 +11,10 @@
+ #include "clang/AST/Type.h"
+ #include "clang/Basic/CharInfo.h"
+ #include "llvm/Support/raw_ostream.h"
++// This libc++ for WASI has no <fstream>: layout override files are not read.
++#ifndef __wasi__
+ #include <fstream>
++#endif
+ #include <string>
+ 
+ using namespace clang;
+@@ -41,6 +44,9 @@
+ }
+ 
+ LayoutOverrideSource::LayoutOverrideSource(StringRef Filename) {
++#if defined(__wasi__)
++  (void)Filename;
++#else
+   std::ifstream Input(Filename.str().c_str());
+   if (!Input.is_open())
+     return;
+@@ -187,6 +193,7 @@
+   // Flush the last type/layout, if there is one.
+   if (!CurrentType.empty())
+     Layouts[CurrentType] = CurrentLayout;
++#endif
+ }
+ 
+ bool
+--- a/llvm/lib/Support/CrashRecoveryContext.cpp
++++ b/llvm/lib/Support/CrashRecoveryContext.cpp
+@@ -14,7 +14,11 @@
+ #include "llvm/Support/thread.h"
+ #include <cassert>
+ #include <mutex>
++// WASI has neither signals nor setjmp: a crash is a trap that ends the
++// program, so there is nothing to recover from and RunSafely just runs.
++#if !defined(__wasi__)
+ #include <setjmp.h>
++#endif
+ 
+ using namespace llvm;
+ 
+@@ -31,7 +35,9 @@
+   const CrashRecoveryContextImpl *Next;
+ 
+   CrashRecoveryContext *CRC;
++#if !defined(__wasi__)
+   ::jmp_buf JumpBuffer;
++#endif
+   volatile unsigned Failed : 1;
+   unsigned SwitchedThread : 1;
+   unsigned ValidJumpBuffer : 1;
+@@ -73,8 +79,10 @@
+     CRC->RetCode = RetCode;
+ 
+     // Jump back to the RunSafely we were called under.
++#if !defined(__wasi__)
+     if (ValidJumpBuffer)
+       longjmp(JumpBuffer, 1);
++#endif
+ 
+     // Otherwise let the caller decide of the outcome of the crash. Currently
+     // this occurs when using SEH on Windows with MSVC or clang-cl.
+@@ -329,6 +337,11 @@
+   }
+ }
+ 
++#elif defined(__wasi__)
++
++static void installExceptionOrSignalHandlers() {}
++static void uninstallExceptionOrSignalHandlers() {}
++
+ #else // !_WIN32
+ 
+ // Generic POSIX implementation.
+@@ -417,10 +430,12 @@
+     CrashRecoveryContextImpl *CRCI = new CrashRecoveryContextImpl(this);
+     Impl = CRCI;
+ 
++#if !defined(__wasi__)
+     CRCI->ValidJumpBuffer = true;
+     if (setjmp(CRCI->JumpBuffer) != 0) {
+       return false;
+     }
++#endif
+   }
+ 
+   Fn();
+--- a/llvm/lib/Support/raw_socket_stream.cpp
++++ b/llvm/lib/Support/raw_socket_stream.cpp
+@@ -1,3 +1,6 @@
++// Sockets are not part of WASI: this file is left out there, and nothing
++// in a compiler running in-process reaches for it.
++#ifndef __wasi__
+ //===-- llvm/Support/raw_socket_stream.cpp - Socket streams --*- C++ -*-===//
+ //
+ // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+@@ -356,3 +359,4 @@
+   }
+   return raw_fd_stream::read(Ptr, Size);
+ }
++#endif // !__wasi__
+--- a/llvm/lib/Support/Unix/Path.inc
++++ b/llvm/lib/Support/Unix/Path.inc
+@@ -326,6 +326,10 @@
+       return std::string(real_path);
+     break; // Found entry, but realpath failed.
+   }
++#elif defined(__wasi__)
++  // WASI gives a program no way to find its own file, and nothing that runs
++  // the compiler in-process asks.
++  return "";
+ #elif defined(HAVE_DLOPEN)
+   // Use dladdr to get executable path if available.
+   Dl_info DLInfo;
+@@ -359,6 +363,13 @@
+ uint32_t file_status::getLinkCount() const { return fs_st_nlinks; }
+ 
+ ErrorOr<space_info> disk_space(const Twine &Path) {
++#if defined(__wasi__)
++  // WASI reports nothing about the file system's size; the link-time
++  // optimization cache asks before pruning, and is told there is room.
++  space_info SpaceInfo;
++  SpaceInfo.capacity = SpaceInfo.free = SpaceInfo.available = uint64_t(1) << 40;
++  return SpaceInfo;
++#else
+   struct STATVFS Vfs;
+   if (::STATVFS(const_cast<char *>(Path.str().c_str()), &Vfs))
+     return errnoAsErrorCode();
+@@ -368,6 +379,7 @@
+   SpaceInfo.free = static_cast<uint64_t>(Vfs.f_bfree) * FrSize;
+   SpaceInfo.available = static_cast<uint64_t>(Vfs.f_bavail) * FrSize;
+   return SpaceInfo;
++#endif
+ }
+ 
+ std::error_code current_path(SmallVectorImpl<char> &result) {
+@@ -564,6 +576,9 @@
+   // The file system can have an arbitrary structure on z/OS; must go with the
+   // conservative answer.
+   return false;
++#elif defined(__wasi__)
++  // Everything WASI shows a program is a directory it was handed.
++  return true;
+ #else
+   return !!(STATVFS_F_FLAG(Vfs) & MNT_LOCAL);
+ #endif
+--- a/llvm/lib/Support/Unix/Program.inc
++++ b/llvm/lib/Support/Unix/Program.inc
+@@ -460,7 +460,7 @@
+     std::chrono::microseconds UserT = toDuration(Info.ru_utime);
+     std::chrono::microseconds KernelT = toDuration(Info.ru_stime);
+     uint64_t PeakMemory = 0;
+-#if !defined(__HAIKU__) && !defined(__MVS__)
++#if !defined(__HAIKU__) && !defined(__MVS__) && !defined(__wasi__) // WASI: rusage has no ru_maxrss
+     PeakMemory = static_cast<uint64_t>(Info.ru_maxrss);
+ #endif
+     *ProcStat = ProcessStatistics{UserT + KernelT, UserT, PeakMemory};

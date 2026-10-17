@@ -23,6 +23,7 @@
       {{- range $site.Sections}}
       <a href="{{$root}}{{.URL}}"{{if eq . $page.Section}} aria-current="true"{{end}}>{{.Title}}</a>
       {{- end}}
+      <a href="{{$root}}play/">Playground</a>
     </nav>
     <div class="search">
       <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">

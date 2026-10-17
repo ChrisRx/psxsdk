@@ -11,7 +11,7 @@ A program for the PlayStation is an ordinary Go module. It depends on `go.chrisr
 - **Go**, 1.27 or newer.
 - **TinyGo** with the `playstation-yaroze` target, which compiles Go for the console's MIPS processor and links against the Net Yaroze library. `tinygo targets | grep playstation` shows whether yours has it.
 - **An emulator** to run the result in. The toolchain has one, `psxemu`, which runs headless and saves a picture of the screen; [mednafen](https://mednafen.github.io/) or any other that takes a cue sheet works for playing.
-- **A BIOS image.** The console's own is Sony's and cannot be distributed, but the open source [OpenBIOS](https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios) boots everything here. The copy the [player](/play/) on this site uses is at [openbios.bin](/play/openbios.bin).
+- **A BIOS image.** The console's own is Sony's and cannot be distributed, but the open source [OpenBIOS](https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios) boots everything here. The copy the [player](/play/player.html) on this site uses is at [openbios.bin](/play/openbios.bin).
 
 ## The module
 

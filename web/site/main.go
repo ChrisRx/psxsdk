@@ -1,6 +1,7 @@
 // Command site builds the documentation site: the pages under docs/, a page
-// for each example from its own package comment, and the player, which is
-// web/static, under play/.
+// for each example from its own package comment, and the playground and the
+// player, which are web/static, under play/: the playground is its index,
+// and the player, which the example pages embed, is play/player.html.
 //
 // There is no framework behind it. A page is a Markdown file with a short
 // front matter, rendered with goldmark and chroma into one template, and the
@@ -61,6 +62,7 @@ var opts = struct {
 	Docs     string
 	Examples string
 	Static   string
+	API      string
 	Out      string
 	Repo     string
 	Name     string
@@ -68,6 +70,7 @@ var opts = struct {
 	Docs:     "docs",
 	Examples: "examples",
 	Static:   "web/static",
+	API:      "yaroze",
 	Out:      ".build/site",
 	Repo:     "https://github.com/ChrisRx/psxsdk",
 	Name:     "psxsdk",
@@ -76,7 +79,8 @@ var opts = struct {
 func main() {
 	flag.StringVar(&opts.Docs, "docs", opts.Docs, "directory of pages")
 	flag.StringVar(&opts.Examples, "examples", opts.Examples, "directory of example programs, one page each")
-	flag.StringVar(&opts.Static, "static", opts.Static, "the player, copied under play/")
+	flag.StringVar(&opts.Static, "static", opts.Static, "the playground and the player, copied under play/")
+	flag.StringVar(&opts.API, "api", opts.API, "package whose exported names the playground completes, written to play/yaroze.json")
 	flag.StringVar(&opts.Out, "out", opts.Out, "directory to write the site into")
 	flag.StringVar(&opts.Repo, "repo", opts.Repo, "repository that paths in links refer to")
 	flag.StringVar(&opts.Name, "name", opts.Name, "the site's name")
@@ -88,6 +92,11 @@ func main() {
 	}
 	if err := s.write(opts.Out, opts.Static); err != nil {
 		log.Fatal(err)
+	}
+	if opts.Static != "" && opts.API != "" {
+		if err := writeAPI(opts.API, filepath.Join(opts.Out, "play", "yaroze.json")); err != nil {
+			log.Fatal(err)
+		}
 	}
 	fmt.Printf("wrote %d pages to %s\n", len(s.pages), opts.Out)
 }
@@ -332,8 +341,8 @@ func (s *Site) expand(p *Page, body []byte) ([]byte, error) {
 // playerHTML is the player framed in a page, booted into the disc built
 // for name, as the player's own page would be with that name in its hash.
 func playerHTML(root, name string) string {
-	return fmt.Sprintf(`<iframe class="player" src="%[1]splay/?embed#%[2]s" title="%[2]s, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
-<p class="muted"><a href="%[1]splay/#%[2]s">Open in the player</a>, with the keyboard and gamepad reference.</p>`, root, name)
+	return fmt.Sprintf(`<iframe class="player" src="%[1]splay/player.html?embed#%[2]s" title="%[2]s, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
+<p class="muted"><a href="%[1]splay/player.html#%[2]s">Open in the player</a>, with the keyboard and gamepad reference.</p>`, root, name)
 }
 
 // render turns a page's Markdown into its content, table of contents and

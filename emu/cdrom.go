@@ -1,6 +1,9 @@
 package emu
 
-import "fmt"
+import (
+	"fmt"
+	"log/slog"
+)
 
 // CD-ROM commands.
 const (
@@ -34,6 +37,16 @@ const (
 	cdReadTOC    = 0x1e
 	cdVideoCD    = 0x1f
 )
+
+var cdCommandNames = map[uint8]string{
+	cdGetstat: "Getstat", cdSetloc: "Setloc", cdPlay: "Play", cdForward: "Forward",
+	cdBackward: "Backward", cdReadN: "ReadN", cdMotorOn: "MotorOn", cdStop: "Stop",
+	cdPause: "Pause", cdInit: "Init", cdMute: "Mute", cdDemute: "Demute",
+	cdSetfilter: "Setfilter", cdSetmode: "Setmode", cdGetparam: "Getparam", cdGetlocL: "GetlocL",
+	cdGetlocP: "GetlocP", cdSetSession: "SetSession", cdGetTN: "GetTN", cdGetTD: "GetTD",
+	cdSeekL: "SeekL", cdSeekP: "SeekP", cdTest: "Test", cdGetID: "GetID",
+	cdReadS: "ReadS", cdReset: "Reset", cdGetQ: "GetQ", cdReadTOC: "ReadTOC", cdVideoCD: "VideoCD",
+}
 
 // Status bits.
 const (
@@ -131,6 +144,7 @@ func (q *cdQueue) clear() {
 // tracing, the drive does what psxe does while tracing: Play plays nothing,
 // and XA sectors are read as data.
 type cdrom struct {
+	log      *logger
 	disc     *Disc
 	discKind int
 	ic       *ic
@@ -366,6 +380,13 @@ func (c *cdrom) Write8(off uint32, v uint8) {
 
 // command starts a command. Its first response comes after a delay.
 func (c *cdrom) command(cmd uint8) {
+	if c.log.on(slog.LevelDebug) {
+		name := cdCommandNames[cmd]
+		if name == "" {
+			name = fmt.Sprintf("%02xh", cmd)
+		}
+		c.log.log(slog.LevelDebug, fmt.Sprintf("CD-ROM %s % x", name, c.parameters.buf[c.parameters.r:c.parameters.w]))
+	}
 	c.prevState = c.state
 	c.state = cdResp1
 	c.pendingCommand = cmd

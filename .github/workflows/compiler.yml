@@ -1,0 +1,40 @@
+# Builds the playground's compiler, TinyGo compiled to WebAssembly with LLVM
+# linked in, and caches it for the Pages workflow, which otherwise builds it
+# itself when its cache misses. It takes a couple of hours, so it runs when
+# the recipe or the TinyGo fork's revision changes, or by hand, rather than
+# on every push.
+name: Compiler
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'web/compiler/**'
+      - 'flake.nix'
+      - 'flake.lock'
+      - '.github/actions/compiler/**'
+      - '.github/workflows/compiler.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Nix
+      uses: cachix/install-nix-action@v31
+
+    - name: Cache Nix store
+      uses: DeterminateSystems/magic-nix-cache-action@v8
+
+    - name: Build the compiler
+      uses: ./.github/actions/compiler
+
+    - name: Upload the compiler
+      uses: actions/upload-artifact@v4
+      with:
+        name: compiler
+        path: .build/compiler/*.wasm
+        retention-days: 14

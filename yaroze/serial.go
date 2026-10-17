@@ -1,4 +1,4 @@
-//go:build !yaroze
+//go:build !yaroze && !wasip1 && !js
 
 package yaroze
 

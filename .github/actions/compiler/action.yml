@@ -1,0 +1,56 @@
+name: Compiler for the playground
+description: >-
+  Puts the playground's compiler, TinyGo compiled to WebAssembly, in
+  .build/compiler: from the cache when the recipe has not changed, built
+  otherwise, which takes a couple of hours. Leaves the patched TinyGo tree
+  in .build/compiler/tinygo, which the playground task needs as well. Nix
+  must be installed already.
+runs:
+  using: composite
+  steps:
+  - name: Find the TinyGo fork's revision
+    id: fork
+    shell: bash
+    run: echo "rev=$(sed -n 's/.*rev = "\([0-9a-f]\{40\}\)".*/\1/p' flake.nix | head -1)" >> "$GITHUB_OUTPUT"
+
+  - name: Check out the TinyGo fork
+    uses: actions/checkout@v4
+    with:
+      repository: ChrisRx/tinygo
+      ref: ${{ steps.fork.outputs.rev }}
+      path: tinygo
+
+  - name: Check out wasi-libc
+    shell: bash
+    run: git -C tinygo submodule update --init --depth 1 lib/wasi-libc
+
+  - name: Prepare the TinyGo tree
+    shell: bash
+    env:
+      TINYGO_SRC: ${{ github.workspace }}/tinygo
+      OUT: ${{ github.workspace }}/.build/compiler
+    run: |
+      rev=$(sed -n 's#.*"rev": *"\([0-9a-f]\{40\}\)".*#\1#p' flake.lock | head -1)
+      NIXPKGS="github:NixOS/nixpkgs/$rev" web/compiler/prepare.sh
+
+  - name: Restore the compiler
+    id: cache
+    uses: actions/cache/restore@v4
+    with:
+      path: .build/compiler/*.wasm
+      key: compiler-${{ steps.fork.outputs.rev }}-${{ hashFiles('web/compiler/**', 'flake.lock') }}
+
+  - name: Build the compiler
+    if: steps.cache.outputs.cache-hit != 'true'
+    shell: bash
+    env:
+      TINYGO_SRC: ${{ github.workspace }}/tinygo
+      JOBS: 4
+    run: web/compiler/build.sh .build/compiler
+
+  - name: Save the compiler
+    if: steps.cache.outputs.cache-hit != 'true'
+    uses: actions/cache/save@v4
+    with:
+      path: .build/compiler/*.wasm
+      key: ${{ steps.cache.outputs.cache-primary-key }}

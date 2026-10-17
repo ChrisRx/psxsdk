@@ -140,7 +140,7 @@ func TestWrite(t *testing.T) {
 	assert.Equal(t, true, strings.Contains(page, `<small>Previous</small>How it fits<`), page)
 
 	ex, _ := os.ReadFile(filepath.Join(out, "examples/demo/index.html"))
-	assert.Equal(t, true, strings.Contains(string(ex), `src="../../play/?embed#demo"`), string(ex))
+	assert.Equal(t, true, strings.Contains(string(ex), `src="../../play/player.html?embed#demo"`), string(ex))
 
 	css, _ := os.ReadFile(filepath.Join(out, "assets/chroma.css"))
 	assert.Equal(t, true, strings.HasPrefix(string(css), "@media (prefers-color-scheme: light) {"))
@@ -174,8 +174,8 @@ func TestExpand(t *testing.T) {
 	p := page(s, "tools/listing/")
 	content := string(p.Content)
 	assert.Equal(t, true, strings.Contains(content, `<span class="kn">package</span>`), content)
-	assert.Equal(t, true, strings.Contains(content, `<iframe class="player" src="../../play/?embed#prog"`), content)
-	assert.Equal(t, true, strings.Contains(content, `href="../../play/#prog"`), content)
+	assert.Equal(t, true, strings.Contains(content, `<iframe class="player" src="../../play/player.html?embed#prog"`), content)
+	assert.Equal(t, true, strings.Contains(content, `href="../../play/player.html#prog"`), content)
 	// What was pulled in is searchable like the rest.
 	assert.Equal(t, true, strings.Contains(p.Text, "func main() {}"), p.Text)
 

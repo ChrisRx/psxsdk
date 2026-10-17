@@ -12,6 +12,7 @@ import (
 	"image"
 	"image/draw"
 	"io"
+	"log/slog"
 
 	"go.chrisrx.dev/psx/emu/cpu"
 	"go.chrisrx.dev/psx/format/psx"
@@ -58,6 +59,13 @@ type Machine struct {
 	// or fails, so that the CPU hands back to run.
 	wake bool
 
+	// log is where the machine logs, if anywhere; log.go says what it
+	// logs. syms names addresses in it, and stuckAt is where the CPU was
+	// last reported looping, so that it is reported once.
+	log     logger
+	syms    []Symbol
+	stuckAt uint32
+
 	trace     *psxtrace.Writer
 	traceRegs [psxtrace.NumRegs]uint32
 	writes    []psxtrace.Write
@@ -90,6 +98,8 @@ func New(bios []byte) (*Machine, error) {
 	m.mdec = newMDEC(m.fail.report)
 
 	// The order is psxe's, which only matters where ranges overlap.
+	m.Bus.log, m.gpu.log, m.dma.log, m.cd.log = &m.log, &m.log, &m.log, &m.log
+
 	m.Bus.setMaps([]mapping{
 		{base: 0x1fc00000, size: uint32(len(bios)), delay: 18, dev: rom{memory(bios)}},
 		{base: 0x00000000, size: 0x800000, dev: m.ram},
@@ -335,7 +345,11 @@ func (m *Machine) Run(n uint64) (uint64, error) {
 // RunFrame runs to the next vertical blank, or for budget instructions if
 // that comes first, as Run does. Whether the blank came shows in Frames.
 func (m *Machine) RunFrame(budget uint64) (uint64, error) {
-	return m.run(budget, m.gpu.frames+1)
+	n, err := m.run(budget, m.gpu.frames+1)
+	if m.log.on(slog.LevelError) {
+		m.checkStuck()
+	}
+	return n, err
 }
 
 // run is Run, stopping too once frames frames have been displayed. What is
@@ -344,6 +358,7 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 	c := m.CPU
 	cd, gpu, sio, tmr, dma, spu := m.cd, m.gpu, m.sio, m.tmr, m.dma, m.spu
 	tty, trace := m.TTY != nil, m.trace != nil
+	logging := m.log.l != nil
 
 	// While tracing, the CPU steps one at a time, to record each step.
 	// Otherwise it runs steps itself until one leaves the devices
@@ -354,8 +369,14 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 		Video: &gpu.cycles, VideoEdge: &gpu.edge, VideoRate: gpuCyclesPerCPU,
 		Sample: &m.spuCycles, SampleCycles: spuSampleCycles,
 		Busy: &dma.active,
-		Hook: 0xb4, Hooked: tty,
+		Hook: 0xb4, HookMask: 0x3fffffff, Hooked: tty,
 		Wake: &m.wake,
+	}
+
+	// Logging, the CPU stops anywhere in the first 256 bytes, which takes
+	// in 0xb4 as well as the exception vector and the BIOS's tables.
+	if logging {
+		k.Hook, k.HookMask, k.Hooked = 0, 0x3fffff00, true
 	}
 
 	var i uint64
@@ -364,6 +385,9 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 		// the handler at 0xb4, with the function number in $t1.
 		if tty && c.PC&0x3fffffff == 0xb4 {
 			m.bFunction()
+		}
+		if logging && c.PC&0x3fffff00 == 0 {
+			m.hooked()
 		}
 
 		if trace {
@@ -438,10 +462,23 @@ func (f *failure) take() error {
 	return err
 }
 
-// bFunction prints what a call to the BIOS's putchar or puts is printing.
+// bFunction prints what a call to the BIOS's putchar or puts is printing,
+// and what the program writes to standard output with FileWrite, as the
+// Net Yaroze library's putchar does, and so a Go program's print, println
+// and panic messages. A FileWrite from the BIOS itself, which is how some
+// BIOSes' putchar prints, is left out, so nothing shows twice.
 func (m *Machine) bFunction() {
 	c := m.CPU
 	switch c.R[9] {
+	case 0x35:
+		if ra := c.R[31] & 0x1fffffff; c.R[4] != 1 || ra < 0x10000 || ra >= RAMSize {
+			return
+		}
+		s := make([]byte, 0, min(c.R[6], 4096))
+		for a := c.R[5]; a < c.R[5]+c.R[6] && len(s) < cap(s); a++ {
+			s = append(s, m.Bus.Read8(a))
+		}
+		m.TTY.Write(s)
 	case 0x3b, 0x3d:
 		m.TTY.Write([]byte{byte(c.R[4])})
 	case 0x3f:

@@ -3,6 +3,7 @@ package emu
 import (
 	"encoding/binary"
 	"fmt"
+	"log/slog"
 )
 
 // device is something mapped into the physical address space. Offsets are
@@ -60,6 +61,16 @@ type Bus struct {
 	// sioCtrl is the one register psxe answers for SIO1, which it does
 	// not otherwise emulate. Nothing ever writes it.
 	sioCtrl uint16
+
+	// log is the machine's, for accesses to nothing.
+	log *logger
+}
+
+// unmapped logs an access to an address nothing is mapped at.
+func (b *Bus) unmapped(what string, addr uint32) {
+	if b.log.on(slog.LevelWarn) {
+		b.log.log(slog.LevelWarn, fmt.Sprintf("unmapped %s at %08x", what, addr))
+	}
 }
 
 // segmentMask strips the segment from a virtual address, indexed by its top
@@ -195,6 +206,7 @@ func (b *Bus) Read32(addr uint32) uint32 {
 		return m.dev.Read32(off)
 	}
 	// An unmapped 32-bit read leaves the cycle count as it was.
+	b.unmapped("32-bit read", addr)
 	return 0
 }
 
@@ -219,6 +231,7 @@ func (b *Bus) Read16(addr uint32) uint16 {
 	case 0x1f400006:
 		return 0x1fe0
 	}
+	b.unmapped("16-bit read", addr)
 	return 0
 }
 
@@ -233,6 +246,7 @@ func (b *Bus) Read8(addr uint32) uint8 {
 		b.cycles = m.delay
 		return m.dev.Read8(off)
 	}
+	b.unmapped("8-bit read", addr)
 	return 0
 }
 
@@ -247,7 +261,9 @@ func (b *Bus) Write32(addr, v uint32) {
 	if m, off, ok := b.find(addr); ok {
 		b.cycles = m.delay
 		m.dev.Write32(off, v)
+		return
 	}
+	b.unmapped("32-bit write", addr)
 }
 
 func (b *Bus) Write16(addr uint32, v uint16) {
@@ -261,7 +277,9 @@ func (b *Bus) Write16(addr uint32, v uint16) {
 	if m, off, ok := b.find(addr); ok {
 		b.cycles = m.delay
 		m.dev.Write16(off, v)
+		return
 	}
+	b.unmapped("16-bit write", addr)
 }
 
 func (b *Bus) Write8(addr uint32, v uint8) {
@@ -275,7 +293,9 @@ func (b *Bus) Write8(addr uint32, v uint8) {
 	if m, off, ok := b.find(addr); ok {
 		b.cycles = m.delay
 		m.dev.Write8(off, v)
+		return
 	}
+	b.unmapped("8-bit write", addr)
 }
 
 // memory is plain little-endian storage. Offsets are wrapped to its size,

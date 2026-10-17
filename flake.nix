@@ -281,6 +281,22 @@
               (mkTinygo pkgs)
             ];
           };
+
+          # What adding the playground to the site takes ("task playground"):
+          # the compiler's own build inputs, LLVM among them, for building
+          # the fork's tinygo-sysroot command natively; wasmtime to run the
+          # compiler once to fill its cache; and Go for the disc tools'
+          # WebAssembly builds. The compiler itself comes from the Compiler
+          # workflow, or "task compiler".
+          playground = pkgs.mkShell {
+            inputsFrom = [ (mkTinygo pkgs) ];
+            packages = [
+              pkgs.go_1_27
+              pkgs.go-task
+              pkgs.wasmtime
+              pkgs.python3
+            ];
+          };
         }
       );
 
