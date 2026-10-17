@@ -1,4 +1,5 @@
-// The playground: one Go file written in the editor, built by the compiler
+// The playground: one Go file written in the editor, and the data files
+// beside it (assets.js), built by the compiler
 // running in compile-worker.js, and booted like an example by app.js, with
 // the compiler's output and the emulator's beside the picture.
 //
@@ -258,7 +259,7 @@ async function buildAndRun() {
   buildStatus.textContent = "Building…";
   const t0 = performance.now();
   let log = "";
-  const result = await request("build", { source: editor.value }, (text) => {
+  const result = await request("build", { source: editor.value, assets: playgroundAssets() }, (text) => {
     log += text;
     appendLog(text);
   });

@@ -1,0 +1,22 @@
+(20,10) map size (rows,columns)
+SX.....XFX    S start position
+.X..X..O.M    . nothing
+.X..X.XXXX    X wall
+...X.....M    M enemy
+..X....X.M    F health
+XXM...X.XF    O wall (can be shot down)
+.........X
+.....X...M
+..X..X...X
+XX...X...M
+..X.X.....
+....X.X.X.
+FX..X.X.X.
+X..X..X.X.
+..X..X..X.
+MMXXX..X..
+MMX.X..XOX
+FXMMXMMX.M
+XXMFXXX..X
+EO..OM...X
+
