@@ -82,8 +82,8 @@ var files = []demo.File{
 }
 
 var (
-	packetArea      [2][packetMax]yaroze.PACKET
-	otherPacketArea [2][packetMax]yaroze.PACKET
+	packetArea      [2][packetMax / 4]uint32
+	otherPacketArea [2][packetMax / 4]uint32
 
 	wot       [2]yaroze.GsOT
 	wtags     [2][1 << otLength]yaroze.GsOT_TAG
@@ -140,7 +140,7 @@ func main() {
 			break
 		}
 
-		yaroze.GsSetWorkBase(&packetArea[side][0])
+		yaroze.GsSetWorkBase(yaroze.Packets(&packetArea[side][0]))
 		yaroze.GsClearOt(0, 0, &wot[side])
 
 		handleAllObjects()
@@ -173,7 +173,7 @@ func main() {
 		// the sphere's texture: the clip and offset of the drawing
 		// environment moved there, and put back after.
 		yaroze.GsClearOt(0, 0, &otherOT[side])
-		yaroze.GsSetWorkBase(&otherPacketArea[side][0])
+		yaroze.GsSetWorkBase(yaroze.Packets(&otherPacketArea[side][0]))
 		env := yaroze.GsDRAWENV()
 		clip, ofs := env.Clip, env.Ofs
 		env.Clip = yaroze.RECT{X: 320, Y: 0, W: 256, H: 256}
@@ -286,7 +286,7 @@ func initialiseAll() bool {
 			yaroze.VSync(0)
 			yaroze.GsSwapDispBuff()
 			side := yaroze.GsGetActiveBuff()
-			yaroze.GsSetWorkBase(&packetArea[side][0])
+			yaroze.GsSetWorkBase(yaroze.Packets(&packetArea[side][0]))
 			yaroze.GsClearOt(0, 0, &wot[side])
 			yaroze.GsSortClear(64, 64, 128, &wot[side])
 			yaroze.GsDrawOt(&wot[side])

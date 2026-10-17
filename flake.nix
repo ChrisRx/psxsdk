@@ -225,6 +225,21 @@
             inherit system;
             inherit crossSystem;
           };
+          # psxplay opens its window and plays its sound through libraries
+          # it loads at run time rather than links against: X11 and OpenGL
+          # for the window, ALSA for the sound. They go on the loader's
+          # path, since nothing is compiled against them.
+          psxplayLibs = with pkgs; [
+            libx11
+            libxcursor
+            libxext
+            libxi
+            libxinerama
+            libxrandr
+            libxrender
+            libGL
+            alsa-lib
+          ];
         in
         {
           default = pkgs.mkShell {
@@ -239,6 +254,9 @@
               pkgs.python3
               pkgs.gh
             ];
+            shellHook = ''
+              export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath psxplayLibs}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            '';
           };
 
           # What CI needs to run "task test", and nothing else. The default

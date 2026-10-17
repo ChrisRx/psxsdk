@@ -397,7 +397,7 @@ func dummyGuiLoopForTextPrinting(n int, quitKey uint32) {
 		if demo.PadRead()&quitKey != 0 && frames > 60 {
 			return
 		}
-		yaroze.GsSetWorkBase(&packetArea[side][0])
+		yaroze.GsSetWorkBase(yaroze.Packets(&packetArea[side][0]))
 		yaroze.GsClearOt(0, 0, &wot[side])
 		yaroze.VSync(2)
 		yaroze.ResetGraph(1)
@@ -451,7 +451,7 @@ func flyingSequence() {
 			yaroze.GsSetFogParam(&fogging)
 		}
 
-		yaroze.GsSetWorkBase(&packetArea[side][0])
+		yaroze.GsSetWorkBase(yaroze.Packets(&packetArea[side][0]))
 		yaroze.GsClearOt(0, 0, &wot[side])
 		updateTheTunnel()
 		yaroze.GsSetRefView2(&view)

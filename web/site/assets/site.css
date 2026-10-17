@@ -172,6 +172,18 @@ article h2 {
 }
 article h3 { margin: 1.8em 0 0.5em; font-size: 1.15rem; font-weight: 600; }
 article h4 { margin: 1.4em 0 0.4em; font-size: 1rem; font-weight: 600; }
+
+/* A section's link to itself, shown when its heading is hovered. */
+article h2 .anchor, article h3 .anchor, article h4 .anchor {
+  margin-left: 0.4em;
+  color: var(--muted);
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+article h2:hover .anchor, article h3:hover .anchor, article h4:hover .anchor,
+article .anchor:focus { opacity: 1; }
+article .anchor:hover { color: var(--accent); }
 article p, article ul, article ol { margin: 0 0 1em; }
 article li { margin: 0.25em 0; }
 article hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }

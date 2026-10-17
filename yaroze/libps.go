@@ -25,6 +25,8 @@
 // and pointers are 32 bits.
 package yaroze
 
+import "unsafe"
+
 // The header's constants are #defines, which are gone by the time clang
 // produces the AST hdr2go reads, so the ones a program is likely to need
 // are written out here under their C names.
@@ -52,6 +54,20 @@ const (
 	SSPLAY_PAUSE    = 0
 	SSPLAY_PLAY     = 1
 	SSPLAY_INFINITY = 0
+)
+
+// Reverb types for SsUtSetReverbType.
+const (
+	SS_REV_TYPE_OFF      = 0
+	SS_REV_TYPE_ROOM     = 1
+	SS_REV_TYPE_STUDIO_A = 2
+	SS_REV_TYPE_STUDIO_B = 3
+	SS_REV_TYPE_STUDIO_C = 4
+	SS_REV_TYPE_HALL     = 5
+	SS_REV_TYPE_SPACE    = 6
+	SS_REV_TYPE_ECHO     = 7
+	SS_REV_TYPE_DELAY    = 8
+	SS_REV_TYPE_PIPE     = 9
 )
 
 // FntPrint and KanjiFntPrint are printf-style in C. Formatting happens in Go
@@ -110,6 +126,9 @@ var gsDRAWENV DRAWENV
 //go:extern GsWSMATRIX
 var gsWSMATRIX MATRIX
 
+//go:extern GsDISPENV
+var gsDISPENV DISPENV
+
 // GsDRAWENV returns the drawing environment the library draws with, which a
 // program changes and then registers with PutDrawEnv.
 func GsDRAWENV() *DRAWENV { return &gsDRAWENV }
@@ -117,6 +136,17 @@ func GsDRAWENV() *DRAWENV { return &gsDRAWENV }
 // GsWSMATRIX returns the world-screen matrix GsSetRefView2 and GsSetView2
 // last worked out.
 func GsWSMATRIX() *MATRIX { return &gsWSMATRIX }
+
+// GsDISPENV returns the display environment GsSwapDispBuff puts up each
+// frame, which a program changes to move the picture on the screen.
+func GsDISPENV() *DISPENV { return &gsDISPENV }
+
+// Packets gives GsSetWorkBase packet space declared as words, the first of
+// which it is passed. The library stores words into the space, and the
+// compiler aligns an array of bytes only to a byte, so a packet area
+// declared as [n]PACKET works or crashes with a misaligned store by where
+// the linker happens to put it.
+func Packets(p *uint32) *PACKET { return (*PACKET)(unsafe.Pointer(p)) }
 
 // The CD-ROM calls the resident library has beyond what libps.h declares,
 // which together read a file whose sector is already known, as package disc
@@ -176,6 +206,8 @@ const (
 const (
 	GsLOFF = 1 << 6  // no lighting
 	GsDIV1 = 1 << 9  // subdivide polygons 2x2
+	GsDIV2 = 2 << 9  // subdivide polygons 4x4
+	GsDIV3 = 3 << 9  // subdivide polygons 8x8
 	GsALON = 1 << 30 // semi-transparent
 	GsDOFF = 1 << 31 // not drawn
 )

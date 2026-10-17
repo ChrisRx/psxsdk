@@ -1,6 +1,6 @@
 ---
 title: mips1fix
-weight: 10
+weight: 11
 ---
 
 `mips1fix` rewrites MIPS II trap instructions as nops so that an object built by LLVM for `mips1` will run on a PlayStation.

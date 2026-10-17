@@ -1,6 +1,6 @@
 ---
 title: objdump
-weight: 11
+weight: 12
 ---
 
 `objdump` displays information from ECOFF object files. It is similar in functionality to the objdump included in [GNU Binutils](https://www.gnu.org/software/binutils/) (although not intended to be exactly the same).

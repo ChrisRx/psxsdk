@@ -78,7 +78,7 @@ var files = []demo.File{
 var (
 	wot        [2]yaroze.GsOT
 	wtags      [2][1 << otLength]yaroze.GsOT_TAG
-	packetArea [2][packetMax]yaroze.PACKET
+	packetArea [2][packetMax / 4]uint32
 
 	view       yaroze.GsRVIEW2
 	projection int32
@@ -132,7 +132,7 @@ func main() {
 		minorOscillateLighting()
 		handleSound()
 
-		yaroze.GsSetWorkBase(&packetArea[side][0])
+		yaroze.GsSetWorkBase(yaroze.Packets(&packetArea[side][0]))
 		yaroze.GsClearOt(0, 0, &wot[side])
 
 		handleAllObjects()

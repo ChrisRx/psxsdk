@@ -1,6 +1,6 @@
 ---
 title: psxtrace
-weight: 7
+weight: 8
 ---
 
 `psxtrace` reads the traces `psxemu` and psxe write. `dump` prints one as text, `diff` reports the first record two traces disagree on, and `vram` compares two VRAM dumps or converts one to an image:

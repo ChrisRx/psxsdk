@@ -23,6 +23,7 @@ import (
 	"unsafe"
 
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/examples/internal/demo"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -56,7 +57,7 @@ var (
 
 	// The library builds GPU commands in here. It has to be large enough
 	// for every primitive in a frame.
-	gpuPacketArea [2][maxObj * 24]yaroze.PACKET
+	gpuPacketArea [2][maxObj * 24 / 4]uint32
 
 	sprites [maxObj]yaroze.GsSPRITE
 )
@@ -209,14 +210,14 @@ func stopSound() {
 // initPrim loads the ball texture into video memory and sets up the sprites.
 func initPrim() {
 	rect := yaroze.RECT{X: 640, Y: 0, W: 16 / 4, H: 16}
-	yaroze.LoadImage(&rect, &ball16x16[0])
+	yaroze.LoadImage(&rect, &demo.Ball16x16[0])
 	tpage := yaroze.GetTPage(0, 0, 640, 0)
 
 	// 32 palettes, one row of video memory each, so each ball can have its
 	// own shade without a second texture.
-	for i := range ballcolor {
+	for i := range demo.BallColor {
 		r := yaroze.RECT{X: 0, Y: int16(480 + i), W: 256, H: 1}
-		yaroze.LoadImage(&r, &ballcolor[i][0])
+		yaroze.LoadImage(&r, &demo.BallColor[i][0])
 	}
 
 	for i := range sprites {
@@ -270,7 +271,7 @@ func padRead(n int) int {
 // frame draws one complete frame of flat color, with an optional caption.
 func frame(caption *byte) {
 	active := yaroze.GsGetActiveBuff()
-	yaroze.GsSetWorkBase(&gpuPacketArea[active][0])
+	yaroze.GsSetWorkBase(yaroze.Packets(&gpuPacketArea[active][0]))
 	yaroze.GsClearOt(0, 0, &worldOT[active])
 
 	yaroze.DrawSync(0)
@@ -339,7 +340,7 @@ func main() {
 		}
 
 		active := yaroze.GsGetActiveBuff()
-		yaroze.GsSetWorkBase(&gpuPacketArea[active][0])
+		yaroze.GsSetWorkBase(yaroze.Packets(&gpuPacketArea[active][0]))
 		yaroze.GsClearOt(0, 0, &worldOT[active])
 
 		for i := 0; i < nobj; i++ {

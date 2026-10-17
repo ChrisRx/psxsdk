@@ -1,6 +1,6 @@
 ---
 title: sioload
-weight: 12
+weight: 13
 ---
 
 The linux version of siocons, found on the [psxdev.net forums](http://www.psxdev.net/forum/viewtopic.php?f=67&t=1078) (and floating around other places), did not initially work when loading a Net Yaroze executable. Even after figuring out a way to make it work, it didn't work for all baud rates, didn't work consistently, and had several huge bugs in how it loaded binaries (it loaded the sections incorrectly in a way that still worked), so `sioload` was written as a replacement.

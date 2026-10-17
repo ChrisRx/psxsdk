@@ -8,9 +8,9 @@ psxsdk is a Go toolchain for the original PlayStation, built around the Net Yaro
 
 - **Write** PlayStation programs in Go, compiled with TinyGo against generated bindings for the Net Yaroze library.
 - **Build** them into bootable discs with tools that convert executables and write CD-XA images, including streamed XA/STR files and CD audio tracks.
-- **Run** them in a PlayStation emulator written in Go, which drives the test suite headless and runs in a browser as WebAssembly.
+- **Run** them in a PlayStation emulator written in Go, which drives the test suite headless, runs in a browser as WebAssembly, and opens a window on the desktop.
 
-**[The documentation](https://chrisrx.github.io/psxsdk/)** has the guide, a tutorial that writes a program from nothing, and the reference for every tool. **[The examples](https://chrisrx.github.io/psxsdk/examples/)** are eight Net Yaroze demos ported to Go, running in the browser on the discs this repository builds, in the emulator it contains.
+**[The documentation](https://chrisrx.github.io/psxsdk/)** has the guide, a tutorial that writes a program from nothing, and the reference for every tool. **[The examples](https://chrisrx.github.io/psxsdk/examples/)** are sixteen Net Yaroze programs ported to Go, running in the browser on the discs this repository builds, in the emulator it contains.
 
 ## Getting started
 
@@ -41,7 +41,7 @@ The tutorial's [first chapter](https://chrisrx.github.io/psxsdk/tutorial/setting
 | [`yaroze`](yaroze) | TinyGo bindings for the resident Net Yaroze library, generated from the SDK's header, and the host-side `libps` image |
 | [`disc`](disc) | Registering the files a program reads off the disc, which `mkpsxiso` reads out of the executable |
 | [`examples`](examples) | The ported demos, one directory each, with the data they load |
-| [`tools`](tools) | `eco2exe`, `mkpsxiso`, `dumpsxiso`, `psxemu` and the rest; the [tools section](https://chrisrx.github.io/psxsdk/tools/) describes each |
+| [`tools`](tools) | `eco2exe`, `mkpsxiso`, `dumpsxiso`, `psxemu`, `psxplay` and the rest; the [tools section](https://chrisrx.github.io/psxsdk/tools/) describes each |
 | [`emu`](emu) | The emulator, with [`emu/emutest`](emu/emutest) for driving it from tests |
 | [`format`](format) | PSX-EXE, ECOFF, CD-ROM sectors, ISO 9660 with CD-XA, whole discs, MDEC movies, instruction traces |
 | [`web`](web) | The emulator's WebAssembly build, the player, and the generator for the documentation site |

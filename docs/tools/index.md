@@ -14,6 +14,7 @@ section: Tools
 | [mdecenc](mdecenc.md) | Encode pictures into an MDEC movie |
 | [hdr2go](hdr2go.md) | Generate layout-checked Go bindings from a C header |
 | [psxemu](psxemu.md) | Run the emulator headless, with traces, VRAM dumps and screenshots |
+| [psxplay](psxplay.md) | Run the emulator in a window, booting the built-in OpenBIOS, with the keyboard or a gamepad as the pad |
 | [psxtrace](psxtrace.md) | Print and diff instruction traces, compare VRAM dumps |
 | [sioload](sioload.md) | Upload an executable to a Net Yaroze over the serial cable |
 | [objdump](objdump.md) | Display ECOFF object files, with disassembly |
