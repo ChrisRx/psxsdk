@@ -18,27 +18,43 @@ import (
 
 const textAddr = 0x80010000
 
-// exe writes a PSX-EXE whose text holds a record for each pair of disc path
-// and host path, laid out as package disc describes, and returns its path.
-func exe(t *testing.T, dir string, regs ...[2]string) string {
+// A reg is one registration to write into a test executable: a disc path,
+// a host path, and the size in bytes of the buffer Into gave it, or 0.
+type reg struct {
+	name, src string
+	buf       uint32
+}
+
+// exe writes a PSX-EXE whose text holds a record for each registration,
+// laid out as package disc describes, and returns its path.
+func exe(t *testing.T, dir string, regs ...reg) string {
 	t.Helper()
 	var text []byte
 	word := func(v uint32) { text = binary.LittleEndian.AppendUint32(text, v) }
 	for _, reg := range regs {
 		nameAddr := textAddr + uint32(len(text))
-		text = append(text, reg[0]...)
+		text = append(text, reg.name...)
 		srcAddr := textAddr + uint32(len(text))
-		text = append(text, reg[1]...)
+		text = append(text, reg.src...)
 		for len(text)%4 != 0 {
 			text = append(text, 0)
 		}
 		word(0x44585350) // "PSXD"
 		word(nameAddr)
-		word(uint32(len(reg[0])))
+		word(uint32(len(reg.name)))
 		word(srcAddr)
-		word(uint32(len(reg[1])))
+		word(uint32(len(reg.src)))
 		word(0)
 		word(0)
+		if reg.buf == 0 {
+			word(0)
+			word(0)
+			word(0)
+		} else {
+			word(0x80150000)
+			word(reg.buf / 4)
+			word(reg.buf / 4)
+		}
 	}
 	text = append(text, make([]byte, 2048-len(text)%2048)...)
 
@@ -89,10 +105,10 @@ func TestRegisteredFiles(t *testing.T) {
 	write(t, dir, "assets/wall0.tmd", "wall zero")
 	write(t, dir, "assets/stone.tim", "stone")
 	prog := exe(t, dir,
-		[2]string{"DATA/WALL0.TMD", "assets/wall0.tmd"},
-		[2]string{"stone.tim", "assets/stone.tim"},
+		reg{name: "DATA/WALL0.TMD", src: "assets/wall0.tmd"},
+		reg{name: "stone.tim", src: "assets/stone.tim"},
 		// The same file registered again, as a second package might.
-		[2]string{"data/wall0.tmd", "assets/wall0.tmd"},
+		reg{name: "data/wall0.tmd", src: "assets/wall0.tmd"},
 	)
 
 	root := placeExe(t, &iso9660.Dir{}, prog)
@@ -139,7 +155,7 @@ func TestRegisteredFileConflicts(t *testing.T) {
 	write(t, dir, "disc/DATA/WALL0.TMD", "from the tree")
 
 	// A path the tree already holds.
-	prog := exe(t, dir, [2]string{"DATA/WALL0.TMD", "assets/wall0.tmd"})
+	prog := exe(t, dir, reg{name: "DATA/WALL0.TMD", src: "assets/wall0.tmd"})
 	tree, err := iso9660.FromDirectory(filepath.Join(dir, "disc"))
 	assert.NoError(t, err)
 	_, err = loadProgram(placeExe(t, tree, prog), "MAIN.EXE", dir)
@@ -147,16 +163,32 @@ func TestRegisteredFileConflicts(t *testing.T) {
 
 	// One path from two host files.
 	prog = exe(t, dir,
-		[2]string{"DATA/WALL0.TMD", "assets/wall0.tmd"},
-		[2]string{"DATA/WALL0.TMD", "assets/other.tmd"},
+		reg{name: "DATA/WALL0.TMD", src: "assets/wall0.tmd"},
+		reg{name: "DATA/WALL0.TMD", src: "assets/other.tmd"},
 	)
 	_, err = loadProgram(placeExe(t, &iso9660.Dir{}, prog), "MAIN.EXE", dir)
 	assert.Error(t, "from both assets/wall0.tmd and assets/other.tmd", err)
 
 	// A host file that is not there.
-	prog = exe(t, dir, [2]string{"DATA/WALL0.TMD", "assets/missing.tmd"})
+	prog = exe(t, dir, reg{name: "DATA/WALL0.TMD", src: "assets/missing.tmd"})
 	_, err = loadProgram(placeExe(t, &iso9660.Dir{}, prog), "MAIN.EXE", dir)
 	assert.Error(t, "missing.tmd", err)
+
+	// A buffer the file does not fit: nine bytes need a sector, and a
+	// buffer of a sector holds it, but one of half a sector does not.
+	prog = exe(t, dir, reg{name: "DATA/WALL0.TMD", src: "assets/wall0.tmd", buf: 2048})
+	_, err = loadProgram(placeExe(t, &iso9660.Dir{}, prog), "MAIN.EXE", dir)
+	assert.NoError(t, err)
+	prog = exe(t, dir, reg{name: "DATA/WALL0.TMD", src: "assets/wall0.tmd", buf: 1024})
+	_, err = loadProgram(placeExe(t, &iso9660.Dir{}, prog), "MAIN.EXE", dir)
+	assert.Error(t, "assets/wall0.tmd is 9 bytes, 1 sectors, but the buffer it is read into holds 1024", err)
+	// The second registration of a file is checked too.
+	prog = exe(t, dir,
+		reg{name: "DATA/WALL0.TMD", src: "assets/wall0.tmd"},
+		reg{name: "data/wall0.tmd", src: "assets/wall0.tmd", buf: 1024},
+	)
+	_, err = loadProgram(placeExe(t, &iso9660.Dir{}, prog), "MAIN.EXE", dir)
+	assert.Error(t, "holds 1024", err)
 
 	// No executable of that name registers nothing, and is not an error.
 	p, err := loadProgram(&iso9660.Dir{}, "MAIN.EXE", dir)

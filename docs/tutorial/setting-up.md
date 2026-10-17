@@ -31,8 +31,6 @@ curl -LO https://chrisrx.github.io/psxsdk/play/openbios.bin
 One file, `main.go`:
 
 ```go
-//go:build yaroze
-
 // Hello: a line of text on the screen.
 package main
 
@@ -48,9 +46,9 @@ const (
 )
 
 var (
-	ot         [2]yaroze.GsOT
-	otTags     [2][1 << otLength]yaroze.GsOT_TAG
-	packetArea [2][packetMax / 4]uint32
+	screen     yaroze.Screen
+	otTags     [2 << otLength]yaroze.GsOT_TAG
+	packetArea [2 * packetMax / 4]uint32
 	textBuf    [32]byte
 )
 
@@ -58,25 +56,14 @@ func main() {
 	yaroze.SetVideoMode(yaroze.MODE_NTSC)
 	yaroze.GsInitGraph(screenW, screenH, 4, 0, 0)
 	yaroze.GsDefDispBuff(0, 0, 0, screenH)
-	for i := range ot {
-		ot[i].Length = otLength
-		ot[i].Org = &otTags[i][0]
-	}
+	screen.Init(otTags[:], packetArea[:])
 	yaroze.FntLoad(960, 256)
 	yaroze.FntOpen(16, 16, 256, 200, 0, 512)
 
 	hello := yaroze.CString(textBuf[:], "hello from go")
 	for {
-		active := yaroze.GsGetActiveBuff()
-		yaroze.GsSetWorkBase(yaroze.Packets(&packetArea[active][0]))
-		yaroze.GsClearOt(0, 0, &ot[active])
-
-		yaroze.DrawSync(0)
-		yaroze.VSync(0)
-		yaroze.GsSwapDispBuff()
-
-		yaroze.GsSortClear(60, 120, 120, &ot[active])
-		yaroze.GsDrawOt(&ot[active])
+		screen.Begin()
+		screen.End(60, 120, 120)
 		yaroze.FntPrint(hello)
 		yaroze.FntFlush(-1)
 	}
@@ -87,11 +74,11 @@ It already has the shape every program has: set up the display, then draw a fram
 
 **Everything is a package-level variable.** The machine has two megabytes of RAM, no memory protection and, in this runtime, no garbage collector running, so memory a frame allocates is memory the program never gets back. Declaring the buffers once, as globals, is how the Net Yaroze programs this toolchain descends from did it too, and nothing in the tutorial allocates after startup.
 
-**The frame is a list before it is a picture.** The GPU does not draw what it is told as it is told. A program sorts drawing commands into an ordering table, an array of linked lists indexed by depth, and then hands the table to the GPU, which walks it while the program goes on to the next frame. `GsClearOt` empties the table, `GsSortClear` sorts a command that clears the screen to a color into it, and `GsDrawOt` starts the GPU on it. There are two tables, and two packet areas for the commands themselves, because the GPU is still drawing one frame while the program builds the next. The packet areas are declared as words rather than bytes, and handed over through `Packets`, because the library stores words into them and the compiler aligns an array of bytes only to a byte.
+**The frame is a list before it is a picture.** The GPU does not draw what it is told as it is told. A program sorts drawing commands into an ordering table, an array of linked lists indexed by depth, and then hands the table to the GPU, which walks it while the program goes on to the next frame. There are two tables, and two packet areas for the commands themselves, because the GPU is still drawing one frame while the program builds the next. The `Screen` holds both pairs, taking each array in halves: `Begin` empties the table for the buffer about to be drawn and returns it, for the frame's drawing to be sorted into, and `End` waits for the GPU and the display, swaps the buffers, sorts a command that clears the screen to a color in front of everything, and starts the GPU on the table. Underneath are the library's own `GsClearOt`, `GsSortClear` and `GsDrawOt`, which a program can call itself. The packet area is declared as words rather than bytes because the library stores words into it and the compiler aligns an array of bytes only to a byte.
 
 **The text goes through the library's font.** `FntLoad` puts the library's 8x8 font into video memory at a corner the display never shows, `FntOpen` opens a window of text at a position on the screen, and `FntPrint` writes into it. In C `FntPrint` is printf-like; here it takes a finished string, which `CString` copies into a buffer the program owns, with the NUL terminator the library expects.
 
-The build constraint on the first line keeps the file out of ordinary Go builds, which cannot compile it: the `yaroze` package is only there for TinyGo's PlayStation target. `go vet ./...` and editors then leave it alone.
+The program needs no build constraint. The `yaroze` package builds under the ordinary Go toolchain too, with every function of the library a stub that panics if it is called, so an editor shows the library's documentation as you write, and `go vet ./...` and `go build ./...` work on the program. Only TinyGo's PlayStation target has the library itself, and only a program it built runs.
 
 ## Building it
 

@@ -18,21 +18,22 @@ package main
 //go:generate go run ./gen -o data/MOVIE.MDC
 
 import (
-	"runtime/volatile"
 	"unsafe"
+
+	"go.chrisrx.dev/psx/internal/volatile"
 
 	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/examples/internal/demo"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
-// The movie is loaded between the resident library and the program, where
-// the demos load their data, and fills most of the space there.
-const movieAddr = 0x80090000
-
-var files = []demo.File{
-	{File: disc.Register("DATA/MOVIE.MDC", "data/MOVIE.MDC"), Addr: movieAddr},
-}
+// The movie, read into the program's own memory, whole, in a buffer of
+// whole sectors.
+var (
+	movieData [(647180 + 2047) / 2048 * 512]uint32
+	movieFile = disc.Register("DATA/MOVIE.MDC", "data/MOVIE.MDC").Into(movieData[:])
+	files     = []*disc.File{&movieFile}
+)
 
 // The movie's layout; see format/mdec.
 const (
@@ -56,7 +57,7 @@ var (
 )
 
 func reg(addr uintptr) *volatile.Register32 {
-	return (*volatile.Register32)(unsafe.Pointer(addr))
+	return (*volatile.Register32)(yaroze.Pointer(addr))
 }
 
 const (
@@ -96,7 +97,7 @@ var (
 
 // openMovie checks the movie, finds its frames and loads the MDEC's tables.
 func openMovie() bool {
-	header := (*[headerWords]uint32)(unsafe.Pointer(uintptr(movieAddr)))
+	header := movieData[:headerWords]
 	if header[0] != movieMagic {
 		return false
 	}
@@ -105,9 +106,9 @@ func openMovie() bool {
 	if movieHeight > maxHeight || movieWidth > 1024/3*2 || movieFrames > len(frameAt) {
 		return false
 	}
-	p := uintptr(movieAddr + 4*headerWords)
+	p := uintptr(unsafe.Pointer(&movieData[headerWords]))
 	for i := range movieFrames {
-		frameAt[i] = demo.At(p)
+		frameAt[i] = yaroze.At(p)
 		p += 4 * uintptr(1+*frameAt[i])
 	}
 
@@ -174,7 +175,7 @@ func say(text, detail string) {
 }
 
 func quitting() bool {
-	return demo.PadRead()&(demo.PADstart|demo.PADselect) == demo.PADstart|demo.PADselect
+	return yaroze.PadRead()&(yaroze.PADstart|yaroze.PADselect) == yaroze.PADstart|yaroze.PADselect
 }
 
 // fail shows what went wrong until the program is quit.
@@ -188,7 +189,7 @@ func fail(text, detail string) {
 func main() {
 	line.Init(lineBuf[:])
 	yaroze.ResetGraph(0)
-	demo.PadInit()
+	yaroze.PadInit()
 
 	yaroze.GsInitGraph(320, 240, 4, 0, 0)
 	yaroze.GsDefDispBuff(0, 0, 0, 256)

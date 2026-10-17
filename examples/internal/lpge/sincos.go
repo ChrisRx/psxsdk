@@ -1,5 +1,3 @@
-//go:build yaroze
-
 package lpge
 
 // Rsin is the demos' rsin: the sine of an angle, 4096 to a circle, as 4096

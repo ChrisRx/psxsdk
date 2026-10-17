@@ -13,9 +13,8 @@
 //
 // Differences from the original:
 //
-//   - The textures and model are read off the disc to addresses below the
-//     program. The original's batch script sent them to addresses the Go
-//     program occupies.
+//   - The textures and model are read off the disc into the program's own
+//     memory. The original's batch script sent them to fixed addresses.
 //   - The drive in moves the car by whole units each frame, as the
 //     original's integer coordinate ends up doing: it adds 1 + i/20 in
 //     floating point and C truncates the sum towards zero, which rounds
@@ -42,29 +41,33 @@ const (
 
 	frame30 = 0
 	frame60 = 1
-
-	// Where the data is read to: below the program, where the original's
-	// batch script put it above its own, smaller, one.
-	texAddr1  = 0x80090000
-	texAddr2  = 0x80095000
-	texAddr3  = 0x80099000
-	texAddr4  = 0x800a1000
-	texAddr5  = 0x800a3000
-	texAddr6  = 0x800a8000
-	texAddr7  = 0x800ab000
-	modelAddr = 0x800b0000
 )
 
-var files = []demo.File{
-	{File: disc.Register("DATA/GIULI_BD.TIM", "data/GIULI_BD.TIM"), Addr: texAddr1},
-	{File: disc.Register("DATA/GIULI_FR.TIM", "data/GIULI_FR.TIM"), Addr: texAddr2},
-	{File: disc.Register("DATA/GIULI_PL.TIM", "data/GIULI_PL.TIM"), Addr: texAddr3},
-	{File: disc.Register("DATA/GIULI_TL.TIM", "data/GIULI_TL.TIM"), Addr: texAddr4},
-	{File: disc.Register("DATA/GIULI_TR.TIM", "data/GIULI_TR.TIM"), Addr: texAddr5},
-	{File: disc.Register("DATA/GIULI_WN.TIM", "data/GIULI_WN.TIM"), Addr: texAddr6},
-	{File: disc.Register("DATA/WHEEL256.TIM", "data/WHEEL256.TIM"), Addr: texAddr7},
-	{File: disc.Register("DATA/GIULIETA.TMD", "data/GIULIETA.TMD"), Addr: modelAddr},
-}
+// The data, read into the program's own memory, in buffers of whole
+// sectors: the seven textures and the model.
+var (
+	tex1Data  [(16416 + 2047) / 2048 * 512]uint32
+	tex2Data  [(14584 + 2047) / 2048 * 512]uint32
+	tex3Data  [(30784 + 2047) / 2048 * 512]uint32
+	tex4Data  [(7584 + 2047) / 2048 * 512]uint32
+	tex5Data  [(16928 + 2047) / 2048 * 512]uint32
+	tex6Data  [(11128 + 2047) / 2048 * 512]uint32
+	tex7Data  [(19450 + 2047) / 2048 * 512]uint32
+	modelData [(52000 + 2047) / 2048 * 512]uint32
+
+	tex1File  = disc.Register("DATA/GIULI_BD.TIM", "data/GIULI_BD.TIM").Into(tex1Data[:])
+	tex2File  = disc.Register("DATA/GIULI_FR.TIM", "data/GIULI_FR.TIM").Into(tex2Data[:])
+	tex3File  = disc.Register("DATA/GIULI_PL.TIM", "data/GIULI_PL.TIM").Into(tex3Data[:])
+	tex4File  = disc.Register("DATA/GIULI_TL.TIM", "data/GIULI_TL.TIM").Into(tex4Data[:])
+	tex5File  = disc.Register("DATA/GIULI_TR.TIM", "data/GIULI_TR.TIM").Into(tex5Data[:])
+	tex6File  = disc.Register("DATA/GIULI_WN.TIM", "data/GIULI_WN.TIM").Into(tex6Data[:])
+	tex7File  = disc.Register("DATA/WHEEL256.TIM", "data/WHEEL256.TIM").Into(tex7Data[:])
+	modelFile = disc.Register("DATA/GIULIETA.TMD", "data/GIULIETA.TMD").Into(modelData[:])
+	files     = []*disc.File{&tex1File, &tex2File, &tex3File, &tex4File, &tex5File, &tex6File, &tex7File, &modelFile}
+
+	textures = [...]yaroze.TIM{tex1Data[:], tex2Data[:], tex3Data[:], tex4Data[:], tex5Data[:], tex6Data[:], tex7Data[:]}
+	model    = yaroze.TMD(modelData[:])
+)
 
 // A DB is one of the two drawing buffers: an ordering table and the GPU
 // packets its primitives become.
@@ -122,7 +125,7 @@ func main() {
 }
 
 func initSystem() {
-	demo.PadInit()
+	yaroze.PadInit()
 
 	yaroze.GsInitGraph(640, 240, yaroze.GsINTER|yaroze.GsOFSGPU, 0, 0)
 	yaroze.GsDefDispBuff(0, 0, 0, 240)
@@ -140,7 +143,7 @@ func initSystem() {
 func initCoordinate() {
 	objWorld = yaroze.GsCOORDINATE2{}
 	rotate = yaroze.SVECTOR{}
-	yaroze.GsInitCoordinate2(demo.WORLD, &objWorld)
+	yaroze.GsInitCoordinate2(yaroze.WORLD, &objWorld)
 }
 
 func initView() {
@@ -149,7 +152,7 @@ func initView() {
 		Vpx: 0, Vpy: 0, Vpz: 1000,
 		Vrx: 0, Vry: 0, Vrz: 0,
 		Rz:    0,
-		Super: demo.WORLD,
+		Super: yaroze.WORLD,
 	}
 	yaroze.GsSetRefView2(&view)
 }
@@ -164,15 +167,13 @@ func initLight() {
 // initModel maps the model's addresses and links a handle to each of its
 // objects, all in the car's coordinate system.
 func initModel() {
-	// Past the ID word is the header GsMapModelingData wants, then the
-	// object count, then the object table.
-	yaroze.GsMapModelingData(demo.At(modelAddr + 4))
-	objcnt = int32(*demo.At(modelAddr + 8))
+	model.Map()
+	objcnt = int32(model.Objects())
 	if objcnt > objectMax {
 		objcnt = objectMax
 	}
 	for i := range objcnt {
-		yaroze.GsLinkObject4(uint32(modelAddr+12), &object[i], i)
+		model.Link(&object[i], i)
 		object[i].Coord2 = &objWorld
 		object[i].Attribute = 0
 	}
@@ -180,57 +181,53 @@ func initModel() {
 
 // initTexture puts the seven textures into video memory.
 func initTexture() {
-	demo.LoadTIM(texAddr1)
-	demo.LoadTIM(texAddr2)
-	demo.LoadTIM(texAddr3)
-	demo.LoadTIM(texAddr4)
-	demo.LoadTIM(texAddr5)
-	demo.LoadTIM(texAddr6)
-	demo.LoadTIM(texAddr7)
+	for _, t := range &textures {
+		t.Load()
+	}
 }
 
 // padRead applies the controls to the car and returns -1 when Select asks
 // to quit. Start, on the frame it goes down, switches the frame rate.
 func padRead() int32 {
-	padd := demo.PadRead()
+	padd := yaroze.PadRead()
 
-	if padd&demo.PADselect != 0 {
+	if padd&yaroze.PADselect != 0 {
 		return -1
 	}
 
-	if padd&demo.PADstart != 0 && padd != paddOld {
+	if padd&yaroze.PADstart != 0 && padd != paddOld {
 		frame ^= 1
 	}
 
-	if padd&demo.PADRleft != 0 {
+	if padd&yaroze.PADRleft != 0 {
 		rotate.Vy -= rotSpeed[frame]
 	}
-	if padd&demo.PADRright != 0 {
+	if padd&yaroze.PADRright != 0 {
 		rotate.Vy += rotSpeed[frame]
 	}
-	if padd&demo.PADRup != 0 {
+	if padd&yaroze.PADRup != 0 {
 		rotate.Vx += rotSpeed[frame]
 	}
-	if padd&demo.PADRdown != 0 {
+	if padd&yaroze.PADRdown != 0 {
 		rotate.Vx -= rotSpeed[frame]
 	}
 
-	if padd&demo.PADL1 != 0 && objWorld.Coord.T[2] < 500 {
+	if padd&yaroze.PADL1 != 0 && objWorld.Coord.T[2] < 500 {
 		objWorld.Coord.T[2] += traSpeed[frame]
 	}
-	if padd&demo.PADL2 != 0 {
+	if padd&yaroze.PADL2 != 0 {
 		objWorld.Coord.T[2] -= traSpeed[frame]
 	}
-	if padd&demo.PADLdown != 0 {
+	if padd&yaroze.PADLdown != 0 {
 		objWorld.Coord.T[1] += traSpeed[frame]
 	}
-	if padd&demo.PADLup != 0 {
+	if padd&yaroze.PADLup != 0 {
 		objWorld.Coord.T[1] -= traSpeed[frame]
 	}
-	if padd&demo.PADLleft != 0 {
+	if padd&yaroze.PADLleft != 0 {
 		objWorld.Coord.T[0] += traSpeed[frame]
 	}
-	if padd&demo.PADLright != 0 {
+	if padd&yaroze.PADLright != 0 {
 		objWorld.Coord.T[0] -= traSpeed[frame]
 	}
 
@@ -270,7 +267,7 @@ func opening() {
 
 // moveObject rebuilds the car's matrix from its position and angles.
 func moveObject() {
-	tmpmat := demo.IDMATRIX
+	tmpmat := yaroze.IDMATRIX
 	tmpmat.T = objWorld.Coord.T
 	tmpvec := rotate
 	yaroze.RotMatrix(&tmpvec, &tmpmat)
@@ -292,7 +289,7 @@ func drawObject(db *DB, frame int32) {
 		yaroze.GsSetLightMatrix(&tmpmat)
 		yaroze.GsGetLs(op.Coord2, &tmpmat)
 		yaroze.GsSetLsMatrix(&tmpmat)
-		yaroze.GsSortObject4(op, &db.gsot, 14-otLength, demo.Scratch())
+		yaroze.GsSortObject4(op, &db.gsot, 14-otLength, yaroze.Scratch())
 	}
 
 	yaroze.DrawSync(0)
@@ -318,7 +315,7 @@ func drawObject(db *DB, frame int32) {
 func fail(what, detail string) {
 	yaroze.FntLoad(960, 256)
 	yaroze.FntOpen(-304, -112, 320, 16, 0, 64)
-	for demo.PadRead()&demo.PADselect == 0 {
+	for yaroze.PadRead()&yaroze.PADselect == 0 {
 		buff := yaroze.GsGetActiveBuff()
 		yaroze.GsSetWorkBase(yaroze.Packets(&db[buff].packet[0]))
 		yaroze.GsClearOt(0, 0, &db[buff].gsot)

@@ -153,7 +153,7 @@ func initialiseObjects() {
 
 	s := &playersShip
 	s.Init()
-	s.BringToLife(player, shipModelAddr, 0, lpge.None)
+	s.BringToLife(player, shipModel, 0, lpge.None)
 	lpge.Register(s)
 	s.Position = yaroze.VECTOR{}
 	s.Rotate.Vy = yaroze.ONE / 2
@@ -173,7 +173,7 @@ func initialiseObjects() {
 	for i := range theBullets {
 		o := &theBullets[i]
 		o.Init()
-		o.BringToLife(bullet, squareModelAddr, 0, lpge.None)
+		o.BringToLife(bullet, squareModel, 0, lpge.None)
 		o.DisplayFlag = lpge.Sprite
 		o.ImageInfo = &fireTexture
 		lpge.Register(o)
@@ -181,7 +181,7 @@ func initialiseObjects() {
 	for i := range theCubes {
 		o := &theCubes[i]
 		o.Init()
-		o.BringToLife(cube, squareModelAddr, 0, lpge.None)
+		o.BringToLife(cube, squareModel, 0, lpge.None)
 		o.DisplayFlag = lpge.Sprite
 		o.ImageInfo = &multipleTexture
 		lpge.Register(o)
@@ -189,7 +189,7 @@ func initialiseObjects() {
 	for i := range tetrahedrons {
 		o := &tetrahedrons[i]
 		o.Init()
-		o.BringToLife(tetrahedron, multipleModelAddr, 0, lpge.None)
+		o.BringToLife(tetrahedron, multipleModel, 0, lpge.None)
 		o.InitialHealth, o.CurrentHealth = 1, 1
 		o.Allegiance = enemy
 		o.MovementSpeed = 5
@@ -200,7 +200,7 @@ func initialiseObjects() {
 	for i := range tieFighters {
 		o := &tieFighters[i]
 		o.Init()
-		o.BringToLife(tieFighter, multipleModelAddr, 6, lpge.None)
+		o.BringToLife(tieFighter, multipleModel, 6, lpge.None)
 		o.InitialHealth, o.CurrentHealth = 1, 1
 		o.Allegiance = enemy
 		o.MovementSpeed = tieFighterMovementSpeed
@@ -211,7 +211,7 @@ func initialiseObjects() {
 	for i := range insectShips {
 		o := &insectShips[i]
 		o.Init()
-		o.BringToLife(insectShip, multipleModelAddr, 3, lpge.None)
+		o.BringToLife(insectShip, multipleModel, 3, lpge.None)
 		o.InitialHealth, o.CurrentHealth = 1, 1
 		o.Allegiance = enemy
 		o.MovementSpeed = insectShipMovementSpeed
@@ -222,7 +222,7 @@ func initialiseObjects() {
 	for i := range singleAttackers {
 		o := &singleAttackers[i]
 		o.Init()
-		o.BringToLife(singleAttacker, multipleModelAddr, 6, lpge.None)
+		o.BringToLife(singleAttacker, multipleModel, 6, lpge.None)
 		o.InitialHealth, o.CurrentHealth = 4, 4
 		o.Allegiance = enemy
 		o.MovementSpeed = singleAttackerMovementSpeed
@@ -238,13 +238,13 @@ func initialiseObjects() {
 	for i := range theSquares {
 		o := &theSquares[i]
 		o.Init()
-		o.BringToLife(square, squareModelAddr, 0, lpge.None)
+		o.BringToLife(square, squareModel, 0, lpge.None)
 		lpge.Register(o)
 	}
 	for i := range specialObjects {
 		o := &specialObjects[i]
 		o.Init()
-		o.BringToLife(specialObject, squareModelAddr, 0, lpge.None)
+		o.BringToLife(specialObject, squareModel, 0, lpge.None)
 		o.DisplayFlag = lpge.Sprite
 		o.ImageInfo = &mascotsTexture
 		o.MovementSpeed = 8
@@ -252,7 +252,7 @@ func initialiseObjects() {
 	}
 	r := &theRobot
 	r.Init()
-	r.BringToLife(robot, multipleModelAddr, 9, lpge.None)
+	r.BringToLife(robot, multipleModel, 9, lpge.None)
 	r.InitialHealth, r.CurrentHealth = 10, 10
 	r.Allegiance = robot
 	r.MovementSpeed = 5

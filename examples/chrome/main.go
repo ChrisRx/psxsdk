@@ -9,9 +9,9 @@
 //
 // Differences from the original:
 //
-//   - The texture and model are read off the disc. On a Net Yaroze the
-//     loader's batch script sent them from the PC to fixed addresses; they
-//     are loaded to the same addresses.
+//   - The texture and model are read off the disc into the program's own
+//     memory. On a Net Yaroze the loader's batch script sent them from the
+//     PC to fixed addresses.
 //   - The torus has a coordinate system of its own. The original points the
 //     object at WORLD, the library's nil coordinate system, and then writes
 //     its transformation through that pointer every frame, which in C
@@ -32,17 +32,22 @@ const (
 	packetMax = 2500 * 24 // GPU packet space per buffer
 	otLength  = 12        // ordering table size, as a power of two
 
-	// Where the texture and the model are loaded.
-	textureTIM = 0x80090000
-	torusTMD   = 0x800a0000
-
 	screenW, screenH = 640, 480
 )
 
-var files = []demo.File{
-	{File: disc.Register("DATA/TEXTURE.TIM", "data/TEXTURE.TIM"), Addr: textureTIM},
-	{File: disc.Register("DATA/TORUS.TMD", "data/TORUS.TMD"), Addr: torusTMD},
-}
+// The texture and the model, read into the program's own memory, in
+// buffers of whole sectors.
+var (
+	textureData [(66080 + 2047) / 2048 * 512]uint32
+	torusData   [(12216 + 2047) / 2048 * 512]uint32
+
+	textureFile = disc.Register("DATA/TEXTURE.TIM", "data/TEXTURE.TIM").Into(textureData[:])
+	torusFile   = disc.Register("DATA/TORUS.TMD", "data/TORUS.TMD").Into(torusData[:])
+	files       = []*disc.File{&textureFile, &torusFile}
+
+	textureTIM = yaroze.TIM(textureData[:])
+	torusTMD   = yaroze.TMD(torusData[:])
+)
 
 // Ordering tables and GPU packet space, one set per display buffer.
 var (
@@ -59,11 +64,10 @@ var (
 
 // initialiseTMD maps a TMD's offsets to addresses and ties a handle to one
 // of its objects, with a coordinate system of its own.
-func initialiseTMD(addr uintptr, objNum int32, obj *yaroze.GsDOBJ2, coord *yaroze.GsCOORDINATE2) {
-	// Past the ID word, then past the whole header.
-	yaroze.GsMapModelingData(demo.At(addr + 4))
-	yaroze.GsLinkObject4(uint32(addr+12), obj, objNum)
-	yaroze.GsInitCoordinate2(demo.WORLD, coord)
+func initialiseTMD(tmd yaroze.TMD, objNum int32, obj *yaroze.GsDOBJ2, coord *yaroze.GsCOORDINATE2) {
+	tmd.Map()
+	tmd.Link(obj, objNum)
+	coord.Init(yaroze.WORLD)
 	obj.Coord2 = coord
 }
 
@@ -77,15 +81,15 @@ func drawObject(obj *yaroze.GsDOBJ2, transform *yaroze.MATRIX, super *yaroze.GsC
 	var ls yaroze.MATRIX
 	yaroze.GsGetLs(obj.Coord2, &ls) // local to screen, with perspective
 	yaroze.GsSetLsMatrix(&ls)
-	yaroze.GsSortObject4(obj, ot, 14-int32(ot.Length), demo.Scratch())
+	yaroze.GsSortObject4(obj, ot, 14-int32(ot.Length), yaroze.Scratch())
 }
 
 // changeTexture works out every quad's texture coordinates from its normals
 // as the transformation turns them: the normal's x and y, from -ONE to ONE,
 // become a texture coordinate from 0 to 255 about the middle. The torus is
 // all gouraud-textured quads, which is what this assumes.
-func changeTexture(addr uintptr, tm *yaroze.MATRIX) {
-	o := demo.TMDObject(addr)
+func changeTexture(tmd yaroze.TMD, tm *yaroze.MATRIX) {
+	o := demo.TMDObject(tmd)
 	for i := range o.NPrim {
 		p := demo.Prim[demo.TMD_G_4T](o, i)
 		p.U0, p.V0 = reflect(o, p.Norm0, tm)
@@ -112,7 +116,7 @@ var (
 // message shows text until Start and Select are held, for when the demo
 // cannot run.
 func message(text, detail string) {
-	for demo.PadRead()&(demo.PADstart|demo.PADselect) != demo.PADstart|demo.PADselect {
+	for yaroze.PadRead()&(yaroze.PADstart|yaroze.PADselect) != yaroze.PADstart|yaroze.PADselect {
 		frame()
 		line.Reset()
 		line.WriteString(text).WriteString(detail)
@@ -136,7 +140,7 @@ func frame() {
 func main() {
 	line.Init(lineBuf[:])
 	yaroze.ResetGraph(0)
-	demo.PadInit()
+	yaroze.PadInit()
 
 	// 640x480, offsets by the GPU, dithered.
 	yaroze.GsInitGraph(screenW, screenH, 4, 1, 0)
@@ -161,7 +165,7 @@ func main() {
 		return
 	}
 
-	demo.LoadTIM(textureTIM)
+	textureTIM.Load()
 	initialiseTMD(torusTMD, 0, &torusOBJ, &torusCoord)
 
 	// One white light from above, as all three, and half ambient.
@@ -179,13 +183,13 @@ func main() {
 		yaroze.GsSetWorkBase(yaroze.Packets(&gpuPacket[buff][0]))
 		yaroze.GsClearOt(0, 0, &ot[buff])
 
-		mainView.View = demo.IDMATRIX
-		mainView.Super = demo.WORLD
+		mainView.View = yaroze.IDMATRIX
+		mainView.Super = yaroze.WORLD
 		yaroze.GsSetView2(&mainView)
 
 		// 1000 in front of the eye, turning about y at half the rate it
 		// turns about z.
-		transform := demo.IDMATRIX
+		transform := yaroze.IDMATRIX
 		translate := yaroze.VECTOR{Vz: 1000}
 		yaroze.TransMatrix(&transform, &translate)
 		rotate := yaroze.SVECTOR{Vy: int16(angle >> 1), Vz: int16(angle)}
@@ -193,7 +197,7 @@ func main() {
 
 		yaroze.GsSetLightMatrix(&transform)
 		changeTexture(torusTMD, &transform)
-		drawObject(&torusOBJ, &transform, demo.WORLD, &ot[buff])
+		drawObject(&torusOBJ, &transform, yaroze.WORLD, &ot[buff])
 
 		yaroze.DrawSync(0)
 		yaroze.VSync(0)
@@ -201,9 +205,9 @@ func main() {
 		yaroze.GsSortClear(0, 0, 0, &ot[buff])
 		yaroze.GsDrawOt(&ot[buff])
 
-		pad := demo.PadRead()
+		pad := yaroze.PadRead()
 		angle += 32
-		if pad&demo.PADselect != 0 && pad&demo.PADstart != 0 {
+		if pad&yaroze.PADselect != 0 && pad&yaroze.PADstart != 0 {
 			break
 		}
 	}

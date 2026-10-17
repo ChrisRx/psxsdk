@@ -26,14 +26,12 @@
 //
 // Differences from the original:
 //
-//   - The pictures are read off the disc as the one file the original was
-//     sent over the serial cable as, at a lower address, since where the
-//     original put them is where a Go program's code now lies. The tune
-//     comes from the SDK's own files, as the check sample's does, and the
-//     sound bank's body is read into the program's own memory, since with
-//     the pictures there is no room for it below the program. The file's
-//     first picture, a Net Yaroze logo that a function the source declares
-//     but never defines would have shown, is loaded and never used.
+//   - The pictures are read off the disc, as the one file the original was
+//     sent over the serial cable as, into the program's own memory rather
+//     than to a fixed address. The tune comes from the SDK's own files, as
+//     the check sample's does. The file's first picture, a Net Yaroze logo
+//     that a function the source declares but never defines would have
+//     shown, is loaded and never used.
 //   - Every object has an image description of its own. The original
 //     gives each a pointer to one that is never set, and so writes every
 //     image's description to address 0.
@@ -111,10 +109,26 @@ const (
 	jumpRight
 )
 
-// Where the data is loaded. The pictures are one file, at the offsets
-// the original had them at from its own address.
-const (
-	dataAddr   = 0x80090000
+// The data, read into the program's own memory, in buffers of whole
+// sectors. The pictures are one file, and the sprites find each at the
+// offset the original had it at from the file's own address.
+var (
+	dogDat  [(292284 + 2047) / 2048 * 512]uint32
+	seqData [(39616 + 2047) / 2048 * 512]uint32
+	vhData  [(60448 + 2047) / 2048 * 512]uint32
+	vbData  [(401360 + 2047) / 2048 * 512]uint32
+
+	dogFile = disc.Register("DATA/DOG.DAT", "data/DOG.DAT").Into(dogDat[:])
+	seqFile = disc.Register("DATA/SOUND/SAMPLE1.SEQ", "data/SAMPLE1.SEQ").Into(seqData[:])
+	vh      = disc.Register("DATA/SOUND/STD0.VH", "data/STD0.VH").Into(vhData[:])
+	vb      = disc.Register("DATA/SOUND/STD0.VB", "data/STD0.VB").Into(vbData[:])
+	files   = []*disc.File{&dogFile, &seqFile, &vh, &vb}
+)
+
+// The pictures, as addresses within the file, since the sprites are set
+// up from a picture's address as the original did it.
+var (
+	dataAddr   = uintptr(unsafe.Pointer(&dogDat[0]))
 	logoData   = dataAddr + 0x02a20
 	cactusData = dataAddr + 0x06fb0
 	copyData   = dataAddr + 0x075d0
@@ -138,25 +152,7 @@ const (
 	dogData    = dataAddr + 0x3a51c
 	overData   = dataAddr + 0x3a97c
 	endData    = dataAddr + 0x3bb9c
-
-	seqAddr = 0x800d8000
-	vhAddr  = 0x800e2000
-
-	// vbSectors is how many sectors the sound bank's body takes, which is
-	// how much of the program's memory the read of it fills.
-	vbSectors = (401360 + 2047) / 2048
 )
-
-var files = []demo.File{
-	{File: disc.Register("DATA/DOG.DAT", "data/DOG.DAT"), Addr: dataAddr},
-	{File: disc.Register("DATA/SOUND/SAMPLE1.SEQ", "data/SAMPLE1.SEQ"), Addr: seqAddr},
-	{File: disc.Register("DATA/SOUND/STD0.VH", "data/STD0.VH"), Addr: vhAddr},
-	{File: disc.Register("DATA/SOUND/STD0.VB", "data/STD0.VB")},
-}
-
-const vbFile = 3
-
-var vb [vbSectors * 512]uint32
 
 // An object is a sprite with its picture, its place and its size, and
 // the rectangle it collides with.
@@ -216,7 +212,8 @@ var (
 	oldPadd                                     uint32
 	restart, rPositionX, rPositionY, rMaxBottom int32
 
-	vab, seq int16
+	bank yaroze.Bank
+	song yaroze.Sequence
 
 	frameNumber uint32
 )
@@ -252,7 +249,7 @@ func main() {
 	dead = 1
 	backR, backG, backB = 0, 0, 0
 
-	demo.PadInit()
+	yaroze.PadInit()
 	yaroze.SetVideoMode(yaroze.MODE_PAL)
 	yaroze.GsInitGraph(screenWidth, screenHeight, 4, 0, 0)
 	yaroze.GsDefDispBuff(0, 0, 0, screenHeight)
@@ -262,7 +259,6 @@ func main() {
 		worldOT[i].Org = &otTags[i][0]
 	}
 
-	files[vbFile].Addr = uintptr(unsafe.Pointer(&vb[0]))
 	if missing := demo.Load(files, nil); missing != "" {
 		fail("could not read ", missing)
 		return
@@ -296,7 +292,7 @@ func fail(what, detail string) {
 	text.Init(buf[:])
 	yaroze.FntLoad(960, 256)
 	yaroze.FntOpen(16, 16, 288, 32, 0, 128)
-	for demo.PadRead()&(demo.PADstart|demo.PADselect) != demo.PADstart|demo.PADselect {
+	for yaroze.PadRead()&(yaroze.PADstart|yaroze.PADselect) != yaroze.PADstart|yaroze.PADselect {
 		activeBuff = yaroze.GsGetActiveBuff()
 		yaroze.GsSetWorkBase(yaroze.Packets(&gpuPacketArea[activeBuff][0]))
 		yaroze.GsClearOt(0, 0, &worldOT[activeBuff])
@@ -315,27 +311,27 @@ func fail(what, detail string) {
 // checkPad reads the pad and moves the man by it. It returns 99 for
 // Select and 98 for Start, and 0 otherwise.
 func checkPad() int32 {
-	padd := demo.PadRead()
+	padd := yaroze.PadRead()
 
-	down := padd&demo.PADRdown != 0
-	oldDown := oldPadd&demo.PADRdown != 0
+	down := padd&yaroze.PADRdown != 0
+	oldDown := oldPadd&yaroze.PADRdown != 0
 	jumpDude := down && !oldDown
 	oldPadd = padd
 
-	if padd&demo.PADselect != 0 {
+	if padd&yaroze.PADselect != 0 {
 		return 99
 	}
-	if padd&demo.PADstart != 0 {
+	if padd&yaroze.PADstart != 0 {
 		return 98
 	}
 
-	if padd&demo.PADRup != 0 && displayLevel == 0 && noKeys != 0 {
+	if padd&yaroze.PADRup != 0 && displayLevel == 0 && noKeys != 0 {
 		keyMoving = 1
 	}
 
-	if gamePaused != 0 && padd&(demo.PADLleft|demo.PADLright|demo.PADLup|demo.PADLdown|demo.PADRdown) != 0 {
+	if gamePaused != 0 && padd&(yaroze.PADLleft|yaroze.PADLright|yaroze.PADLup|yaroze.PADLdown|yaroze.PADRdown) != 0 {
 		gamePaused = 0
-		yaroze.SsSeqReplay(seq)
+		song.Resume()
 	}
 
 	if displayLevel != 0 {
@@ -344,34 +340,34 @@ func checkPad() int32 {
 	man := spriteObject[22]
 
 	// Right, which moves the world left.
-	if padd&demo.PADLright != 0 && !jumpDude && jumping == still {
+	if padd&yaroze.PADLright != 0 && !jumpDude && jumping == still {
 		man.sprite.U = 0
 		changeFrame++
 		moveLeft()
 	}
-	if padd&demo.PADLright != 0 && jumpDude && jumping == still {
+	if padd&yaroze.PADLright != 0 && jumpDude && jumping == still {
 		man.sprite.U = 0
 		changeFrame++
 		moveLeft()
 		jumping = jumpRight
 	}
-	if padd&demo.PADLright != 0 && jumping != still {
+	if padd&yaroze.PADLright != 0 && jumping != still {
 		man.sprite.U = 0
 	}
 
 	// Left, which moves the world right.
-	if padd&demo.PADLleft != 0 && !jumpDude && jumping == still {
+	if padd&yaroze.PADLleft != 0 && !jumpDude && jumping == still {
 		man.sprite.U = 32
 		changeFrame++
 		moveRight()
 	}
-	if padd&demo.PADLleft != 0 && jumpDude && jumping == still {
+	if padd&yaroze.PADLleft != 0 && jumpDude && jumping == still {
 		man.sprite.U = 32
 		changeFrame++
 		moveRight()
 		jumping = jumpLeft
 	}
-	if padd&demo.PADLleft != 0 && jumping != still {
+	if padd&yaroze.PADLleft != 0 && jumping != still {
 		man.sprite.U = 32
 	}
 
@@ -387,7 +383,7 @@ func checkPad() int32 {
 // backgrounds use to reach their second page.
 func createObject(obj *object, timAdd uintptr, extra int32) {
 	im := &obj.image
-	yaroze.GsGetTimInfo(demo.At(timAdd+4), im)
+	yaroze.GsGetTimInfo(yaroze.At(timAdd+4), im)
 
 	rect := yaroze.RECT{X: im.Px, Y: im.Py, W: int16(im.Pw), H: int16(im.Ph)}
 	yaroze.LoadImage(&rect, im.Pixel)
@@ -860,18 +856,18 @@ func displayFrontEnd() {
 	scaleValue := int32(yaroze.ONE)
 	scaleCount := 0
 	for startGame := false; !startGame; {
-		padd := demo.PadRead()
+		padd := yaroze.PadRead()
 
-		if padd&demo.PADLright != 0 && play == 0 {
+		if padd&yaroze.PADLright != 0 && play == 0 {
 			play = 1
 		}
-		if padd&demo.PADLleft != 0 && play != 0 {
+		if padd&yaroze.PADLleft != 0 && play != 0 {
 			play = 0
 		}
-		if padd&demo.PADRdown != 0 && play == 0 {
+		if padd&yaroze.PADRdown != 0 && play == 0 {
 			gameAbout()
 		}
-		if padd&demo.PADRdown != 0 && play != 0 {
+		if padd&yaroze.PADRdown != 0 && play != 0 {
 			startGame = true
 		}
 
@@ -923,7 +919,7 @@ func gameAbout() {
 		refreshScreen(aboutBox)
 	}
 
-	for demo.PadRead()&demo.PADselect == 0 {
+	for yaroze.PadRead()&yaroze.PADselect == 0 {
 		refreshScreen(aboutBox)
 	}
 
@@ -1071,7 +1067,7 @@ func playLevelOne() {
 		if deadSpinning == 0 {
 			if checkPad() == 99 {
 				gamePaused = 1
-				yaroze.SsSeqPause(seq)
+				song.Pause()
 			}
 			for gamePaused != 0 {
 				if checkPad() == 98 {
@@ -1559,33 +1555,27 @@ func pause(duration int) {
 // The sound, which the author says was taken from Sony's check sample.
 
 func initSound() {
-	vab = yaroze.SsVabTransfer(demo.BytesAt(vhAddr), (*uint8)(unsafe.Pointer(&vb[0])), 1, 1)
-	if vab < 0 {
-		return
-	}
-	seq = yaroze.SsSeqOpen(demo.At(seqAddr), vab)
+	bank, _ = yaroze.OpenBank(vh.Bytes(), vb.Bytes())
+	song, _ = bank.Sequence(&seqData[0])
 }
 
 func playSEQ() {
-	if vab < 0 || seq < 0 {
+	if !song.Valid() {
 		return
 	}
 	yaroze.SsSetMVol(mvol, mvol)
-	yaroze.SsSeqSetVol(seq, svol, svol)
-	yaroze.SsSeqPlay(seq, yaroze.SSPLAY_PLAY, yaroze.SSPLAY_INFINITY)
+	song.SetVolume(svol, svol)
+	song.Play(yaroze.SSPLAY_INFINITY)
 }
 
 func stopSound() {
-	if vab < 0 {
-		return
-	}
-	if seq >= 0 {
-		yaroze.SsSeqStop(seq)
+	if song.Valid() {
+		song.Stop()
 		yaroze.VSync(0)
 		yaroze.VSync(0)
-		yaroze.SsSeqClose(seq)
+		song.Close()
 	}
-	yaroze.SsVabClose(vab)
+	bank.Close()
 }
 
 // moveKeys brings the keys found down from above the screen, holds them

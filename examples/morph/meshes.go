@@ -1,5 +1,3 @@
-//go:build yaroze
-
 package main
 
 // The target meshes, as the demo's genmesh program wrote them: x, y and z

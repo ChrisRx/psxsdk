@@ -3,7 +3,6 @@ package main
 import (
 	"unsafe"
 
-	"go.chrisrx.dev/psx/examples/internal/demo"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -380,12 +379,12 @@ func drawObject(obj *yaroze.GsDOBJ2, ang int16, t yaroze.VECTOR, ot *yaroze.GsOT
 	if displayMap {
 		return
 	}
-	transform := demo.IDMATRIX
+	transform := yaroze.IDMATRIX
 	yaroze.RotMatrixY(int32(ang), &transform)
 	yaroze.TransMatrix(&transform, &t)
 
 	obj.Coord2.Coord = transform
-	obj.Coord2.Super = demo.WORLD
+	obj.Coord2.Super = yaroze.WORLD
 	obj.Coord2.Flg = 0
 
 	var ls yaroze.MATRIX
@@ -400,7 +399,7 @@ func drawObject(obj *yaroze.GsDOBJ2, ang int16, t yaroze.VECTOR, ot *yaroze.GsOT
 		obj.Attribute |= gsDIV1
 	}
 
-	yaroze.GsSortObject4(obj, ot, 14-int32(ot.Length), demo.Scratch())
+	yaroze.GsSortObject4(obj, ot, 14-int32(ot.Length), yaroze.Scratch())
 	obj.Attribute &^= gsDIV3
 }
 
@@ -495,14 +494,14 @@ func checkLevel() {
 		goodguy.level++
 		switch goodguy.level {
 		case 1:
-			initMap(map1Addr)
+			initMap(map1Data[:])
 		case 2:
-			initMap(map2Addr)
+			initMap(map2Data[:])
 		case 3:
-			initMap(map3Addr)
+			initMap(map3Data[:])
 		default:
 			goodguy.level = 1
-			initMap(map1Addr)
+			initMap(map1Data[:])
 		}
 	}
 	if playingMusic && yaroze.VSync(-1)-playVsync > 300 {
@@ -525,34 +524,34 @@ func move(increment yaroze.VECTOR) {
 
 // viewControl turns, walks, fires and shows the map, from the pad.
 func viewControl() {
-	if padStatus&demo.PADLleft != 0 {
+	if padStatus&yaroze.PADLleft != 0 {
 		viewAngle = (viewAngle + 32) & 4095
 	}
-	if padStatus&demo.PADLright != 0 {
+	if padStatus&yaroze.PADLright != 0 {
 		viewAngle = (viewAngle - 32) & 4095
 	}
 	sin, cos := rsin(viewAngle), rcos(viewAngle)
-	if padStatus&demo.PADLup != 0 { // forward
+	if padStatus&yaroze.PADLup != 0 { // forward
 		move(yaroze.VECTOR{Vx: -sin >> 6, Vz: cos >> 6})
 	}
-	if padStatus&demo.PADLdown != 0 { // back
+	if padStatus&yaroze.PADLdown != 0 { // back
 		move(yaroze.VECTOR{Vx: sin >> 6, Vz: -cos >> 6})
 	}
-	if padStatus&demo.PADR1 != 0 { // sidestep right
+	if padStatus&yaroze.PADR1 != 0 { // sidestep right
 		move(yaroze.VECTOR{Vx: cos >> 6, Vz: sin >> 6})
 	}
-	if padStatus&demo.PADL1 != 0 { // sidestep left
+	if padStatus&yaroze.PADL1 != 0 { // sidestep left
 		move(yaroze.VECTOR{Vx: -cos >> 6, Vz: -sin >> 6})
 	}
 
-	if padStatus&(demo.PADL1|demo.PADR1|demo.PADLup|demo.PADLdown) != 0 {
+	if padStatus&(yaroze.PADL1|yaroze.PADR1|yaroze.PADLup|yaroze.PADLdown) != 0 {
 		goodguy.position.Vy += goodguy.bounce
 		if goodguy.position.Vy > goodguy.top || goodguy.position.Vy < goodguy.bottom {
 			goodguy.bounce = -goodguy.bounce
 		}
 	}
 
-	if padStatus&demo.PADRdown != 0 && oldPad&demo.PADRdown == 0 { // fire, once a press
+	if padStatus&yaroze.PADRdown != 0 && oldPad&yaroze.PADRdown == 0 { // fire, once a press
 		for i := range goodguy.bullet {
 			b := &goodguy.bullet[i]
 			if b.available == 0 {
@@ -569,7 +568,7 @@ func viewControl() {
 		}
 	}
 
-	if padStatus&demo.PADRright != 0 {
+	if padStatus&yaroze.PADRright != 0 {
 		displayMap = true
 	}
 	oldPad = padStatus
@@ -578,8 +577,8 @@ func viewControl() {
 // initMap reads a map from its text, loaded at addr: the rows and columns,
 // then a line per row, top row first. X is solid, O a fake block, S the
 // start, M a monster, F first aid, E the exit, and anything else floor.
-func initMap(addr uintptr) {
-	mp := (*[0x800]byte)(unsafe.Pointer(addr))
+func initMap(data []uint32) {
+	mp := unsafe.Slice((*byte)(unsafe.Pointer(&data[0])), 4*len(data))
 	i := 0
 
 	visited = [maxMapRows][maxMapCols]uint8{}

@@ -75,8 +75,8 @@
             src = pkgs.fetchFromGitHub {
               owner = "ChrisRx";
               repo = "tinygo";
-              rev = "0bf34c3573a13235d76d3b3309d286b39dda5608";
-              hash = "sha256-Cf/b7bL19Y5abc15iFnuXK37UkZ8dnN83RoGgO6UJ5s=";
+              rev = "e5b6fd267f404f03d44bdb1dcdce90d143c4b0c6";
+              hash = "sha256-7BmDfMR3udCdqE4R1+FayZmgR4h68NE8IWRdqeB/9Dk=";
               fetchSubmodules = true;
               # cmsis-svd carries several GB of vendor data for parts that have
               # nothing to do with this, which nixpkgs drops for the same reason.

@@ -3,6 +3,7 @@ version: '3'
 tasks:
   test:
     cmds:
+      - go vet ./...
       - go test $(go list ./... | grep -v examples)
 
   # Runs the example programs in the emulator, from the tests package. It

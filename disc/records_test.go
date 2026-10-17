@@ -34,8 +34,15 @@ func (im *image) align() {
 	}
 }
 
-// record appends a record as Register lays one out, and returns its offset.
+// record appends a record as Register lays one out, with no buffer, and
+// returns its offset.
 func (im *image) record(name, src string) int {
+	return im.into(name, src, 0, 0)
+}
+
+// into appends a record as Register and Into lay one out, for a buffer of
+// n words at addr, and returns its offset.
+func (im *image) into(name, src string, addr, n uint32) int {
 	nameAddr, srcAddr := im.str(name), im.str(src)
 	im.align()
 	off := len(im.data)
@@ -46,6 +53,9 @@ func (im *image) record(name, src string) int {
 	im.word(uint32(len(src)))
 	im.word(0)
 	im.word(0)
+	im.word(addr)
+	im.word(n)
+	im.word(n)
 	return off
 }
 
@@ -73,6 +83,7 @@ func TestFind(t *testing.T) {
 	im.word(0)
 
 	movie := im.record("MOVIE.STR", "../build/movie.str")
+	stone := im.into("DATA/STONE.TIM", "assets/stone.tim", 0x80150000, 2048)
 
 	// A record cut off by the end of the image is not one.
 	im.word(magic)
@@ -82,6 +93,7 @@ func TestFind(t *testing.T) {
 	assert.Equal(t, []Record{
 		{Name: "DATA/WALL0.TMD", Src: "assets/wall0.tmd", Offset: wall},
 		{Name: "MOVIE.STR", Src: "../build/movie.str", Offset: movie},
+		{Name: "DATA/STONE.TIM", Src: "assets/stone.tim", Buffer: 0x80150000, BufferSize: 8192, Offset: stone},
 	}, Find(im.data, im.base))
 
 	// Nothing before the image's base address is reachable.
@@ -104,4 +116,18 @@ func TestPatch(t *testing.T) {
 	// A patched record is still found, so an executable taken back off a
 	// disc can be placed on another.
 	assert.Equal(t, recs, Find(im.data, im.base))
+}
+
+func TestFits(t *testing.T) {
+	// A record without a buffer says nothing about size.
+	assert.Equal(t, true, Record{}.Fits(1<<20))
+
+	r := Record{Buffer: 0x80150000, BufferSize: 8192}
+	assert.Equal(t, true, r.Fits(8192))
+	assert.Equal(t, true, r.Fits(6145))
+	assert.Equal(t, true, r.Fits(0))
+	// The read delivers whole sectors, so a file a byte over three sectors
+	// needs a fourth sector's room, and one a byte over four does not fit.
+	assert.Equal(t, true, r.Fits(6144+1))
+	assert.Equal(t, false, r.Fits(8192+1))
 }

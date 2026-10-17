@@ -1,5 +1,3 @@
-//go:build yaroze
-
 package demo
 
 // Ball texture and color tables, converted from the SDK's balltex.h, which

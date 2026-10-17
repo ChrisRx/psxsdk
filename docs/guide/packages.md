@@ -5,7 +5,7 @@ weight: 4
 
 | Package | Purpose |
 | --- | --- |
-| [`yaroze`](yaroze) | TinyGo bindings for the resident Net Yaroze library, and the host-side `libps` image `eco2exe` combines with |
+| [`yaroze`](yaroze) | TinyGo bindings for the resident Net Yaroze library, with stubs for every other build, and the host-side `libps` image `eco2exe` combines with |
 | [`emu`](emu), [`emu/cpu`](emu/cpu) | The emulator, and its R3000A and GTE |
 | [`emu/emutest`](emu/emutest) | Running programs in the emulator from Go tests |
 | [`binutils`](binutils) | Combining programs with `libps`, image layout, linker scripts |

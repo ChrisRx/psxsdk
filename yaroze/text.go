@@ -1,5 +1,3 @@
-//go:build yaroze
-
 package yaroze
 
 // Text formatting for the on-screen font.

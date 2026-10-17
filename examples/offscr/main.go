@@ -12,7 +12,7 @@
 //
 // The right-hand buttons move the sprite over the texture, the directional
 // buttons and L1 and L2 move the sphere, Select makes either faster, Start
-// pauses, and Start and Select together quit.
+// pauses and resumes, and Start and Select together quit.
 //
 // Differences from the original:
 //
@@ -42,15 +42,6 @@ const (
 	packetMax        = 2048 * 24
 	otLength         = 9
 
-	squareModelAddr = 0x80090000
-	shipModelAddr   = 0x80091000
-	waveTIMAddr     = 0x80092000
-	fireTIMAddr     = 0x80093000
-	tileTIMAddr     = 0x80094000
-	tile2TIMAddr    = 0x80095000
-	sphereModelAddr = 0x80096000
-	dongleTIMAddr   = 0x800b0000
-
 	// Object types.
 	ship   = 0
 	square = 1
@@ -70,16 +61,36 @@ const (
 	shipMaxZ = 31 * squareSize / 2
 )
 
-var files = []demo.File{
-	{File: disc.Register("DATA/TEN.TMD", "data/TEN.TMD"), Addr: squareModelAddr},
-	{File: disc.Register("DATA/THESHIP.TMD", "data/THESHIP.TMD"), Addr: shipModelAddr},
-	{File: disc.Register("DATA/WAVE09.TIM", "data/WAVE09.TIM"), Addr: waveTIMAddr},
-	{File: disc.Register("DATA/FIRE7.TIM", "data/FIRE7.TIM"), Addr: fireTIMAddr},
-	{File: disc.Register("DATA/TILE2.TIM", "data/TILE2.TIM"), Addr: tileTIMAddr},
-	{File: disc.Register("DATA/TILE3.TIM", "data/TILE3.TIM"), Addr: tile2TIMAddr},
-	{File: disc.Register("DATA/16BIT.TMD", "data/16BIT.TMD"), Addr: sphereModelAddr},
-	{File: disc.Register("DATA/DONGLE.TIM", "data/DONGLE.TIM"), Addr: dongleTIMAddr},
-}
+// The models and the textures, read into the program's own memory, in
+// buffers of whole sectors.
+var (
+	squareData [(112 + 2047) / 2048 * 512]uint32
+	shipData   [(2044 + 2047) / 2048 * 512]uint32
+	waveData   [(2112 + 2047) / 2048 * 512]uint32
+	fireData   [(576 + 2047) / 2048 * 512]uint32
+	tileData   [(2112 + 2047) / 2048 * 512]uint32
+	tile2Data  [(2112 + 2047) / 2048 * 512]uint32
+	sphereData [(8248 + 2047) / 2048 * 512]uint32
+	dongleData [(131092 + 2047) / 2048 * 512]uint32
+
+	squareFile = disc.Register("DATA/TEN.TMD", "data/TEN.TMD").Into(squareData[:])
+	shipFile   = disc.Register("DATA/THESHIP.TMD", "data/THESHIP.TMD").Into(shipData[:])
+	waveFile   = disc.Register("DATA/WAVE09.TIM", "data/WAVE09.TIM").Into(waveData[:])
+	fireFile   = disc.Register("DATA/FIRE7.TIM", "data/FIRE7.TIM").Into(fireData[:])
+	tileFile   = disc.Register("DATA/TILE2.TIM", "data/TILE2.TIM").Into(tileData[:])
+	tile2File  = disc.Register("DATA/TILE3.TIM", "data/TILE3.TIM").Into(tile2Data[:])
+	sphereFile = disc.Register("DATA/16BIT.TMD", "data/16BIT.TMD").Into(sphereData[:])
+	dongleFile = disc.Register("DATA/DONGLE.TIM", "data/DONGLE.TIM").Into(dongleData[:])
+	files      = []*disc.File{&squareFile, &shipFile, &waveFile, &fireFile, &tileFile, &tile2File, &sphereFile, &dongleFile}
+
+	squareModel = yaroze.TMD(squareData[:])
+	sphereModel = yaroze.TMD(sphereData[:])
+	waveTIM     = yaroze.TIM(waveData[:])
+	fireTIM     = yaroze.TIM(fireData[:])
+	tileTIM     = yaroze.TIM(tileData[:])
+	tile2TIM    = yaroze.TIM(tile2Data[:])
+	dongleTIM   = yaroze.TIM(dongleData[:])
+)
 
 var (
 	packetArea      [2][packetMax / 4]uint32
@@ -143,7 +154,10 @@ func main() {
 		yaroze.GsSetWorkBase(yaroze.Packets(&packetArea[side][0]))
 		yaroze.GsClearOt(0, 0, &wot[side])
 
-		handleAllObjects()
+		// Paused, the picture is drawn as it is, with nothing moving.
+		if !paused {
+			handleAllObjects()
+		}
 		yaroze.GsSetRefView2(&view)
 
 		n := performWorldClipping()
@@ -155,7 +169,7 @@ func main() {
 			yaroze.GsGetLs(&o.Coord, &ls)
 			yaroze.GsSetLightMatrix(&ls)
 			yaroze.GsSetLsMatrix(&ls)
-			yaroze.GsSortObject4(&o.Handler, &wot[side], 3, demo.Scratch())
+			yaroze.GsSortObject4(&o.Handler, &wot[side], 3, yaroze.Scratch())
 		}
 
 		// The sprite as it is, on top of everything.
@@ -219,47 +233,59 @@ func findViewPoint() yaroze.VECTOR {
 	}
 }
 
+// controller is the pad as the frame sees it, which tells the press of
+// Start that pauses from the frames it stays held; paused is whether it
+// has, until the next press.
+var (
+	controller yaroze.Pad
+	paused     bool
+)
+
 // dealWithControllerPad acts on the pad, and reports false when the program
-// is to quit. Only the first of the moves held is made.
+// is to quit. Only the first of the moves held is made, and none while
+// paused.
 func dealWithControllerPad() bool {
-	pad := demo.PadRead()
-	if pad&demo.PADstart != 0 && pad&demo.PADselect != 0 {
+	pad := controller.Update()
+	if pad&yaroze.PADstart != 0 && pad&yaroze.PADselect != 0 {
 		return false
 	}
-	for pad&demo.PADstart != 0 { // pause
-		pad = demo.PadRead()
+	if controller.Pressed(yaroze.PADstart) {
+		paused = !paused
+	}
+	if paused {
+		return true
 	}
 	speed := int32(1)
-	if pad&demo.PADselect != 0 {
+	if pad&yaroze.PADselect != 0 {
 		speed = 5
 	}
 	switch {
-	case pad&demo.PADRup != 0:
+	case pad&yaroze.PADRup != 0:
 		theSprite.Y -= int16(speed)
-	case pad&demo.PADRdown != 0:
+	case pad&yaroze.PADRdown != 0:
 		theSprite.Y += int16(speed)
-	case pad&demo.PADRleft != 0:
+	case pad&yaroze.PADRleft != 0:
 		theSprite.X -= int16(speed)
-	case pad&demo.PADRright != 0:
+	case pad&yaroze.PADRright != 0:
 		theSprite.X += int16(speed)
-	case pad&demo.PADL1 != 0:
+	case pad&yaroze.PADL1 != 0:
 		theShip.Position.Vz += speed
-	case pad&demo.PADL2 != 0:
+	case pad&yaroze.PADL2 != 0:
 		theShip.Position.Vz -= speed
-	case pad&demo.PADLup != 0:
+	case pad&yaroze.PADLup != 0:
 		theShip.Position.Vy -= speed
-	case pad&demo.PADLdown != 0:
+	case pad&yaroze.PADLdown != 0:
 		theShip.Position.Vy += speed
-	case pad&demo.PADLleft != 0:
+	case pad&yaroze.PADLleft != 0:
 		theShip.Position.Vx -= speed
-	case pad&demo.PADLright != 0:
+	case pad&yaroze.PADLright != 0:
 		theShip.Position.Vx += speed
 	}
 	return true
 }
 
 func initialiseAll() bool {
-	demo.PadInit()
+	yaroze.PadInit()
 	yaroze.GsInitGraph(screenW, screenH, yaroze.GsINTER|yaroze.GsOFSGPU, 1, 0)
 	yaroze.GsDefDispBuff(0, 0, 0, screenH)
 	yaroze.GsInit3D()
@@ -277,8 +303,8 @@ func initialiseAll() bool {
 	yaroze.FntOpen(-120, 40, 256, 200, 0, 512)
 	if missing := demo.Load(files, nil); missing != "" {
 		for {
-			pad := demo.PadRead()
-			if pad&demo.PADstart != 0 && pad&demo.PADselect != 0 {
+			pad := yaroze.PadRead()
+			if pad&yaroze.PADstart != 0 && pad&yaroze.PADselect != 0 {
 				break
 			}
 			line.Reset()
@@ -296,11 +322,11 @@ func initialiseAll() bool {
 		return false
 	}
 
-	lpge.ProperInitialiseTexture(waveTIMAddr, &waveTexture)
-	lpge.ProperInitialiseTexture(fireTIMAddr, &fireTexture)
-	lpge.ProperInitialiseTexture(tileTIMAddr, &tileTexture)
-	lpge.ProperInitialiseTexture(tile2TIMAddr, &tile2Texture)
-	lpge.ProperInitialiseTexture(dongleTIMAddr, &dongleTexture)
+	lpge.ProperInitialiseTexture(waveTIM, &waveTexture)
+	lpge.ProperInitialiseTexture(fireTIM, &fireTexture)
+	lpge.ProperInitialiseTexture(tileTIM, &tileTexture)
+	lpge.ProperInitialiseTexture(tile2TIM, &tile2Texture)
+	lpge.ProperInitialiseTexture(dongleTIM, &dongleTexture)
 
 	lpge.LinkSpriteToImageInfo(&theSprite, &fireTexture)
 	theSprite.Mx = int16(theSprite.W / 2)
@@ -318,7 +344,7 @@ func initialiseObjects() {
 	lpge.InitialiseObjectClass()
 
 	theShip.Init()
-	theShip.BringToLife(ship, sphereModelAddr, 0, lpge.None)
+	theShip.BringToLife(ship, sphereModel, 0, lpge.None)
 	theShip.RotationSpeed = yaroze.ONE / 128
 	theShip.MovementSpeed = 1
 	theShip.MovementMomentumFlag = true
@@ -332,7 +358,7 @@ func initialiseObjects() {
 
 	for i := range theSquares {
 		theSquares[i].Init()
-		theSquares[i].BringToLife(square, squareModelAddr, 0, lpge.None)
+		theSquares[i].BringToLife(square, squareModel, 0, lpge.None)
 		lpge.Register(&theSquares[i])
 	}
 

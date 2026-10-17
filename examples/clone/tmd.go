@@ -15,7 +15,7 @@ const abe = 0x02
 
 // put writes v at the cursor and moves it on, returning where v went.
 func put[T any](cursor *uintptr, v T) *T {
-	p := (*T)(unsafe.Pointer(*cursor))
+	p := (*T)(yaroze.Pointer(*cursor))
 	*p = v
 	*cursor += unsafe.Sizeof(v)
 	return p
@@ -32,9 +32,8 @@ type quad [4][2]uint16
 // texture works out a TIM's CBA and TSB, and moves the coordinates in q
 // from the TIM's own to its texture page's. trans, if positive, is the
 // semi-transparency mode.
-func texture(timAddr uintptr, q *quad, trans int8) (cba, tsb uint16) {
-	var image yaroze.GsIMAGE
-	yaroze.GsGetTimInfo(demo.At(timAddr+4), &image)
+func texture(tim yaroze.TIM, q *quad, trans int8) (cba, tsb uint16) {
+	image := tim.Image()
 
 	pmode := uint16(image.Pmode & 3)
 	cba = uint16(image.Cy)<<6 + uint16(image.Cx)>>4
@@ -88,11 +87,12 @@ func g4t(cba, tsb uint16, uv [4][2]uint8, v [4]uint16) demo.TMD_G_4T {
 	}
 }
 
-// makeSplitTMD_G_4T builds a TMD at addr of one quad with corners v and
+// makeSplitTMD_G_4T builds a TMD in tmd of one quad with corners v and
 // texture coordinates q, divided into four quads, which the demo does
 // because it clips less near the eye than the library's own subdivision.
-func makeSplitTMD_G_4T(addr, timAddr uintptr, q quad, norm demo.TMD_NORM, v [4]demo.TMD_VERT, trans int8) {
-	cba, tsb := texture(timAddr, &q, trans)
+func makeSplitTMD_G_4T(tmd yaroze.TMD, tim yaroze.TIM, q quad, norm demo.TMD_NORM, v [4]demo.TMD_VERT, trans int8) {
+	addr := uintptr(unsafe.Pointer(&tmd[0]))
+	cba, tsb := texture(tim, &q, trans)
 	u := func(i int) uint8 { return uint8(q[i][0]) }
 	w := func(i int) uint8 { return uint8(q[i][1]) }
 	// Halfway from corner a to corner b.
@@ -135,9 +135,10 @@ func makeSplitTMD_G_4T(addr, timAddr uintptr, q quad, norm demo.TMD_NORM, v [4]d
 	}
 }
 
-// makeTMD_G_4T builds a TMD at addr of one quad, undivided.
-func makeTMD_G_4T(addr, timAddr uintptr, q quad, norm demo.TMD_NORM, v [4]demo.TMD_VERT, trans int8) {
-	cba, tsb := texture(timAddr, &q, trans)
+// makeTMD_G_4T builds a TMD in tmd of one quad, undivided.
+func makeTMD_G_4T(tmd yaroze.TMD, tim yaroze.TIM, q quad, norm demo.TMD_NORM, v [4]demo.TMD_VERT, trans int8) {
+	addr := uintptr(unsafe.Pointer(&tmd[0]))
+	cba, tsb := texture(tim, &q, trans)
 
 	cursor := addr
 	put(&cursor, demo.TMD_HDR{ID: 0x41, Flag: 1, NObjs: 1})

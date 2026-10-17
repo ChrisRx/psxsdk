@@ -17,9 +17,10 @@
 //
 // Differences from the original:
 //
-//   - The sound bank, maps and textures are read off the disc. On a Net
-//     Yaroze the loader's batch script sent them from the PC to fixed
-//     addresses; they are loaded to the same addresses.
+//   - The sound bank, maps and textures are read off the disc into the
+//     program's own memory, and the models it builds are built there too.
+//     On a Net Yaroze the loader's batch script sent the files from the PC
+//     to fixed addresses, and the models were built at others.
 //   - Every object has a real coordinate system. The original points them
 //     all at WORLD, the library's nil coordinate system, and writes each
 //     object's transformation through that pointer, which in C silently
@@ -57,75 +58,98 @@ const (
 	border = 200 // how close you can come to a wall
 )
 
-// Where the data is loaded, as the demo's batch script loaded it.
-const (
-	vhAddr = 0x80090000
-	vbAddr = 0x80092400
+// The data, read into the program's own memory, in buffers of whole
+// sectors: the sound bank, the three maps and the textures.
+var (
+	vhData       [(8736 + 2047) / 2048 * 512]uint32
+	vbData       [(186432 + 2047) / 2048 * 512]uint32
+	map1Data     [(370 + 2047) / 2048 * 512]uint32
+	map2Data     [(488 + 2047) / 2048 * 512]uint32
+	map3Data     [(457 + 2047) / 2048 * 512]uint32
+	statusData   [(3136 + 2047) / 2048 * 512]uint32
+	roofData     [(2112 + 2047) / 2048 * 512]uint32
+	wallData     [(2112 + 2047) / 2048 * 512]uint32
+	floorData    [(2112 + 2047) / 2048 * 512]uint32
+	man1Data     [(16928 + 2047) / 2048 * 512]uint32
+	man2Data     [(16928 + 2047) / 2048 * 512]uint32
+	bulletData   [(192 + 2047) / 2048 * 512]uint32
+	bloodData    [(192 + 2047) / 2048 * 512]uint32
+	deadmanData  [(16928 + 2047) / 2048 * 512]uint32
+	ricochetData [(192 + 2047) / 2048 * 512]uint32
+	healthData   [(2112 + 2047) / 2048 * 512]uint32
+	bullet2Data  [(192 + 2047) / 2048 * 512]uint32
+	eroofData    [(2112 + 2047) / 2048 * 512]uint32
+	ewallData    [(2112 + 2047) / 2048 * 512]uint32
+	efloorData   [(2112 + 2047) / 2048 * 512]uint32
+	fwallData    [(2112 + 2047) / 2048 * 512]uint32
+	faceData     [(532 + 2047) / 2048 * 512]uint32
 
-	map1Addr = 0x800c0000
-	map2Addr = 0x800c0800
-	map3Addr = 0x800c1000
+	vh           = disc.Register("DATA/SFX.VH", "data/SFX.VH").Into(vhData[:])
+	vb           = disc.Register("DATA/SFX.VB", "data/SFX.VB").Into(vbData[:])
+	map1File     = disc.Register("DATA/MAP1.DAT", "data/MAP1.DAT").Into(map1Data[:])
+	map2File     = disc.Register("DATA/MAP2.DAT", "data/MAP2.DAT").Into(map2Data[:])
+	map3File     = disc.Register("DATA/MAP3.DAT", "data/MAP3.DAT").Into(map3Data[:])
+	statusFile   = disc.Register("DATA/STATUS.TIM", "data/STATUS.TIM").Into(statusData[:])
+	roofFile     = disc.Register("DATA/STONE07.TIM", "data/STONE07.TIM").Into(roofData[:])
+	wallFile     = disc.Register("DATA/STONE01.TIM", "data/STONE01.TIM").Into(wallData[:])
+	floorFile    = disc.Register("DATA/WALL03.TIM", "data/WALL03.TIM").Into(floorData[:])
+	man1File     = disc.Register("DATA/ALBIOD_1.TIM", "data/ALBIOD_1.TIM").Into(man1Data[:])
+	man2File     = disc.Register("DATA/ALBIOD_2.TIM", "data/ALBIOD_2.TIM").Into(man2Data[:])
+	bulletFile   = disc.Register("DATA/BULLET.TIM", "data/BULLET.TIM").Into(bulletData[:])
+	bloodFile    = disc.Register("DATA/BLOOD.TIM", "data/BLOOD.TIM").Into(bloodData[:])
+	deadmanFile  = disc.Register("DATA/ALBIOD_3.TIM", "data/ALBIOD_3.TIM").Into(deadmanData[:])
+	ricochetFile = disc.Register("DATA/RICOCHET.TIM", "data/RICOCHET.TIM").Into(ricochetData[:])
+	healthFile   = disc.Register("DATA/FIRSTAID.TIM", "data/FIRSTAID.TIM").Into(healthData[:])
+	bullet2File  = disc.Register("DATA/BULLET2.TIM", "data/BULLET2.TIM").Into(bullet2Data[:])
+	eroofFile    = disc.Register("DATA/ESTONE07.TIM", "data/ESTONE07.TIM").Into(eroofData[:])
+	ewallFile    = disc.Register("DATA/ESTONE01.TIM", "data/ESTONE01.TIM").Into(ewallData[:])
+	efloorFile   = disc.Register("DATA/EWAVE01.TIM", "data/EWAVE01.TIM").Into(efloorData[:])
+	fwallFile    = disc.Register("DATA/FSTONE01.TIM", "data/FSTONE01.TIM").Into(fwallData[:])
+	faceFile     = disc.Register("DATA/FACE.TIM", "data/FACE.TIM").Into(faceData[:])
+	files        = []*disc.File{&vh, &vb, &map1File, &map2File, &map3File, &statusFile, &roofFile, &wallFile, &floorFile, &man1File, &man2File, &bulletFile, &bloodFile, &deadmanFile, &ricochetFile, &healthFile, &bullet2File, &eroofFile, &ewallFile, &efloorFile, &fwallFile, &faceFile}
 
-	statusTIM   = 0x800c8000
-	roofTIM     = 0x800d0000
-	wallTIM     = 0x800d2000
-	floorTIM    = 0x800d4000
-	man1TIM     = 0x800da000
-	man2TIM     = 0x800c2000
-	deadmanTIM  = 0x800ca000
-	bulletTIM   = 0x800d6000
-	bloodTIM    = 0x800d8000
-	ricochetTIM = 0x800e0000
-	healthTIM   = 0x800e2000
-	bullet2TIM  = 0x800e4000
-	eroofTIM    = 0x800e6000
-	ewallTIM    = 0x800e8000
-	efloorTIM   = 0x800ea000
-	fwallTIM    = 0x800ec000
-	faceTIM     = 0x800ee000
-
-	// The models the demo builds.
-	floorTMD    = 0x800f0000
-	roofTMD     = 0x800f1000
-	wallTMD     = 0x800f2000
-	monster1TMD = 0x800f3000
-	monster2TMD = 0x800f4000
-	bulletTMD   = 0x800f5000
-	bloodTMD    = 0x800f6000
-	deadTMD     = 0x800f7000
-	ricochetTMD = 0x800f8000
-	healthTMD   = 0x800f9000
-	bullet2TMD  = 0x800fa000
-	eroofTMD    = 0x800fb000
-	ewallTMD    = 0x800fc000
-	efloorTMD   = 0x800fd000
-	fwallTMD    = 0x800fe000
+	statusTIM   = yaroze.TIM(statusData[:])
+	roofTIM     = yaroze.TIM(roofData[:])
+	wallTIM     = yaroze.TIM(wallData[:])
+	floorTIM    = yaroze.TIM(floorData[:])
+	man1TIM     = yaroze.TIM(man1Data[:])
+	man2TIM     = yaroze.TIM(man2Data[:])
+	bulletTIM   = yaroze.TIM(bulletData[:])
+	bloodTIM    = yaroze.TIM(bloodData[:])
+	deadmanTIM  = yaroze.TIM(deadmanData[:])
+	ricochetTIM = yaroze.TIM(ricochetData[:])
+	healthTIM   = yaroze.TIM(healthData[:])
+	bullet2TIM  = yaroze.TIM(bullet2Data[:])
+	eroofTIM    = yaroze.TIM(eroofData[:])
+	ewallTIM    = yaroze.TIM(ewallData[:])
+	efloorTIM   = yaroze.TIM(efloorData[:])
+	fwallTIM    = yaroze.TIM(fwallData[:])
+	faceTIM     = yaroze.TIM(faceData[:])
 )
 
-var files = []demo.File{
-	{File: disc.Register("DATA/SFX.VH", "data/SFX.VH"), Addr: vhAddr},
-	{File: disc.Register("DATA/SFX.VB", "data/SFX.VB"), Addr: vbAddr},
-	{File: disc.Register("DATA/MAP1.DAT", "data/MAP1.DAT"), Addr: map1Addr},
-	{File: disc.Register("DATA/MAP2.DAT", "data/MAP2.DAT"), Addr: map2Addr},
-	{File: disc.Register("DATA/MAP3.DAT", "data/MAP3.DAT"), Addr: map3Addr},
-	{File: disc.Register("DATA/STATUS.TIM", "data/STATUS.TIM"), Addr: statusTIM},
-	{File: disc.Register("DATA/STONE07.TIM", "data/STONE07.TIM"), Addr: roofTIM},
-	{File: disc.Register("DATA/STONE01.TIM", "data/STONE01.TIM"), Addr: wallTIM},
-	{File: disc.Register("DATA/WALL03.TIM", "data/WALL03.TIM"), Addr: floorTIM},
-	{File: disc.Register("DATA/ALBIOD_1.TIM", "data/ALBIOD_1.TIM"), Addr: man1TIM},
-	{File: disc.Register("DATA/ALBIOD_2.TIM", "data/ALBIOD_2.TIM"), Addr: man2TIM},
-	{File: disc.Register("DATA/BULLET.TIM", "data/BULLET.TIM"), Addr: bulletTIM},
-	{File: disc.Register("DATA/BLOOD.TIM", "data/BLOOD.TIM"), Addr: bloodTIM},
-	{File: disc.Register("DATA/ALBIOD_3.TIM", "data/ALBIOD_3.TIM"), Addr: deadmanTIM},
-	{File: disc.Register("DATA/RICOCHET.TIM", "data/RICOCHET.TIM"), Addr: ricochetTIM},
-	{File: disc.Register("DATA/FIRSTAID.TIM", "data/FIRSTAID.TIM"), Addr: healthTIM},
-	{File: disc.Register("DATA/BULLET2.TIM", "data/BULLET2.TIM"), Addr: bullet2TIM},
-	{File: disc.Register("DATA/ESTONE07.TIM", "data/ESTONE07.TIM"), Addr: eroofTIM},
-	{File: disc.Register("DATA/ESTONE01.TIM", "data/ESTONE01.TIM"), Addr: ewallTIM},
-	{File: disc.Register("DATA/EWAVE01.TIM", "data/EWAVE01.TIM"), Addr: efloorTIM},
-	{File: disc.Register("DATA/FSTONE01.TIM", "data/FSTONE01.TIM"), Addr: fwallTIM},
-	{File: disc.Register("DATA/FACE.TIM", "data/FACE.TIM"), Addr: faceTIM},
-}
+// The models the demo builds, each in 4KB of its own, as the demo spaced
+// them.
+const tmdWords = 4096 / 4
+
+var (
+	builtData [15 * tmdWords]uint32
+
+	floorTMD    = yaroze.TMD(builtData[0*tmdWords : 1*tmdWords])
+	roofTMD     = yaroze.TMD(builtData[1*tmdWords : 2*tmdWords])
+	wallTMD     = yaroze.TMD(builtData[2*tmdWords : 3*tmdWords])
+	monster1TMD = yaroze.TMD(builtData[3*tmdWords : 4*tmdWords])
+	monster2TMD = yaroze.TMD(builtData[4*tmdWords : 5*tmdWords])
+	bulletTMD   = yaroze.TMD(builtData[5*tmdWords : 6*tmdWords])
+	bloodTMD    = yaroze.TMD(builtData[6*tmdWords : 7*tmdWords])
+	deadTMD     = yaroze.TMD(builtData[7*tmdWords : 8*tmdWords])
+	ricochetTMD = yaroze.TMD(builtData[8*tmdWords : 9*tmdWords])
+	healthTMD   = yaroze.TMD(builtData[9*tmdWords : 10*tmdWords])
+	bullet2TMD  = yaroze.TMD(builtData[10*tmdWords : 11*tmdWords])
+	eroofTMD    = yaroze.TMD(builtData[11*tmdWords : 12*tmdWords])
+	ewallTMD    = yaroze.TMD(builtData[12*tmdWords : 13*tmdWords])
+	efloorTMD   = yaroze.TMD(builtData[13*tmdWords : 14*tmdWords])
+	fwallTMD    = yaroze.TMD(builtData[14*tmdWords : 15*tmdWords])
+)
 
 // Map square flags.
 const (
@@ -246,7 +270,7 @@ func mapAt(r, c int32) uint16 {
 func main() {
 	line.Init(lineBuf[:])
 	yaroze.ResetGraph(0)
-	demo.PadInit()
+	yaroze.PadInit()
 
 	// 320 wide, offsets by the GPU, not interlaced, dithered.
 	if yaroze.GetVideoMode() == yaroze.MODE_NTSC {
@@ -270,7 +294,7 @@ func main() {
 	}
 
 	if missing := demo.Load(files, func(string) { message("loading") }); missing != "" {
-		for demo.PadRead()&(demo.PADstart|demo.PADselect) != demo.PADstart|demo.PADselect {
+		for yaroze.PadRead()&(yaroze.PADstart|yaroze.PADselect) != yaroze.PADstart|yaroze.PADselect {
 			message("missing data")
 		}
 		yaroze.ResetGraph(1)
@@ -280,9 +304,9 @@ func main() {
 	setupTexturesAndTMDs()
 	getExitCLUTRect()
 
-	vab = yaroze.SsVabTransfer(demo.BytesAt(vhAddr), demo.BytesAt(vbAddr), -1, 1)
+	vab = yaroze.SsVabTransfer(vh.Bytes(), vb.Bytes(), -1, 1)
 	if vab < 0 {
-		for demo.PadRead()&(demo.PADstart|demo.PADselect) != demo.PADstart|demo.PADselect {
+		for yaroze.PadRead()&(yaroze.PADstart|yaroze.PADselect) != yaroze.PADstart|yaroze.PADselect {
 			message("no sound bank")
 		}
 		yaroze.ResetGraph(1)
@@ -292,7 +316,7 @@ func main() {
 	heartVoice = yaroze.SsUtKeyOn(vab, 0, 0, 60, 0, 0, 0) // heartbeat
 
 	goodguy.level = 1
-	initMap(map1Addr)
+	initMap(map1Data[:])
 	startLevelMusic()
 
 	// No flat light, to clear any left from before; ambient light and fog
@@ -301,7 +325,7 @@ func main() {
 	yaroze.GsSetFlatLight(0, &light)
 	yaroze.GsSetFlatLight(1, &light)
 	yaroze.GsSetFlatLight(2, &light)
-	yaroze.GsSetLightMatrix(&demo.IDMATRIX)
+	yaroze.GsSetLightMatrix(&yaroze.IDMATRIX)
 
 	yaroze.GsSetProjection(280)
 	yaroze.GsSetLightMode(1) // with fog
@@ -313,13 +337,13 @@ func main() {
 
 	for {
 		// The view: from where you stand, turned the way you face.
-		transform := demo.IDMATRIX
+		transform := yaroze.IDMATRIX
 		yaroze.TransMatrix(&transform, &goodguy.position)
 		present.Flg = 0
 		present.Coord = transform
-		present.Super = demo.WORLD
+		present.Super = yaroze.WORLD
 
-		transform = demo.IDMATRIX
+		transform = yaroze.IDMATRIX
 		rotate := yaroze.SVECTOR{Vy: int16(viewAngle)}
 		yaroze.RotMatrix(&rotate, &transform)
 
@@ -347,7 +371,7 @@ func main() {
 
 		if goodguy.health <= 0 { // back to the beginning
 			goodguy.level = 1
-			initMap(map1Addr)
+			initMap(map1Data[:])
 			startLevelMusic()
 		}
 
@@ -365,7 +389,7 @@ func main() {
 		yaroze.GsDrawOt(&ot1[buffIdx]) // floors and roofs
 		yaroze.GsDrawOt(&ot2[buffIdx]) // walls, shots, monsters
 
-		padStatus = demo.PadRead()
+		padStatus = yaroze.PadRead()
 
 		// The level, in red, and kills out of monsters.
 		line.Reset()
@@ -381,7 +405,7 @@ func main() {
 
 		yaroze.FntFlush(-1)
 
-		if padStatus&demo.PADselect != 0 && padStatus&demo.PADstart != 0 {
+		if padStatus&yaroze.PADselect != 0 && padStatus&yaroze.PADstart != 0 {
 			break
 		}
 	}
@@ -416,16 +440,16 @@ func message(text string) {
 }
 
 // initialiseTMD ties a handle to one of a built TMD's objects.
-func initialiseTMD(addr uintptr, objNum int32, obj *yaroze.GsDOBJ2) {
-	yaroze.GsLinkObject4(uint32(addr+12), obj, objNum)
+func initialiseTMD(tmd yaroze.TMD, objNum int32, obj *yaroze.GsDOBJ2) {
+	tmd.Link(obj, objNum)
 	obj.Coord2 = &objectCoord
 }
 
 // initialiseSprite loads a TIM and sets up a sprite to show it, as the
 // demo does, quirks included: it takes the texture's u from the low five
 // bits of its x.
-func initialiseSprite(timAddr uintptr, sprite *yaroze.GsSPRITE) {
-	image := demo.LoadTIM(timAddr)
+func initialiseSprite(tim yaroze.TIM, sprite *yaroze.GsSPRITE) {
+	image := tim.Load()
 	pmode := image.Pmode & 3
 	sprite.Attribute |= pmode << 24
 	sprite.W = image.Pw << (2 - pmode)
@@ -439,12 +463,12 @@ func initialiseSprite(timAddr uintptr, sprite *yaroze.GsSPRITE) {
 }
 
 func setupTexturesAndTMDs() {
-	for _, tim := range [...]uintptr{
+	for _, tim := range [...]yaroze.TIM{
 		roofTIM, wallTIM, floorTIM, man1TIM, man2TIM, deadmanTIM,
 		bulletTIM, bloodTIM, ricochetTIM, healthTIM, bullet2TIM,
 		eroofTIM, ewallTIM, efloorTIM, fwallTIM,
 	} {
-		demo.LoadTIM(tim)
+		tim.Load()
 	}
 	initialiseSprite(statusTIM, &status)
 	status.X = int16(-int32(status.W) >> 1)
@@ -523,9 +547,8 @@ func setupTexturesAndTMDs() {
 // The exit's palettes: where they are in video memory, read back every
 // frame, and brightened or darkened a step to make the exit pulse.
 
-func clutRect(timAddr uintptr) yaroze.RECT {
-	var image yaroze.GsIMAGE
-	yaroze.GsGetTimInfo(demo.At(timAddr+4), &image)
+func clutRect(tim yaroze.TIM) yaroze.RECT {
+	image := tim.Image()
 	return yaroze.RECT{X: image.Cx, Y: image.Cy, W: int16(image.Cw), H: int16(image.Ch)}
 }
 

@@ -1,23 +1,25 @@
-//go:build yaroze
-
 package disc
 
 // The runtime half of the package. Nothing here allocates, and nothing runs
-// unless the program asks a File where it is.
+// unless the program asks a File where it is. It builds on a host too, where
+// the yaroze package's functions are stubs, so that a program using it
+// type-checks there; disc_yaroze.go holds what only means anything on the
+// console.
 
 import (
-	"runtime/volatile"
 	"unsafe"
 
+	"go.chrisrx.dev/psx/internal/volatile"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
-// A File is a file on the disc, declared by Register.
+// A File is a file on the disc, declared by Register, and the memory it is
+// read into, if Into gave it some.
 //
 // Its layout is the record mkpsxiso looks for in the executable, so the
 // fields, their order and their types are part of the contract with the host
-// half of the package. layout.go spells the record out, and the checks below
-// fail the build if the two drift apart.
+// half of the package. layout.go spells the record out, and disc_yaroze.go
+// fails the build if the two drift apart.
 type File struct {
 	magic uint32
 
@@ -36,15 +38,11 @@ type File struct {
 	// also let it drop the record from the executable altogether.
 	sector uint32
 	size   uint32
-}
 
-var (
-	_ = [1]struct{}{}[unsafe.Sizeof(File{})-recordSize]
-	_ = [1]struct{}{}[unsafe.Offsetof(File{}.Name)-offName]
-	_ = [1]struct{}{}[unsafe.Offsetof(File{}.src)-offSrc]
-	_ = [1]struct{}{}[unsafe.Offsetof(File{}.sector)-offSector]
-	_ = [1]struct{}{}[unsafe.Offsetof(File{}.size)-offSize]
-)
+	// dst is the memory the file is read into, from Into, or nil. mkpsxiso
+	// reads its address and length too, to check that the file fits.
+	dst []uint32
+}
 
 // Register declares that the host file src is to be placed on the disc at
 // path, and returns the File the program reads it through.
@@ -66,6 +64,32 @@ var (
 // not on the disc and Placed reports false.
 func Register(path, src string) File {
 	return File{magic: magic, Name: path, src: src}
+}
+
+// Into gives the file the memory it is read into, for Load, and tells
+// mkpsxiso where that is, so that a file too large for it fails the build
+// rather than overrunning it. The drive delivers whole sectors of 2048
+// bytes, so the buffer must hold the file's length rounded up to one. It is
+// declared as words because the read needs word alignment, and it must be
+// a package-level array, since the registration is constant data:
+//
+//	var modelData [2048]uint32
+//	var model = disc.Register("DATA/CUBE.TMD", "data/CUBE.TMD").Into(modelData[:])
+func (f File) Into(buf []uint32) File {
+	f.dst = buf
+	return f
+}
+
+// Data is the memory Into gave the file, as words, or nil.
+func (f *File) Data() []uint32 { return f.dst }
+
+// Bytes is the memory Into gave the file, as the library takes a sound bank,
+// or nil.
+func (f *File) Bytes() *uint8 {
+	if f.dst == nil {
+		return nil
+	}
+	return (*uint8)(unsafe.Pointer(&f.dst[0]))
 }
 
 // Sector is the file's first sector on the disc, as a logical block address.
@@ -92,11 +116,15 @@ func (f *File) Path(buf []byte) *byte {
 // was not built onto a disc by mkpsxiso, or Register was called at run time.
 func (f *File) Placed() bool { return f.Sector() != 0 }
 
-// pos is where the drive is sent for a placed file. It is not on the stack
-// because its address is handed to the library, which would make the
-// compiler allocate it, and a program loading its data should not have to
+// pos is where the drive is sent for a placed file, and pathBuf is where
+// Load writes the name of one that was not. They are not on the stack
+// because their addresses are handed to the library, which would make the
+// compiler allocate them, and a program loading its data should not have to
 // have a heap for that.
-var pos yaroze.CdlLOC
+var (
+	pos     yaroze.CdlLOC
+	pathBuf [64]byte
+)
 
 // Read starts reading the file into memory at addr, and reports whether the
 // read began. A file mkpsxiso placed is read from the sector it recorded,
@@ -104,7 +132,7 @@ var pos yaroze.CdlLOC
 // through CdReadFile, which searches for it, with the name written into
 // buf, which has to stay allocated while the library may read it. Either
 // way the read goes on in the background, and the caller waits for it with
-// CdReadSync, as after CdReadFile.
+// Wait, or with CdReadSync as after CdReadFile.
 //
 // This is for a data file. A stream, an .XA or .STR, is sectors of another
 // form that CdRead does not deliver this way, and is played through the
@@ -118,4 +146,38 @@ func (f *File) Read(addr *uint32, buf []byte) bool {
 		return false
 	}
 	return yaroze.CdRead(int32((f.Size()+2047)/2048), addr, yaroze.CdlModeSpeed) != 0
+}
+
+// Load starts reading the file into the memory Into gave it, and reports
+// whether the read began; it is Read with that memory. A file without any
+// does not start. The read goes on in the background, and Wait waits for
+// it:
+//
+//	if !model.Load() || !disc.Wait(300) {
+//		// the disc is missing or unreadable
+//	}
+func (f *File) Load() bool {
+	if f.dst == nil {
+		return false
+	}
+	return f.Read(&f.dst[0], pathBuf[:])
+}
+
+// Wait waits for the read in progress to finish, polling once a frame for
+// up to frames frames, and reports whether it did. Giving up turns a
+// missing or unreadable disc into something a program can show, rather
+// than a hang; a few seconds, 300 frames say, is longer than any read of a
+// file that is there takes. The drive reads one file at a time, so the
+// read waited for is the last one started.
+func Wait(frames int) bool {
+	for range frames {
+		switch n := yaroze.CdReadSync(1, nil); {
+		case n == 0:
+			return true
+		case n < 0:
+			return false
+		}
+		yaroze.VSync(0)
+	}
+	return false
 }

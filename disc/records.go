@@ -19,9 +19,25 @@ type Record struct {
 	// directory the caller takes the program's files to be in.
 	Src string
 
+	// Buffer is the address of the memory the program gave the file with
+	// Into, and BufferSize its length in bytes, or both zero if it gave
+	// none. The read delivers whole sectors, so the file fits when its
+	// length rounded up to one is at most BufferSize.
+	Buffer, BufferSize uint32
+
 	// Offset is where the record begins in the image it was found in.
 	Offset int
 }
+
+// Fits reports whether a file of size bytes fits the buffer, which a record
+// without one is taken to say nothing about.
+func (r Record) Fits(size uint32) bool {
+	return r.Buffer == 0 || (size+sectorSize-1)/sectorSize*sectorSize <= r.BufferSize
+}
+
+// sectorSize is what one read delivers, and so the unit a buffer has to be
+// able to take.
+const sectorSize = 2048
 
 // Find returns the registrations in image, which is the loadable part of a
 // program with its first byte at address base: for a PSX-EXE, everything
@@ -47,7 +63,12 @@ func Find(image []byte, base uint32) []Record {
 		if !ok {
 			continue
 		}
-		out = append(out, Record{Name: name, Src: src, Offset: off})
+		r := Record{Name: name, Src: src, Offset: off}
+		r.Buffer = binary.LittleEndian.Uint32(image[off+offDst:])
+		if r.Buffer != 0 {
+			r.BufferSize = 4 * binary.LittleEndian.Uint32(image[off+offDstLen:])
+		}
+		out = append(out, r)
 		off += recordSize - 4
 	}
 	return out

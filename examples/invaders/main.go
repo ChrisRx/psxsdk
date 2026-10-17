@@ -22,10 +22,9 @@
 //   - Positions and speeds are fixed point, with four bits of fraction,
 //     where the original has doubles. The only fraction in the game is the
 //     player's shot, which moves two and a half pixels a frame.
-//   - The textures are loaded below the program rather than above it, where
-//     the original's batch script put them and where a Go program's data
-//     now lies. The sound, as in the check sample, comes from the same files
-//     at the same addresses.
+//   - The textures and the sound are read off the disc into the program's
+//     own memory, where the original's batch script sent them to fixed
+//     addresses. The sound comes from the check sample's files.
 //   - An invader only fires when there is one to fire. The original picks
 //     one at random by dividing by how many are left, which is zero in the
 //     frame after the last is destroyed, and then indexes its arrays with
@@ -44,14 +43,6 @@ import (
 )
 
 const (
-	// Where the data is loaded.
-	vhAddr     = 0x80090000
-	vbAddr     = 0x800a0000
-	seqAddr    = 0x80110000
-	invaderTIM = 0x80120000
-	shipTIM    = 0x80121000
-	shotTIM    = 0x80122000
-
 	mvol = 127
 	svol = 127
 
@@ -91,14 +82,28 @@ const (
 	invadersShot = 2
 )
 
-var files = []demo.File{
-	{File: disc.Register("DATA/SOUND/STD0.VH", "data/STD0.VH"), Addr: vhAddr},
-	{File: disc.Register("DATA/SOUND/STD0.VB", "data/STD0.VB"), Addr: vbAddr},
-	{File: disc.Register("DATA/SOUND/GOGO.SEQ", "data/GOGO.SEQ"), Addr: seqAddr},
-	{File: disc.Register("DATA/INVADER1.TIM", "data/INVADER1.TIM"), Addr: invaderTIM},
-	{File: disc.Register("DATA/SHIP1.TIM", "data/SHIP1.TIM"), Addr: shipTIM},
-	{File: disc.Register("DATA/FIRE04.TIM", "data/FIRE04.TIM"), Addr: shotTIM},
-}
+// The sound and the textures, read into the program's own memory, in
+// buffers of whole sectors.
+var (
+	vhData      [(60448 + 2047) / 2048 * 512]uint32
+	vbData      [(401360 + 2047) / 2048 * 512]uint32
+	seqData     [(17341 + 2047) / 2048 * 512]uint32
+	invaderData [(1568 + 2047) / 2048 * 512]uint32
+	shipData    [(2592 + 2047) / 2048 * 512]uint32
+	shotData    [(576 + 2047) / 2048 * 512]uint32
+
+	vh          = disc.Register("DATA/SOUND/STD0.VH", "data/STD0.VH").Into(vhData[:])
+	vb          = disc.Register("DATA/SOUND/STD0.VB", "data/STD0.VB").Into(vbData[:])
+	seqFile     = disc.Register("DATA/SOUND/GOGO.SEQ", "data/GOGO.SEQ").Into(seqData[:])
+	invaderFile = disc.Register("DATA/INVADER1.TIM", "data/INVADER1.TIM").Into(invaderData[:])
+	shipFile    = disc.Register("DATA/SHIP1.TIM", "data/SHIP1.TIM").Into(shipData[:])
+	shotFile    = disc.Register("DATA/FIRE04.TIM", "data/FIRE04.TIM").Into(shotData[:])
+	files       = []*disc.File{&vh, &vb, &seqFile, &invaderFile, &shipFile, &shotFile}
+
+	invaderTIM = yaroze.TIM(invaderData[:])
+	shipTIM    = yaroze.TIM(shipData[:])
+	shotTIM    = yaroze.TIM(shotData[:])
+)
 
 // A movement is where something is and how it moves: its position and
 // speed in fix units, and its size in pixels.
@@ -151,7 +156,8 @@ var (
 	highScoreTable [5]score
 	currentScore   score
 
-	vab, seq     int16
+	bank         yaroze.Bank
+	song         yaroze.Sequence
 	soundSuccess bool
 
 	frameNumber uint32
@@ -281,13 +287,13 @@ func dealWithEnd(heading string) bool {
 	frameNow, whenToLeaveLoop := 0, -1
 	exitSet := false
 	for {
-		padStatus = demo.PadRead()
-		if padStatus&demo.PADL1 != 0 && padStatus&demo.PADR1 != 0 && !exitSet {
+		padStatus = yaroze.PadRead()
+		if padStatus&yaroze.PADL1 != 0 && padStatus&yaroze.PADR1 != 0 && !exitSet {
 			newGame = false
 			whenToLeaveLoop = frameNow + 60
 			exitSet = true
 		}
-		if padStatus&demo.PADRdown != 0 && !exitSet {
+		if padStatus&yaroze.PADRdown != 0 && !exitSet {
 			newGame = true
 			whenToLeaveLoop = frameNow + 60
 			exitSet = true
@@ -366,7 +372,7 @@ func initialiseAll() bool {
 		worldOT[i].Org = &otTags[i][0]
 	}
 
-	demo.PadInit()
+	yaroze.PadInit()
 
 	yaroze.FntLoad(960, 256)
 	yaroze.FntOpen(16, 16, 256, 200, 0, 512)
@@ -392,7 +398,7 @@ func initialiseAll() bool {
 
 // fail shows what went wrong until the program is quit.
 func fail(what, detail string) {
-	for demo.PadRead()&(demo.PADstart|demo.PADselect) != demo.PADstart|demo.PADselect {
+	for yaroze.PadRead()&(yaroze.PADstart|yaroze.PADselect) != yaroze.PADstart|yaroze.PADselect {
 		active := yaroze.GsGetActiveBuff()
 		yaroze.GsSetWorkBase(yaroze.Packets(&gpuPacketArea[active][0]))
 		yaroze.GsClearOt(0, 0, &worldOT[active])
@@ -516,7 +522,7 @@ func initialiseTexturesAndSprites() {
 	var image1, image2, image3 yaroze.GsIMAGE
 
 	// The player's ship.
-	yaroze.GsGetTimInfo(demo.At(shipTIM+4), &image1)
+	image1 = shipTIM.Image()
 	loadTexture(&image1, 320, 0)
 	texturePageID1 := yaroze.GetTPage(1, 0, 320, 0)
 	playersSprite.W = image1.Pw * 2
@@ -527,7 +533,7 @@ func initialiseTexturesAndSprites() {
 	playersSprite.Attribute |= eightBitTexture | semiTransparent1 | semiTransparent2
 
 	// The invaders.
-	yaroze.GsGetTimInfo(demo.At(invaderTIM+4), &image2)
+	image2 = invaderTIM.Image()
 	loadTexture(&image2, 320, 256)
 	texturePageID2 := yaroze.GetTPage(1, 0, 320, 256)
 	for i := range invaders {
@@ -543,7 +549,7 @@ func initialiseTexturesAndSprites() {
 	}
 
 	// The shots.
-	yaroze.GsGetTimInfo(demo.At(shotTIM+4), &image3)
+	image3 = shotTIM.Image()
 	loadTexture(&image3, 640, 0)
 	texturePageID3 := yaroze.GetTPage(0, 0, 640, 0)
 	for i := range shots {
@@ -580,25 +586,25 @@ func clearBackground() {
 }
 
 func dealWithControllerPad() {
-	padStatus = demo.PadRead()
+	padStatus = yaroze.PadRead()
 
-	if padStatus&demo.PADselect != 0 && padStatus&demo.PADstart != 0 {
+	if padStatus&yaroze.PADselect != 0 && padStatus&yaroze.PADstart != 0 {
 		quit = true
 		return
 	}
 
-	for padStatus&demo.PADL1 != 0 { // pause
-		padStatus = demo.PadRead()
+	for padStatus&yaroze.PADL1 != 0 { // pause
+		padStatus = yaroze.PadRead()
 	}
 
-	if padStatus&demo.PADLleft != 0 {
+	if padStatus&yaroze.PADLleft != 0 {
 		playersMovement.dx = max(playersMovement.dx-1*fix, -maxXSpeed*fix)
 	}
-	if padStatus&demo.PADLright != 0 {
+	if padStatus&yaroze.PADLright != 0 {
 		playersMovement.dx = min(playersMovement.dx+1*fix, maxXSpeed*fix)
 	}
 
-	if padStatus&demo.PADRup != 0 && timeSincePlayerLastFired > 10 {
+	if padStatus&yaroze.PADRup != 0 && timeSincePlayerLastFired > 10 {
 		if id := createNewShot(playersShot); id >= 0 {
 			// Above the ship, moving up at two and a half pixels a frame.
 			shots[id].m.x = playersMovement.x + 24*fix
@@ -788,29 +794,28 @@ func yOverlap(first, second *yaroze.RECT) bool {
 // remembering whether both worked so that nothing is played or closed
 // otherwise.
 func initSound() {
-	vab = yaroze.SsVabTransfer(demo.BytesAt(vhAddr), demo.BytesAt(vbAddr), -1, 1)
-	if vab < 0 {
+	var ok bool
+	if bank, ok = yaroze.OpenBank(vh.Bytes(), vb.Bytes()); !ok {
 		soundSuccess = false
 		return
 	}
-	seq = yaroze.SsSeqOpen(demo.At(seqAddr), vab)
-	soundSuccess = seq >= 0
+	song, soundSuccess = bank.Sequence(&seqData[0])
 }
 
 func playSound() {
 	if soundSuccess {
 		yaroze.SsSetMVol(mvol, mvol)
-		yaroze.SsSeqSetVol(seq, svol, svol)
-		yaroze.SsSeqPlay(seq, yaroze.SSPLAY_PLAY, yaroze.SSPLAY_INFINITY)
+		song.SetVolume(svol, svol)
+		song.Play(yaroze.SSPLAY_INFINITY)
 	}
 }
 
 func stopSound() {
 	if soundSuccess {
-		yaroze.SsSeqStop(seq)
+		song.Stop()
 		yaroze.VSync(0)
 		yaroze.VSync(0)
-		yaroze.SsSeqClose(seq)
-		yaroze.SsVabClose(vab)
+		song.Close()
+		bank.Close()
 	}
 }

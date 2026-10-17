@@ -15,23 +15,23 @@ import (
 
 // vertAt returns the i'th vertex of a mapped object.
 func vertAt(o *demo.TMD_OBJ, i uint16) *demo.TMD_VERT {
-	return (*demo.TMD_VERT)(unsafe.Pointer(uintptr(o.VertTop) + uintptr(i)*unsafe.Sizeof(demo.TMD_VERT{})))
+	return (*demo.TMD_VERT)(yaroze.Pointer(uintptr(o.VertTop) + uintptr(i)*unsafe.Sizeof(demo.TMD_VERT{})))
 }
 
 // firstPrim returns the first primitive of a mapped object.
 func firstPrim(o *demo.TMD_OBJ) *demo.PRIM_HDR {
-	return (*demo.PRIM_HDR)(unsafe.Pointer(uintptr(o.PrimTop)))
+	return (*demo.PRIM_HDR)(yaroze.Pointer(uintptr(o.PrimTop)))
 }
 
 // objectTable returns the objects of the TMD at addr, which has to be
 // mapped.
 func objectTable(addr uintptr) *[maxNumberOfObjects]demo.TMD_OBJ {
-	return (*[maxNumberOfObjects]demo.TMD_OBJ)(unsafe.Pointer(addr + unsafe.Sizeof(demo.TMD_HDR{})))
+	return (*[maxNumberOfObjects]demo.TMD_OBJ)(yaroze.Pointer(addr + unsafe.Sizeof(demo.TMD_HDR{})))
 }
 
 // put writes v at the cursor and moves it on, returning where v went.
 func put[T any](cursor *uintptr, v T) *T {
-	p := (*T)(unsafe.Pointer(*cursor))
+	p := (*T)(yaroze.Pointer(*cursor))
 	*p = v
 	*cursor += unsafe.Sizeof(v)
 	return p
@@ -184,7 +184,7 @@ func explosionClut(c int32, clut *uint16) {
 // table points into the copy, so the copy can be linked and drawn like the
 // original, and reset from it after it is destroyed.
 func separateVertices(in, out uintptr) uintptr {
-	header := (*demo.TMD_HDR)(unsafe.Pointer(in))
+	header := (*demo.TMD_HDR)(yaroze.Pointer(in))
 	cursor := out
 	put(&cursor, *header)
 
@@ -199,7 +199,7 @@ func separateVertices(in, out uintptr) uintptr {
 	// The primitives, copied as they are.
 	for k := range header.NObjs {
 		prim := firstPrim(&objects[k])
-		newPrim := (*demo.PRIM_HDR)(unsafe.Pointer(cursor))
+		newPrim := (*demo.PRIM_HDR)(yaroze.Pointer(cursor))
 		newObjects[k].PrimTop = uint32(cursor)
 		for range objects[k].NPrim {
 			prim, newPrim = copyPrim(prim, newPrim)

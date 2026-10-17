@@ -1,5 +1,3 @@
-//go:build yaroze
-
 // Package lpge holds what L. Evans's Net Yaroze tutorials share, from the
 // modules each of them carries a copy of: object.c, which keeps every object
 // in the game in one array and ties each to a model or a sprite and to a
@@ -14,8 +12,6 @@
 package lpge
 
 import (
-	"unsafe"
-
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -58,9 +54,9 @@ type Handler struct {
 	Sprite         yaroze.GsSPRITE
 	ScaleX, ScaleY int32
 
-	Handler      yaroze.GsDOBJ2
-	ModelAddress uintptr
-	WhichModel   int32
+	Handler    yaroze.GsDOBJ2
+	Model      yaroze.TMD
+	WhichModel int32
 
 	ScalingFlag   bool
 	ScalingVector yaroze.VECTOR
@@ -156,7 +152,7 @@ func LinkAllObjectsToModelsOrSprites() {
 		}
 		switch o.DisplayFlag {
 		case TMD:
-			LinkObjectHandlerToTmdObject(&o.Handler, o.WhichModel, o.ModelAddress)
+			LinkObjectHandlerToTmdObject(&o.Handler, o.WhichModel, o.Model)
 		case Sprite:
 			LinkObjectToSprite(o)
 		}
@@ -183,10 +179,10 @@ func LinkAllObjectsToTheirCoordinateSystems() {
 }
 
 // BringToLife makes an object alive, of a type, with a model.
-func (o *Handler) BringToLife(typ int32, modelAddress uintptr, whichModel int32, superCoordinateObjectID int32) {
+func (o *Handler) BringToLife(typ int32, model yaroze.TMD, whichModel int32, superCoordinateObjectID int32) {
 	o.Alive = true
 	o.Type = typ
-	o.ModelAddress = modelAddress
+	o.Model = model
 	o.WhichModel = whichModel
 	o.SuperCoordinateObjectID = superCoordinateObjectID
 }
@@ -203,7 +199,7 @@ func (o *Handler) Init() {
 	o.ImageInfo = nil
 	InitGsSprite(&o.Sprite)
 	o.ScaleX, o.ScaleY = yaroze.ONE, yaroze.ONE
-	o.ModelAddress = 0
+	o.Model = nil
 	o.WhichModel = None
 	o.ScalingFlag = false
 	o.ScalingVector = yaroze.VECTOR{Vx: yaroze.ONE, Vy: yaroze.ONE, Vz: yaroze.ONE}
@@ -374,22 +370,14 @@ func linkSprite(s *yaroze.GsSPRITE, img *yaroze.GsIMAGE) {
 }
 
 // LinkObjectHandlerToTmdObject links a GsDOBJ2 to one of the objects in the
-// TMD at tmdAddress, mapping its offsets to addresses first.
-func LinkObjectHandlerToTmdObject(h *yaroze.GsDOBJ2, which int32, tmdAddress uintptr) {
-	p := (*uint32)(unsafe.Pointer(tmdAddress + 4)) // past the file's ID word
-	yaroze.GsMapModelingData(p)
-	yaroze.GsLinkObject4(uint32(tmdAddress+12), h, which)
+// TMD, mapping its offsets to addresses first.
+func LinkObjectHandlerToTmdObject(h *yaroze.GsDOBJ2, which int32, tmd yaroze.TMD) {
+	tmd.Map()
+	tmd.Link(h, which)
 }
 
-// ProperInitialiseTexture loads a TIM at address into VRAM, with its
-// palette if it has one, and describes it in img.
-func ProperInitialiseTexture(address uintptr, img *yaroze.GsIMAGE) {
-	yaroze.GsGetTimInfo((*uint32)(unsafe.Pointer(address+4)), img)
-	rect := yaroze.RECT{X: img.Px, Y: img.Py, W: int16(img.Pw), H: int16(img.Ph)}
-	yaroze.LoadImage(&rect, img.Pixel)
-	if img.Pmode>>3&1 != 0 {
-		rect = yaroze.RECT{X: img.Cx, Y: img.Cy, W: int16(img.Cw), H: int16(img.Ch)}
-		yaroze.LoadImage(&rect, img.Clut)
-	}
-	yaroze.DrawSync(0)
+// ProperInitialiseTexture loads a TIM into VRAM, with its palette if it has
+// one, and describes it in img.
+func ProperInitialiseTexture(tim yaroze.TIM, img *yaroze.GsIMAGE) {
+	*img = tim.Load()
 }

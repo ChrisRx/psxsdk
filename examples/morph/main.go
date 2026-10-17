@@ -37,10 +37,8 @@ const (
 	packetMax = 2500 * 24 // GPU packet space per buffer
 	lengthOT  = 12
 
-	// Where the picture is read to, and where the TMD is built, as the demo
-	// has them.
-	pictureTIM = 0x80090000
-	pictureTMD = 0x800c0000
+	// The room the sheet's TMD is built in.
+	sheetWords = 64 * 1024 / 4
 
 	// The grid, in quads across and down, and the length of its vertex
 	// tables.
@@ -77,9 +75,18 @@ type TMD_F_4T_NL struct {
 	Vert2, Vert3     uint16
 }
 
-var files = []demo.File{
-	{File: disc.Register("DATA/SB.TIM", "data/SB.TIM"), Addr: pictureTIM},
-}
+// The picture, read into the program's own memory in a buffer of whole
+// sectors, and the memory the sheet's TMD is built in.
+var (
+	pictureData [(131092 + 2047) / 2048 * 512]uint32
+	sheetData   [sheetWords]uint32
+
+	pictureFile = disc.Register("DATA/SB.TIM", "data/SB.TIM").Into(pictureData[:])
+	files       = []*disc.File{&pictureFile}
+
+	pictureTIM = yaroze.TIM(pictureData[:])
+	pictureTMD = yaroze.TMD(sheetData[:])
+)
 
 var (
 	ot              [2]yaroze.GsOT
@@ -112,7 +119,7 @@ func main() {
 	yaroze.GsDefDispBuff(0, 0, 0, 0)
 	yaroze.GsInit3D()
 
-	mainViewMatrix = demo.IDMATRIX
+	mainViewMatrix = yaroze.IDMATRIX
 
 	for i := range 2 {
 		ot[i].Length = lengthOT
@@ -125,14 +132,14 @@ func main() {
 	yaroze.FntOpen(-280, -200, 128, 16, 0, 32)
 
 	padStatus = 0
-	demo.PadInit()
+	yaroze.PadInit()
 
 	if missing := demo.Load(files, nil); missing != "" {
 		fail("could not read ", missing)
 		return
 	}
 
-	demo.LoadTIM(pictureTIM)
+	pictureTIM.Load()
 
 	makeFlat()
 	pvert := makeBigTMDTexQuad(pictureTMD, pictureTIM)
@@ -152,7 +159,7 @@ func main() {
 		yaroze.TransMatrix(&mainViewMatrix, &translate)
 
 		mainView.View = mainViewMatrix
-		mainView.Super = demo.WORLD
+		mainView.Super = yaroze.WORLD
 		yaroze.GsSetView2(&mainView)
 
 		switch {
@@ -168,7 +175,7 @@ func main() {
 			state = 0
 		}
 
-		drawObject(&pictureOBJ, &demo.IDMATRIX, demo.WORLD, &ot[buffIdx])
+		drawObject(&pictureOBJ, &yaroze.IDMATRIX, yaroze.WORLD, &ot[buffIdx])
 
 		yaroze.DrawSync(0)
 		hsync := yaroze.VSync(1)
@@ -185,8 +192,8 @@ func main() {
 		angle += 32
 		frameNumber++
 
-		padStatus = demo.PadRead()
-		if padStatus&demo.PADselect != 0 && padStatus&demo.PADstart != 0 {
+		padStatus = yaroze.PadRead()
+		if padStatus&yaroze.PADselect != 0 && padStatus&yaroze.PADstart != 0 {
 			break
 		}
 	}
@@ -206,12 +213,12 @@ func makeFlat() {
 	}
 }
 
-// initialiseTMD ties a handle to an object of the TMD at addr, giving it a
+// initialiseTMD ties a handle to an object of the TMD, giving it a
 // coordinate system of its own.
-func initialiseTMD(addr uintptr, objNum int32, obj *yaroze.GsDOBJ2) {
-	yaroze.GsMapModelingData(demo.At(addr + 4))
-	yaroze.GsLinkObject4(uint32(addr+12), obj, objNum)
-	yaroze.GsInitCoordinate2(demo.WORLD, &pictureCoord)
+func initialiseTMD(tmd yaroze.TMD, objNum int32, obj *yaroze.GsDOBJ2) {
+	tmd.Map()
+	tmd.Link(obj, objNum)
+	pictureCoord.Init(yaroze.WORLD)
 	obj.Coord2 = &pictureCoord
 }
 
@@ -225,26 +232,26 @@ func drawObject(obj *yaroze.GsDOBJ2, tmat *yaroze.MATRIX, super *yaroze.GsCOORDI
 	var coordMatrix yaroze.MATRIX
 	yaroze.GsGetLs(obj.Coord2, &coordMatrix)
 	yaroze.GsSetLsMatrix(&coordMatrix)
-	yaroze.GsSortObject4(obj, ot, 14-int32(ot.Length), demo.Scratch())
+	yaroze.GsSortObject4(obj, ot, 14-int32(ot.Length), yaroze.Scratch())
 }
 
 // put writes v at the cursor and moves it on, returning where v went.
 func put[T any](cursor *uintptr, v T) *T {
-	p := (*T)(unsafe.Pointer(*cursor))
+	p := (*T)(yaroze.Pointer(*cursor))
 	*p = v
 	*cursor += unsafe.Sizeof(v)
 	return p
 }
 
-// makeBigTMDTexQuad builds the sheet at addr: a TMD of one object, a grid
-// of textured quads without lighting wearing the TIM at timAddr, which
-// must be in video memory already, each quad drawn from both sides by a
-// second primitive with its corners the other way round. It starts as the
-// flat sheet, and returns where the vertex table went. The header says its
+// makeBigTMDTexQuad builds the sheet in tmd: a TMD of one object, a grid
+// of textured quads without lighting wearing the TIM, which must be in
+// video memory already, each quad drawn from both sides by a second
+// primitive with its corners the other way round. It starts as the flat
+// sheet, and returns where the vertex table went. The header says its
 // offsets are addresses already, so GsMapModelingData leaves it alone.
-func makeBigTMDTexQuad(addr, timAddr uintptr) uintptr {
-	var image yaroze.GsIMAGE
-	yaroze.GsGetTimInfo(demo.At(timAddr+4), &image)
+func makeBigTMDTexQuad(tmd yaroze.TMD, tim yaroze.TIM) uintptr {
+	addr := uintptr(unsafe.Pointer(&tmd[0]))
+	image := tim.Image()
 
 	pmode := image.Pmode & 3
 	cba := uint16(image.Cy)<<6 + uint16(image.Cx)>>4
@@ -321,7 +328,7 @@ func changeTo(pvert uintptr, shape *[meshSize]int16) {
 	p := 0
 	for j := 0; j <= gridh; j++ {
 		for i := 0; i <= gridw; i++ {
-			v := (*demo.TMD_VERT)(unsafe.Pointer(pvert))
+			v := (*demo.TMD_VERT)(yaroze.Pointer(pvert))
 			v.Vx = towards(v.Vx, shape[p])
 			v.Vy = towards(v.Vy, shape[p+1])
 			v.Vz = towards(v.Vz, shape[p+2])
@@ -344,7 +351,7 @@ func towards(x, target int16) int16 {
 
 // fail shows what went wrong until the program is quit.
 func fail(what, detail string) {
-	for demo.PadRead()&(demo.PADstart|demo.PADselect) != demo.PADstart|demo.PADselect {
+	for yaroze.PadRead()&(yaroze.PADstart|yaroze.PADselect) != yaroze.PADstart|yaroze.PADselect {
 		buff := yaroze.GsGetActiveBuff()
 		yaroze.GsSetWorkBase(yaroze.Packets(&gpuOutputPacket[buff][0]))
 		yaroze.GsClearOt(0, 0, &ot[buff])

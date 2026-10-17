@@ -43,27 +43,33 @@ const (
 	packetMax        = 2048 * 24
 	objMax           = 256
 	otLength         = 9
-
-	wall0Addr = 0x80090000
-	wall1Addr = 0x80091000
-	wall2Addr = 0x80092000
-	wall3Addr = 0x80093000
-	tenAddr   = 0x80094000
-	yukaAddr  = 0x80095000
-	shipAddr  = 0x80096000
-	stoneAddr = 0x800a0000
 )
 
-var files = []demo.File{
-	{File: disc.Register("DATA/WALL0.TMD", "data/WALL0.TMD"), Addr: wall0Addr},
-	{File: disc.Register("DATA/WALL1.TMD", "data/WALL1.TMD"), Addr: wall1Addr},
-	{File: disc.Register("DATA/WALL2.TMD", "data/WALL2.TMD"), Addr: wall2Addr},
-	{File: disc.Register("DATA/WALL3.TMD", "data/WALL3.TMD"), Addr: wall3Addr},
-	{File: disc.Register("DATA/TEN.TMD", "data/TEN.TMD"), Addr: tenAddr},
-	{File: disc.Register("DATA/YUKA.TMD", "data/YUKA.TMD"), Addr: yukaAddr},
-	{File: disc.Register("DATA/THESHIP.TMD", "data/THESHIP.TMD"), Addr: shipAddr},
-	{File: disc.Register("DATA/STONE.TIM", "data/STONE.TIM"), Addr: stoneAddr},
-}
+// The models and the texture, read into the program's own memory, in
+// buffers of whole sectors.
+var (
+	wall0Data [(112 + 2047) / 2048 * 512]uint32
+	wall1Data [(116 + 2047) / 2048 * 512]uint32
+	wall2Data [(116 + 2047) / 2048 * 512]uint32
+	wall3Data [(116 + 2047) / 2048 * 512]uint32
+	tenData   [(112 + 2047) / 2048 * 512]uint32
+	yukaData  [(112 + 2047) / 2048 * 512]uint32
+	shipData  [(2044 + 2047) / 2048 * 512]uint32
+	stoneData [(2112 + 2047) / 2048 * 512]uint32
+
+	wall0File = disc.Register("DATA/WALL0.TMD", "data/WALL0.TMD").Into(wall0Data[:])
+	wall1File = disc.Register("DATA/WALL1.TMD", "data/WALL1.TMD").Into(wall1Data[:])
+	wall2File = disc.Register("DATA/WALL2.TMD", "data/WALL2.TMD").Into(wall2Data[:])
+	wall3File = disc.Register("DATA/WALL3.TMD", "data/WALL3.TMD").Into(wall3Data[:])
+	tenFile   = disc.Register("DATA/TEN.TMD", "data/TEN.TMD").Into(tenData[:])
+	yukaFile  = disc.Register("DATA/YUKA.TMD", "data/YUKA.TMD").Into(yukaData[:])
+	shipFile  = disc.Register("DATA/THESHIP.TMD", "data/THESHIP.TMD").Into(shipData[:])
+	stoneFile = disc.Register("DATA/STONE.TIM", "data/STONE.TIM").Into(stoneData[:])
+	files     = []*disc.File{&wall0File, &wall1File, &wall2File, &wall3File, &tenFile, &yukaFile, &shipFile, &stoneFile}
+
+	shipTMD  = yaroze.TMD(shipData[:])
+	stoneTIM = yaroze.TIM(stoneData[:])
+)
 
 // The maze: cells fact across, in a grid worldX by worldZ, each a wall or
 // not. The viewpoint stays west short of a wall, at posY above the floor.
@@ -103,8 +109,8 @@ var (
 	dworld  [objMax]yaroze.GsCOORDINATE2
 	nModels int
 
-	// faces holds each face model's object table, for GsLinkObject4.
-	faces [6]uint32
+	// faces holds each face's model, mapped.
+	faces [6]yaroze.TMD
 
 	// pvect is the view's angles: vy round the vertical, vx up and down.
 	pvect      yaroze.SVECTOR
@@ -181,7 +187,7 @@ func main() {
 			yaroze.GsGetLws(op.Coord2, &lw, &ls)
 			yaroze.GsSetLightMatrix(&lw)
 			yaroze.GsSetLsMatrix(&ls)
-			yaroze.GsSortObject4(op, &wot[side], 3, demo.Scratch())
+			yaroze.GsSortObject4(op, &wot[side], 3, yaroze.Scratch())
 		}
 
 		updateTheShip()
@@ -189,7 +195,7 @@ func main() {
 		yaroze.GsGetLs(&ship.coord, &ls)
 		yaroze.GsSetLightMatrix(&ls)
 		yaroze.GsSetLsMatrix(&ls)
-		yaroze.GsSortObject4(&ship.handler, &wot[side], 3, demo.Scratch())
+		yaroze.GsSortObject4(&ship.handler, &wot[side], 3, yaroze.Scratch())
 
 		drawWorldMaps(&sot[side])
 		hsync = yaroze.VSync(2)
@@ -229,50 +235,52 @@ func drawWorldMaps(ot *yaroze.GsOT) {
 
 const speed = 2
 
-var framesSinceLastModeToggle int
+// controller is the pad as the frame sees it, which tells the press of
+// Start that switches modes from the frames it stays held.
+var controller yaroze.Pad
 
 // dealWithControllerPad acts on the pad, and reports whether to quit.
 func dealWithControllerPad() bool {
-	pad := demo.PadRead()
+	pad := controller.Update()
 
 	switch mainMode {
 	case moveView:
 		spd := int32(speed)
-		if pad&demo.PADRright != 0 {
+		if pad&yaroze.PADRright != 0 {
 			spd *= 4
 		}
 
 		// Left and right turn.
-		if pad&demo.PADLleft != 0 {
+		if pad&yaroze.PADLleft != 0 {
 			pvect.Vy = int16((int32(pvect.Vy) - spd*8) & 4095)
 		}
-		if pad&demo.PADLright != 0 {
+		if pad&yaroze.PADLright != 0 {
 			pvect.Vy = int16((int32(pvect.Vy) + spd*8) & 4095)
 		}
 
 		// R2 and L2 look up and down.
-		if pad&demo.PADR2 != 0 && int32(pvect.Vx)+spd*8 < 960 {
+		if pad&yaroze.PADR2 != 0 && int32(pvect.Vx)+spd*8 < 960 {
 			pvect.Vx += int16(spd * 8)
 		}
-		if pad&demo.PADL2 != 0 && int32(pvect.Vx)-spd*8 > -960 {
+		if pad&yaroze.PADL2 != 0 && int32(pvect.Vx)-spd*8 > -960 {
 			pvect.Vx -= int16(spd * 8)
 		}
 
 		// Up and down walk; R1 and L1 sidestep, a quarter turn either way.
 		var vx, vz int32
-		if pad&demo.PADLup != 0 {
+		if pad&yaroze.PADLup != 0 {
 			vz += rcos(int32(pvect.Vy)) / 64 * spd / 16
 			vx += rsin(int32(pvect.Vy)) / 64 * spd / 16
 		}
-		if pad&demo.PADLdown != 0 {
+		if pad&yaroze.PADLdown != 0 {
 			vz -= rcos(int32(pvect.Vy)) / 64 * spd / 16
 			vx -= rsin(int32(pvect.Vy)) / 64 * spd / 16
 		}
-		if pad&demo.PADR1 != 0 {
+		if pad&yaroze.PADR1 != 0 {
 			vz += rcos((int32(pvect.Vy)+1024)&4095) / 64 * spd / 16
 			vx += rsin((int32(pvect.Vy)+1024)&4095) / 64 * spd / 16
 		}
-		if pad&demo.PADL1 != 0 {
+		if pad&yaroze.PADL1 != 0 {
 			vz += rcos((int32(pvect.Vy)-1024)&4095) / 64 * spd / 16
 			vx += rsin((int32(pvect.Vy)-1024)&4095) / 64 * spd / 16
 		}
@@ -300,58 +308,56 @@ func dealWithControllerPad() bool {
 
 	case moveShip:
 		multiplier := int32(1)
-		if pad&demo.PADselect != 0 {
+		if pad&yaroze.PADselect != 0 {
 			multiplier = 10
 		}
 		by := ship.movementSpeed * multiplier
-		if pad&demo.PADLright != 0 {
+		if pad&yaroze.PADLright != 0 {
 			ship.velocity.Vx -= by
 		}
-		if pad&demo.PADLleft != 0 {
+		if pad&yaroze.PADLleft != 0 {
 			ship.velocity.Vx += by
 		}
-		if pad&demo.PADLup != 0 {
+		if pad&yaroze.PADLup != 0 {
 			ship.velocity.Vy -= by
 		}
-		if pad&demo.PADLdown != 0 {
+		if pad&yaroze.PADLdown != 0 {
 			ship.velocity.Vy += by
 		}
-		if pad&demo.PADL2 != 0 {
+		if pad&yaroze.PADL2 != 0 {
 			ship.velocity.Vz -= by
 		}
-		if pad&demo.PADL1 != 0 {
+		if pad&yaroze.PADL1 != 0 {
 			ship.velocity.Vz += by
 		}
 
 		turn := ship.rotationSpeed * multiplier
-		if pad&demo.PADRright != 0 {
+		if pad&yaroze.PADRright != 0 {
 			ship.twist.Vy -= turn
 		}
-		if pad&demo.PADRleft != 0 {
+		if pad&yaroze.PADRleft != 0 {
 			ship.twist.Vy += turn
 		}
-		if pad&demo.PADRup != 0 {
+		if pad&yaroze.PADRup != 0 {
 			ship.twist.Vx -= turn
 		}
-		if pad&demo.PADRdown != 0 {
+		if pad&yaroze.PADRdown != 0 {
 			ship.twist.Vx += turn
 		}
-		if pad&demo.PADR2 != 0 {
+		if pad&yaroze.PADR2 != 0 {
 			ship.twist.Vz -= turn
 		}
-		if pad&demo.PADR1 != 0 {
+		if pad&yaroze.PADR1 != 0 {
 			ship.twist.Vz += turn
 		}
 	}
 
-	// Start switches what is steered, no more than once in ten frames.
-	if pad&demo.PADstart != 0 && framesSinceLastModeToggle > 10 {
+	// Start switches what is steered, once per press.
+	if controller.Pressed(yaroze.PADstart) {
 		mainMode = 1 - mainMode
-		framesSinceLastModeToggle = 0
 	}
-	framesSinceLastModeToggle++
 
-	if pad&demo.PADstart != 0 && pad&demo.PADselect != 0 {
+	if pad&yaroze.PADstart != 0 && pad&yaroze.PADselect != 0 {
 		yaroze.DrawSync(0)
 		return true
 	}
@@ -451,14 +457,14 @@ func addFace(n int, px, py int32, face int, y int32, attribute uint32) int {
 	}
 	yaroze.GsInitCoordinate2(&world[px][py], &dworld[n])
 	dworld[n].Coord.T = [3]int32{0, y, 0}
-	yaroze.GsLinkObject4(faces[face], &models[n], 0)
+	faces[face].Link(&models[n], 0)
 	models[n].Coord2 = &dworld[n]
 	models[n].Attribute = attribute
 	return n + 1
 }
 
 func initialiseAll() bool {
-	demo.PadInit()
+	yaroze.PadInit()
 
 	yaroze.GsInitGraph(screenW, screenH, yaroze.GsINTER|yaroze.GsOFSGPU, 1, 0)
 	yaroze.GsDefDispBuff(0, 0, 0, screenH)
@@ -483,13 +489,13 @@ func initialiseAll() bool {
 	initialiseView()
 	initialiseLighting()
 
-	demo.LoadTIM(stoneAddr)
-	faces[backWall] = modelInit(wall0Addr)
-	faces[frontWall] = modelInit(wall1Addr)
-	faces[rightWall] = modelInit(wall2Addr)
-	faces[leftWall] = modelInit(wall3Addr)
-	faces[ceiling] = modelInit(tenAddr)
-	faces[floor] = modelInit(yukaAddr)
+	stoneTIM.Load()
+	faces[backWall] = modelInit(wall0Data[:])
+	faces[frontWall] = modelInit(wall1Data[:])
+	faces[rightWall] = modelInit(wall2Data[:])
+	faces[leftWall] = modelInit(wall3Data[:])
+	faces[ceiling] = modelInit(tenData[:])
+	faces[floor] = modelInit(yukaData[:])
 
 	makeWorldMaps()
 	clearViewPoint()
@@ -503,7 +509,7 @@ func initialiseAll() bool {
 // fail shows what went wrong until the program is quit.
 func fail(what, detail string) {
 	side := yaroze.GsGetActiveBuff()
-	for demo.PadRead()&(demo.PADstart|demo.PADselect) != demo.PADstart|demo.PADselect {
+	for yaroze.PadRead()&(yaroze.PADstart|yaroze.PADselect) != yaroze.PADstart|yaroze.PADselect {
 		yaroze.GsSetWorkBase(yaroze.Packets(&packetArea[side][0]))
 		yaroze.GsClearOt(0, 0, &wot[side])
 		yaroze.VSync(0)
@@ -528,7 +534,7 @@ func initialiseTheShip() {
 	ship.rotationMomentum = false
 	ship.movementSpeed = 10
 	ship.rotationSpeed = 5
-	lpge.LinkObjectHandlerToTmdObject(&ship.handler, 0, shipAddr)
+	lpge.LinkObjectHandlerToTmdObject(&ship.handler, 0, shipTMD)
 	ship.matrix = yaroze.MATRIX{M: [3][3]int16{
 		{yaroze.ONE, 0, 0},
 		{0, yaroze.ONE, 0},
@@ -600,11 +606,10 @@ func initialiseLighting() {
 	yaroze.GsSetFogParam(&fogging)
 }
 
-// modelInit maps a TMD's offsets to addresses and returns its object table,
-// which GsLinkObject4 takes.
-func modelInit(addr uintptr) uint32 {
-	yaroze.GsMapModelingData(demo.At(addr + 4))
-	return uint32(addr + 12)
+// modelInit maps a TMD's offsets to addresses and returns it, for linking.
+func modelInit(tmd yaroze.TMD) yaroze.TMD {
+	tmd.Map()
+	return tmd
 }
 
 // makeWorldMaps lays the maze out: blocks of three cells by three, a wall

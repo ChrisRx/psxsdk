@@ -513,6 +513,9 @@ func loadProgram(root *iso9660.Dir, name, src string) (*program, error) {
 			if prev.Src != r.Src {
 				return nil, fmt.Errorf("%s registers %s from both %s and %s", e.Name, key, prev.Src, r.Src)
 			}
+			if err := fits(r, prev.entry); err != nil {
+				return nil, fmt.Errorf("%s registers %s: %w", e.Name, r.Name, err)
+			}
 			p.files = append(p.files, registered{Record: r, entry: prev.entry})
 			continue
 		}
@@ -520,11 +523,25 @@ func loadProgram(root *iso9660.Dir, name, src string) (*program, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s registers %s: %w", e.Name, r.Name, err)
 		}
+		if err := fits(r, entry); err != nil {
+			return nil, fmt.Errorf("%s registers %s: %w", e.Name, r.Name, err)
+		}
 		reg := registered{Record: r, entry: entry}
 		placed[key] = reg
 		p.files = append(p.files, reg)
 	}
 	return p, nil
+}
+
+// fits is the error for a file the program gave a buffer too small for it,
+// which the build is the place to find out, rather than the read that
+// overruns the buffer. A buffer has to hold whole sectors, since that is
+// what the drive delivers.
+func fits(r disc.Record, e *iso9660.Entry) error {
+	if r.Fits(e.Size) {
+		return nil
+	}
+	return fmt.Errorf("%s is %d bytes, %d sectors, but the buffer it is read into holds %d", r.Src, e.Size, (e.Size+2047)/2048, r.BufferSize)
 }
 
 // patch writes each registered file's sector and length into its record, and

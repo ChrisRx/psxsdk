@@ -38,12 +38,18 @@ const (
 	packetMax = 2500 * 24 // GPU packet space per buffer
 	lengthOT  = 8
 
-	// Where the sheet's TMD is built, as the demo builds it.
-	lightTMD = 0x800a0000
+	// The room the sheet's TMD is built in.
+	sheetWords = 64 * 1024 / 4
 
 	// The heat grid, in quads across and down.
 	mapx = 40
 	mapy = 34
+)
+
+// The memory the sheet's TMD is built in.
+var (
+	sheetData [sheetWords]uint32
+	lightTMD  = yaroze.TMD(sheetData[:])
 )
 
 // G_4_NL is the primitive mode of a gouraud quad without lighting, and the
@@ -101,7 +107,7 @@ func main() {
 
 	yaroze.ResetGraph(0)
 	padStatus = 0
-	demo.PadInit()
+	yaroze.PadInit()
 
 	yaroze.GsInitGraph(640, 480, yaroze.GsOFSGPU, 1, 0)
 	yaroze.GsDefDispBuff(0, 0, 0, 0)
@@ -120,13 +126,14 @@ func main() {
 	makeColorMap()
 	makeBigTMDGouraudQuad(lightTMD)
 	initialiseTMD(lightTMD, 0, &lightOBJ)
+	sheetAddr := uintptr(unsafe.Pointer(&sheetData[0]))
 
-	mainViewMatrix = demo.IDMATRIX
+	mainViewMatrix = yaroze.IDMATRIX
 	translate := yaroze.VECTOR{Vx: 0, Vy: 0, Vz: 1000}
 	yaroze.TransMatrix(&mainViewMatrix, &translate)
 
 	// The first primitive: past the header and the object table.
-	prims := lightTMD + unsafe.Sizeof(demo.TMD_HDR{}) + unsafe.Sizeof(demo.TMD_OBJ{})
+	prims := sheetAddr + unsafe.Sizeof(demo.TMD_HDR{}) + unsafe.Sizeof(demo.TMD_OBJ{})
 
 	for {
 		buffIdx = yaroze.GsGetActiveBuff()
@@ -134,12 +141,12 @@ func main() {
 		yaroze.GsClearOt(0, 0, &ot[buffIdx])
 
 		mainView.View = mainViewMatrix
-		mainView.Super = demo.WORLD
+		mainView.Super = yaroze.WORLD
 		yaroze.GsSetView2(&mainView)
 
 		fireGrid()
 		alterColors(prims)
-		drawObject(&lightOBJ, &demo.IDMATRIX, demo.WORLD, &ot[buffIdx])
+		drawObject(&lightOBJ, &yaroze.IDMATRIX, yaroze.WORLD, &ot[buffIdx])
 
 		yaroze.DrawSync(0)
 		hsync := yaroze.VSync(1)
@@ -148,7 +155,7 @@ func main() {
 		yaroze.GsSortClear(0, 0, 0, &ot[buffIdx])
 		yaroze.GsDrawOt(&ot[buffIdx])
 
-		padStatus = demo.PadRead()
+		padStatus = yaroze.PadRead()
 		controls()
 
 		line.Reset()
@@ -156,7 +163,7 @@ func main() {
 		yaroze.FntFlush(-1)
 		frameNumber++
 
-		if padStatus&demo.PADselect != 0 && padStatus&demo.PADstart != 0 {
+		if padStatus&yaroze.PADselect != 0 && padStatus&yaroze.PADstart != 0 {
 			break
 		}
 	}
@@ -181,12 +188,12 @@ func makeColorMap() {
 	}
 }
 
-// initialiseTMD ties a handle to an object of the TMD at addr, giving it a
+// initialiseTMD ties a handle to an object of the TMD, giving it a
 // coordinate system of its own.
-func initialiseTMD(addr uintptr, objNum int32, obj *yaroze.GsDOBJ2) {
-	yaroze.GsMapModelingData(demo.At(addr + 4))
-	yaroze.GsLinkObject4(uint32(addr+12), obj, objNum)
-	yaroze.GsInitCoordinate2(demo.WORLD, &lightCoord)
+func initialiseTMD(tmd yaroze.TMD, objNum int32, obj *yaroze.GsDOBJ2) {
+	tmd.Map()
+	tmd.Link(obj, objNum)
+	lightCoord.Init(yaroze.WORLD)
 	obj.Coord2 = &lightCoord
 }
 
@@ -200,7 +207,7 @@ func drawObject(obj *yaroze.GsDOBJ2, tmat *yaroze.MATRIX, super *yaroze.GsCOORDI
 	var coordMatrix yaroze.MATRIX
 	yaroze.GsGetLs(obj.Coord2, &coordMatrix)
 	yaroze.GsSetLsMatrix(&coordMatrix)
-	yaroze.GsSortObject4(obj, ot, 14-int32(ot.Length), demo.Scratch())
+	yaroze.GsSortObject4(obj, ot, 14-int32(ot.Length), yaroze.Scratch())
 }
 
 // fireGrid moves the fire on a frame: hot spots along the bottom, a blur
@@ -244,29 +251,29 @@ func controls() {
 		tmp := mainViewMatrix
 		yaroze.MulMatrix0(&t1, &tmp, &mainViewMatrix)
 	}
-	if padStatus&demo.PADLleft != 0 {
+	if padStatus&yaroze.PADLleft != 0 {
 		rotateBy(0, 64, 0)
 	}
-	if padStatus&demo.PADLright != 0 {
+	if padStatus&yaroze.PADLright != 0 {
 		rotateBy(0, -64, 0)
 	}
-	if padStatus&demo.PADLup != 0 {
+	if padStatus&yaroze.PADLup != 0 {
 		rotateBy(-64, 0, 0)
 	}
-	if padStatus&demo.PADLdown != 0 {
+	if padStatus&yaroze.PADLdown != 0 {
 		rotateBy(64, 0, 0)
 	}
-	if padStatus&demo.PADL1 != 0 {
+	if padStatus&yaroze.PADL1 != 0 {
 		rotateBy(0, 0, 64)
 	}
-	if padStatus&demo.PADL2 != 0 {
+	if padStatus&yaroze.PADL2 != 0 {
 		rotateBy(0, 0, -64)
 	}
-	if padStatus&demo.PADR1 != 0 {
+	if padStatus&yaroze.PADR1 != 0 {
 		translate := yaroze.VECTOR{Vx: mainViewMatrix.T[0], Vy: mainViewMatrix.T[1], Vz: mainViewMatrix.T[2] - 64}
 		yaroze.TransMatrix(&mainViewMatrix, &translate)
 	}
-	if padStatus&demo.PADR2 != 0 {
+	if padStatus&yaroze.PADR2 != 0 {
 		translate := yaroze.VECTOR{Vx: mainViewMatrix.T[0], Vy: mainViewMatrix.T[1], Vz: mainViewMatrix.T[2] + 64}
 		yaroze.TransMatrix(&mainViewMatrix, &translate)
 	}
@@ -274,18 +281,18 @@ func controls() {
 
 // put writes v at the cursor and moves it on, returning where v went.
 func put[T any](cursor *uintptr, v T) *T {
-	p := (*T)(unsafe.Pointer(*cursor))
+	p := (*T)(yaroze.Pointer(*cursor))
 	*p = v
 	*cursor += unsafe.Sizeof(v)
 	return p
 }
 
-// makeBigTMDGouraudQuad builds the sheet at addr: a TMD of one object, a
+// makeBigTMDGouraudQuad builds the sheet in tmd: a TMD of one object, a
 // flat grid of gouraud quads with lighting off, mapx across and mapy-2
 // down, 16 units a side, with no normals. The header says its offsets are
 // addresses already, so GsMapModelingData leaves it alone.
-func makeBigTMDGouraudQuad(addr uintptr) {
-	cursor := addr
+func makeBigTMDGouraudQuad(tmd yaroze.TMD) {
+	cursor := uintptr(unsafe.Pointer(&tmd[0]))
 	put(&cursor, demo.TMD_HDR{ID: 0x41, Flag: 1, NObjs: 1})
 	objTable := put(&cursor, demo.TMD_OBJ{})
 
@@ -324,7 +331,7 @@ func alterColors(addr uintptr) {
 	const stride = unsafe.Sizeof(demo.PRIM_HDR{}) + unsafe.Sizeof(TMD_G_4_NL{})
 	for j := 0; j < mapy-2; j++ {
 		for i := 0; i < mapx; i++ {
-			body := (*[g4NLIlen]uint32)(unsafe.Pointer(addr + unsafe.Sizeof(demo.PRIM_HDR{})))
+			body := (*[g4NLIlen]uint32)(yaroze.Pointer(addr + unsafe.Sizeof(demo.PRIM_HDR{})))
 			body[0] = colorMap[fracmap[i][j]] | uint32(g4NL)<<24
 			body[1] = colorMap[fracmap[i+1][j]]
 			body[2] = colorMap[fracmap[i][j+1]]

@@ -16,9 +16,8 @@
 //
 // Differences from the original:
 //
-//   - The model and texture are read off the disc to addresses below the
-//     program. The original's batch script sent them to addresses the Go
-//     program occupies.
+//   - The model and texture are read off the disc into the program's own
+//     memory. The original's batch script sent them to fixed addresses.
 //
 // Nothing allocates after startup.
 package main
@@ -33,16 +32,21 @@ const (
 	packetMax = 2000 * 64 // GPU packet space per buffer
 	objectMax = 10
 	otLength  = 8
-
-	// Where the data is read to: below the program.
-	modelAddr = 0x80090000
-	texAddr   = 0x80096000
 )
 
-var files = []demo.File{
-	{File: disc.Register("DATA/ODEN.TMD", "data/ODEN.TMD"), Addr: modelAddr},
-	{File: disc.Register("DATA/ODEN.TIM", "data/ODEN.TIM"), Addr: texAddr},
-}
+// The data, read into the program's own memory, in buffers of whole
+// sectors.
+var (
+	modelData [(23316 + 2047) / 2048 * 512]uint32
+	texData   [(16404 + 2047) / 2048 * 512]uint32
+
+	modelFile = disc.Register("DATA/ODEN.TMD", "data/ODEN.TMD").Into(modelData[:])
+	texFile   = disc.Register("DATA/ODEN.TIM", "data/ODEN.TIM").Into(texData[:])
+	files     = []*disc.File{&modelFile, &texFile}
+
+	model   = yaroze.TMD(modelData[:])
+	texture = yaroze.TIM(texData[:])
+)
 
 var (
 	padd uint32
@@ -83,7 +87,7 @@ func main() {
 		fail("could not read ", missing)
 		return
 	}
-	textureInit(texAddr)
+	texture.Load()
 	modelingDataRead()
 
 	for {
@@ -115,11 +119,11 @@ func drawAll(on uint32) {
 		yaroze.GsGetLs(op.Coord2, &tmpm)
 		yaroze.GsSetLsMatrix(&tmpm)
 
-		yaroze.GsSortObject4(op, &wot[outbufIdx], 14-otLength, demo.Scratch())
+		yaroze.GsSortObject4(op, &wot[outbufIdx], 14-otLength, yaroze.Scratch())
 	}
 
 	yaroze.VSync(0)
-	padd = demo.PadRead()
+	padd = yaroze.PadRead()
 	yaroze.ResetGraph(1)
 	yaroze.GsSwapDispBuff()
 	yaroze.GsSortClear(0, 0, 0, &wot[outbufIdx])
@@ -132,19 +136,19 @@ func drawAll(on uint32) {
 func objInteractive() bool {
 	modeF := false
 
-	if padd&demo.PADL1 != 0 {
+	if padd&yaroze.PADL1 != 0 {
 		lightSet(padd, 0)
 		modeF = true
 	}
-	if padd&demo.PADL2 != 0 {
+	if padd&yaroze.PADL2 != 0 {
 		lightSet(padd, 1)
 		modeF = true
 	}
-	if padd&demo.PADR2 != 0 {
+	if padd&yaroze.PADR2 != 0 {
 		lightSet(padd, 2)
 		modeF = true
 	}
-	if padd&demo.PADR1 != 0 {
+	if padd&yaroze.PADR1 != 0 {
 		ambientSet(padd)
 		modeF = true
 	}
@@ -153,16 +157,16 @@ func objInteractive() bool {
 	}
 
 	switch {
-	case padd&demo.PADLleft != 0: // ball
+	case padd&yaroze.PADLleft != 0: // ball
 		object[0].Attribute = yaroze.GsDOFF
 		object[3].Attribute = 0
-	case padd&demo.PADLright != 0: // cube
+	case padd&yaroze.PADLright != 0: // cube
 		object[2].Attribute = yaroze.GsDOFF | yaroze.GsDIV2
 		object[5].Attribute = yaroze.GsDIV2
-	case padd&demo.PADLup != 0: // cone
+	case padd&yaroze.PADLup != 0: // cone
 		object[1].Attribute = yaroze.GsDOFF
 		object[4].Attribute = 0
-	case padd&demo.PADLdown != 0:
+	case padd&yaroze.PADLdown != 0:
 		object[0].Attribute = 0
 		object[3].Attribute = yaroze.GsDOFF
 		object[2].Attribute = yaroze.GsDIV2
@@ -170,26 +174,26 @@ func objInteractive() bool {
 		object[1].Attribute = 0
 		object[4].Attribute = yaroze.GsDOFF
 	default:
-		if padd&demo.PADRleft != 0 {
+		if padd&yaroze.PADRleft != 0 {
 			pWorld.Vy -= 5 * yaroze.ONE / 360
 		}
-		if padd&demo.PADRright != 0 {
+		if padd&yaroze.PADRright != 0 {
 			pWorld.Vy += 5 * yaroze.ONE / 360
 		}
-		if padd&demo.PADRup != 0 {
+		if padd&yaroze.PADRup != 0 {
 			pWorld.Vx += 5 * yaroze.ONE / 360
 		}
-		if padd&demo.PADRdown != 0 {
+		if padd&yaroze.PADRdown != 0 {
 			pWorld.Vx -= 5 * yaroze.ONE / 360
 		}
 
-		if padd&demo.PADstart != 0 && dWorld.Coord.T[2] > -2800 {
+		if padd&yaroze.PADstart != 0 && dWorld.Coord.T[2] > -2800 {
 			dWorld.Coord.T[2] -= 80
 		}
-		if padd&demo.PADselect != 0 {
+		if padd&yaroze.PADselect != 0 {
 			dWorld.Coord.T[2] += 80
 		}
-		if padd&demo.PADselect != 0 && padd&demo.PADstart != 0 {
+		if padd&yaroze.PADselect != 0 && padd&yaroze.PADstart != 0 {
 			return true
 		}
 		setCoordinate(&pWorld, &dWorld)
@@ -200,38 +204,38 @@ func objInteractive() bool {
 // lightSet changes light n's color by the symbol buttons, Start and Select,
 // and its direction by the d-pad.
 func lightSet(padd uint32, n int) {
-	if padd&demo.PADRup != 0 && pslt[n].R < 0xfe {
+	if padd&yaroze.PADRup != 0 && pslt[n].R < 0xfe {
 		pslt[n].R += 2
 	}
-	if padd&demo.PADRdown != 0 && pslt[n].R > 0 {
+	if padd&yaroze.PADRdown != 0 && pslt[n].R > 0 {
 		pslt[n].R -= 2
 	}
 
-	if padd&demo.PADRright != 0 && pslt[n].G < 0xfe {
+	if padd&yaroze.PADRright != 0 && pslt[n].G < 0xfe {
 		pslt[n].G += 2
 	}
-	if padd&demo.PADRleft != 0 && pslt[n].G > 0 {
+	if padd&yaroze.PADRleft != 0 && pslt[n].G > 0 {
 		pslt[n].G -= 2
 	}
 
-	if padd&demo.PADselect != 0 && pslt[n].B < 0xfe {
+	if padd&yaroze.PADselect != 0 && pslt[n].B < 0xfe {
 		pslt[n].B += 2
 	}
-	if padd&demo.PADstart != 0 && pslt[n].B > 0 {
+	if padd&yaroze.PADstart != 0 && pslt[n].B > 0 {
 		pslt[n].B -= 2
 	}
 
-	if padd&demo.PADLup != 0 && pslt[n].Vy < 300 {
+	if padd&yaroze.PADLup != 0 && pslt[n].Vy < 300 {
 		pslt[n].Vy += 10
 	}
-	if padd&demo.PADLdown != 0 && pslt[n].Vy > -300 {
+	if padd&yaroze.PADLdown != 0 && pslt[n].Vy > -300 {
 		pslt[n].Vy -= 10
 	}
 
-	if padd&demo.PADLleft != 0 && pslt[n].Vx < 300 {
+	if padd&yaroze.PADLleft != 0 && pslt[n].Vx < 300 {
 		pslt[n].Vx += 10
 	}
-	if padd&demo.PADLright != 0 && pslt[n].Vx > -300 {
+	if padd&yaroze.PADLright != 0 && pslt[n].Vx > -300 {
 		pslt[n].Vx -= 10
 	}
 
@@ -239,10 +243,10 @@ func lightSet(padd uint32, n int) {
 }
 
 func ambientSet(padd uint32) {
-	if padd&demo.PADRup != 0 && am < 2*yaroze.ONE {
+	if padd&yaroze.PADRup != 0 && am < 2*yaroze.ONE {
 		am += 20
 	}
-	if padd&demo.PADRdown != 0 && am > 20 {
+	if padd&yaroze.PADRdown != 0 && am > 20 {
 		am -= 20
 	}
 	yaroze.GsSetAmbient(am, am, am)
@@ -252,18 +256,16 @@ func ambientSet(padd uint32) {
 // each in a coordinate system of its own under the scene's, scaled by a
 // matrix whose inverse goes into modelScale for the lighting.
 func modelingDataRead() {
-	// Past the ID word is the header GsMapModelingData wants, then the
-	// object count, then the object table.
-	yaroze.GsMapModelingData(demo.At(modelAddr + 4))
-	objnum = *demo.At(modelAddr + 8)
+	model.Map()
+	objnum = uint32(model.Objects())
 	if objnum > objectMax {
 		objnum = objectMax
 	}
 	for i := int32(0); i < int32(objnum); i++ {
-		yaroze.GsLinkObject4(uint32(modelAddr+12), &object[i], i)
+		model.Link(&object[i], i)
 	}
 
-	yaroze.GsInitCoordinate2(demo.WORLD, &dWorld)
+	yaroze.GsInitCoordinate2(yaroze.WORLD, &dWorld)
 	dWorld.Coord.T[2] = 1000
 	yaroze.GsInitCoordinate2(&dWorld, &dCube)
 	yaroze.GsInitCoordinate2(&dWorld, &dCone)
@@ -316,7 +318,7 @@ func modelingDataRead() {
 }
 
 func initAll() {
-	demo.PadInit()
+	yaroze.PadInit()
 	padd = 0
 
 	yaroze.GsInitGraph(640, 480, yaroze.GsINTER|yaroze.GsOFSGPU, 1, 0)
@@ -346,7 +348,7 @@ func viewInit() {
 	view.Vpx, view.Vpy, view.Vpz = 0, -75, -5000
 	view.Vrx, view.Vry, view.Vrz = 0, -75, 0
 	view.Rz = 0
-	view.Super = demo.WORLD
+	view.Super = yaroze.WORLD
 	yaroze.GsSetRefView2(&view)
 }
 
@@ -370,15 +372,10 @@ func lightInit() {
 	yaroze.GsSetFogParam(&fog1)
 }
 
-// textureInit puts the texture into video memory.
-func textureInit(addr uintptr) {
-	demo.LoadTIM(addr)
-}
-
 // setCoordinate rebuilds a coordinate system's matrix from its position
 // and the angles in pos.
 func setCoordinate(pos *yaroze.SVECTOR, coor *yaroze.GsCOORDINATE2) {
-	tmp1 := demo.IDMATRIX
+	tmp1 := yaroze.IDMATRIX
 	tmp1.T = coor.Coord.T
 	v1 := *pos
 	yaroze.RotMatrix(&v1, &tmp1)
@@ -388,7 +385,7 @@ func setCoordinate(pos *yaroze.SVECTOR, coor *yaroze.GsCOORDINATE2) {
 
 // fail shows what went wrong until the program is quit.
 func fail(what, detail string) {
-	for demo.PadRead()&(demo.PADstart|demo.PADselect) != demo.PADstart|demo.PADselect {
+	for yaroze.PadRead()&(yaroze.PADstart|yaroze.PADselect) != yaroze.PADstart|yaroze.PADselect {
 		buff := yaroze.GsGetActiveBuff()
 		yaroze.GsSetWorkBase(yaroze.Packets(&outPacket[buff][0]))
 		yaroze.GsClearOt(0, 0, &wot[buff])

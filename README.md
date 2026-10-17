@@ -38,7 +38,7 @@ The tutorial's [first chapter](https://chrisrx.github.io/psxsdk/tutorial/setting
 
 | Directory | Purpose |
 | --- | --- |
-| [`yaroze`](yaroze) | TinyGo bindings for the resident Net Yaroze library, generated from the SDK's header, and the host-side `libps` image |
+| [`yaroze`](yaroze) | TinyGo bindings for the resident Net Yaroze library, generated from the SDK's header, with stubs for every other build, and the host-side `libps` image |
 | [`disc`](disc) | Registering the files a program reads off the disc, which `mkpsxiso` reads out of the executable |
 | [`examples`](examples) | The ported demos, one directory each, with the data they load |
 | [`tools`](tools) | `eco2exe`, `mkpsxiso`, `dumpsxiso`, `psxemu`, `psxplay` and the rest; the [tools section](https://chrisrx.github.io/psxsdk/tools/) describes each |

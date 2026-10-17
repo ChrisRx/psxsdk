@@ -42,11 +42,11 @@ var (
 
 // objects returns the mapped model's object table.
 func objects() *[objectMax]demo.TMD_OBJ {
-	return (*[objectMax]demo.TMD_OBJ)(unsafe.Pointer(uintptr(md0TMD) + 12))
+	return (*[objectMax]demo.TMD_OBJ)(unsafe.Pointer(md0TMD.Table()))
 }
 
 func vertAt(o *demo.TMD_OBJ, i uint32) *yaroze.SVECTOR {
-	return (*yaroze.SVECTOR)(unsafe.Pointer(uintptr(o.VertTop) + uintptr(i)*unsafe.Sizeof(yaroze.SVECTOR{})))
+	return (*yaroze.SVECTOR)(yaroze.Pointer(uintptr(o.VertTop) + uintptr(i)*unsafe.Sizeof(yaroze.SVECTOR{})))
 }
 
 // setTMDData is where the original copied the model's object table; here
@@ -66,7 +66,7 @@ func setTMDData() {
 // differences from the VDF file.
 func setVertexMimeData() {
 	originalVertexSave()
-	setMdfVertex(uintptr(dinoVDF))
+	setMdfVertex(uintptr(unsafe.Pointer(&vdfData[0])))
 }
 
 // vertexMime puts the vertices back and adds each set in its proportion.
@@ -79,14 +79,14 @@ func vertexMime() {
 // offset, the count of vertices, and the differences themselves.
 func setMdfVertex(addr uintptr) {
 	p := addr
-	n := *demo.At(p)
+	n := *yaroze.At(p)
 	p += 4
 	mdfTotal = min(n, mimeMax)
 	for i := range mdfTotal {
 		m := &mdfvtx0[i]
-		m.object = *demo.At(p)
-		m.offset = *demo.At(p + 4)
-		m.total = *demo.At(p + 8)
+		m.object = *yaroze.At(p)
+		m.offset = *yaroze.At(p + 4)
+		m.total = *yaroze.At(p + 8)
 		m.top = p + 12
 		p += 12 + uintptr(m.total)*unsafe.Sizeof(yaroze.SVECTOR{})
 	}
@@ -124,7 +124,7 @@ func setMimeVertex() {
 		if m.offset+m.total > o.NVert {
 			continue
 		}
-		yaroze.GteMIMefunc(vertAt(o, m.offset), (*yaroze.SVECTOR)(unsafe.Pointer(m.top)), int32(m.total), mimepr[i])
+		yaroze.GteMIMefunc(vertAt(o, m.offset), (*yaroze.SVECTOR)(yaroze.Pointer(m.top)), int32(m.total), mimepr[i])
 	}
 }
 

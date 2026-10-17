@@ -1,8 +1,10 @@
-//go:build yaroze
-
 package demo
 
-import "unsafe"
+import (
+	"unsafe"
+
+	"go.chrisrx.dev/psx/yaroze"
+)
 
 // TMD layouts, from the demos' tmd.h. A TMD is a header, a table of
 // objects, and each object's vertices, normals and primitives.
@@ -63,14 +65,15 @@ const (
 	G_4T = 0x3c // quad, gouraud, textured
 )
 
-// TMDObject returns the first object of a mapped TMD at addr.
-func TMDObject(addr uintptr) *TMD_OBJ {
-	return (*TMD_OBJ)(unsafe.Pointer(addr + unsafe.Sizeof(TMD_HDR{})))
+// TMDObject returns the first object of a mapped TMD, the start of its
+// object table.
+func TMDObject(t yaroze.TMD) *TMD_OBJ {
+	return (*TMD_OBJ)(unsafe.Pointer(t.Table()))
 }
 
 // Norm returns the i'th normal of a mapped object.
 func (o *TMD_OBJ) Norm(i uint16) *TMD_NORM {
-	return (*TMD_NORM)(unsafe.Pointer(uintptr(o.NormTop) + uintptr(i)*unsafe.Sizeof(TMD_NORM{})))
+	return (*TMD_NORM)(yaroze.Pointer(uintptr(o.NormTop) + uintptr(i)*unsafe.Sizeof(TMD_NORM{})))
 }
 
 // Prim returns the body of the i'th primitive of a mapped object, past its
@@ -79,5 +82,5 @@ func (o *TMD_OBJ) Norm(i uint16) *TMD_NORM {
 func Prim[T any](o *TMD_OBJ, i uint32) *T {
 	var body T
 	size := unsafe.Sizeof(PRIM_HDR{}) + unsafe.Sizeof(body)
-	return (*T)(unsafe.Pointer(uintptr(o.PrimTop) + uintptr(i)*size + unsafe.Sizeof(PRIM_HDR{})))
+	return (*T)(yaroze.Pointer(uintptr(o.PrimTop) + uintptr(i)*size + unsafe.Sizeof(PRIM_HDR{})))
 }

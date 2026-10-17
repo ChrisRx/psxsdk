@@ -6,8 +6,11 @@
 // rather than a hello world, and to put the CD path, the controller and a
 // few hundred sprites through the same code the C sample uses.
 //
-// Two deliberate differences from the original:
+// Three deliberate differences from the original:
 //
+//   - The sound data is read into the program's own memory, declared here,
+//     rather than to addresses chosen by hand, and the build checks that
+//     each file fits where it goes.
 //   - The CD waits are bounded. The C sample spins in
 //     "while ((cnt = CdReadSync(1, 0)) > 0)" with no limit, so running it
 //     without the files present hangs before it has drawn anything.
@@ -20,8 +23,6 @@
 package main
 
 import (
-	"unsafe"
-
 	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/examples/internal/demo"
 	"go.chrisrx.dev/psx/yaroze"
@@ -38,26 +39,41 @@ const (
 	mvol = 127 // main volume
 	svol = 127 // sequence volume
 
-	// Where the sound data is loaded. These addresses are below the
-	// program and above the resident library, which is where the SDK puts
-	// scratch data.
-	vhAddr  = 0x80090000
-	vbAddr  = 0x800a0000
-	seqAddr = 0x80110000
-
 	// Frames to wait for one CD read before giving up. Short enough that
 	// three files cannot add up to a wait long enough to look like a hang.
 	readTimeout = 180
+
+	// The sound files' sizes in bytes, from which their buffers are sized
+	// in whole sectors, since that is what the drive delivers. The build
+	// checks the files fit, so a change to the data shows up there.
+	vhSize  = 60448
+	vbSize  = 401360
+	seqSize = 39616
 )
 
-// Ordering tables and GPU packet space, one set per display buffer.
+// The sound data: the bank's header and waveforms, and the sequence, each
+// in a buffer of whole sectors, 512 words each, enough for its file. Each
+// is registered with mkpsxiso by its declaration, which also says where it
+// is read into; see package disc.
 var (
-	worldOT [2]yaroze.GsOT
-	otTags  [2][1 << otLength]yaroze.GsOT_TAG
+	vhData  [(vhSize + 2047) / 2048 * 512]uint32
+	vbData  [(vbSize + 2047) / 2048 * 512]uint32
+	seqData [(seqSize + 2047) / 2048 * 512]uint32
 
-	// The library builds GPU commands in here. It has to be large enough
-	// for every primitive in a frame.
-	gpuPacketArea [2][maxObj * 24 / 4]uint32
+	vh  = disc.Register("DATA/SOUND/STD0.VH", "data/STD0.VH").Into(vhData[:])
+	vb  = disc.Register("DATA/SOUND/STD0.VB", "data/STD0.VB").Into(vbData[:])
+	seq = disc.Register("DATA/SOUND/SAMPLE1.SEQ", "data/SAMPLE1.SEQ").Into(seqData[:])
+
+	dataFiles = [...]*disc.File{&vh, &vb, &seq}
+)
+
+// The frame: two ordering tables and two packet areas, one of each per
+// display buffer, which the screen takes in halves. The packet area has to
+// be large enough for every primitive in a frame.
+var (
+	screen     yaroze.Screen
+	otTags     [2 << otLength]yaroze.GsOT_TAG
+	packetArea [2 * maxObj * 24 / 4]uint32
 
 	sprites [maxObj]yaroze.GsSPRITE
 )
@@ -70,106 +86,35 @@ type pos struct {
 
 var positions [maxObj]pos
 
-// Controller state. GetPadBuf hands back pointers into the library's own
-// receive buffers, which are refreshed every frame.
 var (
-	padBuf0 *uint8
-	padBuf1 *uint8
-)
-
-// Button bits, from the SDK's pad.h. PadRead assembles them from four bytes
-// of the two receive buffers and inverts them, since the hardware reports
-// buttons active low.
-const (
-	padLUp    = 1 << 12
-	padLDown  = 1 << 14
-	padL1     = 1 << 2
-	padSelect = 1 << 8
-)
-
-// padRaw reproduces the sample's PadRead: two bytes from each of the two
-// receive buffers, assembled into one word and inverted.
-func padRaw() uint32 {
-	if padBuf0 == nil || padBuf1 == nil {
-		return 0
-	}
-	b0, b1 := byteAt(padBuf0, 3), byteAt(padBuf0, 2)
-	b2, b3 := byteAt(padBuf1, 3), byteAt(padBuf1, 2)
-	return ^(uint32(b0) | uint32(b1)<<8 | uint32(b2)<<16 | uint32(b3)<<24)
-}
-
-// The files the sample loads off the disc.
-// The sound data, registered with mkpsxiso by these declarations: see
-// package disc.
-var dataFiles = [...]struct {
-	disc.File
-	addr uintptr
-}{
-	{disc.Register("DATA/SOUND/STD0.VH", "data/STD0.VH"), vhAddr},
-	{disc.Register("DATA/SOUND/STD0.VB", "data/STD0.VB"), vbAddr},
-	{disc.Register("DATA/SOUND/SAMPLE1.SEQ", "data/SAMPLE1.SEQ"), seqAddr},
-}
-
-var (
-	pathBuf [64]byte
 	lineBuf [128]byte
 	line    yaroze.Buffer
 
 	loadNote [len(dataFiles)]string
 
-	vab int16 = -1
-	seq int16 = -1
+	vab  int16 = -1
+	song int16 = -1
 )
-
-// The sound data is loaded at addresses the SDK fixes, so these conversions
-// from integer to pointer are deliberate rather than the mistake go vet
-// normally warns about.
-
-// at turns a fixed load address into a pointer the library can write to.
-func at(addr uintptr) *uint32 {
-	return (*uint32)(unsafe.Pointer(addr))
-}
-
-// bytesAt is the same for a byte pointer.
-func bytesAt(addr uintptr) *uint8 {
-	return (*uint8)(unsafe.Pointer(addr))
-}
-
-// byteAt reads the nth byte after p. The controller buffers are plain memory
-// the library refreshes, and Go has no array type to describe them.
-func byteAt(p *uint8, n uintptr) uint8 {
-	return *(*uint8)(unsafe.Add(unsafe.Pointer(p), n))
-}
 
 // loadDataFiles reads the sound data. It reports whether every file
 // arrived, so the caller can skip sound rather than feed the sequencer an
 // empty buffer.
 func loadDataFiles() bool {
 	ok := true
-	for i := range dataFiles {
-		f := &dataFiles[i]
+	for i, f := range dataFiles {
 		status("reading sound data\n")
 
 		// From the sector mkpsxiso recorded, or by name in an executable
 		// it did not place.
-		if !f.Read(at(f.addr), pathBuf[:]) {
+		if !f.Load() {
 			loadNote[i] = "not found"
 			ok = false
 			continue
 		}
 
-		// Bounded, unlike the C original, and with the wait visible so a
-		// drive that never finishes shows up as a stalled counter rather
-		// than a hang.
-		done := false
-		for w := 0; w < readTimeout; w++ {
-			if yaroze.CdReadSync(1, nil) <= 0 {
-				done = true
-				break
-			}
-			yaroze.VSync(0)
-		}
-		if !done {
+		// Bounded, unlike the C original, so that a drive that never
+		// finishes shows up as a report rather than a hang.
+		if !disc.Wait(readTimeout) {
 			loadNote[i] = "read timed out"
 			ok = false
 			continue
@@ -180,44 +125,44 @@ func loadDataFiles() bool {
 }
 
 func initSound() {
-	vab = yaroze.SsVabTransfer(bytesAt(vhAddr), bytesAt(vbAddr), -1, 1)
+	vab = yaroze.SsVabTransfer(vh.Bytes(), vb.Bytes(), -1, 1)
 	if vab < 0 {
 		return
 	}
-	seq = yaroze.SsSeqOpen(at(seqAddr), vab)
+	song = yaroze.SsSeqOpen(&seqData[0], vab)
 }
 
 func playSound() {
-	if vab < 0 || seq < 0 {
+	if vab < 0 || song < 0 {
 		return
 	}
 	yaroze.SsSetMVol(mvol, mvol)
-	yaroze.SsSeqSetVol(seq, svol, svol)
-	yaroze.SsSeqPlay(seq, yaroze.SSPLAY_PLAY, yaroze.SSPLAY_INFINITY)
+	yaroze.SsSeqSetVol(song, svol, svol)
+	yaroze.SsSeqPlay(song, yaroze.SSPLAY_PLAY, yaroze.SSPLAY_INFINITY)
 }
 
 func stopSound() {
-	if vab < 0 || seq < 0 {
+	if vab < 0 || song < 0 {
 		return
 	}
-	yaroze.SsSeqStop(seq)
+	yaroze.SsSeqStop(song)
 	yaroze.VSync(0)
 	yaroze.VSync(0)
-	yaroze.SsSeqClose(seq)
+	yaroze.SsSeqClose(song)
 	yaroze.SsVabClose(vab)
 }
 
 // initPrim loads the ball texture into video memory and sets up the sprites.
 func initPrim() {
 	rect := yaroze.RECT{X: 640, Y: 0, W: 16 / 4, H: 16}
-	yaroze.LoadImage(&rect, &demo.Ball16x16[0])
+	rect.Load(&demo.Ball16x16[0])
 	tpage := yaroze.GetTPage(0, 0, 640, 0)
 
 	// 32 palettes, one row of video memory each, so each ball can have its
 	// own shade without a second texture.
 	for i := range demo.BallColor {
 		r := yaroze.RECT{X: 0, Y: int16(480 + i), W: 256, H: 1}
-		yaroze.LoadImage(&r, &demo.BallColor[i][0])
+		r.Load(&demo.BallColor[i][0])
 	}
 
 	for i := range sprites {
@@ -245,46 +190,31 @@ func initPoints() {
 	}
 }
 
-// padRead adjusts the ball count, returning zero to stop.
+// padRead adjusts the ball count, returning zero to stop. It is kept out of
+// line because the tests run the program until it is first called, which
+// is when the main loop has begun.
+//
+//go:noinline
 func padRead(n int) int {
-	pad := padRaw()
+	pad := yaroze.PadRead()
 
-	if pad&padLUp != 0 {
+	if pad&yaroze.PADLup != 0 {
 		n += 4
 	}
-	if pad&padLDown != 0 {
+	if pad&yaroze.PADLdown != 0 {
 		n -= 4
 	}
-	if pad&padL1 != 0 {
+	if pad&yaroze.PADL1 != 0 {
 		// Pause: hold here until the button comes back up.
-		for padRaw()&padL1 != 0 {
+		for yaroze.PadRead()&yaroze.PADL1 != 0 {
 			yaroze.VSync(0)
 		}
 	}
-	if pad&padSelect != 0 {
+	if pad&yaroze.PADselect != 0 {
 		return 0
 	}
 
 	return min(max(n, 1), maxObj-1)
-}
-
-// frame draws one complete frame of flat color, with an optional caption.
-func frame(caption *byte) {
-	active := yaroze.GsGetActiveBuff()
-	yaroze.GsSetWorkBase(yaroze.Packets(&gpuPacketArea[active][0]))
-	yaroze.GsClearOt(0, 0, &worldOT[active])
-
-	yaroze.DrawSync(0)
-	yaroze.VSync(0)
-	yaroze.GsSwapDispBuff()
-
-	yaroze.GsSortClear(60, 120, 120, &worldOT[active])
-	yaroze.GsDrawOt(&worldOT[active])
-
-	if caption != nil {
-		yaroze.FntPrint(caption)
-		yaroze.FntFlush(-1)
-	}
 }
 
 // status shows a caption for about half a second, so that a slow step has
@@ -295,9 +225,12 @@ func frame(caption *byte) {
 // clear, draw and swap never appears.
 func status(msg string) {
 	for range 24 {
+		screen.Begin()
+		screen.End(60, 120, 120)
 		line.Reset()
 		line.WriteString(msg)
-		frame(line.CString())
+		line.Print()
+		yaroze.FntFlush(-1)
 	}
 }
 
@@ -311,17 +244,13 @@ func main() {
 	yaroze.SetVideoMode(yaroze.MODE_NTSC)
 	yaroze.GsInitGraph(frameX, frameY, 4, 0, 0)
 	yaroze.GsDefDispBuff(0, 0, 0, frameY)
-
-	for i := range worldOT {
-		worldOT[i].Length = otLength
-		worldOT[i].Org = &otTags[i][0]
-	}
+	screen.Init(otTags[:], packetArea[:])
 
 	yaroze.FntLoad(960, 256)
 	yaroze.FntOpen(16, 16, 256, 200, 0, 512)
 
 	status("loading\n")
-	yaroze.GetPadBuf(&padBuf0, &padBuf1)
+	yaroze.PadInit()
 
 	haveSound := loadDataFiles()
 
@@ -339,10 +268,7 @@ func main() {
 			break
 		}
 
-		active := yaroze.GsGetActiveBuff()
-		yaroze.GsSetWorkBase(yaroze.Packets(&gpuPacketArea[active][0]))
-		yaroze.GsClearOt(0, 0, &worldOT[active])
-
+		ot := screen.Begin()
 		for i := 0; i < nobj; i++ {
 			p := &positions[i]
 			p.x += p.dx
@@ -361,15 +287,9 @@ func main() {
 
 			sprites[i].X = int16(x)
 			sprites[i].Y = int16(y)
-			yaroze.GsSortFastSprite(&sprites[i], &worldOT[active], 0)
+			sprites[i].SortFast(ot, 0)
 		}
-
-		yaroze.DrawSync(0)
-		cnt := yaroze.VSync(0)
-		yaroze.GsSwapDispBuff()
-
-		yaroze.GsSortClear(60, 120, 120, &worldOT[active])
-		yaroze.GsDrawOt(&worldOT[active])
+		cnt := screen.End(60, 120, 120)
 
 		line.Reset()
 		line.WriteString("sprites = ").WriteInt(nobj).

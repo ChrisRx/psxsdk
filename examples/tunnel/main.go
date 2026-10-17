@@ -47,33 +47,45 @@ const (
 	packetMax        = 2048 * 24
 	otLength         = 9
 
-	squareModelAddr   = 0x80090000
-	shipModelAddr     = 0x80091000
-	mainTIMAddr       = 0x80092000
-	fireTIMAddr       = 0x80093000
-	multipleModelAddr = 0x80094000
-	multipleTIMAddr   = 0x80099000
-	vhAddr            = 0x800a0000
-	vbAddr            = 0x800b0000
-	mascotsTIMAddr    = 0x80120000
-	asciiTIMAddr      = 0x80130000
-
 	// The square model's own size.
 	squareSize = 128
 )
 
-var files = []demo.File{
-	{File: disc.Register("DATA/TEN.TMD", "data/TEN.TMD"), Addr: squareModelAddr},
-	{File: disc.Register("DATA/THESHIP.TMD", "data/THESHIP.TMD"), Addr: shipModelAddr},
-	{File: disc.Register("DATA/WAVE09.TIM", "data/WAVE09.TIM"), Addr: mainTIMAddr},
-	{File: disc.Register("DATA/FIRE7.TIM", "data/FIRE7.TIM"), Addr: fireTIMAddr},
-	{File: disc.Register("DATA/ENEMY.TMD", "data/ENEMY.TMD"), Addr: multipleModelAddr},
-	{File: disc.Register("DATA/MULTI3.TIM", "data/MULTI3.TIM"), Addr: multipleTIMAddr},
-	{File: disc.Register("DATA/MASCOTS2.TIM", "data/MASCOTS2.TIM"), Addr: mascotsTIMAddr},
-	{File: disc.Register("DATA/ASCII2.TIM", "data/ASCII2.TIM"), Addr: asciiTIMAddr},
-	{File: disc.Register("DATA/LEWIS.VH", "data/LEWIS.VH"), Addr: vhAddr},
-	{File: disc.Register("DATA/LEWIS.VB", "data/LEWIS.VB"), Addr: vbAddr},
-}
+// The models, the textures and the sound bank, read into the program's
+// own memory, in buffers of whole sectors.
+var (
+	squareData   [(112 + 2047) / 2048 * 512]uint32
+	shipData     [(2044 + 2047) / 2048 * 512]uint32
+	mainData     [(2112 + 2047) / 2048 * 512]uint32
+	fireData     [(576 + 2047) / 2048 * 512]uint32
+	multipleData [(18972 + 2047) / 2048 * 512]uint32
+	multiTIMData [(16928 + 2047) / 2048 * 512]uint32
+	mascotsData  [(25024 + 2047) / 2048 * 512]uint32
+	asciiData    [(2112 + 2047) / 2048 * 512]uint32
+	vhData       [(5152 + 2047) / 2048 * 512]uint32
+	vbData       [(440544 + 2047) / 2048 * 512]uint32
+
+	squareFile   = disc.Register("DATA/TEN.TMD", "data/TEN.TMD").Into(squareData[:])
+	shipFile     = disc.Register("DATA/THESHIP.TMD", "data/THESHIP.TMD").Into(shipData[:])
+	mainFile     = disc.Register("DATA/WAVE09.TIM", "data/WAVE09.TIM").Into(mainData[:])
+	fireFile     = disc.Register("DATA/FIRE7.TIM", "data/FIRE7.TIM").Into(fireData[:])
+	multipleFile = disc.Register("DATA/ENEMY.TMD", "data/ENEMY.TMD").Into(multipleData[:])
+	multiTIMFile = disc.Register("DATA/MULTI3.TIM", "data/MULTI3.TIM").Into(multiTIMData[:])
+	mascotsFile  = disc.Register("DATA/MASCOTS2.TIM", "data/MASCOTS2.TIM").Into(mascotsData[:])
+	asciiFile    = disc.Register("DATA/ASCII2.TIM", "data/ASCII2.TIM").Into(asciiData[:])
+	vh           = disc.Register("DATA/LEWIS.VH", "data/LEWIS.VH").Into(vhData[:])
+	vb           = disc.Register("DATA/LEWIS.VB", "data/LEWIS.VB").Into(vbData[:])
+	files        = []*disc.File{&squareFile, &shipFile, &mainFile, &fireFile, &multipleFile, &multiTIMFile, &mascotsFile, &asciiFile, &vh, &vb}
+
+	squareModel   = yaroze.TMD(squareData[:])
+	shipModel     = yaroze.TMD(shipData[:])
+	multipleModel = yaroze.TMD(multipleData[:])
+	mainTIM       = yaroze.TIM(mainData[:])
+	fireTIM       = yaroze.TIM(fireData[:])
+	multipleTIM   = yaroze.TIM(multiTIMData[:])
+	mascotsTIM    = yaroze.TIM(mascotsData[:])
+	asciiTIM      = yaroze.TIM(asciiData[:])
+)
 
 var (
 	wot        [2]yaroze.GsOT
@@ -162,7 +174,7 @@ func drawObjects(n int, ot *yaroze.GsOT) {
 			yaroze.GsGetLs(&o.Coord, &ls)
 			yaroze.GsSetLightMatrix(&ls)
 			yaroze.GsSetLsMatrix(&ls)
-			yaroze.GsSortObject4(&o.Handler, ot, 3, demo.Scratch())
+			yaroze.GsSortObject4(&o.Handler, ot, 3, yaroze.Scratch())
 		} else {
 			z := sortSpriteObjectPosition(o)
 			yaroze.GsSortSprite(&o.Sprite, ot, z)
@@ -239,16 +251,16 @@ func performBogusWorldClipping() int {
 }
 
 func dealWithControllerPad() {
-	pad := demo.PadRead()
-	if pad&demo.PADstart != 0 && pad&demo.PADselect != 0 {
+	pad := yaroze.PadRead()
+	if pad&yaroze.PADstart != 0 && pad&yaroze.PADselect != 0 {
 		registerDelayedAction(quitProgram, 1)
 	}
 	speed := int32(1)
-	if pad&demo.PADselect != 0 {
+	if pad&yaroze.PADselect != 0 {
 		speed = 10
 	}
 	// Select and L2: step slowly.
-	if pad&demo.PADselect != 0 && pad&demo.PADL2 != 0 {
+	if pad&yaroze.PADselect != 0 && pad&yaroze.PADL2 != 0 {
 		count := yaroze.VSync(-1)
 		for count+25 > yaroze.VSync(-1) {
 		}
@@ -258,28 +270,28 @@ func dealWithControllerPad() {
 	if playerInteractive {
 		s := &playersShip
 		by := s.MovementSpeed * speed
-		if pad&demo.PADL1 != 0 {
+		if pad&yaroze.PADL1 != 0 {
 			s.Position.Vz -= by
 		}
-		if pad&demo.PADL2 != 0 {
+		if pad&yaroze.PADL2 != 0 {
 			s.Position.Vz += by
 		}
-		if pad&demo.PADLup != 0 {
+		if pad&yaroze.PADLup != 0 {
 			s.Position.Vy -= by
 		}
-		if pad&demo.PADLdown != 0 {
+		if pad&yaroze.PADLdown != 0 {
 			s.Position.Vy += by
 		}
-		if pad&demo.PADLleft != 0 {
+		if pad&yaroze.PADLleft != 0 {
 			s.Position.Vx -= by
 		}
-		if pad&demo.PADLright != 0 {
+		if pad&yaroze.PADLright != 0 {
 			s.Position.Vx += by
 		}
 		s.Position.Vx = keepWithinRange(s.Position.Vx, playerMinX, playerMaxX)
 		s.Position.Vy = keepWithinRange(s.Position.Vy, playerMinY, playerMaxY)
 		s.Position.Vz = keepWithinRange(s.Position.Vz, playerMinZ, sectionLength)
-		if pad&demo.PADR1 != 0 {
+		if pad&yaroze.PADR1 != 0 {
 			m := &s.Coord.Coord.M
 			// Negated in z because of the way the ship model points.
 			dir := yaroze.VECTOR{Vx: int32(m[2][0]), Vy: int32(m[2][1]), Vz: -int32(m[2][2])}
@@ -287,13 +299,13 @@ func dealWithControllerPad() {
 		}
 	}
 
-	for pad&demo.PADstart != 0 { // pause
-		pad = demo.PadRead()
+	for pad&yaroze.PADstart != 0 { // pause
+		pad = yaroze.PadRead()
 	}
 }
 
 func initialiseAll() bool {
-	demo.PadInit()
+	yaroze.PadInit()
 
 	// The squares' scaling, for smoother walls; set and never used.
 	scalingVector = yaroze.VECTOR{Vx: 7659, Vy: 7059, Vz: 7779}
@@ -315,7 +327,7 @@ func initialiseAll() bool {
 	if missing := demo.Load(files, nil); missing != "" {
 		basicText[0].Reset()
 		basicText[0].WriteString("could not read\n").WriteString(missing)
-		dummyGuiLoopForTextPrinting(1, demo.PADstart|demo.PADselect)
+		dummyGuiLoopForTextPrinting(1, yaroze.PADstart|yaroze.PADselect)
 		yaroze.ResetGraph(3)
 		return false
 	}
@@ -326,11 +338,11 @@ func initialiseAll() bool {
 	initialiseView()
 	initialiseLighting()
 
-	lpge.ProperInitialiseTexture(mainTIMAddr, &mainTexture)
-	lpge.ProperInitialiseTexture(fireTIMAddr, &fireTexture)
-	lpge.ProperInitialiseTexture(multipleTIMAddr, &multipleTexture)
-	lpge.ProperInitialiseTexture(mascotsTIMAddr, &mascotsTexture)
-	lpge.ProperInitialiseTexture(asciiTIMAddr, &asciiTexture)
+	lpge.ProperInitialiseTexture(mainTIM, &mainTexture)
+	lpge.ProperInitialiseTexture(fireTIM, &fireTexture)
+	lpge.ProperInitialiseTexture(multipleTIM, &multipleTexture)
+	lpge.ProperInitialiseTexture(mascotsTIM, &mascotsTexture)
+	lpge.ProperInitialiseTexture(asciiTIM, &asciiTexture)
 
 	initialiseTextStrings()
 	initialiseObjects()

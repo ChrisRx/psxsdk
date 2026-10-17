@@ -1,0 +1,1382 @@
+# The comments on what hdr2go generates from libps.h, which it copies into
+# zz_generated.go and the two function files. A name on a line of its own
+# opens an entry, under the C name, or Struct.field for one field; the
+# tab-indented lines after it are the comment, which is written as the Go
+# one, starting with the Go name. A blank line separates paragraphs. Lines
+# beginning with # are remarks the generator ignores.
+#
+# The descriptions are condensed from Sony's Net Yaroze Library Reference
+# (February 1997), with what the header says taking precedence where the
+# two differ, and what the examples found by running added where it helps.
+# Fixed point is as the library has it throughout: 4096 is 1.0.
+
+# ---------------------------------------------------------------------------
+# Graphics structures
+# ---------------------------------------------------------------------------
+
+RECT
+	RECT is a rectangle in video memory: its top left corner, in pixels, and
+	its size. Video memory is 1024 by 512, and a RECT may not reach outside
+	it or have a negative coordinate.
+
+RECT.x
+	X and Y are the top left corner.
+
+RECT.w
+	W and H are the width and height.
+
+MATRIX
+	MATRIX is a 3 by 3 rotation matrix with a translation vector, the form
+	the GTE takes a transformation in. The matrix elements are fixed point,
+	with 4096 as 1.0; the translation is in plain integer units.
+
+MATRIX.m
+	M holds the rotation, M[row][column].
+
+MATRIX.t
+	T is the translation applied after the rotation.
+
+VECTOR
+	VECTOR is a three-dimensional vector of 32-bit elements. Pad is unused
+	and keeps the size a multiple of four words.
+
+SVECTOR
+	SVECTOR is a three-dimensional vector of 16-bit elements, the form
+	vertices and normals take in model data. Pad is unused and keeps the
+	size a multiple of a word.
+
+CVECTOR
+	CVECTOR is a color as three 8-bit components. Cd is unused.
+
+GsCOORD2PARAM
+	GsCOORD2PARAM is a scale, a rotation and a translation that a
+	coordinate system can be described by instead of a matrix. Nothing in
+	the resident library reads it; it is there for a program to keep a
+	coordinate system's parameters beside the matrix it works out from
+	them.
+
+_GsCOORDINATE2
+	_GsCOORDINATE2 is a coordinate system: a matrix, and the parent
+	coordinate system it is relative to, so that systems nest. GsDOBJ2
+	draws an object in one, GsRVIEW2 and GsVIEW2 place the camera in one,
+	and GsGetLw, GsGetLs and GsGetLws work out the transformation from one
+	to the world or the screen.
+
+	Flg caches that work: the library sets it when it has worked out
+	Workm, and skips the system while it stays set. A program that changes
+	Coord must clear Flg, or the change is not seen.
+
+	The type is the struct tag; GsCOORDINATE2 is the name the header and
+	the documentation use.
+
+_GsCOORDINATE2.flg
+	Flg is nonzero while Workm is up to date. Clear it after changing
+	Coord.
+
+_GsCOORDINATE2.coord
+	Coord is the transformation from this system to its parent.
+
+_GsCOORDINATE2.workm
+	Workm is the transformation from this system to the world, worked out
+	by GsGetLw, GsGetLs and GsGetLws, except for a system whose parent is
+	the world, which has no need of it.
+
+_GsCOORDINATE2.param
+	Param is the parameters the matrix was made from, if the program keeps
+	them. The library leaves it alone.
+
+_GsCOORDINATE2.super
+	Super is the parent system, or nil, which is WORLD.
+
+_GsCOORDINATE2.sub
+	Sub is a child system, which GsInitCoordinate2 links. The library does
+	not otherwise use it.
+
+GsVIEW2
+	GsVIEW2 is a camera given as a matrix: the transformation from the
+	parent coordinate system to the camera's. GsSetView2 installs it.
+
+GsVIEW2.view
+	View is the transformation from Super to the camera's coordinates.
+
+GsVIEW2.super
+	Super is the coordinate system the view is relative to, or WORLD.
+
+GsRVIEW2
+	GsRVIEW2 is a camera given by where it is and what it looks at: a
+	viewpoint, a reference point it looks towards, and a twist about the
+	line between them. GsSetRefView2 installs it, working the matrix out.
+	Setting Super to a moving coordinate system, a vehicle's say, puts the
+	camera in it.
+
+GsRVIEW2.vpx
+	Vpx, Vpy and Vpz are the viewpoint, in Super's coordinates.
+
+GsRVIEW2.vrx
+	Vrx, Vry and Vrz are the point looked at, in Super's coordinates.
+
+GsRVIEW2.rz
+	Rz is the twist about the line of sight, with 4096 as one degree.
+
+GsRVIEW2.super
+	Super is the coordinate system the points are in, or WORLD.
+
+GsF_LIGHT
+	GsF_LIGHT is a parallel light: a direction and a color. GsSetFlatLight
+	installs one of up to three. A face whose normal points against the
+	direction is lit most.
+
+GsF_LIGHT.vx
+	Vx, Vy and Vz are the direction the light shines in. GsSetFlatLight
+	normalizes them.
+
+GsF_LIGHT.r
+	R, G and B are the light's color.
+
+GsOT
+	GsOT is an ordering table: the header of an array of GsOT_TAG, one per
+	depth, into which drawing commands are sorted by their Z and from which
+	the GPU draws them back to front. A program sets Length and Org and
+	leaves the rest to GsClearOt.
+
+GsOT.length
+	Length is the table's size as a power of two, from 1 to 14: the array
+	at Org holds 1<<Length entries.
+
+GsOT.org
+	Org is the array of entries. GsClearOt writes 1<<Length of them, so the
+	array must be at least that long.
+
+GsOT.offset
+	Offset is a Z offset for the table, which the library does not yet
+	support.
+
+GsOT.point
+	Point is a representative Z for the whole table, which GsSortOt uses
+	when it sorts one table into another.
+
+GsOT.tag
+	Tag is the entry drawing starts from, which GsClearOt sets.
+
+GsDOBJ2
+	GsDOBJ2 is a drawable object: a model in a TMD, the coordinate system it
+	is drawn in, and how. GsLinkObject4 ties it to a model and GsSortObject4
+	sorts it into an ordering table.
+
+GsDOBJ2.attribute
+	Attribute says how the object is drawn, as bits: GsLOFF turns lighting
+	off, GsDIV1 through GsDIV5 subdivide its polygons 2x2 through 32x32
+	against texture distortion, GsALON makes it semi-transparent, where the
+	texture allows, and GsDOFF leaves it undrawn. GsFOG asks for fog and
+	GsLLMOD makes that bit count rather than GsSetLightMode. The rest of the
+	bits are the library's.
+
+GsDOBJ2.coord2
+	Coord2 is the coordinate system the object is placed by.
+
+GsDOBJ2.tmd
+	Tmd is the model, which GsLinkObject4 sets.
+
+GsDOBJ2.id
+	Id is the library's.
+
+GsSPRITE
+	GsSPRITE is a sprite: a rectangle of a texture page, drawn at a point
+	on the screen, with a brightness and, through GsSortSprite, a rotation
+	and a scale. GsSortFastSprite draws it without those.
+
+GsSPRITE.attribute
+	Attribute says how the sprite is drawn, as bits. Bits 24 and 25 are the
+	texture's color depth, 0 for 4-bit, 1 for 8-bit and 2 for 16-bit. Bit 6
+	set leaves the brightness alone, ignoring R, G and B. GsROTOFF, bit 27,
+	skips rotation and scaling, which is faster. Bits 28 and 29 are the
+	blending, used with GsALON, bit 30: 0 averages the sprite and the
+	background, 1 adds, 2 subtracts and 3 adds a quarter. GsDOFF, bit 31,
+	leaves the sprite undrawn.
+
+GsSPRITE.x
+	X and Y are where the sprite is drawn on the screen: the point Mx, My
+	of the sprite for GsSortSprite, and its top left corner for
+	GsSortFastSprite.
+
+GsSPRITE.w
+	W and H are the size of the sprite in pixels. A sprite with either zero
+	is not drawn.
+
+GsSPRITE.tpage
+	Tpage is the texture page the sprite is cut from, which GetTPage
+	computes.
+
+GsSPRITE.u
+	U and V are the sprite's top left corner within the texture page.
+
+GsSPRITE.cx
+	Cx and Cy are where the palette is in video memory, for a 4-bit or an
+	8-bit texture.
+
+GsSPRITE.r
+	R, G and B are the brightness, where 128 shows the texture as it is and
+	255 is twice as bright.
+
+GsSPRITE.mx
+	Mx and My are the point of the sprite that rotation and scaling are
+	about, and that X, Y places, from its top left corner.
+
+GsSPRITE.scalex
+	Scalex and Scaley are the scale in each direction, with 4096 as 1.0,
+	up to eight times.
+
+GsSPRITE.rotate
+	Rotate is the rotation, with 4096 as one degree.
+
+GsCELL
+	GsCELL is one cell of a background: a square of a texture page, with
+	its palette and which way round it is drawn.
+
+GsCELL.u
+	U and V are the cell's top left corner within the texture page.
+
+GsCELL.cba
+	Cba is the palette, as GetClut computes it.
+
+GsCELL.flag
+	Flag flips the cell: bit 0 vertically, bit 1 horizontally.
+
+GsCELL.tpage
+	Tpage is the texture page the cell is cut from.
+
+GsMAP
+	GsMAP is the map a background is drawn from: a grid of cell indexes into
+	an array of GsCELL. Every cell of a map is the same size.
+
+GsMAP.cellw
+	Cellw and Cellh are a cell's size in pixels, where 0 means 256.
+
+GsMAP.ncellw
+	Ncellw and Ncellh are the map's size in cells.
+
+GsMAP.base
+	Base is the cells the map indexes.
+
+GsMAP.index
+	Index is the map, Ncellw by Ncellh indexes into Base, where 0xffff is
+	an empty cell.
+
+GsBG
+	GsBG is a background: a map of cells, shown through a window on the
+	screen, scrolled, and for GsSortBg rotated and scaled. The map repeats
+	if the window is bigger than it. GsSortFixBg16 draws one quickly, with
+	16 by 16 cells and no rotation or scaling.
+
+GsBG.attribute
+	Attribute says how the background is drawn, with the bits of
+	GsSPRITE.Attribute.
+
+GsBG.x
+	X and Y are the window's top left corner on the screen.
+
+GsBG.w
+	W and H are the window's size in pixels, whatever the map's.
+
+GsBG.scrollx
+	Scrollx and Scrolly are how far the map is scrolled within the window,
+	in pixels.
+
+GsBG.r
+	R, G and B are the brightness, where 128 shows the cells as they are.
+
+GsBG.map
+	Map is the map of cells.
+
+GsBG.mx
+	Mx and My are the point rotation and scaling are about, from the
+	window's top left corner.
+
+GsBG.scalex
+	Scalex and Scaley are the scale in each direction, with 4096 as 1.0.
+
+GsBG.rotate
+	Rotate is the rotation, with 4096 as one degree.
+
+GsLINE
+	GsLINE is a straight line of one color. GsSortLine draws it.
+
+GsLINE.attribute
+	Attribute is the blending and display bits of GsSPRITE.Attribute, from
+	bit 28 up.
+
+GsLINE.x0
+	X0, Y0 and X1, Y1 are the ends of the line, on the screen.
+
+GsLINE.r
+	R, G and B are the line's color.
+
+GsGLINE
+	GsGLINE is a straight line shaded from one color at one end to another
+	at the other. GsSortGLine draws it.
+
+GsGLINE.attribute
+	Attribute is the blending and display bits of GsSPRITE.Attribute, from
+	bit 28 up.
+
+GsGLINE.x0
+	X0, Y0 and X1, Y1 are the ends of the line, on the screen.
+
+GsGLINE.r0
+	R0, G0, B0 and R1, G1, B1 are the colors at each end.
+
+GsBOXF
+	GsBOXF is a filled rectangle of one color. GsSortBoxFill draws it.
+
+GsBOXF.attribute
+	Attribute is the blending and display bits of GsSPRITE.Attribute, from
+	bit 28 up.
+
+GsBOXF.x
+	X and Y are the top left corner, on the screen.
+
+GsBOXF.w
+	W and H are the size in pixels.
+
+GsBOXF.r
+	R, G and B are the color.
+
+GsFOGPARAM
+	GsFOGPARAM is fog: how fast a face fades into a color with depth, as
+	two coefficients, and the color. GsSetFogParam installs it, and it
+	takes effect on objects lit in fog mode.
+
+	For a fade complete at distance df, with projection distance h, dqa is
+	-df*4096/64/h and dqb is 1.25*4096*4096.
+
+GsFOGPARAM.dqa
+	Dqa and Dqb are the attenuation coefficients.
+
+GsFOGPARAM.rfc
+	Rfc, Gfc and Bfc are the color faded to.
+
+GsIMAGE
+	GsIMAGE describes a TIM image as GsGetTimInfo reads it from the file's
+	header: where its pixels and its palette go in video memory, their
+	sizes, and where they are in memory, ready for LoadImage.
+
+GsIMAGE.pmode
+	Pmode is the pixel format: 0 for 4-bit and 1 for 8-bit palette images,
+	2 for 16-bit and 3 for 24-bit direct color. Bit 3 is set when the image
+	has a palette.
+
+GsIMAGE.px
+	Px and Py are where the pixels go in video memory.
+
+GsIMAGE.pw
+	Pw and Ph are the pixel rectangle's size, in 16-bit units of width: a
+	4-bit image's W is a quarter of its pixels.
+
+GsIMAGE.pixel
+	Pixel is the pixel data in memory.
+
+GsIMAGE.cx
+	Cx and Cy are where the palette goes in video memory.
+
+GsIMAGE.cw
+	Cw and Ch are the palette's size.
+
+GsIMAGE.clut
+	Clut is the palette data in memory.
+
+_GsPOSITION
+	_GsPOSITION is a drawing offset, the form the library keeps the screen
+	origin in.
+
+_GsPOSITION.offx
+	Offx and Offy are the offset.
+
+DR_ENV
+	DR_ENV is the library's, the GPU commands that set a drawing
+	environment.
+
+DRAWENV
+	DRAWENV is a drawing environment: where in video memory the GPU draws,
+	clipped to what, with what offset and texture window, and whether it
+	clears the area first. GsInitGraph sets the library's up, GsDRAWENV
+	returns it, and PutDrawEnv installs one.
+
+DRAWENV.clip
+	Clip is the area drawn into. Nothing is drawn outside it.
+
+DRAWENV.ofs
+	Ofs is the offset added to every coordinate drawn. The sum wraps at
+	-1024 and 1023.
+
+DRAWENV.tw
+	Tw is the texture window, the part of the texture page textures repeat
+	within. Its width and height are 0, for the whole page, or 16, 32, 64
+	or 128, and its position a multiple of that.
+
+DRAWENV.tpage
+	Tpage is the texture page to start with.
+
+DRAWENV.dtd
+	Dtd is 1 to dither.
+
+DRAWENV.dfe
+	Dfe is 1 to allow drawing into the area being displayed.
+
+DRAWENV.isbg
+	Isbg is 1 to clear Clip to R0, G0, B0 when the environment is
+	installed.
+
+DRAWENV.r0
+	R0, G0 and B0 are the color cleared to when Isbg is set.
+
+DRAWENV.dr_env
+	Dr_env is the library's.
+
+DISPENV
+	DISPENV is a display environment: the part of video memory shown, and
+	where on the screen. GsInitGraph sets the library's up, GsDISPENV
+	returns it, and PutDispEnv installs one.
+
+DISPENV.disp
+	Disp is the area of video memory displayed. Its width is 256, 320,
+	360, 512 or 640 and its height 240 or 480.
+
+DISPENV.screen
+	Screen is where on the monitor the picture goes, on a screen that is
+	256 by 240 whatever Disp is, so that moving it works the same at every
+	resolution.
+
+DISPENV.isinter
+	Isinter is 1 for an interlaced display.
+
+DISPENV.isrgb24
+	Isrgb24 is 1 for 24-bit color, in which the GPU can show images but
+	not draw.
+
+DISPENV.pad0
+	Pad0 and Pad1 are unused.
+
+# ---------------------------------------------------------------------------
+# Sound and other structures
+# ---------------------------------------------------------------------------
+
+SndVolume
+	SndVolume is a stereo volume, as SsGetMVol and SsGetSerialVol report
+	it.
+
+SndVolume.left
+	Left and Right are the two channels' volumes.
+
+CdlLOC
+	CdlLOC is a place on the disc, as the drive addresses it: minutes,
+	seconds and sectors, each in binary coded decimal. CdIntToPos and
+	CdPosToInt convert to and from a sector number.
+
+CdlLOC.minute
+	Minute, Second and Sector are the position, in binary coded decimal.
+
+CdlLOC.track
+	Track is unused.
+
+CdlFILE
+	CdlFILE is a file on the disc as CdSearchFile finds it: where it
+	starts, how long it is, and its name.
+
+CdlFILE.pos
+	Pos is the file's first sector.
+
+CdlFILE.size
+	Size is the file's length in bytes.
+
+CdlFILE.name
+	Name is the file's name, without its directory.
+
+EXEC
+	EXEC describes an executable, PSX-EXE, as the file's header carries it
+	and as Load and CdReadExec fill it in: where its text and data go, where
+	it starts, and the stack it asks for. Exec runs one. The registers at
+	the end are where Exec saves the caller's.
+
+EXEC.pc0
+	Pc0 is the address execution starts at.
+
+EXEC.gp0
+	Gp0 is the initial value of the gp register.
+
+EXEC.t_addr
+	T_addr and T_size are the text and initialized data: where the file
+	loads, and how much of it there is.
+
+EXEC.d_addr
+	D_addr and D_size are reserved.
+
+EXEC.b_addr
+	B_addr and B_size are the uninitialized data, which Exec clears.
+
+EXEC.s_addr
+	S_addr and S_size are the stack the program asked for. With S_addr zero
+	Exec leaves the stack pointer alone.
+
+EXEC.sp
+	Sp, Fp, Gp, Ret and Base are where Exec keeps the caller's registers
+	while the program runs.
+
+DIRENTRY
+	DIRENTRY is a file in a directory listing, which Firstfile and Nextfile
+	fill in.
+
+DIRENTRY.name
+	Name is the file's name.
+
+DIRENTRY.attr
+	Attr is the file's attributes, which mean what the file system says
+	they do.
+
+DIRENTRY.size
+	Size is the file's length in bytes.
+
+DIRENTRY.next
+	Next is for the program, to chain entries with.
+
+DIRENTRY.head
+	Head is the file's first sector.
+
+DIRENTRY.system
+	System is reserved.
+
+# ---------------------------------------------------------------------------
+# Aliases
+# ---------------------------------------------------------------------------
+
+GsCOORDINATE2
+	GsCOORDINATE2 is the name the header and the documentation give a
+	coordinate system; the struct is _GsCOORDINATE2.
+
+PACKET
+	PACKET is a byte of GPU packet space, which GsSetWorkBase takes a
+	pointer to. The space must be word aligned, so a program declares it as
+	words and hands it over through Packets.
+
+# ---------------------------------------------------------------------------
+# Graphics functions: setting up
+# ---------------------------------------------------------------------------
+
+ResetGraph
+	ResetGraph resets the GPU. Mode 0 is a full reset, which also resets
+	the drawing and display environments; mode 1 cancels the drawing in
+	progress and empties the command queue, which is what to do before a
+	function that must not run while the GPU is busy.
+
+GsInitGraph
+	GsInitGraph sets up the graphics system for a display of x by y pixels,
+	where x is 256, 320, 384, 512 or 640 and y is 240 or 480, and must be
+	called before any other Gs function. intmode is GsINTER for an
+	interlaced display or GsNONINTER, or'd with GsOFSGPU to have the GPU add
+	the double buffer's offset when it draws, which is usually best, or
+	GsOFSGTE to have it added when packets are made. dith is 1 to dither.
+	varmmode is 1 for 24-bit color, in which the GPU can show images but
+	not draw polygons.
+
+	The result is in GsDISPENV and GsDRAWENV, and in GsIDMATRIX and
+	GsIDMATRIX2, which the Gs functions need.
+
+GsInit3D
+	GsInit3D sets up the library's 3D side, after GsInitGraph and before
+	GsSetRefView2, GsInitCoordinate2, GsSortObject4 and the rest: it moves
+	the screen origin to the middle of the screen and sets the default
+	lighting mode.
+
+GsDefDispBuff
+	GsDefDispBuff places the two display buffers in video memory, buffer 0
+	at x0, y0 and buffer 1 at x1, y1; normally (0, 0) and (0, y) for a
+	display y pixels high. Giving both the same place in non-interlaced
+	mode does away with double buffering, and in interlaced mode makes the
+	two fields the buffers.
+
+GsSwapDispBuff
+	GsSwapDispBuff exchanges the buffer being displayed and the one being
+	drawn, normally just after VSync: it sets the display start, sets the
+	buffer index GsGetActiveBuff returns, moves the clipping and the
+	drawing offset to the new buffer, and counts the frame. The GPU must
+	not be drawing, so DrawSync(0) comes first.
+
+GsGetActiveBuff
+	GsGetActiveBuff returns which display buffer is being drawn into, 0 or
+	1: the index to choose the frame's ordering table and packet area by.
+
+GsSetWorkBase
+	GsSetWorkBase gives the library the memory it builds the frame's GPU
+	packets in, which GsSortObject4, GsSortSprite and the other sorts
+	consume from. It is called at the start of every frame, with a packet
+	area large enough for everything the frame will sort; the areas are
+	declared as words and passed through Packets, since the library stores
+	words.
+
+GsGetTimInfo
+	GsGetTimInfo reads a TIM image's header into tim: where its pixels and
+	palette go in video memory and where they are in memory. im points to
+	the word after the file's ID, which is the file's second word.
+
+GsSetProjection
+	GsSetProjection sets the projection distance, from the viewpoint to the
+	screen: the longer it is, the narrower the field of view. The screen is
+	the resolution GsInitGraph was given, so at 640 by 240 x is twice as
+	wide as y and needs halving.
+
+GsSetRefView2
+	GsSetRefView2 installs a camera given by viewpoint and reference point,
+	working out the world-to-screen matrix GsWSMATRIX from it. It need only
+	be called again when the camera moves, unless pv.Super is a coordinate
+	system other than WORLD, which may itself move, in which case it is
+	called every frame. It returns 0 on success and 1 otherwise.
+
+GsSetView2
+	GsSetView2 installs a camera given as a matrix, which becomes the
+	world-to-screen matrix GsWSMATRIX directly. It avoids the rounding
+	GsSetRefView2 suffers when the camera moves, and with GsIDMATRIX2 as
+	the base the screen's aspect ratio is allowed for. It returns 0 on
+	success and 1 otherwise.
+
+GsScaleScreen
+	GsScaleScreen scales the screen coordinate system relative to the
+	world, by scale's elements with 4096 as 1.0, against the far clip
+	coming too soon: world coordinates are 32 bits and screen coordinates
+	16, and scaling the screen down by half gives it another bit of reach
+	at the cost of its lowest. Objects at different scales cannot share an
+	ordering table without a shift in GsSortObject4 to match.
+
+GsSetClip
+	GsSetClip sets the drawing clip to clip for the current drawing buffer
+	only: GsSwapDispBuff puts the clip back to the one GsSetClip2D gave,
+	which is kept in CLIP2. The GPU must not be drawing.
+
+GsSetClip2D
+	GsSetClip2D sets the clipping area for drawing, relative to the double
+	buffer so that it holds whichever buffer is drawn. It takes effect at
+	the next GsSwapDispBuff, or at once with GsSetDrawBuffClip.
+
+GsSetDrawBuffClip
+	GsSetDrawBuffClip applies the clipping area GsSetClip2D set to the
+	current drawing buffer. The GPU must not be drawing.
+
+GsSetDrawBuffOffset
+	GsSetDrawBuffOffset applies the drawing offset GsSetOrign set to the
+	current drawing buffer. GsSwapDispBuff calls it. The GPU must not be
+	drawing.
+
+GsSetOffset
+	GsSetOffset sets the drawing offset to x, y for the current drawing
+	buffer only, relative to the buffer: GsSwapDispBuff puts the offset
+	back to the one GsSetOrign gave. The GPU must not be drawing.
+
+GsSetOrign
+	GsSetOrign sets where the screen's origin is, as the drawing offset
+	the library applies to every buffer from the next GsSwapDispBuff or
+	GsSetDrawBuffOffset on. GsInit3D puts it in the middle of the screen.
+
+# ---------------------------------------------------------------------------
+# Graphics functions: ordering tables
+# ---------------------------------------------------------------------------
+
+GsClearOt
+	GsClearOt empties an ordering table, ready for a frame's commands,
+	writing every one of its 1<<Length entries from Org; otp.Length and
+	otp.Org must already be set. offset is a Z offset for the table, not
+	yet supported, and point a representative Z for it, which GsSortOt
+	uses.
+
+GsDrawOt
+	GsDrawOt starts the GPU drawing the commands sorted into ot, back to
+	front, and returns at once while it draws. The GPU must not already be
+	drawing: DrawSync(0) first, or ResetGraph(1).
+
+GsSortOt
+	GsSortOt sorts the whole of ot_src into ot_dest at the depth
+	ot_src.Point gives, so that several tables can be drawn as one, and
+	returns ot_dest.
+
+GsSortClear
+	GsSortClear sorts a command that clears the screen to the color r, g, b
+	into the start of ot, so that it is drawn first.
+
+GsSortObject4
+	GsSortObject4 draws a model: it transforms the object's polygons to
+	the screen with the matrices GsSetLsMatrix and GsSetLightMatrix gave
+	the GTE, lights them, builds their GPU packets in the area GsSetWorkBase
+	gave, and sorts them into ot by depth. shift is how many bits the depth
+	is shifted right to fit the table: 14 minus ot.Length, since the GTE's
+	depth is 14 bits. scratch is 1KB of work space for subdividing
+	polygons, normally the CPU's scratchpad, which Scratch returns.
+
+GsSortSprite
+	GsSortSprite sorts a sprite into ot at depth pri, with its rotation
+	and scaling about sp.Mx, sp.My, which is the point placed at sp.X,
+	sp.Y. pri is 0 for the front and up to the table's size for the back;
+	larger is clamped.
+
+GsSortFastSprite
+	GsSortFastSprite sorts a sprite into ot at depth pri, faster than
+	GsSortSprite by ignoring rotation and scaling: sp.Mx, sp.My, sp.Scalex,
+	sp.Scaley and sp.Rotate are not read, and sp.X, sp.Y is the top left
+	corner.
+
+GsSortLine
+	GsSortLine sorts a line of one color into ot at depth pri.
+
+GsSortGLine
+	GsSortGLine sorts a line shaded between two colors into ot at depth
+	pri.
+
+GsSortBoxFill
+	GsSortBoxFill sorts a filled rectangle into ot at depth pri.
+
+GsInitFixBg16
+	GsInitFixBg16 prepares the work area GsSortFixBg16 builds its packets
+	in, once, for a background of 16 by 16 cells. For a screen W by H
+	pixels the area needs ((W/16+1)*(H/16+2)*6+4)*2+2 words.
+
+GsSortFixBg16
+	GsSortFixBg16 sorts a background into otp at depth pri, quickly: the
+	cells are 16 by 16 and 4-bit or 8-bit, the map any size, scrolling is
+	by the pixel, and there is no rotation or scaling. work is the area
+	GsInitFixBg16 prepared, which is where the packets go rather than the
+	area GsSetWorkBase gave.
+
+# ---------------------------------------------------------------------------
+# Graphics functions: coordinates and objects
+# ---------------------------------------------------------------------------
+
+GsInitCoordinate2
+	GsInitCoordinate2 sets a coordinate system to the identity, with
+	super as its parent, which is WORLD for a top-level one. It also sets
+	Flg to zero and makes base super's Sub. Param and Workm are left
+	alone.
+
+GsGetLw
+	GsGetLw works out the transformation from the coordinate system m to
+	the world, into out, following the parents up to WORLD. The result for
+	each system on the way is cached in its Workm while its Flg stays set,
+	and a parent that has changed brings its children with it. A program
+	that changes a Coord must clear that system's Flg first.
+
+GsGetLs
+	GsGetLs works out the transformation from the coordinate system m to
+	the screen, into out: the local-to-world transformation with the
+	world-to-screen matrix GsWSMATRIX after it, cached as GsGetLw caches.
+	It is what GsSetLsMatrix takes.
+
+GsGetLws
+	GsGetLws works out both transformations from the coordinate system m,
+	to the world into outw and to the screen into outs, faster than GsGetLw
+	and GsGetLs one after the other. Lighting needs the first and drawing
+	the second.
+
+GsSetLsMatrix
+	GsSetLsMatrix gives the GTE the local-to-screen matrix GsSortObject4
+	transforms with next, as GsGetLs works it out.
+
+GsSetLightMatrix
+	GsSetLightMatrix gives the GTE the matrix it lights with next: the
+	local-to-world matrix mp, as GsGetLw works it out, multiplied by the
+	three light directions. GsSortObject4 needs it set for a model that is
+	lit.
+
+GsSetFlatLight
+	GsSetFlatLight installs lt as parallel light id, 0, 1 or 2, normalizing
+	its direction. A change to lt afterwards does nothing until it is
+	installed again.
+
+GsSetAmbient
+	GsSetAmbient sets the ambient light, the color every face is lit with
+	whatever it faces, with 4096 as full brightness in each component and
+	0 as none.
+
+GsSetLightMode
+	GsSetLightMode sets the default lighting mode for objects that leave
+	GsLLMOD clear: 0 for plain lighting and 1 for lighting with fog.
+
+GsSetFogParam
+	GsSetFogParam installs the fog, which objects lit in fog mode fade
+	into with depth.
+
+GsMapModelingData
+	GsMapModelingData turns the offsets in a TMD into addresses, in place,
+	once the file is in memory, which it has to be before GsLinkObject4
+	reads it. p points to the word after the file's ID, which is the file's
+	second word. The file records that it has been done, so doing it again
+	is harmless.
+
+gteMIMefunc
+	GteMIMefunc moves n vertices at otp by the differences at dfp, each
+	scaled by p with 4096 as 1.0, in place: the GTE's part of MIMe, Sony's
+	vertex animation, where a model's shape is blended towards a set of
+	differences from it. otp and dfp may be anywhere in memory.
+
+# ---------------------------------------------------------------------------
+# Graphics functions: matrices
+# ---------------------------------------------------------------------------
+
+RotMatrix
+	RotMatrix makes a rotation matrix in m from the angles in r, each with
+	4096 as a full turn, rotating about Z, then Y, then X, and returns m.
+	The translation is left alone.
+
+RotMatrixX
+	RotMatrixX rotates m about the X axis by r, with 4096 as a full turn,
+	in place, and returns it.
+
+RotMatrixY
+	RotMatrixY rotates m about the Y axis by r, with 4096 as a full turn,
+	in place, and returns it.
+
+RotMatrixZ
+	RotMatrixZ rotates m about the Z axis by r, with 4096 as a full turn,
+	in place, and returns it.
+
+TransMatrix
+	TransMatrix sets the translation of m to v and returns m.
+
+ScaleMatrix
+	ScaleMatrix scales the columns of m by v, with 4096 as 1.0, in place,
+	and returns it.
+
+ScaleMatrixL
+	ScaleMatrixL scales the rows of m by v, with 4096 as 1.0, in place, and
+	returns it.
+
+TransposeMatrix
+	TransposeMatrix writes the transpose of m0's rotation to m1 and returns
+	m1.
+
+MulMatrix0
+	MulMatrix0 multiplies the rotations of m0 and m1 into m2 and returns
+	m2, leaving the translations alone. The GTE's rotation matrix is
+	overwritten.
+
+CompMatrix
+	CompMatrix composes the transformations m0 and m1 into m2, translation
+	included, and returns m2: m2's rotation is m0's times m1's, and its
+	translation is m0's rotation applied to m1's translation plus m0's own.
+	m1's translation must fit in 16 bits. The GTE's rotation matrix is
+	overwritten.
+
+ApplyMatrix
+	ApplyMatrix multiplies the short vector v0 by the rotation of m into
+	the long vector v1 and returns v1. The GTE's rotation matrix is
+	overwritten.
+
+ApplyMatrixLV
+	ApplyMatrixLV multiplies the long vector v0 by the rotation of m into
+	the long vector v1 and returns v1. The GTE's rotation matrix is
+	overwritten.
+
+ApplyMatrixSV
+	ApplyMatrixSV multiplies the short vector v0 by the rotation of m into
+	the short vector v1 and returns it, as a VECTOR pointer for reasons of
+	the library's own. The GTE's rotation matrix is overwritten.
+
+# ---------------------------------------------------------------------------
+# Graphics functions: video memory and the display
+# ---------------------------------------------------------------------------
+
+LoadImage
+	LoadImage copies pixels from memory at p into the rectangle rect of
+	video memory, which is how textures and palettes get there. It returns
+	as soon as the transfer is queued, so DrawSync waits for it; clipping
+	and the drawing offset do not apply.
+
+StoreImage
+	StoreImage copies the rectangle rect of video memory out to memory at
+	p. It returns as soon as the transfer is queued, so DrawSync waits for
+	it; clipping and the drawing offset do not apply.
+
+MoveImage
+	MoveImage copies the rectangle rect of video memory to the same size
+	rectangle at x, y within it. It returns as soon as the transfer is
+	queued, so DrawSync waits for it; clipping and the drawing offset do
+	not apply, and overlapping source and destination give an unpredictable
+	result.
+
+ClearImage
+	ClearImage fills the rectangle rect of video memory with the color r,
+	g, b. It returns as soon as the command is queued, so DrawSync waits
+	for it; clipping and the drawing offset do not apply.
+
+DrawSync
+	DrawSync with mode 0 waits until the GPU has finished everything queued
+	for it, which is what a frame does before it swaps buffers. With mode
+	1 it returns at once with how much is queued.
+
+VSync
+	VSync with mode 0 waits for the next vertical blank, the start of the
+	next field, which is what a frame does before it swaps buffers; it
+	returns how long the frame took since the last call, in horizontal
+	lines. Mode 1 returns that without waiting, a mode above 1 waits that
+	many fields, and a negative mode returns the fields since the program
+	started. The controllers are read during the wait.
+
+PutDispEnv
+	PutDispEnv installs the display environment env, at once, until the
+	next PutDispEnv or GsSwapDispBuff. It returns env, or nil if it could
+	not.
+
+PutDrawEnv
+	PutDrawEnv installs the drawing environment env, until the next
+	PutDrawEnv or GsSwapDispBuff. It returns env, or nil if it could not.
+
+SetDispMask
+	SetDispMask turns the display on with mask 1 and off, to black, with
+	mask 0.
+
+GetTPage
+	GetTPage computes the texture page value a sprite or a polygon names
+	its texture by, for the texture at x, y in video memory, where x is a
+	multiple of 64 and y of 256. tp is the color depth, 0 for 4-bit, 1 for
+	8-bit and 2 for 16-bit, and abr the blending for a semi-transparent
+	draw, 0 to average, 1 to add, 2 to subtract and 3 to add a quarter,
+	which applies to untextured polygons too.
+
+GetClut
+	GetClut computes the palette value a sprite or a polygon names its
+	palette by, for the palette at x, y in video memory, where x is a
+	multiple of 16.
+
+# ---------------------------------------------------------------------------
+# Graphics functions: text
+# ---------------------------------------------------------------------------
+
+FntLoad
+	FntLoad puts the library's 8 by 8 font into video memory at tx, ty,
+	where it takes 256 by 128 of a 4-bit texture page, and resets every
+	print stream. It comes before FntOpen and FntFlush, and the area must
+	be one the program does not use for anything else.
+
+FntOpen
+	FntOpen opens a print stream that shows at x, y on the screen, in a
+	window w by h, holding up to n characters, and returns its id. isbg
+	0 clears the window to black each time it is drawn; 1 leaves what is
+	under it. Up to eight streams can be open, and they stay open until
+	the next FntLoad.
+
+FntFlush
+	FntFlush draws print stream id's text into the current drawing buffer
+	and empties the stream, or every stream's with id -1. It returns the
+	ordering table it drew through. Like any drawing it only shows once
+	the buffer it drew into is displayed.
+
+KanjiFntOpen
+	KanjiFntOpen opens a print stream of Shift JIS text, like FntOpen,
+	drawn with the font at dx, dy in video memory and the palette at cx,
+	cy, and returns its id.
+
+KanjiFntFlush
+	KanjiFntFlush draws Shift JIS print stream id's text into the current
+	drawing buffer and empties the stream, returning the ordering table it
+	drew through.
+
+KanjiFntClose
+	KanjiFntClose closes every Shift JIS print stream.
+
+Krom2Tim
+	Krom2Tim renders a Shift JIS string from the console's kanji ROM to
+	a 4-bit TIM at taddr, for LoadImage, with its pixels placed at dx, dy
+	in video memory and its palette at cdx, cdy, in the colors fg on bg. It
+	returns 0, or -1 for a string the ROM cannot render. taddr needs 128
+	bytes per character plus 84.
+
+Krom2Tim2
+	Krom2Tim2 is Krom2Tim for a string of user-defined characters. taddr
+	needs (32*n+16)*4 bytes for n characters up to 16, and
+	(32*16*((n-1)/16+1)+16)*4 beyond.
+
+# ---------------------------------------------------------------------------
+# Sound
+# ---------------------------------------------------------------------------
+
+SsSetMVol
+	SsSetMVol sets the main volume, left and right, from 0 to 127. It has
+	to be set before anything is played.
+
+SsGetMVol
+	SsGetMVol reads the main volume into a0.
+
+SsSetMute
+	SsSetMute mutes all sound with SS_MUTE_ON and restores it with
+	SS_MUTE_OFF.
+
+SsGetMute
+	SsGetMute returns SS_MUTE_ON or SS_MUTE_OFF.
+
+SsVabTransfer
+	SsVabTransfer opens a sound bank: it reads the header, the VH file at
+	a0, and sends the waveforms, the VB file at a1, to the SPU. a2 is the
+	id to open it as, or -1 to be given a free one, and a3 is 1. It returns
+	the bank's id, from 0 to 15, or a negative error: -1 for no free id or
+	a bad header, -2 for bad waveforms.
+
+SsVabClose
+	SsVabClose closes the sound bank a0.
+
+SsSeqOpen
+	SsSeqOpen opens the sequence, the SEQ file, at a0, to play on the sound
+	bank a1, and returns its number, or -1 if 32 are already open.
+
+SsSeqClose
+	SsSeqClose closes the sequence a0.
+
+SsSeqPlay
+	SsSeqPlay plays the sequence a0: at once with a1 SSPLAY_PLAY, or paused
+	until SsSeqReplay with SSPLAY_PAUSE. a2 is how many times, or
+	SSPLAY_INFINITY to loop.
+
+SsSeqPause
+	SsSeqPause pauses the sequence a0, until SsSeqReplay.
+
+SsSeqReplay
+	SsSeqReplay resumes the sequence a0 from where SsSeqPause or SsSeqPlay
+	left it paused.
+
+SsSeqStop
+	SsSeqStop stops the sequence a0.
+
+SsSeqSetVol
+	SsSeqSetVol sets the sequence a0's volume, left and right, from 0 to
+	127.
+
+SsSeqGetVol
+	SsSeqGetVol reads the sequence a0's volume into a2 and a3, left and
+	right. a1 is 0.
+
+SsSeqSetNext
+	SsSeqSetNext makes the sequence a1 play when the sequence a0 ends.
+
+SsSetTempo
+	SsSetTempo sets the sequence a0's tempo to a2, at once. a1 is 0.
+
+SsSeqSetAccelerando
+	SsSeqSetAccelerando speeds the sequence a0 up to the tempo a1 over a2
+	ticks of a sixtieth of a second.
+
+SsSeqSetRitardando
+	SsSeqSetRitardando slows the sequence a0 down to the tempo a1 over a2
+	ticks of a sixtieth of a second.
+
+SsIsEos
+	SsIsEos returns 1 while the sequence a0 is playing and 0 once it has
+	ended. a1 is 0.
+
+SsPlayBack
+	SsPlayBack stops whatever sequence is playing and plays the sequence
+	a0 instead, a2 times or SSPLAY_INFINITY to loop. a1 is 0.
+
+SsSetSerialAttr
+	SsSetSerialAttr turns an attribute of the disc's audio on, with a2
+	SS_SON, or off, with SS_SOFF: a1 is SS_MIX to mix it into the output
+	or SS_REV to put it through the reverb. a0 is SS_CD.
+
+SsGetSerialAttr
+	SsGetSerialAttr returns 1 if the disc audio attribute a1, SS_MIX or
+	SS_REV, is on, and 0 if not. a0 is SS_CD.
+
+SsSetSerialVol
+	SsSetSerialVol sets the disc audio's volume, left and right, from 0 to
+	127. a0 is SS_CD.
+
+SsGetSerialVol
+	SsGetSerialVol reads the disc audio's volume into a1. a0 is SS_CD.
+
+SsUtKeyOn
+	SsUtKeyOn plays a note by hand: tone a2 of program a1 in the sound bank
+	a0, at note a3 of 128, fine pitch a4 in 128ths of a semitone, with
+	volume a5 left and a6 right. It returns the voice it took, from 0 to
+	23, for SsUtKeyOff to stop, or -1 if none was free.
+
+SsUtKeyOff
+	SsUtKeyOff stops the voice a0 that SsUtKeyOn started, given again the
+	bank a1, program a2, tone a3 and note a4 it was started with. It
+	returns 0, or -1 if it could not.
+
+SsUtAllKeyOff
+	SsUtAllKeyOff stops every voice. a0 is 0.
+
+SsUtPitchBend
+	SsUtPitchBend bends the voice a0 by a4, given again the bank a1,
+	program a2 and note a3 it was started with. It returns 0, or -1 if it
+	could not.
+
+SsUtChangePitch
+	SsUtChangePitch moves the voice a0 to note a5 and fine pitch a6, given
+	again the bank a1, program a2 and the note a3 and fine pitch a4 it was
+	started with. It returns 0, or -1 if it could not.
+
+SsUtSetVVol
+	SsUtSetVVol sets the voice a0's volume, left and right. It returns 0,
+	or -1 if it could not.
+
+SsUtGetVVol
+	SsUtGetVVol reads the voice a0's volume into a1 and a2, left and right.
+	It returns 0, or -1 if it could not.
+
+SsUtSetReverbType
+	SsUtSetReverbType chooses the reverb, one of the SS_REV_TYPE constants,
+	and sets its depth to zero. It returns the type, or -1 if it could not.
+	The reverb's working memory may hold noise, so the library suggests
+	turning it on and waiting a few seconds before giving it depth.
+
+SsUtGetReverbType
+	SsUtGetReverbType returns the reverb type.
+
+SsUtReverbOn
+	SsUtReverbOn turns the reverb on, with the type and depth set.
+
+SsUtReverbOff
+	SsUtReverbOff turns the reverb off.
+
+SsUtSetReverbDepth
+	SsUtSetReverbDepth sets how much reverb there is, left and right, from
+	0 to 127.
+
+SsUtSetReverbDelay
+	SsUtSetReverbDelay sets the reverb's delay, from 0 to 127, for the echo
+	and delay types.
+
+SsUtSetReverbFeedback
+	SsUtSetReverbFeedback sets the reverb's feedback, from 0 to 127, for
+	the echo type.
+
+# ---------------------------------------------------------------------------
+# The disc
+# ---------------------------------------------------------------------------
+
+CdReadFile
+	CdReadFile starts reading nbyte bytes of the file named file off the
+	disc into memory at addr, or the whole file with nbyte 0, and returns
+	the number of bytes it will read, or 0 if the file was not found. The
+	read goes on in the background and CdReadSync waits for it. file is
+	the absolute path on the disc as CString makes it, "\DIR\NAME.EXT;1";
+	with file nil the read carries on from where the last one stopped.
+
+CdReadSync
+	CdReadSync reports on the read CdReadFile, CdReadExec or CdRead
+	started: with mode 0 it waits for it to finish, and with mode 1 it
+	returns at once. It returns how many sectors are left, 0 when the read
+	is done, or -1 for an error. result, if not nil, receives the drive's
+	status.
+
+CdSearchFile
+	CdSearchFile finds the file named name on the disc, by its absolute
+	path, and fills in fp with where it starts and how long it is. It
+	returns fp, nil if the file is not there, or -1 as a pointer for an
+	error. A directory read once is remembered.
+
+CdReadExec
+	CdReadExec starts reading the executable named file off the disc to
+	the address in its header, for Exec to run, and returns its EXEC. The
+	read goes on in the background and CdReadSync waits for it. The
+	executable must not overlap the program that loads it.
+
+CdPlay
+	CdPlay plays audio tracks: those in the array at tracks, which ends
+	with a 0, from index offset on, once with mode 1 and round again with
+	mode 2. Mode 0 stops playback and mode 3 only asks. It returns the
+	index in tracks of the track playing, or -1 if none is.
+
+# ---------------------------------------------------------------------------
+# The kernel: timers, interrupts, files and programs
+# ---------------------------------------------------------------------------
+
+GetRCnt
+	GetRCnt returns the value of the root counter spec, one of the CPU's
+	timers, as a 32-bit count, or -1 if it could not. RCntCNT2 is the
+	system clock divided by eight.
+
+StartRCnt
+	StartRCnt starts the root counter spec and enables its interrupt,
+	returning 1, or 0 if it could not.
+
+ResetRCnt
+	ResetRCnt resets the root counter spec to zero, returning 1, or 0 if
+	it could not.
+
+EnterCriticalSection
+	EnterCriticalSection turns interrupts off, for a stretch of code the
+	kernel must not interrupt, until ExitCriticalSection.
+
+ExitCriticalSection
+	ExitCriticalSection turns interrupts back on after
+	EnterCriticalSection.
+
+FlushCashe
+	FlushCashe empties the instruction cache, after code in memory has been
+	changed, so that the CPU fetches the new code. The library spells it
+	so.
+
+TestCard
+	TestCard tests the memory card in slot a0, 0 or 1, and returns 0 for
+	no card, 1 for a card, 2 for a card newly inserted, 3 for an error
+	talking to it and 4 for a card that is not formatted. The test takes
+	one to four fields to complete.
+
+GetVideoMode
+	GetVideoMode returns MODE_NTSC or MODE_PAL, whichever SetVideoMode
+	last set; NTSC until then, whatever the console.
+
+SetVideoMode
+	SetVideoMode tells the library whether the display is MODE_NTSC or
+	MODE_PAL, before anything else is called, and returns the mode that
+	was set before.
+
+Load
+	Load reads the executable named a0 into memory at the address in its
+	header and describes it in a1, for Exec to run. It returns 1, or 0 if
+	it could not.
+
+LoadTest
+	LoadTest reads the header of the executable named a0 into a1 without
+	loading it, and returns its entry point, or 0 if it could not.
+
+Exec
+	Exec runs the executable a0 describes, as Load loaded it, with a1
+	arguments at a2, and returns when it does: it clears the program's
+	uninitialized data, saves the stack and global pointers and sets them
+	for the program unless a0.S_addr is zero, jumps to a0.Pc0, and
+	restores them after. It returns 1, or 0 if it could not, and must be
+	called in a critical section.
+
+open
+	Open opens the file named a0 on a device, "bu00:" for the first memory
+	card say, with flags a1, and returns a descriptor, or -1. The flags are
+	the usual O_RDONLY, O_WRONLY, O_RDWR and O_CREAT, with O_NOBUF for
+	unbuffered and O_NOWAIT for asynchronous access.
+
+close
+	Close closes the descriptor a0 and returns it, or -1.
+
+read
+	Read reads up to a2 bytes from the descriptor a0 into a1 and returns
+	how many it read, or -1.
+
+write
+	Write writes a2 bytes from a1 to the descriptor a0 and returns how
+	many it wrote, or -1.
+
+lseek
+	Lseek moves the descriptor a0's position by a1 bytes, from the start of
+	the file with a2 SEEK_SET or from the current position with SEEK_CUR,
+	and returns the new position, or -1. A character device cannot seek.
+
+firstfile
+	Firstfile starts listing files: it finds the first whose name matches
+	a0, in which a trailing * matches anything, fills in a1 and returns
+	it, or nil if there is none. Nextfile continues.
+
+nextfile
+	Nextfile continues the listing Firstfile started, filling in a0 with
+	the next match and returning it, or nil when there are no more, or if
+	the disc has been removed since.
+
+delete
+	Delete deletes the file named a0 and returns 1, or 0 if it could not.
+
+rename
+	Rename renames the file named a0, with its device, to a1, and returns
+	1, or 0 if it could not. It works on file systems that can be written,
+	the memory cards.
+
+format
+	Format formats the file system named a0, a memory card, and returns 1,
+	or 0 if it could not.
+
+_get_errno
+	_get_errno returns the error the last file operation left, as the
+	kernel's errno.
+
+# ---------------------------------------------------------------------------
+# The C library's math, in software floating point
+# ---------------------------------------------------------------------------
+
+sin
+	Sin returns the sine of a0, in radians. Floating point is software on
+	the console, so a frame loop prefers tables of fixed point.
+
+cos
+	Cos returns the cosine of a0, in radians.
+
+tan
+	Tan returns the tangent of a0, in radians.
+
+asin
+	Asin returns the arcsine of a0, from -1 to 1, in radians from -pi/2 to
+	pi/2, or 0 for an argument out of range.
+
+acos
+	Acos returns the arccosine of a0, from -1 to 1, in radians from 0 to
+	pi, or 0 for an argument out of range.
+
+atan
+	Atan returns the arctangent of a0, in radians from -pi/2 to pi/2.
+
+atan2
+	Atan2 returns the arctangent of a0/a1, in radians from -pi to pi, with
+	the quadrant from the signs of both, or 0 when both are 0.
+
+sinh
+	Sinh returns the hyperbolic sine of a0.
+
+cosh
+	Cosh returns the hyperbolic cosine of a0.
+
+tanh
+	Tanh returns the hyperbolic tangent of a0.
+
+exp
+	Exp returns e to the power a0.
+
+log
+	Log returns the natural logarithm of a0, which must be positive: 0 for
+	a negative argument and 1 for zero.
+
+log10
+	Log10 returns the base 10 logarithm of a0, which must be positive: 0
+	for a negative argument and 1 for zero.
+
+pow
+	Pow returns a0 to the power a1: 0 for a zero base with a positive
+	power, 1 for a zero base otherwise, and 0 for a negative base with a
+	power that is not an integer.
+
+sqrt
+	Sqrt returns the square root of a0, or 0 for a negative argument.
+
+hypot
+	Hypot returns the square root of a0 squared plus a1 squared.
+
+floor
+	Floor returns the largest integer not greater than a0.
+
+ceil
+	Ceil returns the smallest integer not less than a0.
+
+fmod
+	Fmod returns the remainder of a0 divided by a1, with the sign of a0,
+	or 0 when a1 is 0.
+
+modf
+	Modf splits a0 into an integer part, stored at a1, and a fraction,
+	which it returns, both with a0's sign.
+
+frexp
+	Frexp splits a0 into a mantissa from a half to one, which it returns,
+	and a power of two, stored at a1.
+
+ldexp
+	Ldexp returns a0 times two to the power a1.
+
+atof
+	Atof converts the C string at a0 to a float, as Strtod does.
+
+strtod
+	Strtod converts the C string at a0 to a float, white space and a sign
+	allowed before the digits, and stores where it stopped at a1 unless a1
+	is nil. A value too large is the largest, with the string's sign, and
+	one too small is 0.

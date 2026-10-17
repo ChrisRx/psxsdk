@@ -21,10 +21,9 @@
 //
 // Differences from the original:
 //
-//   - The textures are loaded below the program rather than above it, where
-//     the original's batch script put them and where a Go program's data
-//     now lies. The sound, as in the check sample, comes from the same files
-//     at the same addresses.
+//   - The textures and the sound are read off the disc into the program's
+//     own memory, where the original's batch script sent them to fixed
+//     addresses. The sound comes from the check sample's files.
 //   - The missing data is reported, where the original would hang.
 //
 // Nothing allocates after startup.
@@ -37,13 +36,6 @@ import (
 )
 
 const (
-	// Where the data is loaded.
-	vhAddr   = 0x80090000
-	vbAddr   = 0x800a0000
-	seqAddr  = 0x80110000
-	batTIM   = 0x80120000
-	brickTIM = 0x80121000
-
 	mvol = 127
 	svol = 127
 
@@ -91,13 +83,25 @@ const (
 	overlap
 )
 
-var files = []demo.File{
-	{File: disc.Register("DATA/SOUND/STD0.VH", "data/STD0.VH"), Addr: vhAddr},
-	{File: disc.Register("DATA/SOUND/STD0.VB", "data/STD0.VB"), Addr: vbAddr},
-	{File: disc.Register("DATA/SOUND/GOGO.SEQ", "data/GOGO.SEQ"), Addr: seqAddr},
-	{File: disc.Register("DATA/BREAK3.TIM", "data/BREAK3.TIM"), Addr: batTIM},
-	{File: disc.Register("DATA/ODEN3.TIM", "data/ODEN3.TIM"), Addr: brickTIM},
-}
+// The sound and the textures, read into the program's own memory, in
+// buffers of whole sectors.
+var (
+	vhData    [(60448 + 2047) / 2048 * 512]uint32
+	vbData    [(401360 + 2047) / 2048 * 512]uint32
+	seqData   [(17341 + 2047) / 2048 * 512]uint32
+	batData   [(864 + 2047) / 2048 * 512]uint32
+	brickData [(4116 + 2047) / 2048 * 512]uint32
+
+	vh        = disc.Register("DATA/SOUND/STD0.VH", "data/STD0.VH").Into(vhData[:])
+	vb        = disc.Register("DATA/SOUND/STD0.VB", "data/STD0.VB").Into(vbData[:])
+	seqFile   = disc.Register("DATA/SOUND/GOGO.SEQ", "data/GOGO.SEQ").Into(seqData[:])
+	batFile   = disc.Register("DATA/BREAK3.TIM", "data/BREAK3.TIM").Into(batData[:])
+	brickFile = disc.Register("DATA/ODEN3.TIM", "data/ODEN3.TIM").Into(brickData[:])
+	files     = []*disc.File{&vh, &vb, &seqFile, &batFile, &brickFile}
+
+	batTIM   = yaroze.TIM(batData[:])
+	brickTIM = yaroze.TIM(brickData[:])
+)
 
 // A movement is where something is, how big it is and how it moves, in
 // pixels.
@@ -146,7 +150,8 @@ var (
 	highScoreTable [5]score
 	currentScore   score
 
-	vab, seq     int16
+	bank         yaroze.Bank
+	song         yaroze.Sequence
 	soundSuccess bool
 
 	frameNumber uint32
@@ -279,13 +284,13 @@ func dealWithEnd(heading string) bool {
 	frameNow, whenToLeaveLoop := 0, -1
 	exitSet := false
 	for {
-		padStatus = demo.PadRead()
-		if padStatus&demo.PADL1 != 0 && padStatus&demo.PADR1 != 0 && !exitSet {
+		padStatus = yaroze.PadRead()
+		if padStatus&yaroze.PADL1 != 0 && padStatus&yaroze.PADR1 != 0 && !exitSet {
 			newGame = false
 			whenToLeaveLoop = frameNow + 60
 			exitSet = true
 		}
-		if padStatus&demo.PADRdown != 0 && !exitSet {
+		if padStatus&yaroze.PADRdown != 0 && !exitSet {
 			newGame = true
 			whenToLeaveLoop = frameNow + 60
 			exitSet = true
@@ -364,7 +369,7 @@ func initialiseAll() bool {
 		worldOT[i].Org = &otTags[i][0]
 	}
 
-	demo.PadInit()
+	yaroze.PadInit()
 
 	yaroze.FntLoad(960, 256)
 	yaroze.FntOpen(16, 16, 256, 200, 0, 512)
@@ -390,7 +395,7 @@ func initialiseAll() bool {
 
 // fail shows what went wrong until the program is quit.
 func fail(what, detail string) {
-	for demo.PadRead()&(demo.PADstart|demo.PADselect) != demo.PADstart|demo.PADselect {
+	for yaroze.PadRead()&(yaroze.PADstart|yaroze.PADselect) != yaroze.PADstart|yaroze.PADselect {
 		active := yaroze.GsGetActiveBuff()
 		yaroze.GsSetWorkBase(yaroze.Packets(&gpuPacketArea[active][0]))
 		yaroze.GsClearOt(0, 0, &worldOT[active])
@@ -503,7 +508,7 @@ func initialiseTexturesAndSprites() {
 	var image1, image2 yaroze.GsIMAGE
 
 	// The bat.
-	yaroze.GsGetTimInfo(demo.At(batTIM+4), &image1)
+	image1 = batTIM.Image()
 	rect := yaroze.RECT{X: 320, Y: 0, W: int16(image1.Pw), H: int16(image1.Ph)}
 	yaroze.LoadImage(&rect, image1.Pixel)
 	yaroze.DrawSync(0)
@@ -519,7 +524,7 @@ func initialiseTexturesAndSprites() {
 	playersSprite.Attribute |= eightBitTexture | semiTransparent1 | semiTransparent2
 
 	// The bricks.
-	yaroze.GsGetTimInfo(demo.At(brickTIM+4), &image2)
+	image2 = brickTIM.Image()
 	rect = yaroze.RECT{X: 640, Y: 0, W: int16(image2.Pw), H: int16(image2.Ph)}
 	yaroze.LoadImage(&rect, image2.Pixel)
 	yaroze.DrawSync(0)
@@ -564,28 +569,28 @@ func clearBackground() {
 }
 
 func dealWithControllerPad() {
-	padStatus = demo.PadRead()
+	padStatus = yaroze.PadRead()
 
-	if padStatus&demo.PADselect != 0 && padStatus&demo.PADstart != 0 {
+	if padStatus&yaroze.PADselect != 0 && padStatus&yaroze.PADstart != 0 {
 		quit = true
 		return
 	}
 
-	for padStatus&demo.PADL1 != 0 { // pause
-		padStatus = demo.PadRead()
+	for padStatus&yaroze.PADL1 != 0 { // pause
+		padStatus = yaroze.PadRead()
 	}
 
-	if padStatus&demo.PADLleft != 0 {
+	if padStatus&yaroze.PADLleft != 0 {
 		playersMovement.dx = max(playersMovement.dx-playerSpeed, -maxPlayerXSpeed)
 	}
-	if padStatus&demo.PADLright != 0 {
+	if padStatus&yaroze.PADLright != 0 {
 		playersMovement.dx = min(playersMovement.dx+playerSpeed, maxPlayerXSpeed)
 	}
 
-	if padStatus&demo.PADR1 != 0 {
+	if padStatus&yaroze.PADR1 != 0 {
 		playerSpeed++
 	}
-	if padStatus&demo.PADR2 != 0 {
+	if padStatus&yaroze.PADR2 != 0 {
 		playerSpeed--
 	}
 }
@@ -875,29 +880,28 @@ func findWhereRectanglesTouch(first, second *yaroze.RECT) int32 {
 // remembering whether both worked so that nothing is played or closed
 // otherwise.
 func initSound() {
-	vab = yaroze.SsVabTransfer(demo.BytesAt(vhAddr), demo.BytesAt(vbAddr), -1, 1)
-	if vab < 0 {
+	var ok bool
+	if bank, ok = yaroze.OpenBank(vh.Bytes(), vb.Bytes()); !ok {
 		soundSuccess = false
 		return
 	}
-	seq = yaroze.SsSeqOpen(demo.At(seqAddr), vab)
-	soundSuccess = seq >= 0
+	song, soundSuccess = bank.Sequence(&seqData[0])
 }
 
 func playSound() {
 	if soundSuccess {
 		yaroze.SsSetMVol(mvol, mvol)
-		yaroze.SsSeqSetVol(seq, svol, svol)
-		yaroze.SsSeqPlay(seq, yaroze.SSPLAY_PLAY, yaroze.SSPLAY_INFINITY)
+		song.SetVolume(svol, svol)
+		song.Play(yaroze.SSPLAY_INFINITY)
 	}
 }
 
 func stopSound() {
 	if soundSuccess {
-		yaroze.SsSeqStop(seq)
+		song.Stop()
 		yaroze.VSync(0)
 		yaroze.VSync(0)
-		yaroze.SsSeqClose(seq)
-		yaroze.SsVabClose(vab)
+		song.Close()
+		bank.Close()
 	}
 }

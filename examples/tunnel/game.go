@@ -1,7 +1,6 @@
 package main
 
 import (
-	"go.chrisrx.dev/psx/examples/internal/demo"
 	"go.chrisrx.dev/psx/examples/internal/lpge"
 	"go.chrisrx.dev/psx/yaroze"
 )
@@ -162,7 +161,7 @@ func handlePlayerEndOfGame() {
 	basicText[1].WriteString("Your score: ").WriteInt(int(playersShip.MeritRating)).WriteString("\n")
 	basicText[2].Reset()
 	basicText[2].WriteString("Press start\nto play again\n")
-	dummyGuiLoopForTextPrinting(3, demo.PADstart)
+	dummyGuiLoopForTextPrinting(3, yaroze.PADstart)
 	resetEntireProgram()
 }
 
@@ -394,7 +393,7 @@ func init() {
 func dummyGuiLoopForTextPrinting(n int, quitKey uint32) {
 	side := yaroze.GsGetActiveBuff()
 	for frames := 1; ; frames++ {
-		if demo.PadRead()&quitKey != 0 && frames > 60 {
+		if yaroze.PadRead()&quitKey != 0 && frames > 60 {
 			return
 		}
 		yaroze.GsSetWorkBase(yaroze.Packets(&packetArea[side][0]))
@@ -425,8 +424,8 @@ func flyingSequence() {
 	n := performBogusWorldClipping()
 
 	for frame := int32(1); frame <= totalFrames; frame++ {
-		pad := demo.PadRead()
-		if pad&demo.PADstart != 0 && pad&demo.PADselect != 0 {
+		pad := yaroze.PadRead()
+		if pad&yaroze.PADstart != 0 && pad&yaroze.PADselect != 0 {
 			break
 		}
 		switch {
@@ -497,7 +496,7 @@ var (
 )
 
 func initialiseSound() {
-	vab0 = yaroze.SsVabTransfer(demo.BytesAt(vhAddr), demo.BytesAt(vbAddr), -1, 1)
+	vab0 = yaroze.SsVabTransfer(vh.Bytes(), vb.Bytes(), -1, 1)
 	if vab0 < 0 {
 		return
 	}

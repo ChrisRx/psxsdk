@@ -26,12 +26,11 @@
 //
 // Differences from the original:
 //
-//   - The data is read off the disc rather than sent over the serial
-//     cable, and where it lands is rearranged: the sound comes first, to
-//     the addresses the check sample loads it at, and once the sound bank
-//     has gone to the SPU the model and its textures are loaded over it.
-//     The castle picture is loaded into the program's own memory, since
-//     with everything else there is no room for it below the program.
+//   - The data is read off the disc into the program's own memory rather
+//     than sent over the serial cable to fixed addresses. The sound comes
+//     first, and once the sound bank has gone to the SPU the dinosaur's
+//     textures are read into the buffer its body took, as the original
+//     reused that memory, since all of it at once would not fit.
 //   - The GPU packet space is the program's own, and larger. The original
 //     puts it where the sound bank was, with its two buffers closer
 //     together than a frame of the model can need.
@@ -42,28 +41,12 @@
 package main
 
 import (
-	"unsafe"
-
 	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/examples/internal/demo"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
 const (
-	// Where the data is loaded. The sound bank's body is only needed
-	// until it has been sent to the SPU, and the textures are loaded over
-	// it afterwards.
-	seqAddr    = 0x80090000
-	vhAddr     = 0x8009a000
-	vbAddr     = 0x800a9000
-	dinonewTIM = vbAddr
-	md0TMD     = 0x8010a000
-	dinoVDF    = 0x80127000
-
-	// castleSectors is how many sectors the castle picture takes, which is
-	// how much of the program's memory the read of it fills.
-	castleSectors = (307220 + 2047) / 2048
-
 	objectMax = 100
 	otLength  = 10
 	packetMax = 5000 * 24
@@ -72,30 +55,31 @@ const (
 	svol = 127
 )
 
-var soundFiles = []demo.File{
-	{File: disc.Register("DATA/SOUND/SAMPLE1.SEQ", "data/SAMPLE1.SEQ"), Addr: seqAddr},
-	{File: disc.Register("DATA/SOUND/STD0.VH", "data/STD0.VH"), Addr: vhAddr},
-	{File: disc.Register("DATA/SOUND/STD0.VB", "data/STD0.VB"), Addr: vbAddr},
-}
+// The data, read into the program's own memory, in buffers of whole
+// sectors. The sound bank's body is only needed until it has been sent to
+// the SPU, so the dinosaur's textures are read into its buffer afterwards,
+// which the demo also did; the buffer is sized for the larger of the two.
+var (
+	seqData [(39616 + 2047) / 2048 * 512]uint32
+	vhData  [(60448 + 2047) / 2048 * 512]uint32
+	vbData  [(401360 + 2047) / 2048 * 512]uint32
+	md0Data [(115112 + 2047) / 2048 * 512]uint32
+	vdfData [(56056 + 2047) / 2048 * 512]uint32
+	castle  [(307220 + 2047) / 2048 * 512]uint32
 
-// The model and its textures, loaded once the sound has been sent to the
-// SPU. The castle's address is the program's own memory, filled in at run
-// time.
-var dataFiles = []demo.File{
-	{File: disc.Register("DATA/DINONEW.TIM", "data/DINONEW.TIM"), Addr: dinonewTIM},
-	{File: disc.Register("DATA/MD0.TMD", "data/MD0.TMD"), Addr: md0TMD},
-	{File: disc.Register("DATA/DINO.VDF", "data/DINO.VDF"), Addr: dinoVDF},
-	{File: disc.Register("DATA/CASTLE.TIM", "data/CASTLE.TIM")},
-}
+	seqFile     = disc.Register("DATA/SOUND/SAMPLE1.SEQ", "data/SAMPLE1.SEQ").Into(seqData[:])
+	vh          = disc.Register("DATA/SOUND/STD0.VH", "data/STD0.VH").Into(vhData[:])
+	vb          = disc.Register("DATA/SOUND/STD0.VB", "data/STD0.VB").Into(vbData[:])
+	dinonewFile = disc.Register("DATA/DINONEW.TIM", "data/DINONEW.TIM").Into(vbData[:])
+	md0File     = disc.Register("DATA/MD0.TMD", "data/MD0.TMD").Into(md0Data[:])
+	vdfFile     = disc.Register("DATA/DINO.VDF", "data/DINO.VDF").Into(vdfData[:])
+	castleFile  = disc.Register("DATA/CASTLE.TIM", "data/CASTLE.TIM").Into(castle[:])
 
-const (
-	dinonewFile = iota
-	md0File
-	vdfFile
-	castleFile
+	soundFiles = []*disc.File{&seqFile, &vh, &vb}
+	dataFiles  = []*disc.File{&dinonewFile, &md0File, &vdfFile, &castleFile}
+
+	md0TMD = yaroze.TMD(md0Data[:])
 )
-
-var castle [castleSectors * 512]uint32
 
 var (
 	texInfo yaroze.GsIMAGE // the castle, in memory
@@ -153,16 +137,15 @@ var blinktable = [120]int32{
 }
 
 func main() {
-	demo.PadInit()
+	yaroze.PadInit()
 	initAll()
 
 	if missing := demo.Load(soundFiles, nil); missing != "" {
 		fail("could not read ", missing)
 		return
 	}
-	sndSet(demo.At(seqAddr), demo.BytesAt(vhAddr), demo.BytesAt(vbAddr))
+	sndSet(&seqData[0], vh.Bytes(), vb.Bytes())
 
-	dataFiles[castleFile].Addr = uintptr(unsafe.Pointer(&castle[0]))
 	if missing := demo.Load(dataFiles, nil); missing != "" {
 		fail("could not read ", missing)
 		return
@@ -245,10 +228,10 @@ func main() {
 			yaroze.GsGetLs(op.Coord2, &tmpls)
 			yaroze.GsSetLightMatrix(&tmpls)
 			yaroze.GsSetLsMatrix(&tmpls)
-			yaroze.GsSortObject4(op, &wot[outbufIdx], 14-otLength, demo.Scratch())
+			yaroze.GsSortObject4(op, &wot[outbufIdx], 14-otLength, yaroze.Scratch())
 		}
 
-		padd = demo.PadRead()
+		padd = yaroze.PadRead()
 		yaroze.VSync(0)
 		yaroze.ResetGraph(1)
 		yaroze.GsSwapDispBuff()
@@ -294,25 +277,25 @@ func onOff(bits uint32, on int32) int32 {
 // objInteractive turns the pad into the transfer functions' inputs, and
 // returns -1 when the program is to quit.
 func objInteractive() int32 {
-	ctlfc[4].in = choose(demo.PADRleft, demo.PADRright, 6*yaroze.ONE/360)
-	ctlfc[5].in = choose(demo.PADRup, demo.PADRdown, 6*yaroze.ONE/360)
-	ctlfc[8].in = choose(demo.PADselect, demo.PADstart, 300)
-	ctlfc[6].in = choose(demo.PADLleft, demo.PADLright, 200)
-	ctlfc[7].in = choose(demo.PADLdown, demo.PADLup, 200)
+	ctlfc[4].in = choose(yaroze.PADRleft, yaroze.PADRright, 6*yaroze.ONE/360)
+	ctlfc[5].in = choose(yaroze.PADRup, yaroze.PADRdown, 6*yaroze.ONE/360)
+	ctlfc[8].in = choose(yaroze.PADselect, yaroze.PADstart, 300)
+	ctlfc[6].in = choose(yaroze.PADLleft, yaroze.PADLright, 200)
+	ctlfc[7].in = choose(yaroze.PADLdown, yaroze.PADLup, 200)
 
 	// L1 and R1 with another button switch modes.
-	if pressed(demo.PADR1) && pressed(demo.PADL1) {
+	if pressed(yaroze.PADR1) && pressed(yaroze.PADL1) {
 		switch {
-		case pressed(demo.PADselect):
+		case pressed(yaroze.PADselect):
 			modeflag = 0
 			ctlfc[0].in, ctlfc[1].in, ctlfc[2].in, ctlfc[3].in = 0, 0, 0, 0
-		case pressed(demo.PADstart):
+		case pressed(yaroze.PADstart):
 			modeflag = 1
 			ctlfc[9].in, ctlfc[10].in, ctlfc[11].in, ctlfc[12].in = 0, 0, 0, 0
-		case pressed(demo.PADLup):
+		case pressed(yaroze.PADLup):
 			modeflagex = 0
 			ctlfc[0].in, ctlfc[1].in, ctlfc[2].in, ctlfc[3].in = 0, 0, 0, 0
-		case pressed(demo.PADLdown):
+		case pressed(yaroze.PADLdown):
 			modeflagex = 1
 			ctlfc[9].in, ctlfc[10].in, ctlfc[11].in, ctlfc[12].in = 0, 0, 0, 0
 		}
@@ -320,38 +303,38 @@ func objInteractive() int32 {
 
 	switch {
 	case modeflag == 0 && modeflagex == 1: // the feet on the buttons
-		ctlfc[0].in = onOff(demo.PADR1, yaroze.ONE)
-		ctlfc[1].in = onOff(demo.PADR2, yaroze.ONE)
-		ctlfc[2].in = onOff(demo.PADL1, yaroze.ONE)
-		ctlfc[3].in = onOff(demo.PADL2, yaroze.ONE)
+		ctlfc[0].in = onOff(yaroze.PADR1, yaroze.ONE)
+		ctlfc[1].in = onOff(yaroze.PADR2, yaroze.ONE)
+		ctlfc[2].in = onOff(yaroze.PADL1, yaroze.ONE)
+		ctlfc[3].in = onOff(yaroze.PADL2, yaroze.ONE)
 	case modeflag == 0: // the knees, and the mouth, the eyes and the head
-		ctlfc[9].in = onOff(demo.PADR2, yaroze.ONE)
-		ctlfc[10].in = onOff(demo.PADL2, yaroze.ONE)
-		ctlfc[11].in = onOff(demo.PADR1, 6000)
-		if pressed(demo.PADL1) {
+		ctlfc[9].in = onOff(yaroze.PADR2, yaroze.ONE)
+		ctlfc[10].in = onOff(yaroze.PADL2, yaroze.ONE)
+		ctlfc[11].in = onOff(yaroze.PADR1, 6000)
+		if pressed(yaroze.PADL1) {
 			ctlfc[0].in = yaroze.ONE
 		} else {
 			ctlfc[0].in = 0
 			ctlfc[12].in = 0
 		}
 	case modeflagex == 1: // walking: the speed of the walk
-		if pressed(demo.PADR1) {
+		if pressed(yaroze.PADR1) {
 			alpha++
 		}
-		if pressed(demo.PADR2) {
+		if pressed(yaroze.PADR2) {
 			alpha--
 		}
-		if pressed(demo.PADL1) {
+		if pressed(yaroze.PADL1) {
 			alpha = 32
 		}
 	default: // walking: the mouth, the eyes, the head and the tail
-		ctlfc[9].in = onOff(demo.PADR2, 6000)
-		ctlfc[10].in = onOff(demo.PADL2, yaroze.ONE)
-		ctlfc[11].in = onOff(demo.PADR1, 6000)
-		ctlfc[12].in = onOff(demo.PADL1, 6000)
+		ctlfc[9].in = onOff(yaroze.PADR2, 6000)
+		ctlfc[10].in = onOff(yaroze.PADL2, yaroze.ONE)
+		ctlfc[11].in = onOff(yaroze.PADR1, 6000)
+		ctlfc[12].in = onOff(yaroze.PADL1, 6000)
 	}
 
-	if pressed(demo.PADstart) && pressed(demo.PADselect) {
+	if pressed(yaroze.PADstart) && pressed(yaroze.PADselect) {
 		return -1
 	}
 
@@ -384,7 +367,7 @@ func viewInit() {
 	view = yaroze.GsRVIEW2{
 		Vpx: 0, Vpy: 0, Vpz: 2000,
 		Vrx: 0, Vry: 0, Vrz: 0,
-		Rz: 0, Super: demo.WORLD,
+		Rz: 0, Super: yaroze.WORLD,
 	}
 	yaroze.GsSetRefView2(&view)
 }
@@ -405,14 +388,14 @@ func lightInit() {
 }
 
 func coordInit() {
-	yaroze.GsInitCoordinate2(demo.WORLD, &dWorld)
+	yaroze.GsInitCoordinate2(yaroze.WORLD, &dWorld)
 	pWorld = yaroze.SVECTOR{}
 	dWorld.Coord.T[2] = -30000
 }
 
 // setCoordinate turns a coordinate system by pos, keeping where it is.
 func setCoordinate(pos *yaroze.SVECTOR, coor *yaroze.GsCOORDINATE2) {
-	tmp1 := demo.IDMATRIX
+	tmp1 := yaroze.IDMATRIX
 	tmp1.T = coor.Coord.T
 	v1 := *pos
 	yaroze.RotMatrix(&v1, &tmp1)
@@ -432,18 +415,17 @@ func timSize(im *yaroze.GsIMAGE) uintptr {
 // initTexture1 loads the dinosaur's textures into video memory: a file of
 // TIMs one after another, each with its palette.
 func initTexture1() {
-	addr := uintptr(dinonewTIM)
-	end := addr + uintptr(dataFiles[dinonewFile].Size())
-	for addr < end && *demo.At(addr) == 0x10 {
-		im := demo.LoadTIM(addr)
-		addr += timSize(&im)
+	data := vbData[:dinonewFile.Size()/4]
+	for len(data) > 0 && data[0] == 0x10 {
+		im := yaroze.TIM(data).Load()
+		data = data[timSize(&im)/4:]
 	}
 }
 
 // initTexture2 puts the castle up once, so that the first frame has it,
 // and keeps its description for copying it every frame after.
 func initTexture2() {
-	yaroze.GsGetTimInfo(demo.At(uintptr(unsafe.Pointer(&castle[0]))+4), &texInfo)
+	yaroze.GsGetTimInfo(&castle[1], &texInfo)
 	rect := yaroze.RECT{X: texInfo.Px, Y: texInfo.Py, W: int16(texInfo.Pw), H: int16(texInfo.Ph)}
 	yaroze.LoadImage(&rect, texInfo.Pixel)
 	if texInfo.Pmode&8 != 0 {
@@ -456,10 +438,10 @@ func initTexture2() {
 // modelInit maps the model's offsets to addresses and links a handle to
 // each of its objects, all in the dinosaur's coordinate system.
 func modelInit() {
-	yaroze.GsMapModelingData(demo.At(md0TMD + 4))
-	objnum = min(*demo.At(md0TMD + 8), objectMax)
+	md0TMD.Map()
+	objnum = min(uint32(md0TMD.Objects()), objectMax)
 	for i := range objnum {
-		yaroze.GsLinkObject4(uint32(md0TMD+12), &object[i], int32(i))
+		md0TMD.Link(&object[i], int32(i))
 		object[i].Coord2 = &dWorld
 		object[i].Attribute = 0
 	}
@@ -472,7 +454,7 @@ func fail(what, detail string) {
 	text.Init(buf[:])
 	yaroze.FntLoad(960, 256)
 	yaroze.FntOpen(16, 16, 320, 32, 0, 128)
-	for demo.PadRead()&(demo.PADstart|demo.PADselect) != demo.PADstart|demo.PADselect {
+	for yaroze.PadRead()&(yaroze.PADstart|yaroze.PADselect) != yaroze.PADstart|yaroze.PADselect {
 		buff := yaroze.GsGetActiveBuff()
 		yaroze.GsSetWorkBase(yaroze.Packets(&packetArea[buff][0]))
 		yaroze.GsClearOt(0, 0, &wot[buff])
@@ -490,40 +472,37 @@ func fail(what, detail string) {
 
 // The music: the demo's snd.c.
 
-var vab, seq int16
+var (
+	bank yaroze.Bank
+	song yaroze.Sequence
+)
 
 // sndSet sends the sound bank to the SPU and opens the sequence, with
 // the volume down until it plays.
-func sndSet(seqAddr *uint32, vh, vb *uint8) {
+func sndSet(seq *uint32, vh, vb *uint8) {
 	yaroze.SsSetMVol(0, 0)
 	yaroze.SsUtSetReverbType(yaroze.SS_REV_TYPE_STUDIO_C)
-	vab = yaroze.SsVabTransfer(vh, vb, -1, 1)
-	if vab < 0 {
-		return
-	}
-	seq = yaroze.SsSeqOpen(seqAddr, vab)
+	bank, _ = yaroze.OpenBank(vh, vb)
+	song, _ = bank.Sequence(seq)
 }
 
 func sndPlay() {
-	if vab < 0 || seq < 0 {
+	if !song.Valid() {
 		return
 	}
 	yaroze.SsSetMVol(mvol, mvol)
-	yaroze.SsSeqSetVol(seq, svol, svol)
+	song.SetVolume(svol, svol)
 	yaroze.SsUtReverbOn()
 	yaroze.SsUtSetReverbDepth(80, 80)
-	yaroze.SsSeqPlay(seq, yaroze.SSPLAY_PLAY, yaroze.SSPLAY_INFINITY)
+	song.Play(yaroze.SSPLAY_INFINITY)
 }
 
 func sndStop() {
-	if vab < 0 {
-		return
-	}
-	if seq >= 0 {
-		yaroze.SsSeqStop(seq)
+	if song.Valid() {
+		song.Stop()
 		yaroze.VSync(0)
 		yaroze.VSync(0)
-		yaroze.SsSeqClose(seq)
+		song.Close()
 	}
-	yaroze.SsVabClose(vab)
+	bank.Close()
 }

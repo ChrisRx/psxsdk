@@ -48,18 +48,30 @@ const (
 
 	maxNumberOfObjects = 10
 
-	// Where the model is loaded, as the demo's batch script loaded it, and
-	// where the copy is built: below it, with the room between for the
-	// copy to be larger.
-	tmdAddress = 0x800f0000
-	copyTmd    = 0x800c0000
-
 	otLength = 14
+
+	// copyWords is the room the copy of the model is built in, which is
+	// larger than the model since every primitive gets vertices of its
+	// own: the 192KB the demo's batch script left between the two.
+	copyWords = 192 * 1024 / 4
 )
 
-var files = []demo.File{
-	{File: disc.Register("DATA/SHUTTLE1.TMD", "data/SHUTTLE1.TMD"), Addr: tmdAddress},
-}
+// The model, read into the program's own memory in a buffer of whole
+// sectors, and the memory its copy is built in.
+var (
+	shuttleData [(47988 + 2047) / 2048 * 512]uint32
+	copyData    [copyWords]uint32
+
+	shuttleFile = disc.Register("DATA/SHUTTLE1.TMD", "data/SHUTTLE1.TMD").Into(shuttleData[:])
+	files       = []*disc.File{&shuttleFile}
+
+	shuttle = yaroze.TMD(shuttleData[:])
+
+	// The functions that walk the two and copy between them work in
+	// addresses, as the demo does.
+	tmdAddress = uintptr(unsafe.Pointer(&shuttleData[0]))
+	copyTmd    = uintptr(unsafe.Pointer(&copyData[0]))
+)
 
 var (
 	worldOrderingTable [2]yaroze.GsOT
@@ -103,18 +115,17 @@ func main() {
 		return
 	}
 
-	yaroze.GsMapModelingData(demo.At(tmdAddress + 4))
-	if end := separateVertices(tmdAddress, copyTmd); end > tmdAddress {
+	shuttle.Map()
+	if end := separateVertices(tmdAddress, copyTmd); end > copyTmd+copyWords*4 {
 		fail("the copy of the model does not fit", "")
 		return
 	}
 
-	header := (*demo.TMD_HDR)(unsafe.Pointer(uintptr(copyTmd)))
-	nObj = int32(header.NObjs)
-	otable := uint32(copyTmd) + uint32(unsafe.Sizeof(demo.TMD_HDR{}))
+	model := yaroze.TMD(copyData[:])
+	nObj = int32(model.Objects())
 	for i := range nObj {
-		yaroze.GsLinkObject4(otable, &object[i], i)
-		yaroze.GsInitCoordinate2(demo.WORLD, &objectCoord)
+		model.Link(&object[i], i)
+		yaroze.GsInitCoordinate2(yaroze.WORLD, &objectCoord)
 		object[i].Coord2 = &objectCoord
 	}
 
@@ -122,7 +133,7 @@ func main() {
 
 	theMainView.Vrx, theMainView.Vry, theMainView.Vrz = 0, 0, 0
 	theMainView.Rz = 0
-	theMainView.Super = demo.WORLD
+	theMainView.Super = yaroze.WORLD
 
 	yaroze.GsSetProjection(1000)
 
@@ -143,7 +154,7 @@ func main() {
 		yaroze.GsSetAmbient(int32(ambientRed), int32(ambientGreen), int32(ambientBlue))
 
 		// The piece's transformation: scaled, turned, then moved.
-		temp1Matrix := demo.IDMATRIX
+		temp1Matrix := yaroze.IDMATRIX
 		yaroze.ScaleMatrix(&temp1Matrix, &scale)
 		var temp2Matrix, transformMatrix yaroze.MATRIX
 		yaroze.RotMatrix(&rotateObj, &temp2Matrix)
@@ -154,9 +165,9 @@ func main() {
 
 		var coordMatrix yaroze.MATRIX
 		yaroze.GsGetLs(object[dispObj].Coord2, &coordMatrix)
-		yaroze.GsSetLightMatrix(&demo.IDMATRIX)
+		yaroze.GsSetLightMatrix(&yaroze.IDMATRIX)
 		yaroze.GsSetLsMatrix(&coordMatrix)
-		yaroze.GsSortObject4(&object[dispObj], &worldOrderingTable[outputBufferIndex], 14-otLength, demo.Scratch())
+		yaroze.GsSortObject4(&object[dispObj], &worldOrderingTable[outputBufferIndex], 14-otLength, yaroze.Scratch())
 
 		yaroze.DrawSync(0)
 		t := yaroze.VSync(1)
@@ -174,7 +185,7 @@ func main() {
 		yaroze.GsSortClear(bgCol, bgCol, bgCol, &worldOrderingTable[outputBufferIndex])
 		yaroze.GsDrawOt(&worldOrderingTable[outputBufferIndex])
 
-		padStatus = demo.PadRead()
+		padStatus = yaroze.PadRead()
 
 		text.Reset()
 		text.WriteString("vsync ").WriteInt(int(t)).WriteString("\nObject ").WriteInt(int(dispObj + 1)).
@@ -184,7 +195,7 @@ func main() {
 		yaroze.FntFlush(-1)
 		frameNumber++
 
-		if padStatus&demo.PADselect != 0 && padStatus&demo.PADstart != 0 {
+		if padStatus&yaroze.PADselect != 0 && padStatus&yaroze.PADstart != 0 {
 			break
 		}
 	}
@@ -215,12 +226,12 @@ func initialiseAll() {
 		worldOrderingTable[i].Org = &zSortTable[i][0]
 	}
 
-	demo.PadInit()
+	yaroze.PadInit()
 }
 
 // fail shows what went wrong until the program is quit.
 func fail(what, detail string) {
-	for demo.PadRead()&(demo.PADstart|demo.PADselect) != demo.PADstart|demo.PADselect {
+	for yaroze.PadRead()&(yaroze.PADstart|yaroze.PADselect) != yaroze.PADstart|yaroze.PADselect {
 		buff := yaroze.GsGetActiveBuff()
 		yaroze.GsSetWorkBase(yaroze.Packets(&gpuOutputPacket[buff][0]))
 		yaroze.GsClearOt(0, 0, &worldOrderingTable[buff])
@@ -242,28 +253,28 @@ var menuOption int8
 // pieces with Select and Start, prints the page, and hands the pad to it.
 // Leaving the explosion's page puts the piece back together.
 func controlsMainMenu() {
-	if padStatus&demo.PADR1 != 0 {
+	if padStatus&yaroze.PADR1 != 0 {
 		menuOption--
 		if menuOption < 0 {
 			menuOption = 8
 		}
 		delay(10)
 	}
-	if padStatus&demo.PADR2 != 0 {
+	if padStatus&yaroze.PADR2 != 0 {
 		menuOption++
 		if menuOption > 8 {
 			menuOption = 0
 		}
 		delay(10)
 	}
-	if padStatus&demo.PADselect != 0 {
+	if padStatus&yaroze.PADselect != 0 {
 		dispObj--
 		if dispObj < 0 {
 			dispObj = nObj - 1
 		}
 		delay(10)
 	}
-	if padStatus&demo.PADstart != 0 {
+	if padStatus&yaroze.PADstart != 0 {
 		dispObj++
 		if dispObj >= nObj {
 			dispObj = 0
@@ -314,12 +325,12 @@ func controlsMainMenu() {
 // zoom brings the viewpoint nearer with Triangle and further with Cross,
 // by a fiftieth each frame.
 func zoom() {
-	if padStatus&demo.PADRup != 0 {
+	if padStatus&yaroze.PADRup != 0 {
 		viewFrom.Vx += viewFrom.Vx / 50
 		viewFrom.Vy += viewFrom.Vy / 50
 		viewFrom.Vz += viewFrom.Vz / 50
 	}
-	if padStatus&demo.PADRdown != 0 {
+	if padStatus&yaroze.PADRdown != 0 {
 		viewFrom.Vx = viewFrom.Vx * 50 / 51
 		viewFrom.Vy = viewFrom.Vy * 50 / 51
 		viewFrom.Vz = viewFrom.Vz * 50 / 51
@@ -329,22 +340,22 @@ func zoom() {
 // adjust3 changes three values by step: the first with left and right,
 // the second with up and down, and the third with L2 and L1.
 func adjust3(x, y, z *int32, step int32) {
-	if padStatus&demo.PADLright != 0 {
+	if padStatus&yaroze.PADLright != 0 {
 		*x += step
 	}
-	if padStatus&demo.PADLleft != 0 {
+	if padStatus&yaroze.PADLleft != 0 {
 		*x -= step
 	}
-	if padStatus&demo.PADLup != 0 {
+	if padStatus&yaroze.PADLup != 0 {
 		*y += step
 	}
-	if padStatus&demo.PADLdown != 0 {
+	if padStatus&yaroze.PADLdown != 0 {
 		*y -= step
 	}
-	if padStatus&demo.PADL2 != 0 {
+	if padStatus&yaroze.PADL2 != 0 {
 		*z += step
 	}
-	if padStatus&demo.PADL1 != 0 {
+	if padStatus&yaroze.PADL1 != 0 {
 		*z -= step
 	}
 }
@@ -389,14 +400,14 @@ func printColourDetails(r, g, b int32, highlight int8) {
 
 // chooseRGB moves the highlighted component with Square and Circle.
 func chooseRGB(rgb *int8) {
-	if padStatus&demo.PADRright != 0 {
+	if padStatus&yaroze.PADRright != 0 {
 		*rgb++
 		if *rgb > 2 {
 			*rgb = 0
 		}
 		delay(10)
 	}
-	if padStatus&demo.PADRleft != 0 {
+	if padStatus&yaroze.PADRleft != 0 {
 		*rgb--
 		if *rgb < 0 {
 			*rgb = 2
@@ -409,10 +420,10 @@ func chooseRGB(rgb *int8) {
 // down, or nothing.
 func upDown(step int32) int32 {
 	var d int32
-	if padStatus&demo.PADRup != 0 {
+	if padStatus&yaroze.PADRup != 0 {
 		d += step
 	}
-	if padStatus&demo.PADRdown != 0 {
+	if padStatus&yaroze.PADRdown != 0 {
 		d -= step
 	}
 	return d
@@ -480,14 +491,14 @@ func controlsFogging() {
 	}
 	printColourDetails(int32(fogging.Rfc), int32(fogging.Gfc), int32(fogging.Bfc), highlight)
 
-	if padStatus&demo.PADRright != 0 {
+	if padStatus&yaroze.PADRright != 0 {
 		fogOption++
 		if fogOption > 5 {
 			fogOption = 0
 		}
 		delay(10)
 	}
-	if padStatus&demo.PADRleft != 0 {
+	if padStatus&yaroze.PADRleft != 0 {
 		fogOption--
 		if fogOption < 0 {
 			fogOption = 5
@@ -497,7 +508,7 @@ func controlsFogging() {
 
 	switch fogOption {
 	case 0:
-		if padStatus&(demo.PADRup|demo.PADRdown) != 0 {
+		if padStatus&(yaroze.PADRup|yaroze.PADRdown) != 0 {
 			foggingOnOff ^= 1
 			yaroze.GsSetLightMode(foggingOnOff)
 			delay(10)
@@ -545,21 +556,21 @@ func controlsExplosion() {
 		text.WriteString("Speed ").WriteInt(int(explosionSpeed)).WriteString("\n~c0f0").WriteString(onOff[:len(onOff)-1]).WriteString("~cfff\n")
 	}
 
-	if padStatus&(demo.PADRright|demo.PADRleft) != 0 {
+	if padStatus&(yaroze.PADRright|yaroze.PADRleft) != 0 {
 		explosionOption ^= 1
 		delay(10)
 	}
 
 	switch explosionOption {
 	case 0:
-		if padStatus&demo.PADRup != 0 {
+		if padStatus&yaroze.PADRup != 0 {
 			explosionSpeed++
 			if explosionSpeed > 13 {
 				explosionSpeed = 1
 			}
 			delay(10)
 		}
-		if padStatus&demo.PADRdown != 0 {
+		if padStatus&yaroze.PADRdown != 0 {
 			explosionSpeed--
 			if explosionSpeed < 1 {
 				explosionSpeed = 13
@@ -567,7 +578,7 @@ func controlsExplosion() {
 			delay(10)
 		}
 	case 1:
-		if padStatus&(demo.PADRup|demo.PADRdown) != 0 {
+		if padStatus&(yaroze.PADRup|yaroze.PADRdown) != 0 {
 			bang = !bang
 			bangCount = 0
 			resetColors(tmdAddress, copyTmd, dispObj)

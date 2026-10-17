@@ -53,9 +53,9 @@ func TestCheckQuitReturnsToBIOS(t *testing.T) {
 	m.RunUntilTTY("Execute !", 30*emutest.Second)
 
 	// Loading takes a while, and how long depends on the drive, so rather
-	// than guess, run until the main loop reads the pad. Nothing else
-	// calls padRaw.
-	m.RunUntilFunc("main.padRaw", 60*emutest.Second)
+	// than guess, run until the main loop reads the pad, which only padRead
+	// does.
+	m.RunUntilFunc("main.padRead", 60*emutest.Second)
 	m.Hold(1, emu.ButtonSelect, 10)
 
 	m.RunUntilTTY("End of Main", 10*emutest.Second)
@@ -71,7 +71,7 @@ func TestCheckScreenshot(t *testing.T) {
 		emutest.Disc(cue),
 		emutest.Symbols(filepath.Join(filepath.Dir(cue), "prog.elf")),
 	)
-	m.RunUntilFunc("main.padRaw", 90*emutest.Second)
+	m.RunUntilFunc("main.padRead", 90*emutest.Second)
 	m.RunFrames(60)
 	emutest.Golden(t, m.Display(), "check-main-loop.png")
 }
