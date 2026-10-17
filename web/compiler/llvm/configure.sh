@@ -27,7 +27,7 @@ cmake -G Ninja "$SRC/llvm" \
   -DCMAKE_HOST_SYSTEM_NAME=Linux -DCMAKE_HOST_SYSTEM_PROCESSOR=x86_64 \
   -DCMAKE_CROSSCOMPILING=ON -DUNIX=1 \
   -DCMAKE_C_COMPILER="$CC" -DCMAKE_CXX_COMPILER="$CXX" \
-  -DCMAKE_AR="$(which llvm-ar)" -DCMAKE_RANLIB="$(which llvm-ranlib)" \
+  -DCMAKE_AR="$(command -v "$AR")" -DCMAKE_RANLIB="$(command -v "$RANLIB")" \
   -DCMAKE_C_FLAGS="$COMPAT $EMULATED" \
   -DCMAKE_CXX_FLAGS="$CXXSTD $COMPAT $EMULATED" \
   -DLLVM_HOST_TRIPLE=wasm32-unknown-wasi \

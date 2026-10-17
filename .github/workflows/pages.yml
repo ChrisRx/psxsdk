@@ -3,8 +3,8 @@ name: Pages
 # Builds the site, every example's disc, the emulator and the playground,
 # and publishes it through the gh-pages branch, which only this workflow
 # writes to and which GitHub Pages serves. The playground's compiler comes
-# from the cache the Compiler workflow fills, and is built here, slowly,
-# when that misses. A push to main deploys the site to the root. A pull
+# from the cache or the release the Compiler workflow fills, and is built
+# here, slowly, when both miss. A push to main deploys the site to the root. A pull
 # request builds the site, which catches a change that breaks an example,
 # and when it touches the site also deploys a preview to pr-preview/pr-N/
 # and comments the preview's address on the pull request. The preview is

@@ -1,8 +1,10 @@
 # Builds the playground's compiler, TinyGo compiled to WebAssembly with LLVM
-# linked in, and caches it for the Pages workflow, which otherwise builds it
-# itself when its cache misses. It takes a couple of hours, so it runs when
-# the recipe or the TinyGo fork's revision changes, or by hand, rather than
-# on every push.
+# linked in, caches it for the Pages workflow and publishes it as a release
+# (web/compiler/release.sh). The Pages workflow downloads the release when
+# its cache misses, and builds the compiler itself only when there is no
+# release either. It takes a couple of hours, so it runs when the recipe or
+# the TinyGo fork's revision changes, or by hand, rather than on every
+# push. A recipe whose release exists already is downloaded, not built.
 name: Compiler
 
 on:
@@ -20,6 +22,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    permissions:
+      contents: write
     steps:
     - uses: actions/checkout@v4
 
@@ -32,9 +36,8 @@ jobs:
     - name: Build the compiler
       uses: ./.github/actions/compiler
 
-    - name: Upload the compiler
-      uses: actions/upload-artifact@v4
-      with:
-        name: compiler
-        path: .build/compiler/*.wasm
-        retention-days: 14
+    - name: Publish the compiler
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TARGET: ${{ github.sha }}
+      run: web/compiler/release.sh .build/compiler

@@ -66,8 +66,11 @@ player boots like an example.
 
 The Compiler workflow (`.github/workflows/compiler.yml`) builds the two
 modules when this directory, the flake or the fork's revision changes, or
-on request, and caches them under a key made of those. The Pages workflow
-restores that cache, or builds the compiler itself when it misses, through
+on request, caches them under a key made of those (`key.sh`), and
+publishes them as a release named by the key (`release.sh`), which is kept
+where the cache drops an entry unused for a week. The Pages workflow
+restores that cache, downloads the release when it misses, or builds the
+compiler itself when there is neither, through
 the same composite action (`.github/actions/compiler`), which always
 prepares the patched TinyGo tree, then runs `task playground` in the
 `playground` shell, which builds that tree's `tinygo-sysroot` natively and

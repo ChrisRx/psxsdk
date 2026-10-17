@@ -20,7 +20,7 @@ done
 $CXX $CXXFLAGS -c "$HERE/glue/lld-elf.cpp" -o "$OBJ/tinygo-lld.o"
 $CC $COMMON -c "$HERE/glue/wasi-stubs.c" -o "$OBJ/wasi-stubs.o"
 rm -f "$OUT/glue/libtinygoglue.a"
-llvm-ar rcs "$OUT/glue/libtinygoglue.a" "$OBJ"/gollvm-*.o "$OBJ/tinygo-lld.o" "$OBJ/wasi-stubs.o"
+"$AR" rcs "$OUT/glue/libtinygoglue.a" "$OBJ"/gollvm-*.o "$OBJ/tinygo-lld.o" "$OBJ/wasi-stubs.o"
 # The full variant, with TinyGo's clang driver, for the compiler that fills
 # the cache.
 for f in clang cc1as; do
@@ -28,4 +28,4 @@ for f in clang cc1as; do
 done
 $CC $COMMON -DTINYGO_HAVE_CLANG -c "$HERE/glue/wasi-stubs.c" -o "$OBJ/wasi-stubs-full.o"
 rm -f "$OUT/glue/libtinygoglue-full.a"
-llvm-ar rcs "$OUT/glue/libtinygoglue-full.a" "$OBJ"/gollvm-*.o "$OBJ/tinygo-lld.o" "$OBJ/tinygo-clang.o" "$OBJ/tinygo-cc1as.o" "$OBJ/wasi-stubs-full.o"
+"$AR" rcs "$OUT/glue/libtinygoglue-full.a" "$OBJ"/gollvm-*.o "$OBJ/tinygo-lld.o" "$OBJ/tinygo-clang.o" "$OBJ/tinygo-cc1as.o" "$OBJ/wasi-stubs-full.o"

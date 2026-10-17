@@ -1,10 +1,14 @@
 name: Compiler for the playground
 description: >-
   Puts the playground's compiler, TinyGo compiled to WebAssembly, in
-  .build/compiler: from the cache when the recipe has not changed, built
-  otherwise, which takes a couple of hours. Leaves the patched TinyGo tree
-  in .build/compiler/tinygo, which the playground task needs as well. Nix
-  must be installed already.
+  .build/compiler: from the cache when the recipe has not changed, then
+  from the release named by its key, and built otherwise, which takes a
+  couple of hours. Leaves the patched TinyGo tree in .build/compiler/tinygo,
+  which the playground task needs as well. Nix must be installed already.
+outputs:
+  key:
+    description: The compiler's key (web/compiler/key.sh), which names its cache entry and release.
+    value: ${{ steps.key.outputs.key }}
 runs:
   using: composite
   steps:
@@ -33,15 +37,36 @@ runs:
       rev=$(sed -n 's#.*"rev": *"\([0-9a-f]\{40\}\)".*#\1#p' flake.lock | head -1)
       NIXPKGS="github:NixOS/nixpkgs/$rev" web/compiler/prepare.sh
 
+  - name: Find the compiler's key
+    id: key
+    shell: bash
+    run: echo "key=$(web/compiler/key.sh)" >> "$GITHUB_OUTPUT"
+
   - name: Restore the compiler
     id: cache
     uses: actions/cache/restore@v4
     with:
       path: .build/compiler/*.wasm
-      key: compiler-${{ steps.fork.outputs.rev }}-${{ hashFiles('web/compiler/**', 'flake.lock') }}
+      key: ${{ steps.key.outputs.key }}
+
+  # The cache drops an entry nothing has used for a week, and a release
+  # stays, so a miss looks there before building.
+  - name: Download the compiler
+    id: release
+    if: steps.cache.outputs.cache-hit != 'true'
+    shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+      KEY: ${{ steps.key.outputs.key }}
+    run: |
+      if gh release download "$KEY" --repo "$GITHUB_REPOSITORY" --dir .build/compiler --pattern '*.wasm' --clobber; then
+        echo "found=true" >> "$GITHUB_OUTPUT"
+      else
+        echo "No release $KEY; building the compiler."
+      fi
 
   - name: Build the compiler
-    if: steps.cache.outputs.cache-hit != 'true'
+    if: steps.cache.outputs.cache-hit != 'true' && steps.release.outputs.found != 'true'
     shell: bash
     env:
       TINYGO_SRC: ${{ github.workspace }}/tinygo
@@ -53,4 +78,4 @@ runs:
     uses: actions/cache/save@v4
     with:
       path: .build/compiler/*.wasm
-      key: ${{ steps.cache.outputs.cache-primary-key }}
+      key: ${{ steps.key.outputs.key }}
