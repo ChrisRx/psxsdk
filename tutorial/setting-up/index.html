@@ -44,14 +44,14 @@
       <article>
         <h1>Setting up</h1>
         <p>A program for the PlayStation is an ordinary Go module. It depends on <code>go.chrisrx.dev/psx</code> for the library bindings, and on the module's tools for turning what the compiler produces into a disc. This page sets one up and gets a line of text on the screen.</p>
-<h2 id="what-you-need">What you need</h2>
+<h2 id="what-you-need">What you need<a class="anchor" href="#what-you-need" aria-label="Link to this section">#</a></h2>
 <ul>
 <li><strong>Go</strong>, 1.27 or newer.</li>
 <li><strong>TinyGo</strong> with the <code>playstation-yaroze</code> target, which compiles Go for the console's MIPS processor and links against the Net Yaroze library. <code>tinygo targets | grep playstation</code> shows whether yours has it.</li>
 <li><strong>An emulator</strong> to run the result in. The toolchain has one, <code>psxemu</code>, which runs headless and saves a picture of the screen; <a href="https://mednafen.github.io/">mednafen</a> or any other that takes a cue sheet works for playing.</li>
 <li><strong>A BIOS image.</strong> The console's own is Sony's and cannot be distributed, but the open source <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a> boots everything here. The copy the <a href="../../play/">player</a> on this site uses is at <a href="../../play/openbios.bin">openbios.bin</a>.</li>
 </ul>
-<h2 id="the-module">The module</h2>
+<h2 id="the-module">The module<a class="anchor" href="#the-module" aria-label="Link to this section">#</a></h2>
 <p>Make a directory and a module in it, add the toolchain, and add the tools a build uses as tool dependencies, which <code>go tool</code> then runs without installing anything:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">mkdir hello <span class="o">&amp;&amp;</span> <span class="nb">cd</span> hello
 </span></span><span class="line"><span class="cl">go mod init example.com/hello
@@ -59,7 +59,7 @@
 </span></span><span class="line"><span class="cl">go get -tool go.chrisrx.dev/psx/tools/mips1fix go.chrisrx.dev/psx/tools/eco2exe <span class="se">\
 </span></span></span><span class="line"><span class="cl">             go.chrisrx.dev/psx/tools/mkpsxiso go.chrisrx.dev/psx/tools/psxemu
 </span></span><span class="line"><span class="cl">curl -LO https://chrisrx.github.io/psxsdk/play/openbios.bin
-</span></span></code></pre><h2 id="the-program">The program</h2>
+</span></span></code></pre><h2 id="the-program">The program<a class="anchor" href="#the-program" aria-label="Link to this section">#</a></h2>
 <p>One file, <code>main.go</code>:</p>
 <pre class="chroma"><code><span class="line"><span class="cl"><span class="cp">//go:build yaroze</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">
@@ -80,7 +80,7 @@
 </span></span></span><span class="line"><span class="cl"><span class="kd">var</span><span class="w"> </span><span class="p">(</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">	</span><span class="nx">ot</span><span class="w">         </span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="nx">yaroze</span><span class="p">.</span><span class="nx">GsOT</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">	</span><span class="nx">otTags</span><span class="w">     </span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="nx">otLength</span><span class="p">]</span><span class="nx">yaroze</span><span class="p">.</span><span class="nx">GsOT_TAG</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">	</span><span class="nx">packetArea</span><span class="w"> </span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="nx">packetMax</span><span class="p">]</span><span class="nx">yaroze</span><span class="p">.</span><span class="nx">PACKET</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">	</span><span class="nx">packetArea</span><span class="w"> </span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="nx">packetMax</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">4</span><span class="p">]</span><span class="kt">uint32</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">	</span><span class="nx">textBuf</span><span class="w">    </span><span class="p">[</span><span class="mi">32</span><span class="p">]</span><span class="kt">byte</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="p">)</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">
@@ -98,7 +98,7 @@
 </span></span></span><span class="line"><span class="cl"><span class="w">	</span><span class="nx">hello</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">yaroze</span><span class="p">.</span><span class="nf">CString</span><span class="p">(</span><span class="nx">textBuf</span><span class="p">[:],</span><span class="w"> </span><span class="s">&#34;hello from go&#34;</span><span class="p">)</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">	</span><span class="k">for</span><span class="w"> </span><span class="p">{</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">		</span><span class="nx">active</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">yaroze</span><span class="p">.</span><span class="nf">GsGetActiveBuff</span><span class="p">()</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">		</span><span class="nx">yaroze</span><span class="p">.</span><span class="nf">GsSetWorkBase</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">packetArea</span><span class="p">[</span><span class="nx">active</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">		</span><span class="nx">yaroze</span><span class="p">.</span><span class="nf">GsSetWorkBase</span><span class="p">(</span><span class="nx">yaroze</span><span class="p">.</span><span class="nf">Packets</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">packetArea</span><span class="p">[</span><span class="nx">active</span><span class="p">][</span><span class="mi">0</span><span class="p">]))</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">		</span><span class="nx">yaroze</span><span class="p">.</span><span class="nf">GsClearOt</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">ot</span><span class="p">[</span><span class="nx">active</span><span class="p">])</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">		</span><span class="nx">yaroze</span><span class="p">.</span><span class="nf">DrawSync</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="w">
@@ -113,10 +113,10 @@
 </span></span></span><span class="line"><span class="cl"><span class="p">}</span><span class="w">
 </span></span></span></code></pre><p>It already has the shape every program has: set up the display, then draw a frame, wait for the screen, and swap, for ever. Three things about it are not how a program for a modern machine would read.</p>
 <p><strong>Everything is a package-level variable.</strong> The machine has two megabytes of RAM, no memory protection and, in this runtime, no garbage collector running, so memory a frame allocates is memory the program never gets back. Declaring the buffers once, as globals, is how the Net Yaroze programs this toolchain descends from did it too, and nothing in the tutorial allocates after startup.</p>
-<p><strong>The frame is a list before it is a picture.</strong> The GPU does not draw what it is told as it is told. A program sorts drawing commands into an ordering table, an array of linked lists indexed by depth, and then hands the table to the GPU, which walks it while the program goes on to the next frame. <code>GsClearOt</code> empties the table, <code>GsSortClear</code> sorts a command that clears the screen to a color into it, and <code>GsDrawOt</code> starts the GPU on it. There are two tables, and two packet areas for the commands themselves, because the GPU is still drawing one frame while the program builds the next.</p>
+<p><strong>The frame is a list before it is a picture.</strong> The GPU does not draw what it is told as it is told. A program sorts drawing commands into an ordering table, an array of linked lists indexed by depth, and then hands the table to the GPU, which walks it while the program goes on to the next frame. <code>GsClearOt</code> empties the table, <code>GsSortClear</code> sorts a command that clears the screen to a color into it, and <code>GsDrawOt</code> starts the GPU on it. There are two tables, and two packet areas for the commands themselves, because the GPU is still drawing one frame while the program builds the next. The packet areas are declared as words rather than bytes, and handed over through <code>Packets</code>, because the library stores words into them and the compiler aligns an array of bytes only to a byte.</p>
 <p><strong>The text goes through the library's font.</strong> <code>FntLoad</code> puts the library's 8x8 font into video memory at a corner the display never shows, <code>FntOpen</code> opens a window of text at a position on the screen, and <code>FntPrint</code> writes into it. In C <code>FntPrint</code> is printf-like; here it takes a finished string, which <code>CString</code> copies into a buffer the program owns, with the NUL terminator the library expects.</p>
 <p>The build constraint on the first line keeps the file out of ordinary Go builds, which cannot compile it: the <code>yaroze</code> package is only there for TinyGo's PlayStation target. <code>go vet ./...</code> and editors then leave it alone.</p>
-<h2 id="building-it">Building it</h2>
+<h2 id="building-it">Building it<a class="anchor" href="#building-it" aria-label="Link to this section">#</a></h2>
 <p>Three steps turn the source into an executable the console boots:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">tinygo build -target<span class="o">=</span>playstation-yaroze -o prog.elf .
 </span></span><span class="line"><span class="cl">go tool mips1fix prog.elf
@@ -125,7 +125,7 @@
 <p>One more step puts it on a disc:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">go tool mkpsxiso -o hello.bin --boot MAIN.EXE --file MAIN.EXE<span class="o">=</span>MAIN.EXE
 </span></span></code></pre><p><code>--boot</code> writes the <code>SYSTEM.CNF</code> the BIOS reads to find the executable, and <code>--file</code> places the executable on the disc; there is nothing else to put there yet. The result is <code>hello.bin</code> and <code>hello.cue</code>, which any emulator opens.</p>
-<h2 id="running-it">Running it</h2>
+<h2 id="running-it">Running it<a class="anchor" href="#running-it" aria-label="Link to this section">#</a></h2>
 <p><code>psxemu</code> boots the disc headless and, when stopped, saves what the screen shows:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">go tool psxemu --bios openbios.bin --disc hello.cue --png hello.png
 </span></span></code></pre><p>Stop it after a few seconds and <code>hello.png</code> holds the frame: a teal screen with the text in the corner. mednafen and other emulators open the cue sheet directly, and a console that plays burned discs boots it from a CD-R.</p>

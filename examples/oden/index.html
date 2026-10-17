@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>oden · psxsdk</title>
+  <meta name="description" content="The oden demo, in Go.">
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" href="../../play/favicon.png" type="image/png">
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/" aria-current="true">Examples</a>
+      <a href="../../tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Examples">
+        <ul>
+          <li><a href="../../examples/">Examples</a></li>
+          <li><a href="../../examples/blow/">blow</a></li>
+          <li><a href="../../examples/breakout/">breakout</a></li>
+          <li><a href="../../examples/car/">car</a></li>
+          <li><a href="../../examples/check/">check</a></li>
+          <li><a href="../../examples/chrome/">chrome</a></li>
+          <li><a href="../../examples/clone/">clone</a></li>
+          <li><a href="../../examples/dino/">dino</a></li>
+          <li><a href="../../examples/dogtale/">dogtale</a></li>
+          <li><a href="../../examples/dungeon/">dungeon</a></li>
+          <li><a href="../../examples/flame/">flame</a></li>
+          <li><a href="../../examples/invaders/">invaders</a></li>
+          <li><a href="../../examples/mdec/">mdec</a></li>
+          <li><a href="../../examples/morph/">morph</a></li>
+          <li><a href="../../examples/oden/" aria-current="page">oden</a></li>
+          <li><a href="../../examples/offscr/">offscr</a></li>
+          <li><a href="../../examples/tunnel/">tunnel</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>oden</h1>
+        <iframe class="player" src="../../play/?embed#oden" title="oden, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
+<p class="muted"><a href="../../play/#oden">Open in the player</a>, with the keyboard and gamepad reference.</p>
+        <p>The oden demo, in Go.
+<p>A port of Sony&apos;s Net Yaroze demo &quot;oden&quot; (Sony, 1993 to 1996): a
+demonstration of the lighting calculation. A ball, a cone and a cube,
+each scaled by its own matrix, stand under three directional lights at
+640 by 480 interlaced, and every light can be aimed and recolored while
+the scene turns. The symbol buttons turn the scene, Start brings it
+nearer and Select pushes it away. Holding L1, L2 or R2 gives the symbol
+buttons and the d-pad to the first, second or third light: Triangle and
+Cross change its red, Circle and Square its green, Select and Start its
+blue, and the d-pad aims it. Holding R1 with Triangle and Cross raises
+and lowers the ambient light. The d-pad alone swaps each model for the
+textured version the TMD also carries, Left the ball, Right the cube and
+Up the cone, and Down puts the plain versions back. Start and Select
+together quit.
+<p>Differences from the original:
+<ul>
+<li>The model and texture are read off the disc to addresses below the
+program. The original&apos;s batch script sent them to addresses the Go
+program occupies.
+</ul>
+<p>Nothing allocates after startup.
+
+        <p class="source"><a href="https://github.com/ChrisRx/psxsdk/tree/main/examples/oden">Source on GitHub</a></p>
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../examples/morph/"><small>Previous</small>morph</a>
+        <a class="next" href="../../examples/offscr/"><small>Next</small>offscr</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

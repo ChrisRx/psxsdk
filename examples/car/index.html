@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>car · psxsdk</title>
+  <meta name="description" content="The car demo, in Go.">
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" href="../../play/favicon.png" type="image/png">
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/" aria-current="true">Examples</a>
+      <a href="../../tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Examples">
+        <ul>
+          <li><a href="../../examples/">Examples</a></li>
+          <li><a href="../../examples/blow/">blow</a></li>
+          <li><a href="../../examples/breakout/">breakout</a></li>
+          <li><a href="../../examples/car/" aria-current="page">car</a></li>
+          <li><a href="../../examples/check/">check</a></li>
+          <li><a href="../../examples/chrome/">chrome</a></li>
+          <li><a href="../../examples/clone/">clone</a></li>
+          <li><a href="../../examples/dino/">dino</a></li>
+          <li><a href="../../examples/dogtale/">dogtale</a></li>
+          <li><a href="../../examples/dungeon/">dungeon</a></li>
+          <li><a href="../../examples/flame/">flame</a></li>
+          <li><a href="../../examples/invaders/">invaders</a></li>
+          <li><a href="../../examples/mdec/">mdec</a></li>
+          <li><a href="../../examples/morph/">morph</a></li>
+          <li><a href="../../examples/oden/">oden</a></li>
+          <li><a href="../../examples/offscr/">offscr</a></li>
+          <li><a href="../../examples/tunnel/">tunnel</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>car</h1>
+        <iframe class="player" src="../../play/?embed#car" title="car, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
+<p class="muted"><a href="../../play/#car">Open in the player</a>, with the keyboard and gamepad reference.</p>
+        <p>The car demo, in Go.
+<p>A port of Sony&apos;s Net Yaroze demo &quot;car&quot; (Sony, 1995, &quot;60frame&quot; in its
+source): an Alfa Romeo Giulietta, a textured model wearing seven
+textures, drives in from the distance and then turns slowly at the
+center of the screen under one light, at 640 by 240 interlaced. The
+demo is about frame rate: Start switches it between sixty frames a
+second and thirty, which the library&apos;s font reports, and the controls
+double their steps at thirty so that the car moves at the same speed
+either way. The d-pad moves the car across and up and down, the symbol
+buttons turn it, and L1 and L2 bring it nearer and push it further.
+Select quits.
+<p>Differences from the original:
+<ul>
+<li>The textures and model are read off the disc to addresses below the
+program. The original&apos;s batch script sent them to addresses the Go
+program occupies.
+<li>The drive in moves the car by whole units each frame, as the
+original&apos;s integer coordinate ends up doing: it adds 1 + i/20 in
+floating point and C truncates the sum towards zero, which rounds
+the step up while the car is behind the viewpoint. The port
+reproduces that arithmetic.
+<li>The speed line is printed in a font window the port opens. The
+original prints without opening one.
+</ul>
+<p>Nothing allocates after startup.
+
+        <p class="source"><a href="https://github.com/ChrisRx/psxsdk/tree/main/examples/car">Source on GitHub</a></p>
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../examples/breakout/"><small>Previous</small>breakout</a>
+        <a class="next" href="../../examples/check/"><small>Next</small>check</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

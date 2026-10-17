@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>dino · psxsdk</title>
+  <meta name="description" content="The dino demo, in Go.">
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" href="../../play/favicon.png" type="image/png">
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/" aria-current="true">Examples</a>
+      <a href="../../tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Examples">
+        <ul>
+          <li><a href="../../examples/">Examples</a></li>
+          <li><a href="../../examples/blow/">blow</a></li>
+          <li><a href="../../examples/breakout/">breakout</a></li>
+          <li><a href="../../examples/car/">car</a></li>
+          <li><a href="../../examples/check/">check</a></li>
+          <li><a href="../../examples/chrome/">chrome</a></li>
+          <li><a href="../../examples/clone/">clone</a></li>
+          <li><a href="../../examples/dino/" aria-current="page">dino</a></li>
+          <li><a href="../../examples/dogtale/">dogtale</a></li>
+          <li><a href="../../examples/dungeon/">dungeon</a></li>
+          <li><a href="../../examples/flame/">flame</a></li>
+          <li><a href="../../examples/invaders/">invaders</a></li>
+          <li><a href="../../examples/mdec/">mdec</a></li>
+          <li><a href="../../examples/morph/">morph</a></li>
+          <li><a href="../../examples/oden/">oden</a></li>
+          <li><a href="../../examples/offscr/">offscr</a></li>
+          <li><a href="../../examples/tunnel/">tunnel</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>dino</h1>
+        <iframe class="player" src="../../play/?embed#dino" title="dino, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
+<p class="muted"><a href="../../play/#dino">Open in the player</a>, with the keyboard and gamepad reference.</p>
+        <p>The dino demo, in Go.
+<p>A port of Sony&apos;s Net Yaroze demo &quot;dino&quot; (1996): a dinosaur walking in
+front of a castle, at 640 by 240. The dinosaur is one model of 2,724
+polygons, animated by the GTE&apos;s vertex interpolation, MIME: the model
+file comes with a file of vertex differences, nine sets of them, each
+moving part of the body, a leg, the neck, the eyelids, and every frame
+the model&apos;s vertices are put back as they were and each set is added in
+some proportion. The proportions come from the controls through a bank
+of transfer functions, sixteen filters that each smooth their input over
+the last few frames with a window of weights, so that a button pressed
+becomes a step taken. The walk itself is four of them cycling through a
+table. The castle is a full-screen 16-bit picture copied into the
+drawing buffer every frame before the model is drawn over it, in fog,
+under three lights. Music plays from a sequence, with reverb.
+<p>The dinosaur walks by itself. Square and Circle turn it, Triangle and
+Cross tip it, the d-pad moves it across and up and down, and Start and
+Select bring it nearer and further. R2 opens its mouth, L2 blinks, R1
+turns its head and L1 lifts its tail. Holding L1 and R1 with Select
+stops the walk and puts the legs on the buttons instead: R1, R2, L1 and
+L2 lift each in turn, with Down the feet and with Up the knees. L1 and R1
+with Start starts the walk again, and then Up and Down choose between
+the buttons above and R1 and R2 changing the walk&apos;s speed, with L1
+putting it back. Start and Select together quit.
+<p>Differences from the original:
+<ul>
+<li>The data is read off the disc rather than sent over the serial
+cable, and where it lands is rearranged: the sound comes first, to
+the addresses the check sample loads it at, and once the sound bank
+has gone to the SPU the model and its textures are loaded over it.
+The castle picture is loaded into the program&apos;s own memory, since
+with everything else there is no room for it below the program.
+<li>The GPU packet space is the program&apos;s own, and larger. The original
+puts it where the sound bank was, with its two buffers closer
+together than a frame of the model can need.
+<li>The walk&apos;s speed, when it is turned down past zero, wraps round the
+step tables rather than reading before them.
+</ul>
+<p>Nothing allocates after startup.
+
+        <p class="source"><a href="https://github.com/ChrisRx/psxsdk/tree/main/examples/dino">Source on GitHub</a></p>
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../examples/clone/"><small>Previous</small>clone</a>
+        <a class="next" href="../../examples/dogtale/"><small>Next</small>dogtale</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

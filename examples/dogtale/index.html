@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>dogtale · psxsdk</title>
+  <meta name="description" content="A Dog Tale, in Go.">
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" href="../../play/favicon.png" type="image/png">
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/" aria-current="true">Examples</a>
+      <a href="../../tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Examples">
+        <ul>
+          <li><a href="../../examples/">Examples</a></li>
+          <li><a href="../../examples/blow/">blow</a></li>
+          <li><a href="../../examples/breakout/">breakout</a></li>
+          <li><a href="../../examples/car/">car</a></li>
+          <li><a href="../../examples/check/">check</a></li>
+          <li><a href="../../examples/chrome/">chrome</a></li>
+          <li><a href="../../examples/clone/">clone</a></li>
+          <li><a href="../../examples/dino/">dino</a></li>
+          <li><a href="../../examples/dogtale/" aria-current="page">dogtale</a></li>
+          <li><a href="../../examples/dungeon/">dungeon</a></li>
+          <li><a href="../../examples/flame/">flame</a></li>
+          <li><a href="../../examples/invaders/">invaders</a></li>
+          <li><a href="../../examples/mdec/">mdec</a></li>
+          <li><a href="../../examples/morph/">morph</a></li>
+          <li><a href="../../examples/oden/">oden</a></li>
+          <li><a href="../../examples/offscr/">offscr</a></li>
+          <li><a href="../../examples/tunnel/">tunnel</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>dogtale</h1>
+        <iframe class="player" src="../../play/?embed#dogtale" title="dogtale, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
+<p class="muted"><a href="../../play/#dogtale">Open in the player</a>, with the keyboard and gamepad reference.</p>
+        <p>A Dog Tale, in Go.
+<p>A port of Ira Rainey&apos;s Net Yaroze game &quot;A Dog Tale&quot; (1997), which went
+out on the cover disc of the Official UK PlayStation Magazine and on
+Sony&apos;s own Net Yaroze demo discs: a platform game in sprites, twelve
+screens wide, in which a man sets out across a desert to free his dog,
+chained up at the far end with five padlocks, by finding the five keys.
+There are platforms to climb, some of them moving, bones to collect,
+fifty of which are worth a life, and cacti, which cost one. The desert
+scrolls in parallax, the two ranges of mountains and the floor each at
+their own speed under a fixed sky, which is what the author says the
+game grew out of. The title screen scrolls a message along its foot
+under a logo that spins in, with an about box that scales in over it,
+and when the last life goes the screen is grabbed into video memory and
+spun away to nothing. The tune is Sony&apos;s sample, the one the check
+sample plays, which the author&apos;s message says was borrowed. The
+author&apos;s readme asks anyone using the code for a thank you: thanks,
+Ira.
+<p>Left and right walk, Cross jumps, straight up or the way you are
+walking, and Triangle shows the keys found so far. Select pauses, and
+any direction or Cross goes on; Start while paused gives up and goes
+back to the title. On the title, left and right choose between About
+and Play and Cross chooses; Select closes the about box. There is no
+way to quit the program, as in the original.
+<p>Differences from the original:
+<ul>
+<li>The pictures are read off the disc as the one file the original was
+sent over the serial cable as, at a lower address, since where the
+original put them is where a Go program&apos;s code now lies. The tune
+comes from the SDK&apos;s own files, as the check sample&apos;s does, and the
+sound bank&apos;s body is read into the program&apos;s own memory, since with
+the pictures there is no room for it below the program. The file&apos;s
+first picture, a Net Yaroze logo that a function the source declares
+but never defines would have shown, is loaded and never used.
+<li>Every object has an image description of its own. The original
+gives each a pointer to one that is never set, and so writes every
+image&apos;s description to address 0.
+<li>Objects are checked to be in use before their sizes are read, and
+the search for the platform under the man stops at the last object.
+The original reads the sizes of unused objects through null
+pointers, and one past the end of its array.
+<li>There are five keys. The original puts six into the world, reading
+past the end of its table of five for the last, which lands at the
+start of the level at whatever height the memory after the table
+gives.
+<li>The pad check reports nothing pressed when neither Select nor Start
+is, and the title&apos;s spin starts from zero. The original leaves both
+to whatever happened to be in a register or on the stack.
+</ul>
+<p>Nothing allocates after startup.
+
+        <p class="source"><a href="https://github.com/ChrisRx/psxsdk/tree/main/examples/dogtale">Source on GitHub</a></p>
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../examples/dino/"><small>Previous</small>dino</a>
+        <a class="next" href="../../examples/dungeon/"><small>Next</small>dungeon</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

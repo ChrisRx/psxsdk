@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>invaders · psxsdk</title>
+  <meta name="description" content="The invaders demo, in Go.">
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" href="../../play/favicon.png" type="image/png">
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/" aria-current="true">Examples</a>
+      <a href="../../tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Examples">
+        <ul>
+          <li><a href="../../examples/">Examples</a></li>
+          <li><a href="../../examples/blow/">blow</a></li>
+          <li><a href="../../examples/breakout/">breakout</a></li>
+          <li><a href="../../examples/car/">car</a></li>
+          <li><a href="../../examples/check/">check</a></li>
+          <li><a href="../../examples/chrome/">chrome</a></li>
+          <li><a href="../../examples/clone/">clone</a></li>
+          <li><a href="../../examples/dino/">dino</a></li>
+          <li><a href="../../examples/dogtale/">dogtale</a></li>
+          <li><a href="../../examples/dungeon/">dungeon</a></li>
+          <li><a href="../../examples/flame/">flame</a></li>
+          <li><a href="../../examples/invaders/" aria-current="page">invaders</a></li>
+          <li><a href="../../examples/mdec/">mdec</a></li>
+          <li><a href="../../examples/morph/">morph</a></li>
+          <li><a href="../../examples/oden/">oden</a></li>
+          <li><a href="../../examples/offscr/">offscr</a></li>
+          <li><a href="../../examples/tunnel/">tunnel</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>invaders</h1>
+        <iframe class="player" src="../../play/?embed#invaders" title="invaders, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
+<p class="muted"><a href="../../play/#invaders">Open in the player</a>, with the keyboard and gamepad reference.</p>
+        <p>The invaders demo, in Go.
+<p>A port of L. Evans&apos;s Net Yaroze demo &quot;invaders&quot; (Sony, 1996): Space
+Invaders in sprites. Four rows of eight invaders march across the screen,
+dropping a line each time they reach a side, and one of them fires back
+now and then; the player&apos;s ship slides along the bottom and shoots
+upwards, no more than once every ten frames. Clearing the screen starts
+the next of ten levels, all alike, and an invader or a shot reaching the
+ship costs one of five lives. When they are gone, or the tenth level is
+cleared, the score and the high score table are shown. Behind the sprites
+a semi-transparent black box covers the screen, which the original uses to
+soften the black edges its sprites have, and the library&apos;s font prints the
+frame, the lives and the score. Music plays from a sequence off the disc.
+<p>Left and right push the ship, which has momentum, and Triangle fires. L1
+pauses for as long as it is held, and Start and Select together quit. On
+the score screen Cross starts a new game and L1 and R1 together quit. If
+the invaders reach the bottom of the screen the program ends.
+<p>Differences from the original:
+<ul>
+<li>Positions and speeds are fixed point, with four bits of fraction,
+where the original has doubles. The only fraction in the game is the
+player&apos;s shot, which moves two and a half pixels a frame.
+<li>The textures are loaded below the program rather than above it, where
+the original&apos;s batch script put them and where a Go program&apos;s data
+now lies. The sound, as in the check sample, comes from the same files
+at the same addresses.
+<li>An invader only fires when there is one to fire. The original picks
+one at random by dividing by how many are left, which is zero in the
+frame after the last is destroyed, and then indexes its arrays with
+what that gives.
+<li>A shot that cannot be created, with all of them in flight, is not
+fired. The original writes the shot into the element before the first.
+<li>The missing data is reported, where the original would hang.
+</ul>
+<p>Nothing allocates after startup.
+
+        <p class="source"><a href="https://github.com/ChrisRx/psxsdk/tree/main/examples/invaders">Source on GitHub</a></p>
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../examples/flame/"><small>Previous</small>flame</a>
+        <a class="next" href="../../examples/mdec/"><small>Next</small>mdec</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

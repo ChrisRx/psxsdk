@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>blow · psxsdk</title>
+  <meta name="description" content="The blow demo, in Go.">
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" href="../../play/favicon.png" type="image/png">
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/" aria-current="true">Examples</a>
+      <a href="../../tools/">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Examples">
+        <ul>
+          <li><a href="../../examples/">Examples</a></li>
+          <li><a href="../../examples/blow/" aria-current="page">blow</a></li>
+          <li><a href="../../examples/breakout/">breakout</a></li>
+          <li><a href="../../examples/car/">car</a></li>
+          <li><a href="../../examples/check/">check</a></li>
+          <li><a href="../../examples/chrome/">chrome</a></li>
+          <li><a href="../../examples/clone/">clone</a></li>
+          <li><a href="../../examples/dino/">dino</a></li>
+          <li><a href="../../examples/dogtale/">dogtale</a></li>
+          <li><a href="../../examples/dungeon/">dungeon</a></li>
+          <li><a href="../../examples/flame/">flame</a></li>
+          <li><a href="../../examples/invaders/">invaders</a></li>
+          <li><a href="../../examples/mdec/">mdec</a></li>
+          <li><a href="../../examples/morph/">morph</a></li>
+          <li><a href="../../examples/oden/">oden</a></li>
+          <li><a href="../../examples/offscr/">offscr</a></li>
+          <li><a href="../../examples/tunnel/">tunnel</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>blow</h1>
+        <iframe class="player" src="../../play/?embed#blow" title="blow, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
+<p class="muted"><a href="../../play/#blow">Open in the player</a>, with the keyboard and gamepad reference.</p>
+        <p>The blow demo, in Go.
+<p>A port of Sony&apos;s Net Yaroze demo &quot;blow&quot; (S. Ashley, 1997): a model
+viewer that blows its model up. A space shuttle, in five pieces, is read
+off the disc, and one piece at a time is shown at 512 by 240, turned,
+moved and scaled, under three directional lights, ambient light and fog,
+every parameter of which a menu of the library&apos;s font lets you change.
+The last page of the menu is the explosion: the piece&apos;s polygons fly
+apart along their normals, flashing white and burning through yellow and
+red to black while the screen flashes, and then it is put back together
+to go again. To do that the model is copied at startup with a separate
+set of vertices for every polygon, since a TMD shares its vertices
+between the polygons that meet at them, and the copy is what is drawn.
+<p>R1 and R2 step through the menu&apos;s pages and Select and Start through
+the pieces. On each page the d-pad, L1 and L2 adjust three values, and
+the symbol buttons the rest: the first page turns the piece, and Triangle
+and Cross bring the viewpoint nearer and further; the second moves the
+viewpoint; the third scales the piece; the next three aim and color the
+lights, Square and Circle choosing the component and Triangle and Cross
+changing it; then the ambient light; then the fog, its distance and
+color, and whether it is on; and last the explosion, its speed and
+whether it is going. Start and Select together quit.
+<p>Differences from the original:
+<ul>
+<li>The viewpoint moves in and out by fiftieths, where the original
+multiplies and divides by 1.02 in floating point.
+<li>The model is read off the disc to the address the original&apos;s batch
+script sent it to, and the copy is checked to fit below it.
+<li>The model&apos;s extent, which the original works out at startup and
+prints to the serial console, is left out, and so is the missing
+data&apos;s report, which the original would hang on.
+</ul>
+<p>Nothing allocates after startup.
+
+        <p class="source"><a href="https://github.com/ChrisRx/psxsdk/tree/main/examples/blow">Source on GitHub</a></p>
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../examples/"><small>Previous</small>Examples</a>
+        <a class="next" href="../../examples/breakout/"><small>Next</small>breakout</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>

@@ -40,6 +40,7 @@
           <li><a href="../../tools/dumpsxiso/">dumpsxiso</a></li>
           <li><a href="../../tools/mdecenc/">mdecenc</a></li>
           <li><a href="../../tools/psxemu/">psxemu</a></li>
+          <li><a href="../../tools/psxplay/">psxplay</a></li>
           <li><a href="../../tools/psxtrace/">psxtrace</a></li>
           <li><a href="../../tools/ecoff2asm/">ecoff2asm and ecoffcmp</a></li>
           <li><a href="../../tools/hdr2go/">hdr2go</a></li>
@@ -70,7 +71,7 @@
 </span></span><span class="line"><span class="cl">$ mednafen game.cue
 </span></span><span class="line"><span class="cl"><span class="o">[</span>CDC<span class="o">]</span> In leadout area: <span class="m">639</span>
 </span></span></code></pre><p><code>--file DISC=HOST</code> places one more host file at a path on the disc, making the directories on the way, and may be repeated. With it an image needs no directory at all.</p>
-<h2 id="registered-files">Registered files</h2>
+<h2 id="registered-files">Registered files<a class="anchor" href="#registered-files" aria-label="Link to this section">#</a></h2>
 <p>A program can declare the files it reads itself, with the <a href="https://github.com/ChrisRx/psxsdk/tree/main/disc"><code>disc</code></a> package, instead of a directory being kept in step with it by hand:</p>
 <pre class="chroma"><code><span class="line"><span class="cl"><span class="kn">import</span><span class="w"> </span><span class="s">&#34;go.chrisrx.dev/psx/disc&#34;</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">
@@ -85,10 +86,10 @@
 </span></span></code></pre><p>A registered path that the directory already holds is an error rather than a choice between the two, as is one path registered from two different host files. An executable not built onto a disc this way, or run from the serial loader, sees a zero sector and length, which <code>Placed</code> reports, and <code>Read</code> falls back to <code>CdReadFile</code> by name.</p>
 <p>Sony exported <code>CdRead</code> but not the <code>CdControl</code> that positions the drive for it, so the TinyGo target's link script provides <code>CdControl</code>, <code>CdControlB</code>, <code>CdIntToPos</code> and <code>CdPosToInt</code> at the addresses the library's own <code>CdReadFile</code> calls, and the <code>yaroze</code> package declares them.</p>
 <p>The volume descriptor fields are flags: <code>--volume-id</code>, <code>--system-id</code>, <code>--publisher</code>, <code>--preparer</code> and <code>--application</code>. <code>--date</code> sets the volume date, and leaving it unset records no date at all, so the same tree always produces the same bytes. <code>--file-times</code> records each file's own modification time instead, which is honest about the tree but makes the image depend on the mtimes in it.</p>
-<h2 id="streamed-media">Streamed media</h2>
+<h2 id="streamed-media">Streamed media<a class="anchor" href="#streamed-media" aria-label="Link to this section">#</a></h2>
 <p>Files named <code>.xa</code> or <code>.str</code> are streamed media: XA audio and video are produced as whole 2336-byte Mode 2 sectors with their subheaders already in place, saying which form each sector is and which interleaved channel it belongs to. Those are written through untouched rather than packed into logical blocks, and their directory records carry the CD-XA attributes that mark them Form 2. <code>--raw</code> adds patterns to the set and <code>--no-raw</code> empties it. A file taken for a stream that is not a whole number of sectors is an error rather than a file padded into nonsense.</p>
 <p>Every image is a CD-XA disc: the <code>CD-XA001</code> signature in the volume descriptor and the 14-byte attribute block on every directory record, which is what a PlayStation disc carries and what says a file holds a stream. <code>--no-xa</code> leaves both out, for comparing against a plain ISO 9660 writer.</p>
-<h2 id="audio-tracks">Audio tracks</h2>
+<h2 id="audio-tracks">Audio tracks<a class="anchor" href="#audio-tracks" aria-label="Link to this section">#</a></h2>
 <p><code>--audio</code> appends a CD audio track, which a program plays by its number rather than opening as a file. Input is a WAV file or headerless samples, in both cases 44.1kHz 16-bit stereo, which is the only thing a CD holds. The two second pause the standard requires between the data track and the audio that follows it is inserted automatically, and the <code>.cue</code> describes the result:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">$ mkpsxiso -o game.bin --boot MAIN.EXE --audio track1.wav --audio track2.wav ./disc
 </span></span><span class="line"><span class="cl">created <span class="s2">&#34;game.bin&#34;</span>: <span class="m">789</span> blocks <span class="o">(</span><span class="m">150</span> of run-out<span class="o">)</span> and <span class="m">2</span> audio track<span class="o">(</span>s<span class="o">)</span>, <span class="m">15489</span> sectors in all, <span class="s2">&#34;game.cue&#34;</span>
@@ -101,7 +102,7 @@
 </span></span><span class="line"><span class="cl">    INDEX <span class="m">01</span> 00:12:39
 </span></span><span class="line"><span class="cl">  TRACK <span class="m">03</span> AUDIO
 </span></span><span class="line"><span class="cl">    INDEX <span class="m">01</span> 01:44:00
-</span></span></code></pre><h2 id="plain-iso-9660">Plain ISO 9660</h2>
+</span></span></code></pre><h2 id="plain-iso-9660">Plain ISO 9660<a class="anchor" href="#plain-iso-9660" aria-label="Link to this section">#</a></h2>
 <p><code>--iso</code> writes plain 2048-byte blocks instead. That cannot represent audio tracks or Form 2 sectors, and says so rather than writing an image missing either, but ordinary ISO 9660 tools can read it, which is how the filesystem is checked against an independent implementation:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">$ mkpsxiso --iso -o test.iso ./disc
 </span></span><span class="line"><span class="cl">$ xorriso -indev test.iso -find /

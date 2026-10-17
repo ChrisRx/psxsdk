@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en" data-root="../../">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>psxplay · psxsdk</title>
+  
+  <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="../../play/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../play/fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" href="../../play/favicon.png" type="image/png">
+  <link rel="stylesheet" href="../../assets/site.css">
+  <link rel="stylesheet" href="../../assets/chroma.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../../">psxsdk</a>
+    <nav class="sections" aria-label="Sections">
+      <a href="../../guide/">Guide</a>
+      <a href="../../tutorial/">Tutorial</a>
+      <a href="../../examples/">Examples</a>
+      <a href="../../tools/" aria-current="true">Tools</a>
+    </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
+      <ul id="results" class="results" hidden></ul>
+    </div>
+    <a class="repo" href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <nav aria-label="Tools">
+        <ul>
+          <li><a href="../../tools/">Tools</a></li>
+          <li><a href="../../tools/eco2exe/">eco2exe</a></li>
+          <li><a href="../../tools/elf2exe/">elf2exe</a></li>
+          <li><a href="../../tools/mkpsxiso/">mkpsxiso</a></li>
+          <li><a href="../../tools/dumpsxiso/">dumpsxiso</a></li>
+          <li><a href="../../tools/mdecenc/">mdecenc</a></li>
+          <li><a href="../../tools/psxemu/">psxemu</a></li>
+          <li><a href="../../tools/psxplay/" aria-current="page">psxplay</a></li>
+          <li><a href="../../tools/psxtrace/">psxtrace</a></li>
+          <li><a href="../../tools/ecoff2asm/">ecoff2asm and ecoffcmp</a></li>
+          <li><a href="../../tools/hdr2go/">hdr2go</a></li>
+          <li><a href="../../tools/mips1fix/">mips1fix</a></li>
+          <li><a href="../../tools/objdump/">objdump</a></li>
+          <li><a href="../../tools/sioload/">sioload</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <article>
+        <h1>psxplay</h1>
+        <p><code>psxplay</code> runs the emulator in a window, with the keyboard or a gamepad as the pad in port 1 and the SPU's sound on the speakers. It is the desktop counterpart of the <a href="../../play/">player</a> on this site, which runs the same emulator in a browser:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">$ psxplay .build/check/check.cue
+</span></span></code></pre><p>OpenBIOS is built in, so no BIOS image is needed; <code>--bios</code> boots another, such as Sony's. <code>--exe</code> loads a PSX-EXE when the BIOS reaches its shell instead of booting a disc, as <code>psxemu --exe</code> does, <code>--card</code> attaches a memory card image to slot 1 and writes it back on exit, <code>--scale</code> sets the window's initial size as a multiple of 320x240, and <code>--mute</code> leaves the sound off. What the BIOS prints to the TTY goes to standard output.</p>
+<p>The keyboard is laid out as the player has it:</p>
+<table>
+<thead>
+<tr>
+<th>Keys</th>
+<th>Pad</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Arrows</td>
+<td>D-pad</td>
+</tr>
+<tr>
+<td>Z, X, A, S</td>
+<td>Cross, circle, square, triangle</td>
+</tr>
+<tr>
+<td>Q, W</td>
+<td>L1, R1</td>
+</tr>
+<tr>
+<td>1, 2</td>
+<td>L2, R2</td>
+</tr>
+<tr>
+<td>Enter, Backspace</td>
+<td>Start, Select</td>
+</tr>
+</tbody>
+</table>
+<p>A gamepad with a standard layout works as itself, with the left stick doubling as the d-pad. F11 toggles full screen and Escape leaves it.</p>
+<p>In the repository, <code>task play NAME=check</code> builds an example's disc and runs it, with flags after <code>--</code> passed on: <code>task play NAME=check -- --mute</code>.</p>
+<p>The window is drawn with <a href="https://ebitengine.org">Ebitengine</a>, which loads X11, OpenGL and ALSA at run time rather than linking against them, so building needs nothing beyond Go. On Linux the libraries must be on the loader's path to run it; the Nix development shell puts them there.</p>
+
+      </article>
+      <nav class="prevnext" aria-label="Neighbouring pages">
+        <a class="prev" href="../../tools/psxemu/"><small>Previous</small>psxemu</a>
+        <a class="next" href="../../tools/psxtrace/"><small>Next</small>psxtrace</a>
+      </nav>
+    </main>
+  </div>
+
+  <footer>
+    <p><a href="https://github.com/ChrisRx/psxsdk">psxsdk</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
+  </footer>
+  <script src="../../assets/search.js" defer></script>
+  <script src="../../assets/player.js" defer></script>
+</body>
+</html>
