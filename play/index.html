@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>psxsdk examples</title>
-  <meta name="description" content="Play the psxsdk example programs in an emulator written in Go, compiled to WebAssembly.">
+  <title>psxsdk playground</title>
+  <meta name="description" content="Write a PlayStation program in Go, build it in the browser with TinyGo compiled to WebAssembly, and run it in an emulator written in Go.">
   <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
   <link rel="preload" href="fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
@@ -12,62 +12,35 @@
   <link rel="icon" href="favicon.png" type="image/png">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <header class="top">
-    <h1>psxsdk examples</h1>
-    <p>PlayStation programs written in Go with <a href="https://github.com/ChrisRx/psxsdk">psxsdk</a>, running in an emulator that is also written in Go, compiled to WebAssembly.</p>
+<body class="playground">
+  <header class="pg-top">
+    <h1>psxsdk playground</h1>
+    <button id="run" class="primary" type="button" title="Format, build and run (Ctrl+Enter)">Run</button>
+    <button id="format" type="button" title="Format the program with gofmt (Ctrl+Shift+F)">Format</button>
+    <button id="revert" type="button" title="Replace the program with the one the playground starts with">Start over</button>
+    <span class="pg-hint muted"><kbd>Ctrl</kbd> <kbd>Enter</kbd> runs, <kbd>Ctrl</kbd> <kbd>Space</kbd> completes</span>
+    <div class="pg-links">
+      <a href="player.html">Examples</a>
+      <a href="../">Documentation</a>
+      <a href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+    </div>
   </header>
 
-  <main>
-    <nav aria-label="Examples">
-      <ul id="examples"><li class="muted">Loading…</li></ul>
-    </nav>
+  <main id="pg" class="pg">
+    <section class="pg-code" aria-label="Program">
+      <div id="editor"></div>
+    </section>
 
-    <section class="player" aria-label="Player">
+    <div id="split" class="pg-split" role="separator" aria-orientation="vertical" aria-label="Resize the editor" tabindex="0"></div>
+
+    <section class="pg-side" aria-label="Emulator">
       <div id="stage" class="stage">
-        <div class="screen">
-          <canvas id="screen" width="320" height="240" aria-label="Emulator display"></canvas>
-          <div id="overlay" class="overlay">Pick an example to start it.</div>
+        <div class="screen" tabindex="0" aria-label="Emulator display; focus it to use the keyboard as the pad">
+          <canvas id="screen" width="320" height="240"></canvas>
+          <div id="overlay" class="overlay">Run the program to build it and start it here.</div>
           <button id="exit-full" class="exit-full" type="button" aria-label="Exit fullscreen">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12m0-12L6 18"/></svg>
           </button>
-        </div>
-
-        <!-- The touch controller, shown on touchscreens. Each pad is one
-             touch area, so a thumb can roll between its buttons; buttons
-             carry their pad bit's name. -->
-        <div class="controller" aria-hidden="true">
-          <div class="pad pad-left">
-            <div class="shoulders">
-              <div class="shoulder" data-button="l2">L2</div>
-              <div class="shoulder" data-button="l1">L1</div>
-            </div>
-            <div class="dish" data-dpad>
-              <svg class="dpad" viewBox="0 0 120 120">
-                <path data-button="up" d="M43 4h34a3 3 0 0 1 3 3v31L60 58 40 38V7a3 3 0 0 1 3-3z"/>
-                <path data-button="right" d="M116 43v34a3 3 0 0 1-3 3H82L62 60l20-20h31a3 3 0 0 1 3 3z"/>
-                <path data-button="down" d="M77 116H43a3 3 0 0 1-3-3V82l20-20 20 20v31a3 3 0 0 1-3 3z"/>
-                <path data-button="left" d="M4 77V43a3 3 0 0 1 3-3h31l20 20-20 20H7a3 3 0 0 1-3-3z"/>
-                <circle class="pivot" cx="60" cy="60" r="7"/>
-              </svg>
-            </div>
-          </div>
-          <div class="pad pad-mid">
-            <div class="small" data-button="select">Select</div>
-            <div class="small" data-button="start">Start</div>
-          </div>
-          <div class="pad pad-right">
-            <div class="shoulders">
-              <div class="shoulder" data-button="r1">R1</div>
-              <div class="shoulder" data-button="r2">R2</div>
-            </div>
-            <div class="dish face">
-              <div class="face-button triangle" data-button="triangle"><svg viewBox="0 0 24 24"><path d="M12 4.5 20.5 19h-17z"/></svg></div>
-              <div class="face-button square" data-button="square"><svg viewBox="0 0 24 24"><path d="M5.5 5.5h13v13h-13z"/></svg></div>
-              <div class="face-button circle" data-button="circle"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/></svg></div>
-              <div class="face-button cross" data-button="cross"><svg viewBox="0 0 24 24"><path d="m5.5 5.5 13 13m0-13-13 13"/></svg></div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -78,38 +51,34 @@
         <button id="fullscreen" type="button">Fullscreen</button>
         <span id="status" class="status" aria-live="polite"></span>
       </div>
-      <p id="hint" class="hint"></p>
 
-      <details id="keys" class="panel">
-        <summary>Keyboard and gamepad</summary>
-        <table class="keys">
-          <tr><th>Directions</th><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd></td></tr>
-          <tr><th>Cross, Circle</th><td><kbd>Z</kbd> <kbd>X</kbd></td></tr>
-          <tr><th>Square, Triangle</th><td><kbd>A</kbd> <kbd>S</kbd></td></tr>
-          <tr><th>L1, R1</th><td><kbd>Q</kbd> <kbd>W</kbd></td></tr>
-          <tr><th>L2, R2</th><td><kbd>1</kbd> <kbd>2</kbd></td></tr>
-          <tr><th>Start, Select</th><td><kbd>Enter</kbd> <kbd>Backspace</kbd></td></tr>
-        </table>
-        <p class="muted">A gamepad with the standard layout works as it is. On a touchscreen, a controller appears under the picture, and beside it in landscape.</p>
-      </details>
-
-      <details class="panel">
-        <summary>BIOS</summary>
-        <p>The examples boot with the <a href="https://github.com/pcsx-redux/nugget/tree/main/openbios">OpenBIOS</a> from PCSX-Redux (<a href="OPENBIOS-LICENSE.txt">MIT license</a>). You can use your own BIOS image instead. It stays in this browser.</p>
-        <p><span id="bios-name">Using OpenBIOS.</span></p>
-        <p>
-          <label class="file">Choose a BIOS image… <input id="bios-file" type="file"></label>
-          <button id="bios-clear" type="button" hidden>Use OpenBIOS</button>
-        </p>
-      </details>
-
-      <details class="panel">
-        <summary>Console</summary>
-        <pre id="tty" class="tty"></pre>
-      </details>
+      <section class="pg-out out" aria-label="Output">
+        <div class="tabs">
+          <div role="tablist" aria-label="Output">
+            <button id="tab-build" role="tab" type="button" aria-selected="true" aria-controls="build-log">Compiler</button>
+            <button id="tab-tty" role="tab" type="button" aria-selected="false" aria-controls="tty" tabindex="-1">Emulator</button>
+          </div>
+          <span id="build-status" class="status" aria-live="polite"></span>
+          <label class="level" hidden title="What the emulator logs besides what the program prints. error: crashes; warn: accesses to unmapped addresses; info: display changes; debug: BIOS calls and CD-ROM commands; trace: DMA, events and system calls.">Log
+            <select id="log-level">
+              <option value="off">off</option>
+              <option value="error">error</option>
+              <option value="warn">warn</option>
+              <option value="info" selected>info</option>
+              <option value="debug">debug</option>
+              <option value="trace">trace</option>
+            </select>
+          </label>
+          <button id="clear-tty" class="small-button" type="button" hidden>Clear</button>
+        </div>
+        <pre id="build-log" class="log" role="tabpanel" aria-labelledby="tab-build"></pre>
+        <pre id="tty" class="log" role="tabpanel" aria-labelledby="tab-tty" hidden></pre>
+      </section>
     </section>
   </main>
 
   <script src="app.js"></script>
+  <script src="editor.js"></script>
+  <script src="playground.js"></script>
 </body>
 </html>

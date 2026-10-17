@@ -2,6 +2,11 @@
 // a BIOS, and passes the emulator the pad's state as it changes. The
 // emulator runs in worker.js, off this thread, keeping its own time and
 // drawing onto the canvas itself.
+//
+// Two pages share it: the player (player.html), with the list of examples,
+// and the playground (index.html), whose editor.js builds the disc it boots.
+// What only the player has, the list, the hint and the BIOS panel, is
+// looked for before it is used.
 "use strict";
 
 // Pad bits, as emu's Button constants.
@@ -109,7 +114,10 @@ worker.onmessage = (e) => {
   switch (msg.event) {
     case "stats":
       if (state.driving) status.textContent = `${msg.fps.toFixed(1)} fps`;
-      if (msg.tty) {
+      // The playground shows the log along with what was printed.
+      if (msg.output && typeof showEmulatorOutput === "function") {
+        showEmulatorOutput(msg.output);
+      } else if (msg.tty) {
         tty.textContent = (tty.textContent + msg.tty).slice(-20000);
         tty.scrollTop = tty.scrollHeight;
       }
@@ -254,7 +262,7 @@ async function boot() {
   setRunning(false);
   const init = await ready;
   if (init.error) throw new Error(init.error);
-  const reply = await call("boot", { bios: await biosData(), cue: state.disc.cue, files: state.disc.files });
+  const reply = await call("boot", { bios: await biosData(), cue: state.disc.cue, files: state.disc.files, elf: state.disc.elf });
   started(`start ${state.current.name}`, reply);
 }
 
@@ -267,7 +275,7 @@ async function start(example) {
     // In the row of chips on a narrow screen, bring the current one into view.
     if (current && narrow.matches) a.scrollIntoView({ block: "nearest", inline: "center" });
   }
-  $("hint").textContent = INFO[example.name]?.controls ?? "";
+  if ($("hint")) $("hint").textContent = INFO[example.name]?.controls ?? "";
   tty.textContent = "";
   status.textContent = "";
   showOverlay(`Loading ${example.name}…`);
@@ -505,11 +513,12 @@ $("sound").addEventListener("click", async () => {
 showSound();
 
 function showBIOS() {
+  if (!$("bios-name")) return;
   $("bios-name").textContent = state.bios ? `Using ${state.bios.name}.` : "Using OpenBIOS.";
   $("bios-clear").hidden = !state.bios;
 }
 
-$("bios-file").addEventListener("change", async (e) => {
+$("bios-file")?.addEventListener("change", async (e) => {
   const file = e.target.files[0];
   e.target.value = "";
   if (!file) return;
@@ -524,7 +533,7 @@ $("bios-file").addEventListener("change", async (e) => {
   if (state.disc) boot().catch((e) => showOverlay(`Could not start: ${e.message}`));
 });
 
-$("bios-clear").addEventListener("click", async () => {
+$("bios-clear")?.addEventListener("click", async () => {
   state.bios = null;
   await store.delete("bios");
   showBIOS();
@@ -558,7 +567,10 @@ async function init() {
   state.bios = (await store.get("bios")) ?? null;
   showBIOS();
 
+  requestAnimationFrame(loop);
+
   const list = $("examples");
+  if (!list) return;
   try {
     state.examples = await (await fetch("examples.json")).json();
   } catch (e) {
@@ -587,7 +599,6 @@ async function init() {
 
   const example = exampleFromHash();
   if (example) start(example);
-  requestAnimationFrame(loop);
 }
 
 init();

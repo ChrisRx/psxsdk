@@ -6,17 +6,22 @@
 // carries back:
 //
 //	{type: "init", canvas}              the canvas to draw on
-//	{type: "boot", bios, cue, files}    boots a disc, as psx.boot does, and
+//	{type: "boot", bios, cue, files, elf}
+//	                                    boots a disc, as psx.boot does, and
 //	                                    runs it
 //	{type: "reset"}                     boots the same disc again
 //	{type: "pause"}, {type: "resume"}   stops and starts running
 //	{type: "buttons", buttons}          the pad's buttons, as they change
 //	{type: "audio", on, port}           turns the sound on or off; port,
 //	                                    once, is audio.js's, to send it to
+//	{type: "log", level}                sets the level the emulator logs at,
+//	                                    as psx.setLogLevel does
 //
-// It sends the page, unasked, {event: "stats", fps, tty} twice a second,
-// with what the BIOS printed meanwhile, and {event: "stopped", error} if
-// the emulator stops.
+// It sends the page, unasked, {event: "stats", fps, tty, output} twice a
+// second, with what the BIOS and the program printed meanwhile, as text in
+// tty and, while logging, interleaved with the log in output, as
+// psx.takeOutput returns it; and {event: "stopped", error} if the emulator
+// stops.
 "use strict";
 
 importScripts("wasm_exec.js");
@@ -51,8 +56,9 @@ const clock = {
   scheduled: false,
   frames: 0,     // run since the last stats
   since: 0,
-  tty: "",
+  output: [],
 };
+let logging = false;
 
 // Yielding with a message rather than setTimeout(0), which browsers clamp
 // to 4ms once nested.
@@ -100,13 +106,14 @@ function tick() {
     clock.frames += ran;
   }
 
-  clock.tty += psx.takeTTY();
+  clock.output.push(...psx.takeOutput());
   if (now - clock.since >= STATS_MS) {
     const fps = (clock.frames * 1000) / (now - clock.since);
-    self.postMessage({ event: "stats", fps, tty: clock.tty });
+    const tty = clock.output.filter((c) => !c.level).map((c) => c.text).join("");
+    self.postMessage({ event: "stats", fps, tty, output: logging ? clock.output : undefined });
     clock.frames = 0;
     clock.since = now;
-    clock.tty = "";
+    clock.output = [];
   }
   schedule();
 }
@@ -123,11 +130,12 @@ function stop(error) {
   if (error) self.postMessage({ event: "stopped", error });
 }
 
-function boot({ bios, cue, files }) {
+function boot({ bios, cue, files, elf }) {
   stop();
-  const error = psx.boot(bios, cue, files);
+  clock.output = [];
+  const error = psx.boot(bios, cue, files, elf ?? null);
   audioPort?.postMessage("flush");
-  booted = error ? null : { bios, cue, files };
+  booted = error ? null : { bios, cue, files, elf };
   if (!error) {
     psx.setButtons(buttons);
     start();
@@ -165,6 +173,10 @@ self.onmessage = async (e) => {
         if (msg.port) audioPort = msg.port;
         psx.setAudio(msg.on);
         if (!msg.on) audioPort?.postMessage("flush");
+        break;
+      case "log":
+        logging = msg.level !== "off";
+        psx.setLogLevel(msg.level);
         break;
       default:
         reply = { error: `unknown request ${msg.type}` };

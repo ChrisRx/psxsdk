@@ -21,6 +21,7 @@
       <a href="../../tutorial/">Tutorial</a>
       <a href="../../examples/" aria-current="true">Examples</a>
       <a href="../../tools/">Tools</a>
+      <a href="../../play/">Playground</a>
     </nav>
     <div class="search">
       <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
@@ -49,6 +50,7 @@
           <li><a href="../../examples/morph/">morph</a></li>
           <li><a href="../../examples/oden/">oden</a></li>
           <li><a href="../../examples/offscr/">offscr</a></li>
+          <li><a href="../../examples/square/">square</a></li>
           <li><a href="../../examples/tunnel/">tunnel</a></li>
         </ul>
       </nav>
@@ -57,8 +59,8 @@
     <main>
       <article>
         <h1>chrome</h1>
-        <iframe class="player" src="../../play/?embed#chrome" title="chrome, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
-<p class="muted"><a href="../../play/#chrome">Open in the player</a>, with the keyboard and gamepad reference.</p>
+        <iframe class="player" src="../../play/player.html?embed#chrome" title="chrome, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
+<p class="muted"><a href="../../play/player.html#chrome">Open in the player</a>, with the keyboard and gamepad reference.</p>
         <p>The chrome sample, in Go.
 <p>A port of Sony&apos;s Net Yaroze demo &quot;chrome&quot; (S. Ashley, 1997): a textured
 torus, turning, whose texture coordinates are worked out again every frame
@@ -68,9 +70,9 @@ environment, mapping. It puts the GTE, the 3D library and lighting
 through their paces, which the check example does not touch.
 <p>Differences from the original:
 <ul>
-<li>The texture and model are read off the disc. On a Net Yaroze the
-loader&apos;s batch script sent them from the PC to fixed addresses; they
-are loaded to the same addresses.
+<li>The texture and model are read off the disc into the program&apos;s own
+memory. On a Net Yaroze the loader&apos;s batch script sent them from the
+PC to fixed addresses.
 <li>The torus has a coordinate system of its own. The original points the
 object at WORLD, the library&apos;s nil coordinate system, and then writes
 its transformation through that pointer every frame, which in C

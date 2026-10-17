@@ -19,6 +19,21 @@
   --accent: #3b63c9;
   --screen: #000;
 
+  /* The playground's editor. */
+  --code-bg: #f7f6f2;
+  --gutter: #9a9994;
+  --sel: rgba(59, 99, 201, 0.22);
+  --t-kw: #a2318f;
+  --t-type: #13708a;
+  --t-fn: #2f55b3;
+  --t-builtin: #b23a48;
+  --t-str: #2c7a39;
+  --t-num: #a8590a;
+  --t-const: #8a5a00;
+  --t-pkg: #6a4bb8;
+  --t-com: #8a8984;
+  --error: #c62f3c;
+
   /* The controller. */
   --plastic: #cfcec8;
   --plastic-deep: #bcbbb4;
@@ -44,6 +59,20 @@
     --line: #37373c;
     --line-strong: #4b4b51;
     --accent: #8fa8ff;
+
+    --code-bg: #161618;
+    --gutter: #5d5d64;
+    --sel: rgba(143, 168, 255, 0.28);
+    --t-kw: #e48ad8;
+    --t-type: #6ccbe0;
+    --t-fn: #93aeff;
+    --t-builtin: #f2899a;
+    --t-str: #9ad48c;
+    --t-num: #f0b46e;
+    --t-const: #e8c070;
+    --t-pkg: #c2a6ff;
+    --t-com: #74747c;
+    --error: #ff6f7b;
 
     --plastic: #2a2a2e;
     --plastic-deep: #202023;
@@ -479,3 +508,259 @@ body.has-full { overflow: hidden; }
 .embed body { padding: 8px; }
 .embed .top, .embed main > nav, .embed .panel { display: none; }
 .embed .hint { margin-bottom: 0; }
+
+/* The playground (index.html): the editor on the left, the emulator on the
+   right with the compiler's and the emulator's output under it, filling the
+   window, with the divider between the two sides dragged to share it. */
+body.playground {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  padding: 0;
+  overflow: hidden;
+}
+body.resizing { cursor: col-resize; user-select: none; -webkit-user-select: none; }
+
+.pg-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.pg-top h1 { margin-right: 14px; font-size: 1.625rem; }
+.pg-hint { margin-left: 6px; font-size: 0.875rem; }
+.pg-hint kbd { min-width: 0; font-size: 0.75rem; }
+.pg-links { display: flex; gap: 18px; margin-left: auto; }
+button.primary { border-color: var(--accent); background: var(--accent); color: var(--bg); }
+button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 86%, var(--ink)); }
+
+.pg {
+  --side: min(520px, 42vw);
+  max-width: none;
+  margin: 0;
+  gap: 0;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 7px var(--side);
+}
+
+.pg-code { position: relative; min-width: 0; min-height: 0; background: var(--code-bg); }
+.pg-code .editor { position: absolute; inset: 0; }
+
+.pg-split {
+  cursor: col-resize;
+  touch-action: none;
+  background: var(--line);
+  border-left: 3px solid var(--bg);
+  border-right: 3px solid var(--bg);
+}
+.pg-split:hover, .pg-split:focus-visible, .resizing .pg-split { background: var(--accent); outline: none; }
+
+.pg-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px 16px 12px 10px;
+}
+.pg-side .bar { margin-top: 0; }
+.pg-side .screen:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.pg-out { flex: 1; min-height: 0; }
+.out {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+/* The output's tabs, the compiler's and the emulator's, with the status
+   and the emulator's log level beside them. */
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 0 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.875rem;
+}
+.tabs [role="tablist"] { display: flex; align-self: stretch; }
+.tabs [role="tab"] {
+  position: relative;
+  min-height: 0;
+  padding: 7px 10px 6px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+  font-weight: 600;
+}
+.tabs [role="tab"]:hover:not(:disabled) { background: none; color: var(--ink); }
+.tabs [role="tab"][aria-selected="true"] { border-bottom-color: var(--accent); color: var(--ink); }
+.tabs [role="tab"].unread::after {
+  content: "";
+  position: absolute;
+  top: 7px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.tabs [role="tab"].unread.has-error::after { background: var(--error); }
+.tabs .status { min-width: 0; margin-left: 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tabs .level { display: flex; align-items: center; gap: 6px; margin-left: auto; color: var(--muted); }
+.tabs .level[hidden], .tabs [hidden] { display: none; }
+.tabs select {
+  padding: 2px 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.small-button { min-height: 0; padding: 2px 10px; font-size: 0.8125rem; }
+.log[hidden] { display: none; }
+.log .lv-ERROR { color: var(--error); font-weight: 600; }
+.log .lv-attrs { color: var(--muted); font-weight: 400; }
+.log .lv-WARN { color: var(--t-num); }
+.log .lv-INFO { color: var(--t-type); }
+.log .lv-DEBUG, .log .lv-REPEAT { color: var(--muted); }
+.log .lv-TRACE { color: var(--gutter); }
+.log {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.log a { color: var(--error); }
+
+/* The editor (editor.js). The highlighted copy and the textarea over it
+   must set their text identically: the same font, line height, padding
+   and tab size, and no wrapping. */
+.editor { position: relative; overflow: hidden; }
+.ed-scroll { position: absolute; inset: 0; overflow: auto; }
+.ed-sizer { display: flex; width: max-content; min-width: 100%; min-height: 100%; }
+.ed-gutter, .ed-hl, .editor textarea {
+  margin: 0;
+  font: 13px/20px ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-variant-ligatures: none;
+  tab-size: 4;
+  -moz-tab-size: 4;
+  white-space: pre;
+}
+.ed-gutter {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 3.5em;
+  padding: 12px 12px 12px 8px;
+  text-align: right;
+  color: var(--gutter);
+  background: var(--code-bg);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.ed-gutter .err {
+  display: inline-block;
+  margin-right: -4px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--error);
+  color: var(--code-bg);
+}
+.ed-code { position: relative; flex: 1; }
+.ed-hl, .editor textarea { padding: 12px 32px 12px 6px; }
+.ed-hl { min-height: 100%; color: var(--ink); }
+.editor textarea {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--ink);
+}
+.editor textarea::selection { background: var(--sel); color: transparent; }
+
+.t-kw { color: var(--t-kw); }
+.t-type { color: var(--t-type); }
+.t-fn { color: var(--t-fn); }
+.t-builtin { color: var(--t-builtin); }
+.t-str { color: var(--t-str); }
+.t-num { color: var(--t-num); }
+.t-const { color: var(--t-const); }
+.t-pkg { color: var(--t-pkg); }
+.t-com { color: var(--t-com); font-style: italic; }
+
+.ed-complete {
+  position: absolute;
+  z-index: 5;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.ed-complete[hidden] { display: none; }
+.ed-complete ul { max-height: 200px; margin: 0; padding: 4px 0; overflow-y: auto; list-style: none; }
+.ed-complete li { display: flex; gap: 8px; align-items: center; padding: 2px 10px; cursor: pointer; white-space: nowrap; }
+.ed-complete li[aria-selected="true"] { background: var(--sel); }
+.ed-kind {
+  flex: none;
+  width: 1.4em;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--code-bg);
+  background: var(--muted);
+}
+.k-func { background: var(--t-fn); }
+.k-type { background: var(--t-type); }
+.k-const, .k-var { background: var(--t-const); }
+.k-field { background: var(--t-pkg); }
+.ed-doc { max-height: 160px; overflow-y: auto; padding: 8px 10px; border-top: 1px solid var(--line); }
+.ed-doc code { display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ed-doc p {
+  margin: 6px 0 0;
+  font: 400 0.875rem/1.4 Barlow, system-ui, sans-serif;
+  color: var(--muted);
+  white-space: pre-line;
+}
+
+/* On a narrow screen the sides stack, the emulator first, and the page
+   scrolls. */
+@media (max-width: 899px) {
+  body.playground { display: block; height: auto; overflow: visible; }
+  .pg-top h1 { width: 100%; font-size: 1.5rem; }
+  .pg-hint { display: none; }
+  .pg-links { margin-left: 0; width: 100%; }
+  .pg { display: flex; flex-direction: column; gap: 12px; padding: 12px 16px 24px; }
+  .pg-split { display: none; }
+  .pg-side { display: contents; }
+  .pg-side .stage { order: -2; }
+  .pg-side .bar { order: -1; }
+  .pg-code { height: 65vh; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .pg-out { flex: none; height: 340px; }
+  .tabs { flex-wrap: wrap; }
+  .tabs .status { order: 3; flex-basis: 100%; margin: 0 0 6px 10px; }
+}

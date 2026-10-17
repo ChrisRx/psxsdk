@@ -21,6 +21,7 @@
       <a href="../../tutorial/">Tutorial</a>
       <a href="../../examples/">Examples</a>
       <a href="../../tools/" aria-current="true">Tools</a>
+      <a href="../../play/">Playground</a>
     </nav>
     <div class="search">
       <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
@@ -65,18 +66,39 @@ read the header, <code>hdr2go</code> asks the compiler that will build the code,
 </span></span></span><span class="line"><span class="cl">    -Xclang -ast-dump<span class="o">=</span>json                  hdr.c   <span class="c1"># structure and types</span>
 </span></span><span class="line"><span class="cl">clang ... -Xclang -fdump-record-layouts-complete hdr.c  <span class="c1"># offsets and sizes</span>
 </span></span><span class="line"><span class="cl">
-</span></span><span class="line"><span class="cl">$ hdr2go --layouts layouts.txt --header libps.h --package libps <span class="se">\
-</span></span></span><span class="line"><span class="cl">    --out libps/zz_generated.go &lt; ast.json
-</span></span><span class="line"><span class="cl"><span class="m">30</span> structs, <span class="m">2</span> aliases, <span class="m">166</span> functions <span class="o">(</span><span class="nv">named</span><span class="o">=</span><span class="m">31</span> <span class="nv">known</span><span class="o">=</span><span class="m">33</span> <span class="nv">sizes</span><span class="o">=</span>35<span class="o">)</span>
-</span></span></code></pre><p>Padding the C compiler inserted implicitly is written out explicitly, and
-each struct's size is asserted against clang's number:</p>
+</span></span><span class="line"><span class="cl">$ hdr2go --layouts layouts.txt --header libps.h --package yaroze <span class="se">\
+</span></span></span><span class="line"><span class="cl">    --out yaroze --doc yaroze/libps.txt --skip GsLinkObject4 &lt; ast.json
+</span></span><span class="line"><span class="cl"><span class="m">30</span> structs, <span class="m">2</span> aliases, <span class="m">165</span> functions <span class="o">(</span><span class="nv">named</span><span class="o">=</span><span class="m">31</span> <span class="nv">known</span><span class="o">=</span><span class="m">33</span> <span class="nv">sizes</span><span class="o">=</span>35<span class="o">)</span>
+</span></span></code></pre><p>Three files come out of it, because the library is only there on the
+console and a program should still compile everywhere else.
+<code>zz_generated.go</code> holds the structs, which every build shares.
+<code>zz_generated_yaroze.go</code>, built only under the <code>yaroze</code> tag that the
+<code>playstation-yaroze</code> target sets, holds the functions as bodyless
+declarations carrying <code>//export</code>, which in TinyGo imports a C symbol rather
+than exporting a Go one, and the size assertions. <code>zz_generated_stub.go</code>,
+built everywhere else, holds the same functions with bodies that panic,
+naming themselves and saying where the real one is, so that an editor, <code>go vet</code> and <code>go build</code> all work on a program written against the library, and a
+call into it fails at run time rather than at the build. <code>--tag</code> names the
+tag, and <code>--out</code> the directory the three go into.</p>
+<p>Padding the C compiler inserted implicitly is written out explicitly, and
+each struct's size is asserted against clang's number in the console's file:</p>
 <pre class="chroma"><code><span class="line"><span class="cl"><span class="kd">var</span><span class="w"> </span><span class="nx">_</span><span class="w"> </span><span class="p">[</span><span class="nx">unsafe</span><span class="p">.</span><span class="nf">Sizeof</span><span class="p">(</span><span class="nx">GsSPRITE</span><span class="p">{})</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">36</span><span class="p">]</span><span class="kt">byte</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="kd">var</span><span class="w"> </span><span class="nx">_</span><span class="w"> </span><span class="p">[</span><span class="mi">36</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nx">unsafe</span><span class="p">.</span><span class="nf">Sizeof</span><span class="p">(</span><span class="nx">GsSPRITE</span><span class="p">{})]</span><span class="kt">byte</span><span class="w">
 </span></span></span></code></pre><p>An array cannot have negative length, so the pair fails to compile unless the
 size is exactly right. This is deliberately not a test: a host toolchain will
 not compile the bodyless function declarations, and a bare-metal target has
 nowhere to run one, so an assertion inside the generated file is the only
-check that runs during the build that matters.</p>
+check that runs during the build that matters. On a host, where a pointer is
+wider, the structs that hold one are a different size, and nothing there
+depends on it.</p>
+<p>The comments come from the file <code>--doc</code> names, so that the documentation an
+editor shows is kept apart from what the generator derives. It is plain
+text: a name on a line of its own, the C one, or <code>Struct.field</code> for one
+field, opens an entry, and the tab-indented lines after it are the comment,
+written as the Go one, with a blank line between paragraphs. An entry that
+matches nothing generated is reported, which is how a mistyped name shows
+up. The library's is <code>yaroze/libps.txt</code>, condensed from Sony's library
+reference.</p>
 <p>Names stay as the header spells them, so the library's documentation reads
 across directly. The one departure is that a C name beginning with a
 lowercase letter is capitalised, since Go would otherwise put it out of reach
@@ -85,13 +107,17 @@ of every other package; <code>//export</code> carries the real symbol either way
 at, and the report names what has to be bound by hand:</p>
 <pre><code>1 declarations with unmapped types, skipped:
   GsOT_TAG: uses bitfields, bind by hand
-8 unprototyped or variadic, bind by hand:
+9 unprototyped, variadic or skipped, bind by hand:
   FntPrint int ()
+  GsLinkObject4 void (unsigned long, GsDOBJ2 *, int) (--skip)
   ...
 </code></pre>
 <p>An empty parameter list is the common case there. In this vintage of C it
 means &quot;unspecified&quot;, not &quot;none&quot;, so generating a zero-argument binding would
-produce something that compiles and then passes nothing.</p>
+produce something that compiles and then passes nothing. <code>--skip</code> leaves out
+a function whose header signature is not the one to offer: <code>GsLinkObject4</code>
+takes a pointer typed as an integer, and the package binds it by hand with a
+Go signature that inlines to the same call.</p>
 
       </article>
       <nav class="prevnext" aria-label="Neighbouring pages">

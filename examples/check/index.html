@@ -21,6 +21,7 @@
       <a href="../../tutorial/">Tutorial</a>
       <a href="../../examples/" aria-current="true">Examples</a>
       <a href="../../tools/">Tools</a>
+      <a href="../../play/">Playground</a>
     </nav>
     <div class="search">
       <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
@@ -49,6 +50,7 @@
           <li><a href="../../examples/morph/">morph</a></li>
           <li><a href="../../examples/oden/">oden</a></li>
           <li><a href="../../examples/offscr/">offscr</a></li>
+          <li><a href="../../examples/square/">square</a></li>
           <li><a href="../../examples/tunnel/">tunnel</a></li>
         </ul>
       </nav>
@@ -57,16 +59,19 @@
     <main>
       <article>
         <h1>check</h1>
-        <iframe class="player" src="../../play/?embed#check" title="check, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
-<p class="muted"><a href="../../play/#check">Open in the player</a>, with the keyboard and gamepad reference.</p>
+        <iframe class="player" src="../../play/player.html?embed#check" title="check, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
+<p class="muted"><a href="../../play/player.html#check">Open in the player</a>, with the keyboard and gamepad reference.</p>
         <p>The check sample, in Go.
 <p>A port of sdk/sample/check/main.c: bouncing balls over a cleared
 background, the count adjustable with the d-pad, with the sound data read
 off the disc. It exists to show the Go bindings carrying a real program
 rather than a hello world, and to put the CD path, the controller and a
 few hundred sprites through the same code the C sample uses.
-<p>Two deliberate differences from the original:
+<p>Three deliberate differences from the original:
 <ul>
+<li>The sound data is read into the program&apos;s own memory, declared here,
+rather than to addresses chosen by hand, and the build checks that
+each file fits where it goes.
 <li>The CD waits are bounded. The C sample spins in
 &quot;while ((cnt = CdReadSync(1, 0)) &gt; 0)&quot; with no limit, so running it
 without the files present hangs before it has drawn anything.

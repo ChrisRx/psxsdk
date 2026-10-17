@@ -21,6 +21,7 @@
       <a href="../../tutorial/">Tutorial</a>
       <a href="../../examples/" aria-current="true">Examples</a>
       <a href="../../tools/">Tools</a>
+      <a href="../../play/">Playground</a>
     </nav>
     <div class="search">
       <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
@@ -49,6 +50,7 @@
           <li><a href="../../examples/morph/">morph</a></li>
           <li><a href="../../examples/oden/">oden</a></li>
           <li><a href="../../examples/offscr/">offscr</a></li>
+          <li><a href="../../examples/square/">square</a></li>
           <li><a href="../../examples/tunnel/">tunnel</a></li>
         </ul>
       </nav>
@@ -57,8 +59,8 @@
     <main>
       <article>
         <h1>invaders</h1>
-        <iframe class="player" src="../../play/?embed#invaders" title="invaders, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
-<p class="muted"><a href="../../play/#invaders">Open in the player</a>, with the keyboard and gamepad reference.</p>
+        <iframe class="player" src="../../play/player.html?embed#invaders" title="invaders, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
+<p class="muted"><a href="../../play/player.html#invaders">Open in the player</a>, with the keyboard and gamepad reference.</p>
         <p>The invaders demo, in Go.
 <p>A port of L. Evans&apos;s Net Yaroze demo &quot;invaders&quot; (Sony, 1996): Space
 Invaders in sprites. Four rows of eight invaders march across the screen,
@@ -80,10 +82,9 @@ the invaders reach the bottom of the screen the program ends.
 <li>Positions and speeds are fixed point, with four bits of fraction,
 where the original has doubles. The only fraction in the game is the
 player&apos;s shot, which moves two and a half pixels a frame.
-<li>The textures are loaded below the program rather than above it, where
-the original&apos;s batch script put them and where a Go program&apos;s data
-now lies. The sound, as in the check sample, comes from the same files
-at the same addresses.
+<li>The textures and the sound are read off the disc into the program&apos;s
+own memory, where the original&apos;s batch script sent them to fixed
+addresses. The sound comes from the check sample&apos;s files.
 <li>An invader only fires when there is one to fire. The original picks
 one at random by dividing by how many are left, which is zero in the
 frame after the last is destroyed, and then indexes its arrays with

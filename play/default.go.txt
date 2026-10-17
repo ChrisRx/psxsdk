@@ -1,0 +1,66 @@
+// A box to move around the screen with the directional buttons: a program
+// to start from.
+package main
+
+import (
+	"go.chrisrx.dev/psx/yaroze"
+)
+
+const (
+	screenW, screenH = 320, 240
+	otLength         = 1
+	packetMax        = 1024
+)
+
+var (
+	ot         [2]yaroze.GsOT
+	otTags     [2][1 << otLength]yaroze.GsOT_TAG
+	packetArea [2][packetMax / 4]uint32	
+)
+
+func main() {
+	yaroze.SetVideoMode(yaroze.MODE_NTSC)
+	yaroze.GsInitGraph(screenW, screenH, yaroze.GsOFSGPU, 1, 0)
+	yaroze.GsDefDispBuff(0, 0, 0, screenH)
+	for i := range ot {
+		ot[i].Length = otLength
+		ot[i].Org = &otTags[i][0]
+	}
+	
+	var textBuf [64]byte
+	hint := yaroze.CString(textBuf[:], "the directions move the box")
+	yaroze.FntLoad(960, 256)
+	yaroze.FntOpen(16, 16, 256, 64, 0, 512)
+	
+	box := yaroze.GsBOXF{X: screenW/2 - 20, Y: screenH/2 - 20, W: 40, H: 40, R: 255, G: 160, B: 32}
+	
+	yaroze.PadInit()
+	for {
+		pad := yaroze.PadRead()
+		if pad&yaroze.PADLup != 0 && box.Y > 0 {
+			box.Y -= 2
+		}
+		if pad&yaroze.PADLdown != 0 && box.Y+int16(box.H) < screenH {
+			box.Y += 2
+		}
+		if pad&yaroze.PADLleft != 0 && box.X > 0 {
+			box.X -= 2
+		}
+		if pad&yaroze.PADLright != 0 && box.X+int16(box.W) < screenW {
+			box.X += 2
+		}
+
+		active := yaroze.GsGetActiveBuff()
+		yaroze.GsSetWorkBase(yaroze.Packets(&packetArea[active][0]))
+		yaroze.GsClearOt(0, 0, &ot[active])
+		yaroze.GsSortBoxFill(&box, &ot[active], 0)
+
+		yaroze.DrawSync(0)
+		yaroze.VSync(0)
+		yaroze.GsSwapDispBuff()
+		yaroze.GsSortClear(40, 60, 100, &ot[active])
+		yaroze.GsDrawOt(&ot[active])
+		yaroze.FntPrint(hint)
+		yaroze.FntFlush(-1)
+	}
+}
