@@ -54,16 +54,31 @@ func TestDungeonScreenshot(t *testing.T) {
 	emutest.Golden(t, m.Display(), "dungeon.png")
 }
 
-// TestFlyingScreenshot checks the ship over the plane after a turn and a
-// run forwards, with the star field slid round and the scanner in the
-// corner.
-func TestFlyingScreenshot(t *testing.T) {
-	m := bootExample(t, "flying")
-	m.RunUntilCount("main.frameNumber", 60, frameBudget)
+// TestCarScreenshot checks the car fifty frames after its drive in from
+// the distance, close to the viewpoint and turning.
+func TestCarScreenshot(t *testing.T) {
+	m := bootExample(t, "car")
+	m.RunUntilCount("main.frameNumber", 520, frameBudget)
+	emutest.Golden(t, m.Display(), "car.png")
+}
+
+// TestOdenScreenshot checks the three shapes under the three lights after
+// the ball is swapped for its textured version and the scene is turned.
+func TestOdenScreenshot(t *testing.T) {
+	m := bootExample(t, "oden")
+	m.RunUntilCount("main.frameNumber", 30, frameBudget)
+	m.Hold(1, emu.ButtonLeft, 3)
 	m.Hold(1, emu.ButtonSquare, 20)
-	m.Hold(1, emu.ButtonUp, 60)
-	m.RunFrames(10)
-	emutest.Golden(t, m.Display(), "flying.png")
+	m.RunFrames(5)
+	emutest.Golden(t, m.Display(), "oden.png")
+}
+
+// TestMorphScreenshot checks the sheet most of the way to becoming a
+// cylinder, with the picture wrapped round it.
+func TestMorphScreenshot(t *testing.T) {
+	m := bootExample(t, "morph")
+	m.RunUntilCount("main.frameNumber", 400, frameBudget)
+	emutest.Golden(t, m.Display(), "morph.png")
 }
 
 // TestOffscrScreenshot checks the sphere wearing the texture the sprite is
@@ -83,4 +98,76 @@ func TestTunnelScreenshot(t *testing.T) {
 	m := bootExample(t, "tunnel")
 	m.RunUntilCount("main.frameNumber", 166, frameBudget)
 	emutest.Golden(t, m.Display(), "tunnel.png")
+}
+
+// TestFlameScreenshot checks the sheet of fire a second and a half in, with
+// the hot spots along its bottom edge and the heat risen through the
+// palette above them.
+func TestFlameScreenshot(t *testing.T) {
+	m := bootExample(t, "flame")
+	m.RunUntilCount("main.frameNumber", 90, frameBudget)
+	emutest.Golden(t, m.Display(), "flame.png")
+}
+
+// TestInvadersScreenshot checks the invaders on their march after the ship
+// has slid to the left and fired a shot.
+func TestInvadersScreenshot(t *testing.T) {
+	m := bootExample(t, "invaders")
+	m.RunUntilCount("main.frameNumber", 30, frameBudget)
+	m.Hold(1, emu.ButtonLeft, 20)
+	m.RunFrames(5)
+	m.Hold(1, emu.ButtonTriangle, 5)
+	m.RunFrames(40)
+	emutest.Golden(t, m.Display(), "invaders.png")
+}
+
+// TestBreakoutScreenshot checks the wall of bricks with the ball on its
+// way down and the bat moved to the right to meet it.
+func TestBreakoutScreenshot(t *testing.T) {
+	m := bootExample(t, "breakout")
+	m.RunUntilCount("main.frameNumber", 30, frameBudget)
+	m.Hold(1, emu.ButtonRight, 20)
+	m.RunFrames(100)
+	emutest.Golden(t, m.Display(), "breakout.png")
+}
+
+// TestBlowScreenshot checks the shuttle's first piece a second and a half
+// into its explosion, with the menu on the explosion's page: R1 steps the
+// menu back from the first page to the last, Circle moves to its second
+// line and Triangle turns the explosion on.
+func TestBlowScreenshot(t *testing.T) {
+	m := bootExample(t, "blow")
+	m.RunUntilCount("main.frameNumber", 60, frameBudget)
+	m.Hold(1, emu.ButtonR1, 3)
+	m.RunFrames(15)
+	m.Hold(1, emu.ButtonCircle, 3)
+	m.RunFrames(15)
+	m.Hold(1, emu.ButtonTriangle, 3)
+	m.RunFrames(90)
+	emutest.Golden(t, m.Display(), "blow.png")
+}
+
+// TestDinoScreenshot checks the dinosaur in front of the castle two
+// seconds into its walk.
+func TestDinoScreenshot(t *testing.T) {
+	m := bootExample(t, "dino")
+	m.RunUntilCount("main.frameNumber", 120, frameBudget)
+	emutest.Golden(t, m.Display(), "dino.png")
+}
+
+// TestDogTaleScreenshot checks the level a little way in: the title is
+// left by choosing Play with Right and Cross, "get ready" is shown for 75
+// frames, and then the man walks right, past the first bones, and jumps
+// before he reaches the first cactus.
+func TestDogTaleScreenshot(t *testing.T) {
+	m := bootExample(t, "dogtale")
+	m.RunUntilCount("main.frameNumber", 60, frameBudget)
+	m.Hold(1, emu.ButtonRight, 3)
+	m.RunFrames(3)
+	m.Hold(1, emu.ButtonCross, 3)
+	m.RunFrames(90)
+	m.Hold(1, emu.ButtonRight, 25)
+	m.Hold(1, emu.ButtonCross|emu.ButtonRight, 3)
+	m.RunFrames(10)
+	emutest.Golden(t, m.Display(), "dogtale.png")
 }

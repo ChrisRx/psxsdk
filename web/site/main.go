@@ -37,6 +37,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -401,8 +402,20 @@ func (s *Site) render(p *Page, body []byte) error {
 	if err := md.Renderer().Render(&out, body, doc); err != nil {
 		return err
 	}
-	p.Content = template.HTML(out.String())
+	p.Content = anchored(out.String())
 	return nil
+}
+
+// headingID matches a heading with an id, as goldmark and the comment
+// printer both write them, with its text.
+var headingID = regexp.MustCompile(`(?s)<h([2-4]) id="([^"]+)">(.*?)</h[2-4]>`)
+
+// anchored gives every section heading in rendered HTML a link to itself,
+// shown when the heading is hovered, so that a section's address can be
+// taken from the page.
+func anchored(html string) template.HTML {
+	return template.HTML(headingID.ReplaceAllString(html,
+		`<h$1 id="$2">$3<a class="anchor" href="#$2" aria-label="Link to this section">#</a></h$1>`))
 }
 
 // A linker rewrites the links in a page as the package comment describes.
@@ -529,7 +542,7 @@ func (s *Site) examplePage(name, main string) (*Page, error) {
 	}
 	// The first sentence says what the program is.
 	p.Description = firstSentence(f.Doc.Text())
-	p.Content = template.HTML(pr.HTML(d))
+	p.Content = anchored(string(pr.HTML(d)))
 	p.Text = strings.Join(strings.Fields(string(pr.Text(d))), " ")
 	for _, b := range d.Content {
 		if h, ok := b.(*comment.Heading); ok {

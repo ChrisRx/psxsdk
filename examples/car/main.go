@@ -1,0 +1,335 @@
+// The car demo, in Go.
+//
+// A port of Sony's Net Yaroze demo "car" (Sony, 1995, "60frame" in its
+// source): an Alfa Romeo Giulietta, a textured model wearing seven
+// textures, drives in from the distance and then turns slowly at the
+// center of the screen under one light, at 640 by 240 interlaced. The
+// demo is about frame rate: Start switches it between sixty frames a
+// second and thirty, which the library's font reports, and the controls
+// double their steps at thirty so that the car moves at the same speed
+// either way. The d-pad moves the car across and up and down, the symbol
+// buttons turn it, and L1 and L2 bring it nearer and push it further.
+// Select quits.
+//
+// Differences from the original:
+//
+//   - The textures and model are read off the disc to addresses below the
+//     program. The original's batch script sent them to addresses the Go
+//     program occupies.
+//   - The drive in moves the car by whole units each frame, as the
+//     original's integer coordinate ends up doing: it adds 1 + i/20 in
+//     floating point and C truncates the sum towards zero, which rounds
+//     the step up while the car is behind the viewpoint. The port
+//     reproduces that arithmetic.
+//   - The speed line is printed in a font window the port opens. The
+//     original prints without opening one.
+//
+// Nothing allocates after startup.
+package main
+
+import (
+	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/examples/internal/demo"
+	"go.chrisrx.dev/psx/yaroze"
+)
+
+const (
+	otLength  = 12
+	otSize    = 1 << otLength
+	scrZ      = 1000 // screen to viewpoint distance
+	objectMax = 100
+	packetMax = 10000 * 24 // GPU packet space per buffer
+
+	frame30 = 0
+	frame60 = 1
+
+	// Where the data is read to: below the program, where the original's
+	// batch script put it above its own, smaller, one.
+	texAddr1  = 0x80090000
+	texAddr2  = 0x80095000
+	texAddr3  = 0x80099000
+	texAddr4  = 0x800a1000
+	texAddr5  = 0x800a3000
+	texAddr6  = 0x800a8000
+	texAddr7  = 0x800ab000
+	modelAddr = 0x800b0000
+)
+
+var files = []demo.File{
+	{File: disc.Register("DATA/GIULI_BD.TIM", "data/GIULI_BD.TIM"), Addr: texAddr1},
+	{File: disc.Register("DATA/GIULI_FR.TIM", "data/GIULI_FR.TIM"), Addr: texAddr2},
+	{File: disc.Register("DATA/GIULI_PL.TIM", "data/GIULI_PL.TIM"), Addr: texAddr3},
+	{File: disc.Register("DATA/GIULI_TL.TIM", "data/GIULI_TL.TIM"), Addr: texAddr4},
+	{File: disc.Register("DATA/GIULI_TR.TIM", "data/GIULI_TR.TIM"), Addr: texAddr5},
+	{File: disc.Register("DATA/GIULI_WN.TIM", "data/GIULI_WN.TIM"), Addr: texAddr6},
+	{File: disc.Register("DATA/WHEEL256.TIM", "data/WHEEL256.TIM"), Addr: texAddr7},
+	{File: disc.Register("DATA/GIULIETA.TMD", "data/GIULIETA.TMD"), Addr: modelAddr},
+}
+
+// A DB is one of the two drawing buffers: an ordering table and the GPU
+// packets its primitives become.
+type DB struct {
+	gsot   yaroze.GsOT
+	ot     [otSize]yaroze.GsOT_TAG
+	packet [packetMax / 4]uint32
+}
+
+var (
+	db       [2]DB
+	objWorld yaroze.GsCOORDINATE2
+	rotate   yaroze.SVECTOR
+	object   [objectMax]yaroze.GsDOBJ2
+	objcnt   int32
+	frame    int32 = frame60
+	paddOld  uint32
+
+	// The controls' steps at thirty frames a second and at sixty.
+	rotSpeed = [2]int16{4 * yaroze.ONE / 360, 2 * yaroze.ONE / 360}
+	traSpeed = [2]int32{20, 10}
+
+	frameNumber int32
+
+	textBuf [64]byte
+	text    yaroze.Buffer
+)
+
+func main() {
+	text.Init(textBuf[:])
+	initSystem()
+
+	if missing := demo.Load(files, nil); missing != "" {
+		fail("could not read ", missing)
+		return
+	}
+
+	initCoordinate()
+	initView()
+	initLight()
+	initModel()
+	initTexture()
+
+	yaroze.FntLoad(960, 256)
+	yaroze.FntOpen(-304, -112, 320, 16, 0, 64)
+
+	opening()
+
+	for padRead() == 0 {
+		moveObject()
+		idx := yaroze.GsGetActiveBuff()
+		drawObject(&db[idx], frame)
+	}
+	yaroze.ResetGraph(3)
+}
+
+func initSystem() {
+	demo.PadInit()
+
+	yaroze.GsInitGraph(640, 240, yaroze.GsINTER|yaroze.GsOFSGPU, 0, 0)
+	yaroze.GsDefDispBuff(0, 0, 0, 240)
+
+	for i := range db {
+		db[i].gsot.Length = otLength
+		db[i].gsot.Point = 0
+		db[i].gsot.Offset = 0
+		db[i].gsot.Org = &db[i].ot[0]
+	}
+
+	yaroze.GsInit3D()
+}
+
+func initCoordinate() {
+	objWorld = yaroze.GsCOORDINATE2{}
+	rotate = yaroze.SVECTOR{}
+	yaroze.GsInitCoordinate2(demo.WORLD, &objWorld)
+}
+
+func initView() {
+	yaroze.GsSetProjection(scrZ)
+	view := yaroze.GsRVIEW2{
+		Vpx: 0, Vpy: 0, Vpz: 1000,
+		Vrx: 0, Vry: 0, Vrz: 0,
+		Rz:    0,
+		Super: demo.WORLD,
+	}
+	yaroze.GsSetRefView2(&view)
+}
+
+func initLight() {
+	light := yaroze.GsF_LIGHT{Vx: 20, Vy: -100, Vz: -100, R: 0xd0, G: 0xd0, B: 0xd0}
+	yaroze.GsSetFlatLight(0, &light)
+	yaroze.GsSetAmbient(yaroze.ONE/2, yaroze.ONE/2, yaroze.ONE/2)
+	yaroze.GsSetLightMode(0)
+}
+
+// initModel maps the model's addresses and links a handle to each of its
+// objects, all in the car's coordinate system.
+func initModel() {
+	// Past the ID word is the header GsMapModelingData wants, then the
+	// object count, then the object table.
+	yaroze.GsMapModelingData(demo.At(modelAddr + 4))
+	objcnt = int32(*demo.At(modelAddr + 8))
+	if objcnt > objectMax {
+		objcnt = objectMax
+	}
+	for i := range objcnt {
+		yaroze.GsLinkObject4(uint32(modelAddr+12), &object[i], i)
+		object[i].Coord2 = &objWorld
+		object[i].Attribute = 0
+	}
+}
+
+// initTexture puts the seven textures into video memory.
+func initTexture() {
+	demo.LoadTIM(texAddr1)
+	demo.LoadTIM(texAddr2)
+	demo.LoadTIM(texAddr3)
+	demo.LoadTIM(texAddr4)
+	demo.LoadTIM(texAddr5)
+	demo.LoadTIM(texAddr6)
+	demo.LoadTIM(texAddr7)
+}
+
+// padRead applies the controls to the car and returns -1 when Select asks
+// to quit. Start, on the frame it goes down, switches the frame rate.
+func padRead() int32 {
+	padd := demo.PadRead()
+
+	if padd&demo.PADselect != 0 {
+		return -1
+	}
+
+	if padd&demo.PADstart != 0 && padd != paddOld {
+		frame ^= 1
+	}
+
+	if padd&demo.PADRleft != 0 {
+		rotate.Vy -= rotSpeed[frame]
+	}
+	if padd&demo.PADRright != 0 {
+		rotate.Vy += rotSpeed[frame]
+	}
+	if padd&demo.PADRup != 0 {
+		rotate.Vx += rotSpeed[frame]
+	}
+	if padd&demo.PADRdown != 0 {
+		rotate.Vx -= rotSpeed[frame]
+	}
+
+	if padd&demo.PADL1 != 0 && objWorld.Coord.T[2] < 500 {
+		objWorld.Coord.T[2] += traSpeed[frame]
+	}
+	if padd&demo.PADL2 != 0 {
+		objWorld.Coord.T[2] -= traSpeed[frame]
+	}
+	if padd&demo.PADLdown != 0 {
+		objWorld.Coord.T[1] += traSpeed[frame]
+	}
+	if padd&demo.PADLup != 0 {
+		objWorld.Coord.T[1] -= traSpeed[frame]
+	}
+	if padd&demo.PADLleft != 0 {
+		objWorld.Coord.T[0] += traSpeed[frame]
+	}
+	if padd&demo.PADLright != 0 {
+		objWorld.Coord.T[0] -= traSpeed[frame]
+	}
+
+	// The car turns on its own too.
+	rotate.Vy += rotSpeed[frame] / 2
+
+	paddOld = padd
+	return 0
+}
+
+// opening drives the car in from the distance to the foreground, over 470
+// frames at sixty a second.
+func opening() {
+	objWorld.Coord.T[0] = -930
+	objWorld.Coord.T[1] = 60
+	objWorld.Coord.T[2] = -6050
+	rotate.Vy = 110
+
+	for i := int32(0); i < 470; i++ {
+		objWorld.Coord.T[0] += 2
+
+		// The original adds 1 + i/20 in floating point to the integer z
+		// and C truncates the sum towards zero: while z is negative a
+		// fraction rounds the step up, and once it is positive the
+		// fraction is dropped.
+		sum := objWorld.Coord.T[2] + 1 + i/20
+		if sum < 0 && i%20 != 0 {
+			sum++
+		}
+		objWorld.Coord.T[2] = sum
+
+		moveObject()
+		idx := yaroze.GsGetActiveBuff()
+		drawObject(&db[idx], frame60)
+	}
+}
+
+// moveObject rebuilds the car's matrix from its position and angles.
+func moveObject() {
+	tmpmat := demo.IDMATRIX
+	tmpmat.T = objWorld.Coord.T
+	tmpvec := rotate
+	yaroze.RotMatrix(&tmpvec, &tmpmat)
+	objWorld.Coord = tmpmat
+	objWorld.Flg = 0
+}
+
+// drawObject draws a frame into db: the car's objects into the ordering
+// table, a wait for one or two vertical syncs by the frame rate, the speed
+// line, and the swap.
+func drawObject(db *DB, frame int32) {
+	yaroze.GsSetWorkBase(yaroze.Packets(&db.packet[0]))
+	yaroze.GsClearOt(0, 0, &db.gsot)
+
+	for i := range objcnt {
+		op := &object[i]
+		var tmpmat yaroze.MATRIX
+		yaroze.GsGetLw(op.Coord2, &tmpmat)
+		yaroze.GsSetLightMatrix(&tmpmat)
+		yaroze.GsGetLs(op.Coord2, &tmpmat)
+		yaroze.GsSetLsMatrix(&tmpmat)
+		yaroze.GsSortObject4(op, &db.gsot, 14-otLength, demo.Scratch())
+	}
+
+	yaroze.DrawSync(0)
+
+	switch frame {
+	case frame30:
+		yaroze.VSync(2)
+	case frame60:
+		yaroze.VSync(0)
+	}
+
+	text.Reset()
+	text.WriteString("speed = ").WriteInt(int(30 * (frame + 1))).WriteString(" frame/sec\n").Print()
+	yaroze.FntFlush(-1)
+
+	yaroze.GsSwapDispBuff()
+	yaroze.GsSortClear(0, 0, 0, &db.gsot)
+	yaroze.GsDrawOt(&db.gsot)
+	frameNumber++
+}
+
+// fail shows what went wrong until the program is quit.
+func fail(what, detail string) {
+	yaroze.FntLoad(960, 256)
+	yaroze.FntOpen(-304, -112, 320, 16, 0, 64)
+	for demo.PadRead()&demo.PADselect == 0 {
+		buff := yaroze.GsGetActiveBuff()
+		yaroze.GsSetWorkBase(yaroze.Packets(&db[buff].packet[0]))
+		yaroze.GsClearOt(0, 0, &db[buff].gsot)
+		yaroze.DrawSync(0)
+		yaroze.VSync(0)
+		yaroze.GsSwapDispBuff()
+		yaroze.GsSortClear(0, 0, 0, &db[buff].gsot)
+		yaroze.GsDrawOt(&db[buff].gsot)
+		text.Reset()
+		text.WriteString(what).WriteString(detail).Print()
+		yaroze.FntFlush(-1)
+	}
+	yaroze.ResetGraph(3)
+}

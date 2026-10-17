@@ -29,14 +29,14 @@ var (
 	model   = disc.Register("DATA/CUBE.TMD", "data/CUBE.TMD")
 	texture = disc.Register("DATA/CUBE.TIM", "data/CUBE.TIM")
 
-	modelData   [2048 / 4]uint32
-	textureData [4096 / 4]uint32
+	modelData   [2048]uint32
+	textureData [4096]uint32
 )
 
 var (
 	ot         [2]yaroze.GsOT
 	otTags     [2][1 << otLength]yaroze.GsOT_TAG
-	packetArea [2][packetMax]yaroze.PACKET
+	packetArea [2][packetMax / 4]uint32
 
 	view  yaroze.GsRVIEW2
 	light yaroze.GsF_LIGHT
@@ -138,7 +138,7 @@ func main() {
 		coord.Flg = 0
 
 		active := yaroze.GsGetActiveBuff()
-		yaroze.GsSetWorkBase(&packetArea[active][0])
+		yaroze.GsSetWorkBase(yaroze.Packets(&packetArea[active][0]))
 		yaroze.GsClearOt(0, 0, &ot[active])
 
 		yaroze.GsGetLs(&coord, &ls)

@@ -48,7 +48,7 @@ var files = []demo.File{
 var (
 	ot        [2]yaroze.GsOT
 	zTable    [2][1 << otLength]yaroze.GsOT_TAG
-	gpuPacket [2][packetMax]yaroze.PACKET
+	gpuPacket [2][packetMax / 4]uint32
 )
 
 var (
@@ -124,7 +124,7 @@ func message(text, detail string) {
 // frame draws a blank frame.
 func frame() {
 	buff := yaroze.GsGetActiveBuff()
-	yaroze.GsSetWorkBase(&gpuPacket[buff][0])
+	yaroze.GsSetWorkBase(yaroze.Packets(&gpuPacket[buff][0]))
 	yaroze.GsClearOt(0, 0, &ot[buff])
 	yaroze.DrawSync(0)
 	yaroze.VSync(0)
@@ -176,7 +176,7 @@ func main() {
 	var angle int32
 	for {
 		buff := yaroze.GsGetActiveBuff()
-		yaroze.GsSetWorkBase(&gpuPacket[buff][0])
+		yaroze.GsSetWorkBase(yaroze.Packets(&gpuPacket[buff][0]))
 		yaroze.GsClearOt(0, 0, &ot[buff])
 
 		mainView.View = demo.IDMATRIX

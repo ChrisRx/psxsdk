@@ -190,7 +190,7 @@ func TestBootKernel(t *testing.T) {
 // with Run, which lets the CPU run steps itself between the ones the devices
 // need, and checks the two machines end up the same.
 func TestRunMatchesStep(t *testing.T) {
-	bios, err := os.ReadFile("../web/static/openbios.bin")
+	bios, err := os.ReadFile("openbios/openbios.bin")
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}

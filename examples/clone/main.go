@@ -179,7 +179,7 @@ var (
 	zTable1   [2][1 << lengthOT1]yaroze.GsOT_TAG
 	ot2       [2]yaroze.GsOT
 	zTable2   [2][1 << lengthOT2]yaroze.GsOT_TAG
-	gpuPacket [2][packetMax]yaroze.PACKET
+	gpuPacket [2][packetMax / 4]uint32
 )
 
 var padStatus uint32
@@ -328,7 +328,7 @@ func main() {
 		yaroze.GsSetView2(&mainView)
 
 		buffIdx = yaroze.GsGetActiveBuff()
-		yaroze.GsSetWorkBase(&gpuPacket[buffIdx][0])
+		yaroze.GsSetWorkBase(yaroze.Packets(&gpuPacket[buffIdx][0]))
 		yaroze.GsClearOt(0, 0, &ot1[buffIdx])
 		yaroze.GsClearOt(0, 0, &ot2[buffIdx])
 
@@ -402,7 +402,7 @@ func startLevelMusic() {
 // message draws a frame with text in the status line.
 func message(text string) {
 	buff := yaroze.GsGetActiveBuff()
-	yaroze.GsSetWorkBase(&gpuPacket[buff][0])
+	yaroze.GsSetWorkBase(yaroze.Packets(&gpuPacket[buff][0]))
 	yaroze.GsClearOt(0, 0, &ot1[buff])
 	yaroze.DrawSync(0)
 	yaroze.VSync(0)

@@ -112,7 +112,7 @@ var (
 	lights     [3]yaroze.GsF_LIGHT
 	fogging    yaroze.GsFOGPARAM
 	lightMode  int32
-	packetArea [2][packetMax]yaroze.PACKET
+	packetArea [2][packetMax / 4]uint32
 
 	line yaroze.GsLINE
 	box  [2]yaroze.GsBOXF
@@ -172,7 +172,7 @@ func main() {
 		nModels = calcWorldData()
 
 		yaroze.GsSetRefView2(&view)
-		yaroze.GsSetWorkBase(&packetArea[side][0])
+		yaroze.GsSetWorkBase(yaroze.Packets(&packetArea[side][0]))
 		yaroze.GsClearOt(0, 0, &wot[side])
 		yaroze.GsClearOt(0, 0, &sot[side])
 		for i := range nModels {
@@ -504,7 +504,7 @@ func initialiseAll() bool {
 func fail(what, detail string) {
 	side := yaroze.GsGetActiveBuff()
 	for demo.PadRead()&(demo.PADstart|demo.PADselect) != demo.PADstart|demo.PADselect {
-		yaroze.GsSetWorkBase(&packetArea[side][0])
+		yaroze.GsSetWorkBase(yaroze.Packets(&packetArea[side][0]))
 		yaroze.GsClearOt(0, 0, &wot[side])
 		yaroze.VSync(0)
 		yaroze.ResetGraph(1)

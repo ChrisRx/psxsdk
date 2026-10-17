@@ -14,7 +14,7 @@ tasks:
     cmds:
       - task: discs
       - task: disc:tutorial
-      - PSX_BIOS="${PSX_BIOS:-$PWD/web/static/openbios.bin}" PSX_DISCS="$PWD/.build" go test -v ./tests/...
+      - PSX_BIOS="${PSX_BIOS:-$PWD/emu/openbios/openbios.bin}" PSX_DISCS="$PWD/.build" go test -v ./tests/...
 
   # Builds the check example onto .build/check/check.cue.
   disc:check:
@@ -58,12 +58,25 @@ tasks:
       - task: disc
         vars: { NAME: cube, DIR: docs/tutorial/cube }
 
+  # Builds the program in DIR, examples/NAME unless told otherwise, onto a
+  # disc and runs it in a window with psxplay, booting OpenBIOS. Flags
+  # after -- go to psxplay: task play NAME=check -- --mute
+  play:
+    requires:
+      vars: [NAME]
+    vars:
+      DIR: '{{.DIR | default (printf "examples/%s" .NAME)}}'
+    cmds:
+      - task: disc
+        vars: { NAME: '{{.NAME}}', DIR: '{{.DIR}}' }
+      - go run ./tools/psxplay {{.CLI_ARGS}} .build/{{.NAME}}/{{.NAME}}.cue
+
   # Builds the site into .build/site, replacing what is there: the
   # documentation from docs/ and the examples' package comments, rendered
-  # by web/site, and under play/ the player from web/static, which includes
-  # the OpenBIOS image the examples boot with, every example's disc and the
-  # tutorial's, and the emulator compiled to WebAssembly from web/. Sony's
-  # BIOS must never be copied in.
+  # by web/site, and under play/ the player from web/static, the OpenBIOS
+  # image the examples boot with from emu/openbios, every example's disc
+  # and the tutorial's, and the emulator compiled to WebAssembly from web/.
+  # Sony's BIOS must never be copied in.
   #
   # .github/workflows/pages.yml publishes this directory to GitHub Pages
   # through the gh-pages branch, so it is never committed here. The
@@ -82,6 +95,7 @@ tasks:
       - task: disc:tutorial
       - rm -rf {{.SITE}}
       - go run ./web/site -out {{.SITE}}
+      - cp emu/openbios/openbios.bin emu/openbios/OPENBIOS-LICENSE.txt {{.PLAY}}/
       - mkdir -p {{.PLAY}}/examples
       - for: { var: EXAMPLES }
         cmd: mkdir -p {{.PLAY}}/examples/{{.ITEM}} && cp .build/{{.ITEM}}/{{.ITEM}}.cue .build/{{.ITEM}}/{{.ITEM}}.bin {{.PLAY}}/examples/{{.ITEM}}/
@@ -124,4 +138,4 @@ tasks:
             printf "%7d\t%7d\t%7d\t%7d\n", text, $2, $3, text + $2 + $3 }'
       - go tool eco2exe tmp/prog.elf tmp/prog.exe
       - go tool mkpsxiso -o tmp/check.bin --volume-id check.exe --boot MAIN.EXE --file MAIN.EXE=tmp/prog.exe --src examples/check
-      - psxe -a -b web/static/openbios.bin -L5 tmp/check.cue
+      - psxe -a -b emu/openbios/openbios.bin -L5 tmp/check.cue
