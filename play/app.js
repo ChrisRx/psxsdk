@@ -80,7 +80,10 @@ const state = {
   disc: null,     // its files, kept to boot again with another BIOS
   bios: null,     // {name, data}, the visitor's own, or null for OpenBIOS
   openBIOS: null,
-  running: false,
+  running: false, // the visitor wants it running (as against paused)
+  shown: !document.hidden, // the page is in a visible tab
+  inView: true,   // the screen is within the viewport
+  driving: false, // the worker is running frames
   keys: 0,
   touches: new Map(), // pointer id to {dpad, bits}, for each finger on the touch controls
   buttons: 0,     // the buttons last sent to the emulator
@@ -105,13 +108,14 @@ worker.onmessage = (e) => {
   const msg = e.data;
   switch (msg.event) {
     case "stats":
-      if (state.running) status.textContent = `${msg.fps.toFixed(1)} fps`;
+      if (state.driving) status.textContent = `${msg.fps.toFixed(1)} fps`;
       if (msg.tty) {
         tty.textContent = (tty.textContent + msg.tty).slice(-20000);
         tty.scrollTop = tty.scrollHeight;
       }
       return;
     case "stopped":
+      state.driving = false;
       setRunning(false);
       showOverlay(`Stopped: ${msg.error}`);
       return;
@@ -203,11 +207,32 @@ function setRunning(running) {
   $("reset").disabled = !state.current;
 }
 
+// drive runs the emulator only while the visitor wants it running and the
+// screen can be seen: a hidden tab, or a player scrolled off the page,
+// costs nothing. The worker's own boot starts it, so started() records
+// that before calling here.
+async function drive() {
+  const want = state.running && state.shown && state.inView;
+  if (want === state.driving) return;
+  state.driving = want;
+  if (!want) status.textContent = "";
+  await call(want ? "resume" : "pause");
+}
+
 // pause pauses or resumes the emulator.
 async function pause(paused) {
   setRunning(!paused);
-  await call(paused ? "pause" : "resume");
+  await drive();
 }
+
+document.addEventListener("visibilitychange", () => {
+  state.shown = !document.hidden;
+  drive();
+});
+new IntersectionObserver((entries) => {
+  state.inView = entries.at(-1).isIntersecting;
+  drive();
+}).observe(canvas);
 
 // started shows the outcome of booting, from the worker's reply.
 function started(what, reply) {
@@ -218,7 +243,9 @@ function started(what, reply) {
   }
   tty.textContent = "";
   showOverlay("");
+  state.driving = true;
   setRunning(true);
+  drive();
 }
 
 // boot boots the current example's disc with the BIOS chosen. The worker
