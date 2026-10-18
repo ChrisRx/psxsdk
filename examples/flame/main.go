@@ -86,7 +86,7 @@ var (
 	mainView       yaroze.GsVIEW2
 	mainViewMatrix yaroze.MATRIX
 
-	padStatus uint32
+	padStatus yaroze.Buttons
 
 	lightOBJ   yaroze.GsDOBJ2
 	lightCoord yaroze.GsCOORDINATE2

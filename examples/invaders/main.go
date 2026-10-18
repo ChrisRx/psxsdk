@@ -144,7 +144,7 @@ var (
 	otTags        [2][1 << otLength]yaroze.GsOT_TAG
 	gpuPacketArea [2][maxObjects * maxSizeofPrimitive / 4]uint32
 
-	padStatus uint32
+	padStatus yaroze.Buttons
 	quit      bool
 
 	invaders [maxInvaders]invader
@@ -795,11 +795,11 @@ func yOverlap(first, second *yaroze.RECT) bool {
 // otherwise.
 func initSound() {
 	var ok bool
-	if bank, ok = yaroze.OpenBank(vh.Bytes(), vb.Bytes()); !ok {
+	if bank, ok = yaroze.OpenBank(vh.Data(), vb.Data()); !ok {
 		soundSuccess = false
 		return
 	}
-	song, soundSuccess = bank.Sequence(&seqData[0])
+	song, soundSuccess = bank.Sequence(seqData[:])
 }
 
 func playSound() {

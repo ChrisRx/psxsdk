@@ -101,6 +101,9 @@ var gsWSMATRIX MATRIX
 //go:extern GsDISPENV
 var gsDISPENV DISPENV
 
+//go:extern POSITION
+var position _GsPOSITION
+
 // GsDRAWENV returns the drawing environment the library draws with, which a
 // program changes and then registers with PutDrawEnv.
 func GsDRAWENV() *DRAWENV { return &gsDRAWENV }
@@ -112,6 +115,23 @@ func GsWSMATRIX() *MATRIX { return &gsWSMATRIX }
 // GsDISPENV returns the display environment GsSwapDispBuff puts up each
 // frame, which a program changes to move the picture on the screen.
 func GsDISPENV() *DISPENV { return &gsDISPENV }
+
+// POSITION returns the screen origin the library draws from in GsOFSGPU
+// mode: the offset GsSwapDispBuff adds to every coordinate, which
+// GsInitGraph sets to the top left corner and GsInit3D to the middle.
+func POSITION() *GsPOSITION { return &position }
+
+// NativeVideoMode returns the video mode the console is made for, MODE_PAL
+// for a European one and MODE_NTSC for any other, from the region letter
+// at the end of the version string Sony's BIOS carries: "System ROM
+// Version 3.0 01/06/97 E". A BIOS without one, the first Japanese one or
+// an OpenBIOS, is taken for NTSC.
+func NativeVideoMode() int32 {
+	if *(*byte)(Pointer(0xbfc7ff52)) == 'E' {
+		return MODE_PAL
+	}
+	return MODE_NTSC
+}
 
 // The CD-ROM calls the resident library has beyond what libps.h declares,
 // which together read a file whose sector is already known, as package disc

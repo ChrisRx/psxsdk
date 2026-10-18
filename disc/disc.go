@@ -14,7 +14,7 @@ import (
 )
 
 // A File is a file on the disc, declared by Register, and the memory it is
-// read into, if Into gave it some.
+// read into, which Into gives it or Load allocates.
 //
 // Its layout is the record mkpsxiso looks for in the executable, so the
 // fields, their order and their types are part of the contract with the host
@@ -39,8 +39,10 @@ type File struct {
 	sector uint32
 	size   uint32
 
-	// dst is the memory the file is read into, from Into, or nil. mkpsxiso
-	// reads its address and length too, to check that the file fits.
+	// dst is the memory the file is read into, from Into, or from Load,
+	// which allocates it when Into gave none, or nil. mkpsxiso reads its
+	// address and length too, to check that a file given memory by Into
+	// fits.
 	dst []uint32
 }
 
@@ -66,9 +68,9 @@ func Register(path, src string) File {
 	return File{magic: magic, Name: path, src: src}
 }
 
-// Into gives the file the memory it is read into, for Load, and tells
-// mkpsxiso where that is, so that a file too large for it fails the build
-// rather than overrunning it. The drive delivers whole sectors of 2048
+// Into gives the file the memory it is read into, in place of what Load
+// would allocate, and tells mkpsxiso where that is, so that a file too
+// large for it fails the build rather than overrunning it. The drive delivers whole sectors of 2048
 // bytes, so the buffer must hold the file's length rounded up to one. It is
 // declared as words because the read needs word alignment, and it must be
 // a package-level array, since the registration is constant data:
@@ -80,11 +82,13 @@ func (f File) Into(buf []uint32) File {
 	return f
 }
 
-// Data is the memory Into gave the file, as words, or nil.
+// Data is the memory the file is read into, as words: what Into gave it,
+// or what Load allocated, or nil before either. It is whole sectors, so
+// past the file's Size it holds whatever the drive delivered or zeros.
 func (f *File) Data() []uint32 { return f.dst }
 
-// Bytes is the memory Into gave the file, as the library takes a sound bank,
-// or nil.
+// Bytes is the memory the file is read into, as the library takes a sound
+// bank, or nil.
 func (f *File) Bytes() *uint8 {
 	if f.dst == nil {
 		return nil
@@ -148,17 +152,26 @@ func (f *File) Read(addr *uint32, buf []byte) bool {
 	return yaroze.CdRead(int32((f.Size()+2047)/2048), addr, yaroze.CdlModeSpeed) != 0
 }
 
-// Load starts reading the file into the memory Into gave it, and reports
-// whether the read began; it is Read with that memory. A file without any
-// does not start. The read goes on in the background, and Wait waits for
-// it:
+// Load starts reading the file into its memory, and reports whether the
+// read began; it is Read with that memory. A file Into gave none gets it
+// here, the first time, from the heap: the whole sectors of the file's
+// Size, which the program keeps for good, since nothing is freed. A file
+// mkpsxiso did not place has no Size to allocate by, and does not start
+// without Into. The read goes on in the background, and Wait waits for it:
 //
 //	if !model.Load() || !disc.Wait(300) {
 //		// the disc is missing or unreadable
 //	}
+//
+// The heap is the memory between the program's own and the stack, and a
+// program whose files do not fit in it stops at the allocation with "out
+// of memory".
 func (f *File) Load() bool {
 	if f.dst == nil {
-		return false
+		if !f.Placed() {
+			return false
+		}
+		f.dst = make([]uint32, (f.Size()+2047)/2048*512)
 	}
 	return f.Read(&f.dst[0], pathBuf[:])
 }
@@ -181,3 +194,94 @@ func Wait(frames int) bool {
 	}
 	return false
 }
+
+// LoadAll reads each of files into its memory, as Load does, one after the
+// other, waiting up to frames frames for each as Wait does, and returns the
+// first that could not be read, or nil once they all are:
+//
+//	if f := disc.LoadAll(300, &model, &texture); f != nil {
+//		// f.Name is missing or unreadable
+//	}
+func LoadAll(frames int, files ...*File) *File {
+	for _, f := range files {
+		if !f.Load() || !Wait(frames) {
+			return f
+		}
+	}
+	return nil
+}
+
+// A Loader reads files while the frames go on, a step a frame, so that a
+// program can draw something, a bar or a message, while its data arrives,
+// rather than stopping in LoadAll. Start gives it the files, and Step,
+// once a frame, starts each read in turn and sees whether it has finished:
+//
+//	loader.Start(300, files...)
+//	for ot := range screen.Frames() {
+//		if !loader.Step() {
+//			bar.W = uint16(200 * loader.Loaded() / len(files))
+//			bar.Sort(ot, 0)
+//			continue
+//		}
+//		if f := loader.Failed(); f != nil {
+//			// f.Name is missing or unreadable
+//		}
+//		...
+//	}
+//
+// Each file is read as Load reads it, into memory Into gave it or memory
+// allocated as its read starts.
+type Loader struct {
+	files   []*File
+	frames  int // the frames a read may take before it is given up on
+	next    int // the file being read, or the one to read next
+	waited  int // frames the read in progress has taken
+	reading bool
+	failed  *File
+}
+
+// Start sets the loader to read files, each given up on after frames
+// frames, as Wait gives up. Nothing is read until Step.
+func (l *Loader) Start(frames int, files ...*File) {
+	*l = Loader{files: files, frames: frames}
+}
+
+// Step moves the reads on, once a frame: it starts the next file's read,
+// or sees whether the one in progress has finished, and starts the next as
+// soon as it has. It reports whether the loader is done, with every file
+// read or one failed, which Failed says.
+func (l *Loader) Step() bool {
+	for l.failed == nil && l.next < len(l.files) {
+		f := l.files[l.next]
+		if !l.reading {
+			if !f.Load() {
+				l.failed = f
+				break
+			}
+			l.reading, l.waited = true, 0
+		}
+		switch n := yaroze.CdReadSync(1, nil); {
+		case n < 0:
+			l.failed = f
+		case n == 0:
+			l.reading = false
+			l.next++
+			continue
+		default:
+			if l.waited++; l.waited > l.frames {
+				l.failed = f
+			}
+		}
+		break
+	}
+	return l.Done()
+}
+
+// Done reports whether every file has been read or one has failed.
+func (l *Loader) Done() bool { return l.failed != nil || l.next >= len(l.files) }
+
+// Loaded returns how many of the files have been read.
+func (l *Loader) Loaded() int { return l.next }
+
+// Failed returns the file that could not be read, or nil.
+func (l *Loader) Failed() *File { return l.failed }

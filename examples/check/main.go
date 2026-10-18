@@ -71,7 +71,7 @@ var (
 // display buffer, which the screen takes in halves. The packet area has to
 // be large enough for every primitive in a frame.
 var (
-	screen     yaroze.Screen
+	screen     = yaroze.Screen{Background: yaroze.CVECTOR{R: 60, G: 120, B: 120}}
 	otTags     [2 << otLength]yaroze.GsOT_TAG
 	packetArea [2 * maxObj * 24 / 4]uint32
 
@@ -226,7 +226,7 @@ func padRead(n int) int {
 func status(msg string) {
 	for range 24 {
 		screen.Begin()
-		screen.End(60, 120, 120)
+		screen.End()
 		line.Reset()
 		line.WriteString(msg)
 		line.Print()
@@ -289,7 +289,7 @@ func main() {
 			sprites[i].Y = int16(y)
 			sprites[i].SortFast(ot, 0)
 		}
-		cnt := screen.End(60, 120, 120)
+		cnt := screen.End()
 
 		line.Reset()
 		line.WriteString("sprites = ").WriteInt(nobj).

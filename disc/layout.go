@@ -12,9 +12,19 @@
 // the disc's directory for it, and the one declaration is what both the
 // program and the image are built from.
 //
-// A declaration can also say where the file goes in memory, with Into, and
-// then mkpsxiso checks at build time that the file fits, and the program
-// reads it with Load and no address at all:
+// The program reads the file with Load, into memory Load allocates the
+// first time, as many whole sectors as mkpsxiso recorded the file has, and
+// Data is that memory:
+//
+//	var model = disc.Register("DATA/CUBE.TMD", "data/CUBE.TMD")
+//
+//	if !model.Load() || !disc.Wait(300) { ... }
+//	cube := yaroze.TMD(model.Data())
+//
+// Or a declaration says where the file goes, with Into, and mkpsxiso checks
+// at build time that the file fits: memory the program declares itself,
+// which it can see the size of, share between files read at different
+// times, or keep out of the heap.
 //
 //	var modelData [2048]uint32
 //	var model = disc.Register("DATA/CUBE.TMD", "data/CUBE.TMD").Into(modelData[:])

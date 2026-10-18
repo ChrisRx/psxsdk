@@ -46,7 +46,7 @@ const (
 )
 
 var (
-	screen     yaroze.Screen
+	screen     = yaroze.Screen{Background: yaroze.CVECTOR{R: 60, G: 120, B: 120}}
 	otTags     [2 << otLength]yaroze.GsOT_TAG
 	packetArea [2 * packetMax / 4]uint32
 	textBuf    [32]byte
@@ -63,7 +63,7 @@ func main() {
 	hello := yaroze.CString(textBuf[:], "hello from go")
 	for {
 		screen.Begin()
-		screen.End(60, 120, 120)
+		screen.End()
 		yaroze.FntPrint(hello)
 		yaroze.FntFlush(-1)
 	}
@@ -74,7 +74,7 @@ It already has the shape every program has: set up the display, then draw a fram
 
 **Everything is a package-level variable.** The machine has two megabytes of RAM, no memory protection and, in this runtime, no garbage collector running, so memory a frame allocates is memory the program never gets back. Declaring the buffers once, as globals, is how the Net Yaroze programs this toolchain descends from did it too, and nothing in the tutorial allocates after startup.
 
-**The frame is a list before it is a picture.** The GPU does not draw what it is told as it is told. A program sorts drawing commands into an ordering table, an array of linked lists indexed by depth, and then hands the table to the GPU, which walks it while the program goes on to the next frame. There are two tables, and two packet areas for the commands themselves, because the GPU is still drawing one frame while the program builds the next. The `Screen` holds both pairs, taking each array in halves: `Begin` empties the table for the buffer about to be drawn and returns it, for the frame's drawing to be sorted into, and `End` waits for the GPU and the display, swaps the buffers, sorts a command that clears the screen to a color in front of everything, and starts the GPU on the table. Underneath are the library's own `GsClearOt`, `GsSortClear` and `GsDrawOt`, which a program can call itself. The packet area is declared as words rather than bytes because the library stores words into it and the compiler aligns an array of bytes only to a byte.
+**The frame is a list before it is a picture.** The GPU does not draw what it is told as it is told. A program sorts drawing commands into an ordering table, an array of linked lists indexed by depth, and then hands the table to the GPU, which walks it while the program goes on to the next frame. There are two tables, and two packet areas for the commands themselves, because the GPU is still drawing one frame while the program builds the next. The `Screen` holds both pairs, taking each array in halves: `Begin` empties the table for the buffer about to be drawn and returns it, for the frame's drawing to be sorted into, and `End` waits for the GPU and the display, swaps the buffers, sorts a command that clears the screen to its `Background` color in front of everything, and starts the GPU on the table. Underneath are the library's own `GsClearOt`, `GsSortClear` and `GsDrawOt`, which a program can call itself. The packet area is declared as words rather than bytes because the library stores words into it and the compiler aligns an array of bytes only to a byte.
 
 **The text goes through the library's font.** `FntLoad` puts the library's 8x8 font into video memory at a corner the display never shows, `FntOpen` opens a window of text at a position on the screen, and `FntPrint` writes into it. In C `FntPrint` is printf-like; here it takes a finished string, which `CString` copies into a buffer the program owns, with the NUL terminator the library expects.
 

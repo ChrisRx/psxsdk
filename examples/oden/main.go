@@ -49,7 +49,7 @@ var (
 )
 
 var (
-	padd uint32
+	padd yaroze.Buttons
 
 	wot        [2]yaroze.GsOT
 	zsorttable [2][1 << otLength]yaroze.GsOT_TAG
@@ -203,7 +203,7 @@ func objInteractive() bool {
 
 // lightSet changes light n's color by the symbol buttons, Start and Select,
 // and its direction by the d-pad.
-func lightSet(padd uint32, n int) {
+func lightSet(padd yaroze.Buttons, n int) {
 	if padd&yaroze.PADRup != 0 && pslt[n].R < 0xfe {
 		pslt[n].R += 2
 	}
@@ -242,7 +242,7 @@ func lightSet(padd uint32, n int) {
 	yaroze.GsSetFlatLight(int32(n), &pslt[n])
 }
 
-func ambientSet(padd uint32) {
+func ambientSet(padd yaroze.Buttons) {
 	if padd&yaroze.PADRup != 0 && am < 2*yaroze.ONE {
 		am += 20
 	}

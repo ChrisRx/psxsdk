@@ -390,7 +390,7 @@ func init() {
 
 // dummyGuiLoopForTextPrinting shows the first n texts until a button of
 // quitKey is pressed, a second in at the earliest.
-func dummyGuiLoopForTextPrinting(n int, quitKey uint32) {
+func dummyGuiLoopForTextPrinting(n int, quitKey yaroze.Buttons) {
 	side := yaroze.GsGetActiveBuff()
 	for frames := 1; ; frames++ {
 		if yaroze.PadRead()&quitKey != 0 && frames > 60 {

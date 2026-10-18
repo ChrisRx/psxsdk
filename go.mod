@@ -3,6 +3,7 @@ module go.chrisrx.dev/psx
 go 1.27
 
 tool (
+	go.chrisrx.dev/psx/tools/discgen
 	go.chrisrx.dev/psx/tools/dumpsxiso
 	go.chrisrx.dev/psx/tools/eco2exe
 	go.chrisrx.dev/psx/tools/elf2exe

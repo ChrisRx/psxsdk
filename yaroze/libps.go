@@ -42,6 +42,10 @@ import "unsafe"
 // expose are addresses the library owns.
 type GsOT_TAG uint32
 
+// GsPOSITION is the drawing offset the library keeps the screen origin in,
+// which POSITION returns; the struct is _GsPOSITION.
+type GsPOSITION = _GsPOSITION
+
 // Video modes for SetVideoMode.
 const (
 	MODE_NTSC = 0

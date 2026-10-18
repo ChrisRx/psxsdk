@@ -84,6 +84,15 @@ func (b *Buffer) Print() {
 	FntPrint(b.CString())
 }
 
+// Print sends s to the on-screen font, as FntPrint does, and returns what it
+// does. It copies s into storage of its own first, since FntPrint takes a C
+// string and keeps only what it has copied out by the time it returns, so a
+// literal needs no buffer of the program's. s must contain no percent
+// directives, as with FntPrint, and is cut at 255 bytes.
+func Print(s string) int32 { return FntPrint(CString(printBuf[:], s)) }
+
+var printBuf [256]byte
+
 // CString returns a pointer to a NUL terminated copy of s in buf.
 //
 // Go string literals are not NUL terminated and the library expects C

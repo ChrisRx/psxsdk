@@ -77,7 +77,7 @@ var (
 	worldOrderingTable [2]yaroze.GsOT
 	zSortTable         [2][1 << otLength]yaroze.GsOT_TAG
 	gpuOutputPacket    [2][packetMax / 4]uint32
-	padStatus          uint32
+	padStatus          yaroze.Buttons
 
 	object      [maxNumberOfObjects]yaroze.GsDOBJ2
 	theMainView yaroze.GsRVIEW2

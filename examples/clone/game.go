@@ -510,7 +510,7 @@ func checkLevel() {
 	}
 }
 
-var oldPad uint32
+var oldPad yaroze.Buttons
 
 // move moves you by increment, in x and z separately, as far as walls allow.
 func move(increment yaroze.VECTOR) {

@@ -9,6 +9,7 @@ section: Tools
 | [eco2exe](eco2exe.md) | Combine a Net Yaroze program with `libps` into a bootable PSX-EXE |
 | [elf2exe](elf2exe.md) | Write a standalone ELF or ECOFF program as a PSX-EXE |
 | [mips1fix](mips1fix.md) | Replace the MIPS II traps LLVM emits with nops so the code runs on an R3000A |
+| [discgen](discgen.md) | Write the declarations that put a program's data files on its disc |
 | [mkpsxiso](mkpsxiso.md) | Build a CD-XA disc image from a directory |
 | [dumpsxiso](dumpsxiso.md) | List or extract a disc image |
 | [mdecenc](mdecenc.md) | Encode pictures into an MDEC movie |

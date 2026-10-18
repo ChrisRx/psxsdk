@@ -54,11 +54,39 @@ func (lp *GsGLINE) Sort(ot *GsOT, pri uint16) { GsSortGLine(lp, ot, pri) }
 //go:inline
 func (o *GsDOBJ2) Sort(ot *GsOT, shift int32) { GsSortObject4(o, ot, shift, Scratch()) }
 
+// Draw sorts the object into ot as a frame draws a lit model: it sets the
+// light matrix from the object's coordinate system to the world and the
+// GTE's matrix from it to the screen, with GsGetLw and GsGetLs, and then
+// sorts it as Sort does, with the shift that fits the table, 14 minus its
+// Length.
+func (o *GsDOBJ2) Draw(ot *GsOT) {
+	GsGetLw(o.Coord2, &drawMatrix)
+	GsSetLightMatrix(&drawMatrix)
+	GsGetLs(o.Coord2, &drawMatrix)
+	GsSetLsMatrix(&drawMatrix)
+	o.Sort(ot, 14-int32(ot.Length))
+}
+
+// drawMatrix is Draw's working matrix. It is not on the stack because its
+// address is handed to the library, which would make the compiler allocate
+// it on every call.
+var drawMatrix MATRIX
+
 // Init is GsInitCoordinate2 on the coordinate system, with super as its
 // parent, or WORLD.
 //
 //go:inline
 func (c *GsCOORDINATE2) Init(super *GsCOORDINATE2) { GsInitCoordinate2(super, c) }
+
+// SetMatrix makes m the coordinate system's matrix and clears Flg, which
+// is how the library learns that the matrix changed: one changed without
+// clearing it goes on being drawn where it was.
+//
+//go:inline
+func (c *GsCOORDINATE2) SetMatrix(m *MATRIX) {
+	c.Coord = *m
+	c.Flg = 0
+}
 
 // Lw is GsGetLw: the transformation from the coordinate system to the
 // world, into out.
@@ -171,6 +199,40 @@ func (im *GsIMAGE) Load() {
 	if im.Pmode&8 != 0 {
 		rect = RECT{X: im.Cx, Y: im.Cy, W: int16(im.Cw), H: int16(im.Ch)}
 		LoadImage(&rect, im.Clut)
+	}
+}
+
+// Sprite returns a sprite of the whole image, once it is in video memory:
+// its size in pixels, the texture page and the corner within it its pixels
+// are at, its palette, and its color depth, drawn at its own brightness,
+// unscaled, unturned, and about its middle. A 24-bit image cannot be a
+// sprite.
+//
+//	ball := yaroze.TIM(ballFile.Data()).Load().Sprite()
+//	ball.X, ball.Y = 0, 0
+//	ball.Sort(ot, 0)
+func (im GsIMAGE) Sprite() GsSPRITE {
+	depth := im.Pmode & 3
+	// Pixels per 16-bit unit of video memory: four at 4 bits, two at 8 and
+	// one at 16.
+	per := uint16(4 >> depth)
+	w := im.Pw * per
+	return GsSPRITE{
+		Attribute: depth << 24,
+		W:         w,
+		H:         im.Ph,
+		Tpage:     GetTPage(int32(depth), 0, int32(im.Px), int32(im.Py)),
+		U:         uint8(uint16(im.Px&0x3f) * per),
+		V:         uint8(im.Py & 0xff),
+		Cx:        im.Cx,
+		Cy:        im.Cy,
+		R:         128,
+		G:         128,
+		B:         128,
+		Mx:        int16(w / 2),
+		My:        int16(im.Ph / 2),
+		Scalex:    ONE,
+		Scaley:    ONE,
 	}
 }
 

@@ -136,7 +136,7 @@ tasks:
       - TINYGO_SRC="${TINYGO_SRC:-$HOME/src/ChrisRx/tinygo}" web/compiler/build.sh .build/compiler
 
   # Adds the playground to the built site: the compiler from the compiler
-  # task, the disc tools and gofmt compiled to WebAssembly, and the
+  # task, the disc tools, discgen and gofmt compiled to WebAssembly, and the
   # sysroot, the standard library and psx packages the examples use
   # together with the target files and the compiler's cache, packed for the
   # compiler to read.
@@ -154,7 +154,7 @@ tasks:
       - test -x {{.TREE}}/build/tinygo-sysroot || (cd {{.TREE}} && GOFLAGS=-mod=mod go build -tags llvm22 -ldflags "-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=$(clang-22 -print-resource-dir)" -o build/tinygo-sysroot ./cmd/tinygo-sysroot)
       - mkdir -p {{.PLAY}}/tools
       - cp .build/compiler/tinygo.wasm {{.PLAY}}/tinygo.wasm
-      - for: [mips1fix, eco2exe, mkpsxiso]
+      - for: [discgen, mips1fix, eco2exe, mkpsxiso]
         cmd: GOOS=wasip1 GOARCH=wasm go build -trimpath -ldflags=-s -o {{.PLAY}}/tools/{{.ITEM}}.wasm ./tools/{{.ITEM}}
       # gofmt, for the playground's Format button and to format on Run.
       - GOOS=wasip1 GOARCH=wasm go build -trimpath -ldflags=-s -o {{.PLAY}}/tools/gofmt.wasm cmd/gofmt

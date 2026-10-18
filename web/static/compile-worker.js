@@ -34,8 +34,9 @@ async function fetchTar(url) {
 
 async function load(log) {
 	log("Loading the compiler…\n");
-	const [tinygo, mips1fix, eco2exe, mkpsxiso, tar] = await Promise.all([
+	const [tinygo, discgen, mips1fix, eco2exe, mkpsxiso, tar] = await Promise.all([
 		fetchModule("tinygo.wasm"),
+		fetchModule("tools/discgen.wasm"),
 		fetchModule("tools/mips1fix.wasm"),
 		fetchModule("tools/eco2exe.wasm"),
 		fetchModule("tools/mkpsxiso.wasm"),
@@ -45,7 +46,7 @@ async function load(log) {
 	readTar(fs, tar, "/");
 	const sysroot = fs.lookup([], "/sysroot").node;
 	const env = JSON.parse(new TextDecoder().decode(fs.get("/sysroot/env.json")));
-	return new Pipeline({ tinygo, mips1fix, eco2exe, mkpsxiso }, sysroot, env);
+	return new Pipeline({ tinygo, discgen, mips1fix, eco2exe, mkpsxiso }, sysroot, env);
 }
 
 let gofmt = null; // a promise of the compiled gofmt.wasm

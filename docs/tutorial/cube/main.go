@@ -35,7 +35,7 @@ var (
 var (
 	// The frame: two ordering tables and two packet areas, one of each
 	// per display buffer, which the screen takes in halves.
-	screen     yaroze.Screen
+	screen     = yaroze.Screen{Background: yaroze.CVECTOR{R: 60, G: 120, B: 120}}
 	otTags     [2 << otLength]yaroze.GsOT_TAG
 	packetArea [2 * packetMax / 4]uint32
 
@@ -122,7 +122,7 @@ func main() {
 		yaroze.GsSetLightMatrix(&ls)
 		yaroze.GsSetLsMatrix(&ls)
 		cube.Sort(ot, 14-otLength)
-		screen.End(60, 120, 120)
+		screen.End()
 
 		yaroze.FntPrint(hint)
 		yaroze.FntFlush(-1)

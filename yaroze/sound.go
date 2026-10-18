@@ -6,21 +6,32 @@ package yaroze
 // with whether they are valid, so that a program whose sound did not load
 // can carry on without it.
 
+import "unsafe"
+
 // A Bank is a sound bank, a VAB, open on the SPU: the instruments a
 // sequence plays with. OpenBank sends one.
 type Bank struct {
 	ID int16
 }
 
-// OpenBank is SsVabTransfer: it reads the bank's header, the VH file at vh,
-// sends its waveforms, the VB file at vb, to the SPU, and returns the bank
-// and whether it was accepted. SsSetMVol has to be called before anything
-// plays. A bank that was not accepted has a negative ID, and its methods do
-// nothing.
-func OpenBank(vh, vb *uint8) (Bank, bool) {
-	id := SsVabTransfer(vh, vb, -1, 1)
+// OpenBank is SsVabTransfer: it reads the bank's header, the VH file in vh,
+// sends its waveforms, the VB file in vb, to the SPU, and returns the bank
+// and whether it was accepted. Each is a file's words, as package disc reads
+// them. SsSetMVol has to be called before anything plays. A bank that was
+// not accepted has a negative ID, and its methods do nothing; nor is one
+// with either file empty sent.
+func OpenBank(vh, vb []uint32) (Bank, bool) {
+	if len(vh) == 0 || len(vb) == 0 {
+		return Bank{-1}, false
+	}
+	id := SsVabTransfer(firstByte(vh), firstByte(vb), -1, 1)
 	return Bank{id}, id >= 0
 }
+
+// firstByte is the first byte of words, as the library takes a sound bank.
+//
+//go:inline
+func firstByte(words []uint32) *uint8 { return (*uint8)(unsafe.Pointer(&words[0])) }
 
 // Valid reports whether the bank was accepted by the SPU.
 func (b Bank) Valid() bool { return b.ID >= 0 }
@@ -32,14 +43,14 @@ func (b Bank) Close() {
 	}
 }
 
-// Sequence is SsSeqOpen: it opens the sequence, the SEQ file at seq, to
-// play on the bank, and returns it and whether it opened. An invalid bank
-// opens nothing.
-func (b Bank) Sequence(seq *uint32) (Sequence, bool) {
-	if !b.Valid() {
+// Sequence is SsSeqOpen: it opens the sequence, the SEQ file in seq, to
+// play on the bank, and returns it and whether it opened. An invalid bank,
+// or an empty file, opens nothing.
+func (b Bank) Sequence(seq []uint32) (Sequence, bool) {
+	if !b.Valid() || len(seq) == 0 {
 		return Sequence{-1}, false
 	}
-	id := SsSeqOpen(seq, b.ID)
+	id := SsSeqOpen(&seq[0], b.ID)
 	return Sequence{id}, id >= 0
 }
 

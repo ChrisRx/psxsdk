@@ -35,6 +35,17 @@ async function startingProgram() {
   return res.text();
 }
 
+// startingData adds the data files of the program the playground starts
+// with, the example default.json names, so that it runs as it is.
+async function startingData() {
+  try {
+    const res = await fetch("default.json");
+    if (!res.ok) return;
+    const { example } = await res.json();
+    if (example) await addExampleData(example);
+  } catch { /* the program is left to say what it could not read */ }
+}
+
 let compiler = null;
 const builds = new Map();
 let nextBuild = 0;
@@ -291,11 +302,12 @@ async function buildAndRun() {
 $("run").addEventListener("click", () => buildAndRun());
 
 $("revert").addEventListener("click", async () => {
-  if (!confirm("Replace your program with the one the playground starts with?")) return;
+  if (!confirm("Replace your program with the one the playground starts with, and add its data files?")) return;
   try {
     editor.value = await startingProgram();
     saveDraft(editor.value);
     editor.focus();
+    await startingData();
   } catch (e) {
     buildStatus.textContent = `Could not load the starting program: ${e.message}`;
   }
@@ -372,6 +384,7 @@ for (const type of ["focusin", "pointerdown"]) {
   try { draft = localStorage.getItem(DRAFT); } catch { /* none */ }
   try {
     editor.value = draft ?? await startingProgram();
+    if (draft === null) await startingData();
   } catch (e) {
     buildStatus.textContent = `Could not load the starting program: ${e.message}`;
   }

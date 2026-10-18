@@ -17,6 +17,12 @@
 //   - to anything else in the repository, by its path from the root there:
 //     "examples/check", the same on every page
 //
+// The playground starts from the square example, copied to
+// play/default.go.txt, so that the program a newcomer first sees is one that
+// builds as an example does and cannot drift from the package; and
+// play/default.json names the example, for the playground to add its data
+// files from the example's beside it.
+//
 // task site runs it after building the examples' discs and the emulator,
 // then puts those under play/ beside the player.
 package main
@@ -62,6 +68,7 @@ var opts = struct {
 	Docs     string
 	Examples string
 	Static   string
+	Default  string
 	API      string
 	Out      string
 	Repo     string
@@ -70,6 +77,7 @@ var opts = struct {
 	Docs:     "docs",
 	Examples: "examples",
 	Static:   "web/static",
+	Default:  "examples/square/main.go",
 	API:      "yaroze",
 	Out:      ".build/site",
 	Repo:     "https://github.com/ChrisRx/psxsdk",
@@ -80,6 +88,7 @@ func main() {
 	flag.StringVar(&opts.Docs, "docs", opts.Docs, "directory of pages")
 	flag.StringVar(&opts.Examples, "examples", opts.Examples, "directory of example programs, one page each")
 	flag.StringVar(&opts.Static, "static", opts.Static, "the playground and the player, copied under play/")
+	flag.StringVar(&opts.Default, "default", opts.Default, "the program the playground starts with, written to play/default.go.txt")
 	flag.StringVar(&opts.API, "api", opts.API, "package whose exported names the playground completes, written to play/yaroze.json")
 	flag.StringVar(&opts.Out, "out", opts.Out, "directory to write the site into")
 	flag.StringVar(&opts.Repo, "repo", opts.Repo, "repository that paths in links refer to")
@@ -92,6 +101,11 @@ func main() {
 	}
 	if err := s.write(opts.Out, opts.Static); err != nil {
 		log.Fatal(err)
+	}
+	if opts.Static != "" && opts.Default != "" {
+		if err := writeDefault(opts.Default, filepath.Join(opts.Out, "play")); err != nil {
+			log.Fatal(err)
+		}
 	}
 	if opts.Static != "" && opts.API != "" {
 		if err := writeAPI(opts.API, filepath.Join(opts.Out, "play", "yaroze.json")); err != nil {
@@ -579,6 +593,20 @@ func headingText(h *comment.Heading) string {
 		}
 	}
 	return b.String()
+}
+
+// writeDefault copies the program the playground starts with, src, into
+// play as default.go.txt, and writes default.json naming the example it is,
+// the directory it is in, whose data the site publishes under play/examples.
+func writeDefault(src, play string) error {
+	if err := copyFile(src, filepath.Join(play, "default.go.txt")); err != nil {
+		return err
+	}
+	data, err := json.Marshal(map[string]string{"example": filepath.Base(filepath.Dir(src))})
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(play, "default.json"), data, 0o644)
 }
 
 // write renders every page into out, and copies the assets and the player.

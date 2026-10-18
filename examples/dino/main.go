@@ -107,7 +107,7 @@ var (
 	modeflagex int32
 
 	frameNumber uint32
-	padd        uint32
+	padd        yaroze.Buttons
 )
 
 // The walk: which of the four leg movements is on at each of the sixteen
@@ -144,7 +144,7 @@ func main() {
 		fail("could not read ", missing)
 		return
 	}
-	sndSet(&seqData[0], vh.Bytes(), vb.Bytes())
+	sndSet(seqData[:], vh.Data(), vb.Data())
 
 	if missing := demo.Load(dataFiles, nil); missing != "" {
 		fail("could not read ", missing)
@@ -253,10 +253,10 @@ func pick(x uint32) int32 {
 }
 
 // pressed reports whether any of the buttons in bits are down.
-func pressed(bits uint32) bool { return padd&bits != 0 }
+func pressed(bits yaroze.Buttons) bool { return padd&bits != 0 }
 
 // choose returns by if up is pressed, -by if down is, and 0 otherwise.
-func choose(up, down uint32, by int32) int32 {
+func choose(up, down yaroze.Buttons, by int32) int32 {
 	switch {
 	case pressed(up):
 		return by
@@ -267,7 +267,7 @@ func choose(up, down uint32, by int32) int32 {
 }
 
 // onOff returns on while bits are pressed, and 0 otherwise.
-func onOff(bits uint32, on int32) int32 {
+func onOff(bits yaroze.Buttons, on int32) int32 {
 	if pressed(bits) {
 		return on
 	}
@@ -479,7 +479,7 @@ var (
 
 // sndSet sends the sound bank to the SPU and opens the sequence, with
 // the volume down until it plays.
-func sndSet(seq *uint32, vh, vb *uint8) {
+func sndSet(seq, vh, vb []uint32) {
 	yaroze.SsSetMVol(0, 0)
 	yaroze.SsUtSetReverbType(yaroze.SS_REV_TYPE_STUDIO_C)
 	bank, _ = yaroze.OpenBank(vh, vb)

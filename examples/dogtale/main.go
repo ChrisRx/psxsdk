@@ -209,7 +209,7 @@ var (
 	goingUp, jumping, maxBottom, onPlat, fall   int32
 	breakOut, gamePaused, dead, alreadyRun      int32
 	quitGame, endOfGame, whichPlat              int32
-	oldPadd                                     uint32
+	oldPadd                                     yaroze.Buttons
 	restart, rPositionX, rPositionY, rMaxBottom int32
 
 	bank yaroze.Bank
@@ -1555,8 +1555,8 @@ func pause(duration int) {
 // The sound, which the author says was taken from Sony's check sample.
 
 func initSound() {
-	bank, _ = yaroze.OpenBank(vh.Bytes(), vb.Bytes())
-	song, _ = bank.Sequence(&seqData[0])
+	bank, _ = yaroze.OpenBank(vh.Data(), vb.Data())
+	song, _ = bank.Sequence(seqData[:])
 }
 
 func playSEQ() {

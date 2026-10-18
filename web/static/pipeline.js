@@ -3,8 +3,10 @@
 // also WebAssembly, fix the executable, convert it and write it onto a disc
 // image, all against one file system held in memory.
 //
-// It is the same pipeline as the Taskfile's disc task:
+// It is the same pipeline as the Taskfile's disc task, after go generate
+// for the one generator a program may name, discgen:
 //
+//	discgen data             (for a //go:generate line naming it)
 //	tinygo build -target=playstation-yaroze -o prog.elf ./prog
 //	mips1fix prog.elf
 //	eco2exe prog.elf prog.exe
@@ -53,13 +55,24 @@ export function readTar(fs, bytes, prefix) {
 	}
 }
 
+// discgenArgs returns the arguments a //go:generate line in source gives
+// discgen, run as "go run go.chrisrx.dev/psx/tools/discgen" or "go tool
+// discgen", or null if there is no such line. It is the one generator the
+// playground runs, since its output, the declarations of the program's data
+// files, is what a program in one file cannot otherwise have beside it.
+export function discgenArgs(source) {
+	const m = source.match(/^\/\/go:generate\s+go\s+(?:run\s+go\.chrisrx\.dev\/psx\/tools\/discgen(?:@\S+)?|tool\s+discgen)((?:[ \t]+\S+)*)[ \t]*$/m);
+	return m ? m[1].trim().split(/\s+/).filter(Boolean) : null;
+}
+
 // A Pipeline holds what every build shares: the compiled modules, the
 // sysroot, and the compiler's cache. The cache comes filled in the sysroot,
 // with the standard library and the C the target needs already compiled,
 // since the compiler has no clang of its own; what a build adds stays for
 // the next one.
 export class Pipeline {
-	// modules: {tinygo, mips1fix, eco2exe, mkpsxiso} as WebAssembly.Module;
+	// modules: {tinygo, discgen, mips1fix, eco2exe, mkpsxiso} as
+	// WebAssembly.Module;
 	// sysroot: the Dir the sysroot tarball was read into; env: its env.json.
 	constructor(modules, sysroot, env) {
 		this.modules = modules;
@@ -100,15 +113,20 @@ export class Pipeline {
 			// The cache is keyed by the compiler the host filled it with.
 			TINYGO_BUILD_ID: this.env.buildID ?? "",
 		};
-		const steps = [
+		const steps = [];
+		const generate = discgenArgs(source);
+		if (generate) {
+			steps.push(["discgen", ["discgen", ...generate], { PWD: "/work/prog", GOPACKAGE: "main" }]);
+		}
+		steps.push(
 			["tinygo", ["tinygo", "-target=" + this.env.target, "-o", "/work/prog.elf", "/work/prog"]],
 			["mips1fix", ["mips1fix", "-q", "/work/prog.elf"]],
 			["eco2exe", ["eco2exe", "/work/prog.elf", "/work/prog.exe"]],
 			["mkpsxiso", ["mkpsxiso", "-o", "/work/prog.bin", "--volume-id", "prog.exe", "--boot", "MAIN.EXE", "--file", "MAIN.EXE=/work/prog.exe", "--src", "/work/prog"]],
-		];
-		for (const [name, args] of steps) {
+		);
+		for (const [name, args, extra] of steps) {
 			const started = performance.now();
-			const code = await this.run(name, args, env, fs, log);
+			const code = await this.run(name, args, { ...env, ...extra }, fs, log);
 			const took = ((performance.now() - started) / 1000).toFixed(1);
 			if (code !== 0) {
 				log(`${name} failed with exit code ${code} after ${took}s\n`);

@@ -67,6 +67,18 @@ func GsLinkObject4(tmd *uint32, objp *GsDOBJ2, n int32) { panic(stub("GsLinkObje
 // program changes and then registers with PutDrawEnv.
 func GsDRAWENV() *DRAWENV { panic(stub("GsDRAWENV")) }
 
+// POSITION returns the screen origin the library draws from in GsOFSGPU
+// mode: the offset GsSwapDispBuff adds to every coordinate, which
+// GsInitGraph sets to the top left corner and GsInit3D to the middle.
+func POSITION() *GsPOSITION { panic(stub("POSITION")) }
+
+// NativeVideoMode returns the video mode the console is made for, MODE_PAL
+// for a European one and MODE_NTSC for any other, from the region letter
+// at the end of the version string Sony's BIOS carries: "System ROM
+// Version 3.0 01/06/97 E". A BIOS without one, the first Japanese one or
+// an OpenBIOS, is taken for NTSC.
+func NativeVideoMode() int32 { panic(stub("NativeVideoMode")) }
+
 // GsWSMATRIX returns the world-screen matrix GsSetRefView2 and GsSetView2
 // last worked out.
 func GsWSMATRIX() *MATRIX { panic(stub("GsWSMATRIX")) }

@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"go.chrisrx.dev/x/assert"
+
 	"go.chrisrx.dev/psx/emu"
 	"go.chrisrx.dev/psx/emu/emutest"
 )
@@ -170,4 +172,48 @@ func TestDogTaleScreenshot(t *testing.T) {
 	m.Hold(1, emu.ButtonCross|emu.ButtonRight, 3)
 	m.RunFrames(10)
 	emutest.Golden(t, m.Display(), "dogtale.png")
+}
+
+// TestSquareScreenshot checks the box after it is moved up and to the right
+// over the turning cube, with left and right held together for a while to
+// show that they cancel, and that the music plays, stops while Start has
+// paused it, and plays again after Start resumes it. The square is the
+// program the playground starts from. Its frames are counted by the
+// screen's own count, the first word of yaroze.Screen, and the cube turns
+// by that count, so that the picture is the same however long the BIOS
+// took to start the program and the disc to deliver its files.
+func TestSquareScreenshot(t *testing.T) {
+	m := bootExample(t, "square")
+	m.SetAudio(true)
+	m.RunUntilCount("main.screen", 150, frameBudget)
+
+	// Playing is a peak in the thousands. Paused, what is left of the
+	// notes' release after half a second is a few steps from silence.
+	const quiet = 100
+	assert.Equal(t, true, peak(m, 60) > quiet, "the music plays")
+	m.Hold(1, emu.ButtonStart, 2)
+	peak(m, 30) // the notes' release, which also empties what Audio keeps
+	assert.Equal(t, true, peak(m, 30) < quiet, "the music is paused")
+	m.Hold(1, emu.ButtonStart, 2)
+	assert.Equal(t, true, peak(m, 60) > quiet, "the music plays again")
+
+	m.Hold(1, emu.ButtonUp|emu.ButtonRight, 60)
+	m.Hold(1, emu.ButtonLeft|emu.ButtonRight, 20)
+	m.RunFrames(5)
+	emutest.Golden(t, m.Display(), "square.png")
+}
+
+// peak runs the machine for frames frames and returns the loudest sample
+// the SPU made meanwhile.
+func peak(m *emutest.Machine, frames int) int {
+	var p int
+	var buf []int16
+	for range frames {
+		m.RunFrames(1)
+		buf = m.Audio(buf[:0])
+		for _, s := range buf {
+			p = max(p, int(s), -int(s))
+		}
+	}
+	return p
 }

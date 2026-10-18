@@ -84,7 +84,7 @@ var (
 	object   [objectMax]yaroze.GsDOBJ2
 	objcnt   int32
 	frame    int32 = frame60
-	paddOld  uint32
+	paddOld  yaroze.Buttons
 
 	// The controls' steps at thirty frames a second and at sixty.
 	rotSpeed = [2]int16{4 * yaroze.ONE / 360, 2 * yaroze.ONE / 360}

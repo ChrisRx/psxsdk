@@ -4,7 +4,8 @@
 // from an example's data, and are kept in this browser, in IndexedDB,
 // until they are removed.
 //
-// playground.js sends playgroundAssets() with each build.
+// playground.js sends playgroundAssets() with each build, and calls
+// addExampleData for the data of the program it starts with.
 "use strict";
 
 const assetFiles = new Map(); // path, such as data/CUBE.TIM, to its bytes
@@ -12,6 +13,10 @@ const assetFiles = new Map(); // path, such as data/CUBE.TIM, to its bytes
 function playgroundAssets() {
   return [...assetFiles].map(([path, data]) => ({ path, data }));
 }
+
+// addExampleData puts the named example's data files beside the program,
+// replacing any at the same paths without asking. It is set below.
+let addExampleData = async (name) => {};
 
 (() => {
   const DB = "playground";
@@ -69,18 +74,17 @@ function playgroundAssets() {
     return `${(n / 1024 / 1024).toFixed(1)} MB`;
   }
 
-  // declaration is what a program writes to read the file at path, of n
-  // bytes, into its own memory: a buffer of whole sectors, and the
-  // registration, as the examples write them.
-  function declaration(path, n) {
+  // declaration is what a program writes to read the file at path: the
+  // registration, as the examples write them, which Load reads into memory
+  // it allocates.
+  function declaration(path) {
     const base = path.split("/").pop();
     const dot = base.lastIndexOf(".");
     const stem = (dot > 0 ? base.slice(0, dot) : base).toLowerCase();
     const ext = dot > 0 ? base.slice(dot + 1).toUpperCase() : "";
     let name = (stem + ext).replace(/[^A-Za-z0-9_]/g, "_");
     if (!/^[A-Za-z_]/.test(name)) name = "f" + name;
-    return `var ${name}Data [(${n} + 2047) / 2048 * 512]uint32\n` +
-      `var ${name} = disc.Register("${path.toUpperCase()}", "${path}").Into(${name}Data[:])\n`;
+    return `var ${name} = disc.Register("${path.toUpperCase()}", "${path}")\n`;
   }
 
   function render() {
@@ -102,8 +106,8 @@ function playgroundAssets() {
       copy.title = "Copy the Go that registers this file and reads it into memory";
       copy.addEventListener("click", async () => {
         try {
-          await navigator.clipboard.writeText(declaration(path, data.length));
-          say(`Copied the declaration of ${path}. The program imports go.chrisrx.dev/psx/disc and calls Load on it.`);
+          await navigator.clipboard.writeText(declaration(path));
+          say(`Copied the declaration of ${path}. The program imports go.chrisrx.dev/psx/disc, calls Load on it, and finds the file in its Data.`);
         } catch (e) {
           say(`Could not copy: ${e.message}`);
         }
@@ -124,11 +128,12 @@ function playgroundAssets() {
   }
 
   // add puts files, a list of {path, data}, beside the program, replacing
-  // those at the same paths once that is confirmed.
-  async function add(files) {
+  // those at the same paths once that is confirmed, or at once if confirmed
+  // is true.
+  async function add(files, confirmed = false) {
     if (!files.length) return;
     const replaced = files.filter((f) => assetFiles.has(f.path)).map((f) => f.path);
-    if (replaced.length && !confirm(`Replace ${replaced.join(", ")}?`)) return;
+    if (!confirmed && replaced.length && !confirm(`Replace ${replaced.join(", ")}?`)) return;
     for (const { path, data } of files) assetFiles.set(path, data);
     render();
     panel.open = true;
@@ -190,7 +195,7 @@ function playgroundAssets() {
   // The examples' data, which the site publishes beside their discs, with
   // examples.json listing each one's files.
   let catalog = [];
-  (async () => {
+  const catalogLoaded = (async () => {
     try {
       const res = await fetch("examples.json");
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
@@ -207,21 +212,32 @@ function playgroundAssets() {
     examples.disabled = !catalog.length;
   })();
 
-  examples.addEventListener("change", async () => {
-    const ex = catalog.find((e) => e.name === examples.value);
-    examples.value = "";
-    if (!ex) return;
+  // fromExample fetches the data of the example ex, an entry of the
+  // catalog, and adds it.
+  async function fromExample(ex, confirmed) {
     examples.disabled = true;
     say(`Fetching ${ex.name}'s data…`);
     try {
       const files = await Promise.all(ex.data.map(async (path) => ({ path, data: await fetchBytes(`examples/${ex.name}/${path}`) })));
-      await add(files);
+      await add(files, confirmed);
     } catch (e) {
       say(`Could not fetch ${ex.name}'s data: ${e.message}`);
     } finally {
       examples.disabled = false;
     }
+  }
+
+  examples.addEventListener("change", async () => {
+    const ex = catalog.find((e) => e.name === examples.value);
+    examples.value = "";
+    if (ex) await fromExample(ex, false);
   });
+
+  addExampleData = async (name) => {
+    await catalogLoaded;
+    const ex = catalog.find((e) => e.name === name);
+    if (ex) await fromExample(ex, true);
+  };
 
   // Whether the panel is open is kept in this browser too.
   try { panel.open = localStorage.getItem(OPEN) === "1"; } catch { /* closed */ }

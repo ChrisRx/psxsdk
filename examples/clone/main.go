@@ -206,7 +206,7 @@ var (
 	gpuPacket [2][packetMax / 4]uint32
 )
 
-var padStatus uint32
+var padStatus yaroze.Buttons
 
 // The model handles, which all share one coordinate system: drawObject
 // sets it, and works out the screen matrix from it, as it draws each one.
