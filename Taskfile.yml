@@ -55,12 +55,13 @@ tasks:
       - go tool eco2exe .build/{{.NAME}}/prog.elf .build/{{.NAME}}/prog.exe
       - go tool mkpsxiso -o .build/{{.NAME}}/{{.NAME}}.bin --volume-id {{.NAME}}.exe --boot MAIN.EXE --file MAIN.EXE=.build/{{.NAME}}/prog.exe --src {{.DIR}}
 
-  # Builds the tutorial's program onto .build/cube/cube.cue, so that it
-  # runs in the player like the examples and in the emulator tests.
+  # Builds the tutorial's first program onto .build/hello/hello.cue, so
+  # that it runs on its page like the examples and in the emulator tests.
+  # The rest of the tutorial writes the square example.
   disc:tutorial:
     cmds:
       - task: disc
-        vars: { NAME: cube, DIR: docs/tutorial/cube }
+        vars: { NAME: hello, DIR: docs/tutorial/hello }
 
   # Builds the program in DIR, examples/NAME unless told otherwise, onto a
   # disc and runs it in a window with psxplay, booting OpenBIOS. Flags
@@ -93,9 +94,9 @@ tasks:
       PLAY: .build/site/play
       EXAMPLES:
         # Every directory under examples with a main.go; examples/internal
-        # holds what they share, and is not one. The tutorial's program
-        # joins them in the player.
-        sh: for f in examples/*/main.go; do basename "$(dirname "$f")"; done; echo cube
+        # holds what they share, and is not one. The tutorial's first
+        # program joins them.
+        sh: for f in examples/*/main.go; do basename "$(dirname "$f")"; done; echo hello
     cmds:
       - task: discs
       - task: disc:tutorial
@@ -162,11 +163,11 @@ tasks:
       # gofmt, for the playground's Format button and to format on Run.
       - GOOS=wasip1 GOARCH=wasm go build -trimpath -ldflags=-s -o {{.PLAY}}/tools/gofmt.wasm cmd/gofmt
       - rm -rf .build/sysroot
-      - '{{.TREE}}/build/tinygo-sysroot -target=playstation-yaroze -o .build/sysroot ./examples/... ./docs/tutorial/cube'
+      - '{{.TREE}}/build/tinygo-sysroot -target=playstation-yaroze -o .build/sysroot ./examples/... ./docs/tutorial/hello'
       # The shipped compiler has no clang, so the full one runs here over
       # every example to fill the cache with the target's C and the
       # standard library.
-      - web/compiler/mkcache.sh .build/compiler/tinygo-full.wasm .build/compiler/tinygo.wasm .build/sysroot $(cd .build/sysroot && ls -d mod/go.chrisrx.dev/psx/examples/*/ mod/go.chrisrx.dev/psx/docs/tutorial/cube/ | grep -v /internal/)
+      - web/compiler/mkcache.sh .build/compiler/tinygo-full.wasm .build/compiler/tinygo.wasm .build/sysroot $(cd .build/sysroot && ls -d mod/go.chrisrx.dev/psx/examples/*/ mod/go.chrisrx.dev/psx/docs/tutorial/hello/ | grep -v /internal/)
       - tar --format=ustar -C .build -cf - sysroot | gzip -9 > {{.PLAY}}/sysroot.tar.gz
 
   # Renders the documentation alone into .build/site, over whatever is
