@@ -43,7 +43,7 @@ func TestYarozeConvertEcoffToEXE(t *testing.T) {
 
 	exe, err = Combine(exe)
 	exe = assert.Ok(t, exe, err)
-	assert.Equal(t, "47FB1AD6D1AEE3C8BDF71BDC2ECD144B", fmt.Sprintf("%X", md5.Sum(exe.Bytes())))
+	assert.Equal(t, "ABF4D710C68B1E59A7BF4AB6CF0A9586", fmt.Sprintf("%X", md5.Sum(exe.Bytes())))
 }
 
 // TestPatchExecutablePreservesReturnAddress runs the startup stub and checks

@@ -41,8 +41,13 @@ func PatchExecutable(f *psx.File) error {
 		binary.LittleEndian.PutUint32(patchData[4*i:], val)
 	}
 
-	f.FileHeader.PC0 += uint32(len(f.Section("text").Data))
+	// The stub goes at the end of the text, which is where the entry point
+	// moves to. The program's own entry, which the stub jumps to, is
+	// wherever its crt0 is: at the start of the text for TinyGo's ELF, and
+	// at the end for the SDK's, which links crt0 last.
+	text := f.Section("text")
+	f.FileHeader.PC0 = text.Addr + uint32(len(text.Data))
 	f.FileHeader.TextSize += uint32(len(patchData))
-	f.Section("text").Data = append(f.Section("text").Data, patchData...)
+	text.Data = append(text.Data, patchData...)
 	return nil
 }
