@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash/fnv"
+	"math/rand/v2"
 	"strings"
 	"testing"
 
@@ -145,10 +146,9 @@ func TestDecodeBlock(t *testing.T) {
 	assert.Equal(t, []int16{60, 56, 53, 50}, snd.buf[:4])
 }
 
-// spuReverbScript adds reverb to spuScript's voice: a work area from
-// 60000h, a set of delays and volumes, the voice sent to the reverb, and
-// the reverb turned on with the output.
-var spuReverbScript = strings.NewReplacer("w 1aa c000\n", "", "w 188 1\n", "", "s 112\n", "").Replace(spuScript) + `
+// spuReverbRegs sets up the reverb: a work area from 60000h, a set of
+// delays and volumes, and the output volume.
+const spuReverbRegs = `
 w 1a2 c000
 w 1c0 28
 w 1c2 bf
@@ -184,43 +184,55 @@ w 1fc 51c4
 w 1fe fae5
 w 184 2e1b
 w 186 3876
+`
+
+// spuReverbScript adds reverb to spuScript's voice: spuReverbRegs, the
+// voice sent to the reverb, and the reverb turned on.
+var spuReverbScript = strings.NewReplacer("w 1aa c000\n", "", "w 188 1\n", "", "s 112\n", "").Replace(spuScript) + spuReverbRegs + `
 w 198 1
 w 1aa c080
 w 188 1
 s 3000
 `
 
-// TestSPUReverbMatchesPsxe plays spuReverbScript and checks the sound, and
-// what the reverb leaves in SPU RAM and its own state, against psxe's.
-func TestSPUReverbMatchesPsxe(t *testing.T) {
+// TestSPUReverbMatchesMednafen runs the reverb alone, set up by
+// spuReverbRegs, over a work area of noise, on a second of noise, loud and
+// quiet in turn, with the reverb turned off for a while along the way. Its
+// output and what it leaves in SPU RAM are Mednafen's from the same input,
+// which follows the hardware's arithmetic and resampling.
+func TestSPUReverbMatchesMednafen(t *testing.T) {
 	s := newSPU(&ic{setIRQ: func(bool) {}})
-	s.setAudio(true)
-	samples := runSPUScript(t, s, spuReverbScript)
+	runSPUScript(t, s, spuReverbRegs)
+	rng := rand.New(rand.NewPCG(1, 2))
+	for i := range s.ram {
+		s.ram[i] = byte(rng.Uint32())
+	}
 
-	h := fnv.New64a()
-	for _, p := range samples {
-		h.Write(binary.LittleEndian.AppendUint16(binary.LittleEndian.AppendUint16(nil, uint16(p[0])), uint16(p[1])))
+	out := fnv.New64a()
+	for i := range 44100 {
+		cnt := uint16(0xc080)
+		if i/10000 == 2 {
+			cnt = 0xc000
+		}
+		s.put16(spuSPUCNT, cnt)
+		amp := [2]int32{0x8000, 1000}[i/2000%2]
+		l, r := s.reverb(int16(rng.Int32N(2*amp)-amp), int16(rng.Int32N(2*amp)-amp))
+		out.Write(binary.LittleEndian.AppendUint16(binary.LittleEndian.AppendUint16(nil, uint16(l)), uint16(r)))
 	}
 	ram := fnv.New64a()
 	ram.Write(s.ram[:])
-	assert.Equal(t, 3000, len(samples))
-	assert.Equal(t, uint64(0x0ec097af3e01fe26), h.Sum64(), "the sound")
-	assert.Equal(t, uint64(0x9a0e4a12fe02837e), ram.Sum64(), "SPU RAM")
-	assert.Equal(t, [3]int32{-727, 0, 0x60bb8},
-		[3]int32{int32(s.get32(spuIntRevL)), int32(s.get32(spuIntRevR)), int32(s.get32(spuIntRevbAddr))},
-		"the reverb's output and position")
+	assert.Equal(t, uint64(0x2aad3c15844ad642), out.Sum64(), "the output")
+	assert.Equal(t, uint64(0xa835d310410016b3), ram.Sum64(), "SPU RAM")
 }
 
 // TestSPUReverbOff checks that the reverb leaves SPU RAM alone when it is
-// off, and when it is on but the output is muted, which psxe checks first.
+// off, with a voice sent to it.
 func TestSPUReverbOff(t *testing.T) {
-	for _, cnt := range []string{"w 1aa c000", "w 1aa 8080"} {
-		s := newSPU(&ic{setIRQ: func(bool) {}})
-		s.setAudio(true)
-		runSPUScript(t, s, strings.Replace(spuReverbScript, "w 1aa c080", cnt, 1))
-		var area [spuRAMSize - 0x60000]byte
-		assert.Equal(t, area, [spuRAMSize - 0x60000]byte(s.ram[0x60000:]), cnt)
-	}
+	s := newSPU(&ic{setIRQ: func(bool) {}})
+	s.setAudio(true)
+	runSPUScript(t, s, strings.Replace(spuReverbScript, "w 1aa c080", "w 1aa c000", 1))
+	var area [spuRAMSize - 0x60000]byte
+	assert.Equal(t, area, [spuRAMSize - 0x60000]byte(s.ram[0x60000:]))
 }
 
 // spuScriptPsxe is psxe's output from spuScript.

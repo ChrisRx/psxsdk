@@ -33,7 +33,8 @@ const (
 // while playing, since a program can see that through the registers: which
 // voices have ended, their envelope volumes, and the interrupt raised when a
 // voice reaches a chosen address. It also makes the sound, as psxe does,
-// since its reverb writes to SPU RAM, where a program can read it back.
+// but for the reverb, which works as the hardware does, since the reverb
+// writes to SPU RAM, where a program can read it back.
 //
 // psxe keeps the registers in a packed struct laid out like the hardware's
 // register map, and reads and writes it as raw memory, with its internal
@@ -57,6 +58,8 @@ type spu struct {
 	cdIn       [2]int16
 	capture    bool
 	capturePos uint32
+
+	rev reverbState
 }
 
 // voiceSound is a voice's sound, as psxe makes it.
@@ -80,13 +83,12 @@ func newSPU(ic *ic) *spu {
 }
 
 const (
-	spuIRQAddr      = 0x1a4
-	spuIntEvenCycle = 0x252 // int: toggled every sample, for the reverb
-	spuMainVolL     = 0x180
-	spuCDVolL       = 0x1b0
-	spuCDVolR       = 0x1b2
-	spuRAMCtrl      = 0x1ac
-	spuMainVolR     = 0x182
+	spuIRQAddr  = 0x1a4
+	spuMainVolL = 0x180
+	spuCDVolL   = 0x1b0
+	spuCDVolR   = 0x1b2
+	spuRAMCtrl  = 0x1ac
+	spuMainVolR = 0x182
 
 	// Voice registers, relative to the voice's block of 16 bytes.
 	voiceVolumeL = 0x00
@@ -303,12 +305,10 @@ const (
 )
 
 // sample makes one sample, as psxe does every 768 cycles while tracing:
-// every voice advances, and the voices are mixed, with reverb if it is on.
+// every voice advances, and the voices are mixed, with the reverb.
 // The reverb writes to its work area in SPU RAM, which a program can read,
 // so the mix is made whether or not audio is on; audio only keeps it.
 func (s *spu) sample() {
-	even := s.get32(spuIntEvenCycle) ^ 1
-	s.put32(spuIntEvenCycle, even)
 	s.put32(spuKONL, 0)
 	s.put32(spuKOFFL, 0)
 
@@ -370,22 +370,17 @@ func (s *spu) sample() {
 		v.counter += uint32(s.voiceReg(i, voicePitch))
 	}
 
-	// CD audio comes in at its own volume, if its input is on, and into the
-	// reverb if that is on for it too.
+	// CD audio comes in at its own volume, if its input is on.
 	if s.capture {
 		s.captureCD(irqEnabled, irqAddr)
 	}
 	var cdl, cdr int32
-	if cnt := s.get16(spuSPUCNT); cnt&1 != 0 {
+	if s.get16(spuSPUCNT)&1 != 0 {
 		cdl = int32(s.cdIn[0]) * int32(int16(s.get16(spuCDVolL))) >> 15
 		cdr = int32(s.cdIn[1]) * int32(int16(s.get16(spuCDVolR))) >> 15
-		if cnt&4 != 0 {
-			revl += cdl
-			revr += cdr
-		}
 	}
 
-	s.mix(left, right, revl, revr, cdl, cdr, even != 0)
+	s.mix(left, right, revl, revr, cdl, cdr)
 }
 
 // voiceSample is a voice's part of the mix, left and right, as psxe works it
@@ -416,27 +411,26 @@ func (s *spu) voiceSample(i uint32) (l, r float32) {
 }
 
 // mix makes a sample from the voices' sums, the sums of those sent to the
-// reverb, and the CD audio: with the SPU's output muted, the CD audio
-// alone, which the mute bit does not affect; otherwise, with reverb on, the
-// reverb takes a sample, on even samples, and what it last made is added
-// in. Each channel is clamped to 16 bits and scaled by the main volume.
-func (s *spu) mix(left, right, revl, revr, cdl, cdr int32, even bool) {
-	var l, r int16
-	mainL, mainR := s.get16(spuMainVolL), s.get16(spuMainVolR)
-	if cnt := s.get16(spuSPUCNT); cnt&0x4000 != 0 {
-		if cnt&0x80 != 0 {
-			if even {
-				s.reverb(clamp16(revl), clamp16(revr))
-			}
-			left = int32(clamp16(left)) + int32(s.get32(spuIntRevL))
-			right = int32(clamp16(right)) + int32(s.get32(spuIntRevR))
-		}
-		l = mainVolume(left+cdl, mainL)
-		r = mainVolume(right+cdr, mainR)
-	} else if cdl|cdr != 0 {
-		l = mainVolume(cdl, mainL)
-		r = mainVolume(cdr, mainR)
+// reverb, and the CD audio. With the SPU's output muted, the voices are
+// left out, but not the CD audio, which the mute bit does not affect; it
+// goes to the reverb too if that is on for it. The reverb runs whatever
+// the bits say, and its output is added in at its signed volume. Each
+// channel is clamped to 16 bits and scaled by the main volume.
+func (s *spu) mix(left, right, revl, revr, cdl, cdr int32) {
+	cnt := s.get16(spuSPUCNT)
+	if cnt&0x4000 == 0 {
+		left, right, revl, revr = 0, 0, 0, 0
 	}
+	if cnt&4 != 0 {
+		revl += cdl
+		revr += cdr
+	}
+	rl, rr := s.reverb(clamp16(revl), clamp16(revr))
+	left += cdl + int32(rl)*s.revVol(spuVLOut)>>15
+	right += cdr + int32(rr)*s.revVol(spuVROut)>>15
+
+	l := mainVolume(left, s.get16(spuMainVolL))
+	r := mainVolume(right, s.get16(spuMainVolR))
 	if !s.audio {
 		return
 	}
