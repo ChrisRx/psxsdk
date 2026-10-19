@@ -5,6 +5,9 @@
 # release either. It takes a couple of hours, so it runs when the recipe or
 # the TinyGo fork's revision changes, or by hand, rather than on every
 # push. A recipe whose release exists already is downloaded, not built.
+# The Pages workflow leaves the build to this one and skips its deploy
+# while the compiler is missing, so a compiler built here runs Pages again
+# to deploy the playground with it.
 name: Compiler
 
 on:
@@ -24,6 +27,7 @@ jobs:
     timeout-minutes: 360
     permissions:
       contents: write
+      actions: write
     steps:
     - uses: actions/checkout@v4
 
@@ -34,6 +38,7 @@ jobs:
       uses: DeterminateSystems/magic-nix-cache-action@v8
 
     - name: Build the compiler
+      id: compiler
       uses: ./.github/actions/compiler
 
     - name: Publish the compiler
@@ -41,3 +46,9 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         TARGET: ${{ github.sha }}
       run: web/compiler/release.sh .build/compiler
+
+    - name: Deploy the site with the compiler
+      if: steps.compiler.outputs.built == 'true' && github.ref == 'refs/heads/main'
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: gh workflow run pages.yml --ref main

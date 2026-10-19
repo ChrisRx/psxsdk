@@ -3,8 +3,12 @@ name: Pages
 # Builds the site, every example's disc, the emulator and the playground,
 # and publishes it through the gh-pages branch, which only this workflow
 # writes to and which GitHub Pages serves. The playground's compiler comes
-# from the cache or the release the Compiler workflow fills, and is built
-# here, slowly, when both miss. A push to main deploys the site to the root. A pull
+# from the cache or the release the Compiler workflow fills, and is never
+# built here: when both miss, the Compiler workflow is building it, so a
+# push to main skips the deploy, which would drop the playground, and the
+# Compiler workflow runs this one again once it has published the
+# compiler. A pull request builds the site without the playground then.
+# A push to main deploys the site to the root. A pull
 # request builds the site, which catches a change that breaks an example,
 # and when it touches the site also deploys a preview to pr-preview/pr-N/
 # and comments the preview's address on the pull request. The preview is
@@ -25,6 +29,7 @@ jobs:
     timeout-minutes: 360
     outputs:
       site: ${{ steps.changes.outputs.site }}
+      compiler: ${{ steps.compiler.outputs.found }}
     steps:
     - uses: actions/checkout@v4
 
@@ -49,9 +54,13 @@ jobs:
       run: nix develop .#site --command task site
 
     - name: Get the playground's compiler
+      id: compiler
       uses: ./.github/actions/compiler
+      with:
+        build: false
 
     - name: Build playground
+      if: steps.compiler.outputs.found == 'true'
       env:
         TINYGO_SRC: ${{ github.workspace }}/tinygo
       run: nix develop .#playground --command task playground
@@ -64,7 +73,7 @@ jobs:
         include-hidden-files: true
 
   deploy:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && needs.build.outputs.compiler == 'true'
     needs: build
     runs-on: ubuntu-latest
     permissions:

@@ -73,10 +73,15 @@ modules when this directory, the flake or the fork's revision changes, or
 on request, caches them under a key made of those, less the Markdown
 (`key.sh`), and
 publishes them as a release named by the key (`release.sh`), which is kept
-where the cache drops an entry unused for a week. The Pages workflow
-restores that cache, downloads the release when it misses, or builds the
-compiler itself when there is neither, through
-the same composite action (`.github/actions/compiler`), which always
+where the cache drops an entry unused for a week, then runs the Pages
+workflow. The Pages workflow restores that cache or downloads the release
+when it misses, through the same composite action
+(`.github/actions/compiler`), and never builds the compiler itself: with
+neither, a push to main skips the deploy until the Compiler workflow has
+published it, and a pull request builds the site without the playground.
+A release published from a local build (`release.sh .build/compiler`)
+before the change is pushed saves the Compiler workflow the build. The
+action always
 prepares the patched TinyGo tree, then runs `task playground` in the
 `playground` shell, which builds that tree's `tinygo-sysroot` natively and
 runs the full module under wasmtime to fill the cache. The fork is checked out at the revision `flake.nix` pins, so

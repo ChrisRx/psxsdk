@@ -5,10 +5,24 @@ description: >-
   from the release named by its key, and built otherwise, which takes a
   couple of hours. Leaves the patched TinyGo tree in .build/compiler/tinygo,
   which the playground task needs as well. Nix must be installed already.
+inputs:
+  build:
+    description: >-
+      Whether to build the compiler when neither the cache nor a release has
+      it. The Pages workflow passes false and leaves the build to the
+      Compiler workflow, which would otherwise be doing the same build at
+      the same time.
+    default: 'true'
 outputs:
   key:
     description: The compiler's key (web/compiler/key.sh), which names its cache entry and release.
     value: ${{ steps.key.outputs.key }}
+  found:
+    description: Whether .build/compiler has the compiler, from the cache, a release or a build.
+    value: ${{ steps.result.outputs.found }}
+  built:
+    description: Whether the compiler was built here rather than found.
+    value: ${{ steps.result.outputs.built }}
 runs:
   using: composite
   steps:
@@ -66,16 +80,35 @@ runs:
       fi
 
   - name: Build the compiler
-    if: steps.cache.outputs.cache-hit != 'true' && steps.release.outputs.found != 'true'
+    id: build
+    if: steps.cache.outputs.cache-hit != 'true' && steps.release.outputs.found != 'true' && inputs.build == 'true'
     shell: bash
     env:
       TINYGO_SRC: ${{ github.workspace }}/tinygo
       JOBS: 4
     run: web/compiler/build.sh .build/compiler
 
+  - name: Note the compiler is missing
+    if: steps.cache.outputs.cache-hit != 'true' && steps.release.outputs.found != 'true' && inputs.build != 'true'
+    shell: bash
+    env:
+      KEY: ${{ steps.key.outputs.key }}
+    run: echo "::notice::No compiler $KEY in the cache or a release, and this workflow does not build it; the Compiler workflow does."
+
   - name: Save the compiler
-    if: steps.cache.outputs.cache-hit != 'true'
+    if: steps.cache.outputs.cache-hit != 'true' && (steps.release.outputs.found == 'true' || steps.build.outcome == 'success')
     uses: actions/cache/save@v4
     with:
       path: .build/compiler/*.wasm
       key: ${{ steps.key.outputs.key }}
+
+  - name: Report the result
+    id: result
+    shell: bash
+    env:
+      HIT: ${{ steps.cache.outputs.cache-hit == 'true' || steps.release.outputs.found == 'true' }}
+      BUILT: ${{ steps.build.outcome == 'success' }}
+    run: |
+      if [ "$HIT" = true ] || [ "$BUILT" = true ]; then found=true; else found=false; fi
+      echo "found=$found" >> "$GITHUB_OUTPUT"
+      echo "built=$BUILT" >> "$GITHUB_OUTPUT"
