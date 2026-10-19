@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -17,7 +16,6 @@ import (
 
 var opts struct {
 	OutputDir string
-	AbsBase   string
 	Annotate  bool
 	LdScript  bool
 	Exclude   []string
@@ -58,17 +56,11 @@ addresses in its relocation tables rather than in the instruction stream.`,
 				return runLdScript(kept)
 			}
 
-			absBase, err := strconv.ParseUint(opts.AbsBase, 0, 32)
-			if err != nil {
-				return fmt.Errorf("invalid --abs-base %q: %v", opts.AbsBase, err)
-			}
-
 			for _, o := range kept {
 				var buf bytes.Buffer
 				err := binutils.WriteAsm(&buf, o.file, binutils.AsmOptions{
 					Source:   fmt.Sprintf("%s(%s)", filepath.Base(args[0]), o.name),
 					Annotate: opts.Annotate,
-					AbsBase:  uint32(absBase),
 				})
 				if err != nil {
 					return fmt.Errorf("%s: %v", o.name, err)
@@ -85,7 +77,6 @@ addresses in its relocation tables rather than in the instruction stream.`,
 	f.StringVarP(&opts.OutputDir, "output-dir", "o", "", "write output files to this directory instead of stdout")
 	f.BoolVarP(&opts.Annotate, "annotate", "a", false, "comment each relocated instruction with its original encoding")
 	f.BoolVar(&opts.LdScript, "ld-script", false, "emit ld PROVIDE definitions for absolute symbols instead of assembly")
-	f.StringVar(&opts.AbsBase, "abs-base", "0x80000000", "address the .libps section is placed at; absolute symbols are emitted relative to it")
 	f.StringSliceVarP(&opts.Exclude, "exclude", "x", nil, "archive members to skip")
 	return cmd
 }

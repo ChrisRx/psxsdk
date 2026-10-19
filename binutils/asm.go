@@ -19,10 +19,6 @@ type AsmOptions struct {
 	// Annotate adds the original instruction encoding as a trailing comment
 	// on every relocated instruction.
 	Annotate bool
-
-	// AbsBase is the address the AbsSectionName section is placed at, which
-	// absolute symbol definitions are emitted relative to.
-	AbsBase uint32
 }
 
 // sectionClasses maps an ECOFF storage class to the section a symbol with that
@@ -268,14 +264,8 @@ func (a *asmWriter) write(w io.Writer) error {
 	return nil
 }
 
-// AbsSectionName is the section absolute symbols are emitted into. A link
-// script is expected to place it, as NOLOAD, at AsmOptions.AbsBase.
-const AbsSectionName = ".libps"
-
 // writeAbsoluteSymbols emits definitions for symbols that live at a fixed
 // address rather than in any section.
-//
-// Two things constrain how this can be done.
 //
 // It has to be an object rather than a link script. A script assignment is
 // applied only after the linker has scanned the input archives, so a reference
@@ -286,28 +276,19 @@ const AbsSectionName = ".libps"
 // definitions have to be in place before the scan happens. That is what the
 // original symusr.o achieved by being an archive member.
 //
-// It also cannot use absolute symbols, which is what symusr.o did and what the
-// obvious "name = 0xADDRESS" spelling would produce. ld does not apply the
-// usual MIPS PC-region masking to an absolute symbol, so a jal to one fails
-// with "relocation truncated to fit: R_MIPS_26" no matter that the target is
-// in the same 256MB region. Emitting them as offsets into an empty section
-// that the link script positions keeps the addresses exact while leaving them
-// section relative, which relocates correctly.
+// The symbols are absolute, as they were in symusr.o, which takes lld: GNU ld
+// does not apply the MIPS PC-region masking to an absolute symbol, so a jal to
+// one fails with "relocation truncated to fit: R_MIPS_26". They used to be
+// offsets into an empty section that the link script placed at the resident
+// library, but that section counted as allocated, so size(1) reported the
+// library's 420KB as part of every program.
 func (a *asmWriter) writeAbsoluteSymbols(w io.Writer) error {
 	syms := AbsoluteSymbols(a.f)
 	if len(syms) == 0 {
 		return nil
 	}
-	base := a.opts.AbsBase
-	if len(syms) > 0 && syms[0].Address < base {
-		return fmt.Errorf("absolute symbol %s at 0x%08X is below the base address 0x%08X",
-			syms[0].Name, syms[0].Address, base)
-	}
 
-	fmt.Fprintf(w, "# %d absolute symbols: entry points in the resident library,\n", len(syms))
-	fmt.Fprintf(w, "# emitted as offsets from 0x%08X into an empty %s section.\n",
-		base, AbsSectionName)
-	fmt.Fprintf(w, "# A link script must place %s at that address, as NOLOAD.\n", AbsSectionName)
+	fmt.Fprintf(w, "# %d absolute symbols: entry points in the resident library.\n", len(syms))
 	fmt.Fprintf(w, "#\n")
 	fmt.Fprintf(w, "# The definitions are weak so that a program bringing its own copy of\n")
 	fmt.Fprintf(w, "# one of them wins instead of colliding. That is what the resident\n")
@@ -316,13 +297,8 @@ func (a *asmWriter) writeAbsoluteSymbols(w io.Writer) error {
 	fmt.Fprintf(w, "# definition, so it does not reopen the question of archive members\n")
 	fmt.Fprintf(w, "# being pulled in to satisfy these names.\n\n")
 
-	// @nobits means the section has no file contents, so spanning the whole
-	// address range of the resident library costs nothing in the object.
-	fmt.Fprintf(w, "\t.section %s,\"a\",@nobits\n", AbsSectionName)
 	for _, s := range syms {
-		// .org is absolute within the section, so gas rejects any
-		// out-of-order address rather than silently misplacing a symbol.
-		fmt.Fprintf(w, "\t.org 0x%X\n\t.weak %s\n%s:\n", s.Address-base, s.Name, s.Name)
+		fmt.Fprintf(w, "\t.weak %s\n\t.set %s, 0x%08X\n", s.Name, s.Name, s.Address)
 	}
 	fmt.Fprint(w, "\n")
 	return nil

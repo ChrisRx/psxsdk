@@ -5,9 +5,7 @@
 	.set noreorder
 	.set noat
 
-# 266 absolute symbols: entry points in the resident library,
-# emitted as offsets from 0x80000000 into an empty .libps section.
-# A link script must place .libps at that address, as NOLOAD.
+# 266 absolute symbols: entry points in the resident library.
 #
 # The definitions are weak so that a program bringing its own copy of
 # one of them wins instead of colliding. That is what the resident
@@ -16,803 +14,536 @@
 # definition, so it does not reopen the question of archive members
 # being pulled in to satisfy these names.
 
-	.section .libps,"a",@nobits
-	.org 0x100C8
 	.weak GetPadBuf
-GetPadBuf:
-	.org 0x1012C
+	.set GetPadBuf, 0x800100C8
 	.weak TestCard
-TestCard:
-	.org 0x10700
+	.set TestCard, 0x8001012C
 	.weak InitHeap
-InitHeap:
-	.org 0x10754
+	.set InitHeap, 0x80010700
 	.weak malloc
-malloc:
-	.org 0x10924
+	.set malloc, 0x80010754
 	.weak free
-free:
-	.org 0x1095C
+	.set free, 0x80010924
 	.weak realloc
-realloc:
-	.org 0x109F0
+	.set realloc, 0x8001095C
 	.weak calloc
-calloc:
-	.org 0x10C90
+	.set calloc, 0x800109F0
 	.weak SsGetMute
-SsGetMute:
-	.org 0x10CB4
+	.set SsGetMute, 0x80010C90
 	.weak SsGetMVol
-SsGetMVol:
-	.org 0x10D34
+	.set SsGetMVol, 0x80010CB4
 	.weak SsGetSerialAttr
-SsGetSerialAttr:
-	.org 0x10DCC
+	.set SsGetSerialAttr, 0x80010D34
 	.weak SsGetSerialVol
-SsGetSerialVol:
-	.org 0x10EA0
+	.set SsGetSerialVol, 0x80010DCC
 	.weak SsSetMute
-SsSetMute:
-	.org 0x10EE0
+	.set SsSetMute, 0x80010EA0
 	.weak SsSetMVol
-SsSetMVol:
-	.org 0x10F30
+	.set SsSetMVol, 0x80010EE0
 	.weak SsSetSerialAttr
-SsSetSerialAttr:
-	.org 0x10FC4
+	.set SsSetSerialAttr, 0x80010F30
 	.weak SsSetSerialVol
-SsSetSerialVol:
-	.org 0x113E8
+	.set SsSetSerialVol, 0x80010FC4
 	.weak SsSeqOpen
-SsSeqOpen:
-	.org 0x133FC
+	.set SsSeqOpen, 0x800113E8
 	.weak SsSeqSetNext
-SsSeqSetNext:
-	.org 0x135F4
+	.set SsSeqSetNext, 0x800133FC
 	.weak SsSeqSetAccelerando
-SsSeqSetAccelerando:
-	.org 0x13654
+	.set SsSeqSetAccelerando, 0x800135F4
 	.weak SsSetTempo
-SsSetTempo:
-	.org 0x137E8
+	.set SsSetTempo, 0x80013654
 	.weak SsIsEos
-SsIsEos:
-	.org 0x139D4
+	.set SsIsEos, 0x800137E8
 	.weak SsSeqClose
-SsSeqClose:
-	.org 0x147EC
+	.set SsSeqClose, 0x800139D4
 	.weak SsSetTickMode
-SsSetTickMode:
-	.org 0x14C10
+	.set SsSetTickMode, 0x800147EC
 	.weak SsSeqPause
-SsSeqPause:
-	.org 0x14D64
+	.set SsSeqPause, 0x80014C10
 	.weak SsSeqPlay
-SsSeqPlay:
-	.org 0x14DD4
+	.set SsSeqPlay, 0x80014D64
 	.weak SsPlayBack
-SsPlayBack:
-	.org 0x14F3C
+	.set SsPlayBack, 0x80014DD4
 	.weak SsSeqReplay
-SsSeqReplay:
-	.org 0x15124
+	.set SsSeqReplay, 0x80014F3C
 	.weak SsSeqSetRitardando
-SsSeqSetRitardando:
-	.org 0x151BC
+	.set SsSeqSetRitardando, 0x80015124
 	.weak SsSeqSetVol
-SsSeqSetVol:
-	.org 0x15224
+	.set SsSeqSetVol, 0x800151BC
 	.weak SsSeqGetVol
-SsSeqGetVol:
-	.org 0x153C4
+	.set SsSeqGetVol, 0x80015224
 	.weak SsSeqStop
-SsSeqStop:
-	.org 0x155F4
+	.set SsSeqStop, 0x800153C4
 	.weak SsVabClose
-SsVabClose:
-	.org 0x15D94
+	.set SsVabClose, 0x800155F4
 	.weak SsVabTransfer
-SsVabTransfer:
-	.org 0x1626C
+	.set SsVabTransfer, 0x80015D94
 	.weak SsUtSetReverbType
-SsUtSetReverbType:
-	.org 0x16310
+	.set SsUtSetReverbType, 0x8001626C
 	.weak SsUtGetReverbType
-SsUtGetReverbType:
-	.org 0x16320
+	.set SsUtGetReverbType, 0x80016310
 	.weak SsUtReverbOn
-SsUtReverbOn:
-	.org 0x16340
+	.set SsUtReverbOn, 0x80016320
 	.weak SsUtReverbOff
-SsUtReverbOff:
-	.org 0x16360
+	.set SsUtReverbOff, 0x80016340
 	.weak SsUtSetReverbFeedback
-SsUtSetReverbFeedback:
-	.org 0x163A0
+	.set SsUtSetReverbFeedback, 0x80016360
 	.weak SsUtSetReverbDepth
-SsUtSetReverbDepth:
-	.org 0x16438
+	.set SsUtSetReverbDepth, 0x800163A0
 	.weak SsUtSetReverbDelay
-SsUtSetReverbDelay:
-	.org 0x1A33C
+	.set SsUtSetReverbDelay, 0x80016438
 	.weak SsUtKeyOn
-SsUtKeyOn:
-	.org 0x1A6E0
+	.set SsUtKeyOn, 0x8001A33C
 	.weak SsUtKeyOff
-SsUtKeyOff:
-	.org 0x1AD88
+	.set SsUtKeyOff, 0x8001A6E0
 	.weak SsUtPitchBend
-SsUtPitchBend:
-	.org 0x1AE18
+	.set SsUtPitchBend, 0x8001AD88
 	.weak SsUtChangePitch
-SsUtChangePitch:
-	.org 0x1B0F4
+	.set SsUtChangePitch, 0x8001AE18
 	.weak SsUtGetVVol
-SsUtGetVVol:
-	.org 0x1B180
+	.set SsUtGetVVol, 0x8001B0F4
 	.weak SsUtSetVVol
-SsUtSetVVol:
-	.org 0x1B2B4
+	.set SsUtSetVVol, 0x8001B180
 	.weak SsUtAllKeyOff
-SsUtAllKeyOff:
-	.org 0x1F4B8
+	.set SsUtAllKeyOff, 0x8001B2B4
 	.weak GsSortFixBg16
-GsSortFixBg16:
-	.org 0x1F7E0
+	.set GsSortFixBg16, 0x8001F4B8
 	.weak GsInitFixBg16
-GsInitFixBg16:
-	.org 0x203B4
+	.set GsInitFixBg16, 0x8001F7E0
 	.weak GsSortLine
-GsSortLine:
-	.org 0x20520
+	.set GsSortLine, 0x800203B4
 	.weak GsSortGLine
-GsSortGLine:
-	.org 0x20628
+	.set GsSortGLine, 0x80020520
 	.weak GsSortBoxFill
-GsSortBoxFill:
-	.org 0x208C4
+	.set GsSortBoxFill, 0x80020628
 	.weak GsSortSprite
-GsSortSprite:
-	.org 0x20DC0
+	.set GsSortSprite, 0x800208C4
 	.weak GsSortFastSprite
-GsSortFastSprite:
-	.org 0x20F3C
+	.set GsSortFastSprite, 0x80020DC0
 	.weak GsInitGraph
-GsInitGraph:
-	.org 0x21400
+	.set GsInitGraph, 0x80020F3C
 	.weak GsSortClear
-GsSortClear:
-	.org 0x2153C
+	.set GsSortClear, 0x80021400
 	.weak GsGetActiveBuff
-GsGetActiveBuff:
-	.org 0x2154C
+	.set GsGetActiveBuff, 0x8002153C
 	.weak GsSetDrawBuffOffset
-GsSetDrawBuffOffset:
-	.org 0x21660
+	.set GsSetDrawBuffOffset, 0x8002154C
 	.weak GsSetDrawBuffClip
-GsSetDrawBuffClip:
-	.org 0x216F0
+	.set GsSetDrawBuffClip, 0x80021660
 	.weak GsSetOffset
-GsSetOffset:
-	.org 0x217E8
+	.set GsSetOffset, 0x800216F0
 	.weak GsSetClip
-GsSetClip:
-	.org 0x21868
+	.set GsSetClip, 0x800217E8
 	.weak GsSetClip2D
-GsSetClip2D:
-	.org 0x21920
+	.set GsSetClip2D, 0x80021868
 	.weak GsSwapDispBuff
-GsSwapDispBuff:
-	.org 0x219D0
+	.set GsSwapDispBuff, 0x80021920
 	.weak GsSetOrign
-GsSetOrign:
-	.org 0x219E8
+	.set GsSetOrign, 0x800219D0
 	.weak GsInitCoordinate2
-GsInitCoordinate2:
-	.org 0x21A90
+	.set GsInitCoordinate2, 0x800219E8
 	.weak GsSetLsMatrix
-GsSetLsMatrix:
-	.org 0x21AC0
+	.set GsSetLsMatrix, 0x80021A90
 	.weak GsSetLightMatrix
-GsSetLightMatrix:
-	.org 0x21DE0
+	.set GsSetLightMatrix, 0x80021AC0
 	.weak GsDefDispBuff
-GsDefDispBuff:
-	.org 0x21E80
+	.set GsDefDispBuff, 0x80021DE0
 	.weak GsInit3D
-GsInit3D:
-	.org 0x21EF8
+	.set GsInit3D, 0x80021E80
 	.weak GsMapModelingData
-GsMapModelingData:
-	.org 0x21F70
+	.set GsMapModelingData, 0x80021EF8
 	.weak GsSetProjection
-GsSetProjection:
-	.org 0x21F90
+	.set GsSetProjection, 0x80021F70
 	.weak GsSetFlatLight
-GsSetFlatLight:
-	.org 0x22524
+	.set GsSetFlatLight, 0x80021F90
 	.weak GsSetLightMode
-GsSetLightMode:
-	.org 0x225B0
+	.set GsSetLightMode, 0x80022524
 	.weak GsSetFogParam
-GsSetFogParam:
-	.org 0x22600
+	.set GsSetFogParam, 0x800225B0
 	.weak GsSetAmbient
-GsSetAmbient:
-	.org 0x22628
+	.set GsSetAmbient, 0x80022600
 	.weak GsDrawOt
-GsDrawOt:
-	.org 0x2264C
+	.set GsDrawOt, 0x80022628
 	.weak GsClearOt
-GsClearOt:
-	.org 0x226A4
+	.set GsClearOt, 0x8002264C
 	.weak GsSortOt
-GsSortOt:
-	.org 0x2297C
+	.set GsSortOt, 0x800226A4
 	.weak GsGetTimInfo
-GsGetTimInfo:
-	.org 0x22A60
+	.set GsGetTimInfo, 0x8002297C
 	.weak GsSetWorkBase
-GsSetWorkBase:
-	.org 0x22A70
+	.set GsSetWorkBase, 0x80022A60
 	.weak GsGetWorkBase
-GsGetWorkBase:
-	.org 0x22B44
+	.set GsGetWorkBase, 0x80022A70
 	.weak GsSetRefView2
-GsSetRefView2:
-	.org 0x231B0
+	.set GsSetRefView2, 0x80022B44
 	.weak GsSetView2
-GsSetView2:
-	.org 0x23314
+	.set GsSetView2, 0x800231B0
 	.weak GsGetLw
-GsGetLw:
-	.org 0x235D8
+	.set GsGetLw, 0x80023314
 	.weak GsGetLs
-GsGetLs:
-	.org 0x238AC
+	.set GsGetLs, 0x800235D8
 	.weak GsGetLws
-GsGetLws:
-	.org 0x23BCC
+	.set GsGetLws, 0x800238AC
 	.weak GsScaleScreen
-GsScaleScreen:
-	.org 0x23CF4
+	.set GsScaleScreen, 0x80023BCC
 	.weak GsLinkObject4
-GsLinkObject4:
-	.org 0x23E58
+	.set GsLinkObject4, 0x80023CF4
 	.weak GsSortObject4
-GsSortObject4:
-	.org 0x2527C
+	.set GsSortObject4, 0x80023E58
 	.weak FntLoad
-FntLoad:
-	.org 0x25320
+	.set FntLoad, 0x8002527C
 	.weak FntOpen
-FntOpen:
-	.org 0x255D8
+	.set FntOpen, 0x80025320
 	.weak FntFlush
-FntFlush:
-	.org 0x258FC
+	.set FntFlush, 0x800255D8
 	.weak FntPrint
-FntPrint:
-	.org 0x2632C
+	.set FntPrint, 0x800258FC
 	.weak KanjiFntOpen
-KanjiFntOpen:
-	.org 0x2663C
+	.set KanjiFntOpen, 0x8002632C
 	.weak KanjiFntClose
-KanjiFntClose:
-	.org 0x2665C
+	.set KanjiFntClose, 0x8002663C
 	.weak KanjiFntFlush
-KanjiFntFlush:
-	.org 0x26A2C
+	.set KanjiFntFlush, 0x8002665C
 	.weak KanjiFntPrint
-KanjiFntPrint:
-	.org 0x26F04
+	.set KanjiFntPrint, 0x80026A2C
 	.weak Krom2Tim
-Krom2Tim:
-	.org 0x27404
+	.set Krom2Tim, 0x80026F04
 	.weak GetTPage
-GetTPage:
-	.org 0x274CC
+	.set GetTPage, 0x80027404
 	.weak GetClut
-GetClut:
-	.org 0x27CB0
+	.set GetClut, 0x800274CC
 	.weak ResetGraph
-ResetGraph:
-	.org 0x280B0
+	.set ResetGraph, 0x80027CB0
 	.weak SetDispMask
-SetDispMask:
-	.org 0x2814C
+	.set SetDispMask, 0x800280B0
 	.weak DrawSync
-DrawSync:
-	.org 0x282E0
+	.set DrawSync, 0x8002814C
 	.weak ClearImage
-ClearImage:
-	.org 0x28374
+	.set ClearImage, 0x800282E0
 	.weak LoadImage
-LoadImage:
-	.org 0x283D8
+	.set LoadImage, 0x80028374
 	.weak StoreImage
-StoreImage:
-	.org 0x2843C
+	.set StoreImage, 0x800283D8
 	.weak MoveImage
-MoveImage:
-	.org 0x28724
+	.set MoveImage, 0x8002843C
 	.weak PutDrawEnv
-PutDrawEnv:
-	.org 0x288FC
+	.set PutDrawEnv, 0x80028724
 	.weak PutDispEnv
-PutDispEnv:
-	.org 0x2A9FC
+	.set PutDispEnv, 0x800288FC
 	.weak Krom2RawAdd2
-Krom2RawAdd2:
-	.org 0x2C778
+	.set Krom2RawAdd2, 0x8002A9FC
 	.weak gteMIMefunc
-gteMIMefunc:
-	.org 0x2C898
+	.set gteMIMefunc, 0x8002C778
 	.weak CompMatrix
-CompMatrix:
-	.org 0x2C9F8
+	.set CompMatrix, 0x8002C898
 	.weak MulMatrix0
-MulMatrix0:
-	.org 0x2CDE0
+	.set MulMatrix0, 0x8002C9F8
 	.weak ApplyMatrixLV
-ApplyMatrixLV:
-	.org 0x2CF70
+	.set ApplyMatrixLV, 0x8002CDE0
 	.weak ScaleMatrixL
-ScaleMatrixL:
-	.org 0x2D094
+	.set ScaleMatrixL, 0x8002CF70
 	.weak PushMatrix
-PushMatrix:
-	.org 0x2D134
+	.set PushMatrix, 0x8002D094
 	.weak PopMatrix
-PopMatrix:
-	.org 0x2D2B8
+	.set PopMatrix, 0x8002D134
 	.weak MulMatrix
-MulMatrix:
-	.org 0x2D4D8
+	.set MulMatrix, 0x8002D2B8
 	.weak ApplyMatrix
-ApplyMatrix:
-	.org 0x2D528
+	.set ApplyMatrix, 0x8002D4D8
 	.weak ApplyMatrixSV
-ApplyMatrixSV:
-	.org 0x2D588
+	.set ApplyMatrixSV, 0x8002D528
 	.weak TransMatrix
-TransMatrix:
-	.org 0x2D5B8
+	.set TransMatrix, 0x8002D588
 	.weak ScaleMatrix
-ScaleMatrix:
-	.org 0x2D718
+	.set ScaleMatrix, 0x8002D5B8
 	.weak SetLightMatrix
-SetLightMatrix:
-	.org 0x2DEA8
+	.set SetLightMatrix, 0x8002D718
 	.weak TransposeMatrix
-TransposeMatrix:
-	.org 0x2DEF8
+	.set TransposeMatrix, 0x8002DEA8
 	.weak RotMatrix
-RotMatrix:
-	.org 0x2E188
+	.set RotMatrix, 0x8002DEF8
 	.weak RotMatrixX
-RotMatrixX:
-	.org 0x2E328
+	.set RotMatrixX, 0x8002E188
 	.weak RotMatrixY
-RotMatrixY:
-	.org 0x2E4C8
+	.set RotMatrixY, 0x8002E328
 	.weak RotMatrixZ
-RotMatrixZ:
-	.org 0x3B198
+	.set RotMatrixZ, 0x8002E4C8
 	.weak CdSearchFile
-CdSearchFile:
-	.org 0x3BF60
+	.set CdSearchFile, 0x8003B198
 	.weak CdRead
-CdRead:
-	.org 0x3C068
+	.set CdRead, 0x8003BF60
 	.weak CdReadSync
-CdReadSync:
-	.org 0x3C14C
+	.set CdReadSync, 0x8003C068
 	.weak CdReadFile
-CdReadFile:
-	.org 0x3C2B4
+	.set CdReadFile, 0x8003C14C
 	.weak CdReadExec
-CdReadExec:
-	.org 0x3C388
+	.set CdReadExec, 0x8003C2B4
 	.weak CdPlay
-CdPlay:
-	.org 0x3CA68
+	.set CdPlay, 0x8003C388
 	.weak VSync
-VSync:
-	.org 0x3CCDC
+	.set VSync, 0x8003CA68
 	.weak VSyncCallback
-VSyncCallback:
-	.org 0x3D744
+	.set VSyncCallback, 0x8003CCDC
 	.weak GetVideoMode
-GetVideoMode:
-	.org 0x3D754
+	.set GetVideoMode, 0x8003D744
 	.weak atan
-atan:
-	.org 0x3D960
+	.set atan, 0x8003D754
 	.weak atan2
-atan2:
-	.org 0x3DBF8
+	.set atan2, 0x8003D960
 	.weak asin
-asin:
-	.org 0x3DD7C
+	.set asin, 0x8003DBF8
 	.weak acos
-acos:
-	.org 0x3DF74
+	.set acos, 0x8003DD7C
 	.weak __adddf3
-__adddf3:
-	.org 0x3E3A0
+	.set __adddf3, 0x8003DF74
 	.weak _dbl_shift
-_dbl_shift:
-	.org 0x3E468
+	.set _dbl_shift, 0x8003E3A0
 	.weak __divdf3
-__divdf3:
-	.org 0x3E854
+	.set __divdf3, 0x8003E468
 	.weak __eqdf2
-__eqdf2:
-	.org 0x3E8A4
+	.set __eqdf2, 0x8003E854
 	.weak __floatsidf
-__floatsidf:
-	.org 0x3E9A8
+	.set __floatsidf, 0x8003E8A4
 	.weak __gedf2
-__gedf2:
-	.org 0x3EA84
+	.set __gedf2, 0x8003E9A8
 	.weak __gtdf2
-__gtdf2:
-	.org 0x3EB60
+	.set __gtdf2, 0x8003EA84
 	.weak __ltdf2
-__ltdf2:
-	.org 0x3ECB4
+	.set __ltdf2, 0x8003EB60
 	.weak __muldf3
-__muldf3:
-	.org 0x3F0B8
+	.set __muldf3, 0x8003ECB4
 	.weak __nedf2
-__nedf2:
-	.org 0x3F108
+	.set __nedf2, 0x8003F0B8
 	.weak __negdf2
-__negdf2:
-	.org 0x3F140
+	.set __negdf2, 0x8003F108
 	.weak __subdf3
-__subdf3:
-	.org 0x3F1C4
+	.set __subdf3, 0x8003F140
 	.weak exp
-exp:
-	.org 0x3F3E8
+	.set exp, 0x8003F1C4
 	.weak __fixdfsi
-__fixdfsi:
-	.org 0x3F4E8
+	.set __fixdfsi, 0x8003F3E8
 	.weak floor
-floor:
-	.org 0x3F5C0
+	.set floor, 0x8003F4E8
 	.weak ceil
-ceil:
-	.org 0x3F7A0
+	.set ceil, 0x8003F5C0
 	.weak hypot
-hypot:
-	.org 0x3F9BC
+	.set hypot, 0x8003F7A0
 	.weak __addsf3
-__addsf3:
-	.org 0x3FB64
+	.set __addsf3, 0x8003F9BC
 	.weak __divsf3
-__divsf3:
-	.org 0x3FCB0
+	.set __divsf3, 0x8003FB64
 	.weak __extendsfdf2
-__extendsfdf2:
-	.org 0x3FE10
+	.set __extendsfdf2, 0x8003FCB0
 	.weak __mulsf3
-__mulsf3:
-	.org 0x3FF54
+	.set __mulsf3, 0x8003FE10
 	.weak __truncdfsf2
-__truncdfsf2:
-	.org 0x40088
+	.set __truncdfsf2, 0x8003FF54
 	.weak ldexp
-ldexp:
-	.org 0x4014C
+	.set ldexp, 0x80040088
 	.weak frexp
-frexp:
-	.org 0x40274
+	.set frexp, 0x8004014C
 	.weak log
-log:
-	.org 0x404BC
+	.set log, 0x80040274
 	.weak log10
-log10:
-	.org 0x40554
+	.set log10, 0x800404BC
 	.weak modf
-modf:
-	.org 0x405FC
+	.set modf, 0x80040554
 	.weak fmod
-fmod:
-	.org 0x40740
+	.set fmod, 0x800405FC
 	.weak pow
-pow:
-	.org 0x4096C
+	.set pow, 0x80040740
 	.weak __ledf2
-__ledf2:
-	.org 0x40C3C
+	.set __ledf2, 0x8004096C
 	.weak tan
-tan:
-	.org 0x40CC4
+	.set tan, 0x80040C3C
 	.weak sin
-sin:
-	.org 0x40D9C
+	.set sin, 0x80040CC4
 	.weak cos
-cos:
-	.org 0x40ED4
+	.set cos, 0x80040D9C
 	.weak sinh
-sinh:
-	.org 0x4100C
+	.set sinh, 0x80040ED4
 	.weak cosh
-cosh:
-	.org 0x4107C
+	.set cosh, 0x8004100C
 	.weak tanh
-tanh:
-	.org 0x411CC
+	.set tanh, 0x8004107C
 	.weak sqrt
-sqrt:
-	.org 0x412FC
+	.set sqrt, 0x800411CC
 	.weak printf2
-printf2:
-	.org 0x4133C
+	.set printf2, 0x800412FC
 	.weak sprintf2
-sprintf2:
-	.org 0x42860
+	.set sprintf2, 0x8004133C
 	.weak _err_math
-_err_math:
-	.org 0x428C8
+	.set _err_math, 0x80042860
 	.weak atof
-atof:
-	.org 0x428E8
+	.set atof, 0x800428C8
 	.weak strtod
-strtod:
-	.org 0x42DF8
+	.set strtod, 0x800428E8
 	.weak LoadTest
-LoadTest:
-	.org 0x42E08
+	.set LoadTest, 0x80042DF8
 	.weak Load
-Load:
-	.org 0x42E18
+	.set Load, 0x80042E08
 	.weak Exec
-Exec:
-	.org 0x42E28
+	.set Exec, 0x80042E18
 	.weak FlushCache
-FlushCache:
-	.org 0x42F28
+	.set FlushCache, 0x80042E28
 	.weak EnterCriticalSection
-EnterCriticalSection:
-	.org 0x42F38
+	.set EnterCriticalSection, 0x80042F28
 	.weak ExitCriticalSection
-ExitCriticalSection:
-	.org 0x42F58
+	.set ExitCriticalSection, 0x80042F38
 	.weak open
-open:
-	.org 0x42F68
+	.set open, 0x80042F58
 	.weak lseek
-lseek:
-	.org 0x42F78
+	.set lseek, 0x80042F68
 	.weak read
-read:
-	.org 0x42F88
+	.set read, 0x80042F78
 	.weak write
-write:
-	.org 0x42F98
+	.set write, 0x80042F88
 	.weak close
-close:
-	.org 0x42FA8
+	.set close, 0x80042F98
 	.weak format
-format:
-	.org 0x42FB8
+	.set format, 0x80042FA8
 	.weak firstfile
-firstfile:
-	.org 0x42FC8
+	.set firstfile, 0x80042FB8
 	.weak nextfile
-nextfile:
-	.org 0x42FD8
+	.set nextfile, 0x80042FC8
 	.weak rename
-rename:
-	.org 0x42FE8
+	.set rename, 0x80042FD8
 	.weak delete
-delete:
-	.org 0x42FF8
+	.set delete, 0x80042FE8
 	.weak Krom2RawAdd
-Krom2RawAdd:
-	.org 0x43008
+	.set Krom2RawAdd, 0x80042FF8
 	.weak _get_errno
-_get_errno:
-	.org 0x430E8
+	.set _get_errno, 0x80043008
 	.weak GetRCnt
-GetRCnt:
-	.org 0x43120
+	.set GetRCnt, 0x800430E8
 	.weak StartRCnt
-StartRCnt:
-	.org 0x43188
+	.set StartRCnt, 0x80043120
 	.weak ResetRCnt
-ResetRCnt:
-	.org 0x431C0
+	.set ResetRCnt, 0x80043188
 	.weak atoi
-atoi:
-	.org 0x432F4
+	.set atoi, 0x800431C0
 	.weak atol
-atol:
-	.org 0x43314
+	.set atol, 0x800432F4
 	.weak bcmp
-bcmp:
-	.org 0x43360
+	.set bcmp, 0x80043314
 	.weak bcopy
-bcopy:
-	.org 0x43394
+	.set bcopy, 0x80043360
 	.weak bzero
-bzero:
-	.org 0x433C0
+	.set bzero, 0x80043394
 	.weak toupper
-toupper:
-	.org 0x433F0
+	.set toupper, 0x800433C0
 	.weak tolower
-tolower:
-	.org 0x43420
+	.set tolower, 0x800433F0
 	.weak getc
-getc:
-	.org 0x43450
+	.set getc, 0x80043420
 	.weak getchar
-getchar:
-	.org 0x43484
+	.set getchar, 0x80043450
 	.weak gets
-gets:
-	.org 0x435FC
+	.set gets, 0x80043484
 	.weak memchr
-memchr:
-	.org 0x4364C
+	.set memchr, 0x800435FC
 	.weak memcmp
-memcmp:
-	.org 0x43698
+	.set memcmp, 0x8004364C
 	.weak memcpy
-memcpy:
-	.org 0x436CC
+	.set memcpy, 0x80043698
 	.weak memmove
-memmove:
-	.org 0x43738
+	.set memmove, 0x800436CC
 	.weak memset
-memset:
-	.org 0x43764
+	.set memset, 0x80043738
 	.weak putc
-putc:
-	.org 0x43790
+	.set putc, 0x80043764
 	.weak putchar
-putchar:
-	.org 0x43AB4
+	.set putchar, 0x80043790
 	.weak qsort
-qsort:
-	.org 0x43B30
+	.set qsort, 0x80043AB4
 	.weak rand
-rand:
-	.org 0x43B60
+	.set rand, 0x80043B30
 	.weak srand
-srand:
-	.org 0x43B70
+	.set srand, 0x80043B60
 	.weak strcat
-strcat:
-	.org 0x43C18
+	.set strcat, 0x80043B70
 	.weak strchr
-strchr:
-	.org 0x43C4C
+	.set strchr, 0x80043C18
 	.weak strcmp
-strcmp:
-	.org 0x43CB0
+	.set strcmp, 0x80043C4C
 	.weak strcpy
-strcpy:
-	.org 0x43CF4
+	.set strcpy, 0x80043CB0
 	.weak strcspn
-strcspn:
-	.org 0x43D5C
+	.set strcspn, 0x80043CF4
 	.weak strlen
-strlen:
-	.org 0x43D8C
+	.set strlen, 0x80043D5C
 	.weak strncat
-strncat:
-	.org 0x43E00
+	.set strncat, 0x80043D8C
 	.weak strncmp
-strncmp:
-	.org 0x43E80
+	.set strncmp, 0x80043E00
 	.weak strncpy
-strncpy:
-	.org 0x43EF8
+	.set strncpy, 0x80043E80
 	.weak strpbrk
-strpbrk:
-	.org 0x43F68
+	.set strpbrk, 0x80043EF8
 	.weak strrchr
-strrchr:
-	.org 0x43FB0
+	.set strrchr, 0x80043F68
 	.weak strspn
-strspn:
-	.org 0x44018
+	.set strspn, 0x80043FB0
 	.weak strstr
-strstr:
-	.org 0x44090
+	.set strstr, 0x80044018
 	.weak strtok
-strtok:
-	.org 0x441A4
+	.set strtok, 0x80044090
 	.weak strtol
-strtol:
-	.org 0x44368
+	.set strtol, 0x800441A4
 	.weak strtoul
-strtoul:
-	.org 0x44518
+	.set strtoul, 0x80044368
 	.weak printf
-printf:
-	.org 0x44BE0
+	.set printf, 0x80044518
 	.weak sprintf
-sprintf:
-	.org 0x4543C
+	.set sprintf, 0x80044BE0
 	.weak bsearch
-bsearch:
-	.org 0x4550C
+	.set bsearch, 0x8004543C
 	.weak setjmp
-setjmp:
-	.org 0x45548
+	.set setjmp, 0x8004550C
 	.weak longjmp
-longjmp:
-	.org 0x4EA28
+	.set longjmp, 0x80045548
 	.weak math_errno
-math_errno:
-	.org 0x62D04
+	.set math_errno, 0x8004EA28
 	.weak PSDOFSX
-PSDOFSX:
-	.org 0x62D08
+	.set PSDOFSX, 0x80062D04
 	.weak PSDOFSY
-PSDOFSY:
-	.org 0x62D0C
+	.set PSDOFSY, 0x80062D08
 	.weak GsLIOFF
-GsLIOFF:
-	.org 0x62D10
+	.set GsLIOFF, 0x80062D0C
 	.weak GsLMODE
-GsLMODE:
-	.org 0x62D14
+	.set GsLMODE, 0x80062D10
 	.weak GsLIGNR
-GsLIGNR:
-	.org 0x63D3C
+	.set GsLIGNR, 0x80062D14
 	.weak POSITION
-POSITION:
-	.org 0x63D40
+	.set POSITION, 0x80063D3C
 	.weak GsOUT_PACKET_P
-GsOUT_PACKET_P:
-	.org 0x63DA8
+	.set GsOUT_PACKET_P, 0x80063D40
 	.weak GsDISPON
-GsDISPON:
-	.org 0x63E30
+	.set GsDISPON, 0x80063DA8
 	.weak GsLIGHTWSMATRIX
-GsLIGHTWSMATRIX:
-	.org 0x63E54
+	.set GsLIGHTWSMATRIX, 0x80063E30
 	.weak GsDRAWENV
-GsDRAWENV:
-	.org 0x63EB0
+	.set GsDRAWENV, 0x80063E54
 	.weak GsDISPENV
-GsDISPENV:
-	.org 0x63F0C
+	.set GsDISPENV, 0x80063EB0
 	.weak GsIDMATRIX
-GsIDMATRIX:
-	.org 0x63F2C
+	.set GsIDMATRIX, 0x80063F0C
 	.weak GsLSMATRIX
-GsLSMATRIX:
-	.org 0x63F4C
+	.set GsLSMATRIX, 0x80063F2C
 	.weak GsWSMATRIX
-GsWSMATRIX:
-	.org 0x63F74
+	.set GsWSMATRIX, 0x80063F4C
 	.weak GsIDMATRIX2
-GsIDMATRIX2:
-	.org 0x63F9C
+	.set GsIDMATRIX2, 0x80063F74
 	.weak CLIP2
-CLIP2:
-	.org 0x658C8
+	.set CLIP2, 0x80063F9C
 	.weak GsTON
-GsTON:
-	.org 0x65954
+	.set GsTON, 0x800658C8
 	.weak GsLIGHT_MODE
-GsLIGHT_MODE:
-	.org 0x661E0
+	.set GsLIGHT_MODE, 0x80065954
 	.weak PSDCNT
-PSDCNT:
-	.org 0x661E4
+	.set PSDCNT, 0x800661E0
 	.weak PSDIDX
-PSDIDX:
-	.org 0x66274
+	.set PSDIDX, 0x800661E4
 	.weak GsNDIV
-GsNDIV:
+	.set GsNDIV, 0x80066274
 

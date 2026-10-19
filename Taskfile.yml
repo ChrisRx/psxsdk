@@ -222,12 +222,7 @@ tasks:
       - mkdir -p tmp
       - defer: rm -rf tmp
       - go run ./cmd/nyc build --opt=z -o tmp/prog.elf ./examples/check
-      - |
-        LIBPS=$(mipsel-none-elf-size -A tmp/prog.elf | awk '$1 == ".libps" { print $2; exit }')
-        mipsel-none-elf-size tmp/prog.elf | awk -v window="${LIBPS:-0}" '
-          NR == 1 { print "   text\t   data\t    bss\t    dec"; next }
-          { text = $1 - window
-            printf "%7d\t%7d\t%7d\t%7d\n", text, $2, $3, text + $2 + $3 }'
+      - mipsel-none-elf-size tmp/prog.elf
       - go tool eco2exe tmp/prog.elf tmp/prog.exe
       - go tool mkpsxiso -o tmp/check.bin --volume-id check.exe --boot MAIN.EXE --file MAIN.EXE=tmp/prog.exe --src examples/check
       - psxe -a -b emu/openbios/openbios.bin -L5 tmp/check.cue

@@ -38,23 +38,11 @@ __stack_size = DEFINED(__stack_size) ? __stack_size : 0x10000;
 
 SECTIONS
 {
-  /* playstation-yaroze-symusr.S defines every libps entry point as an offset
-   * into .libps, so placing the section here is what gives those symbols
-   * their real addresses. The code is already in RAM, so nothing is loaded.
-   *
-   * NOLOAD rather than INFO, because lld ignores the address on an INFO
-   * section and resolves every one of these symbols without the 0x80000000
-   * base: FntPrint comes out at 0x000258fc instead of 0x800258fc. It links
-   * silently, since R_MIPS_26 still reaches, and the program dies before it
-   * draws. GNU ld honours either spelling.
-   *
-   * The cost of NOLOAD is that the window counts as allocated memory, so
-   * size(1) reports the 420KB span of the resident library as if it were
-   * part of the program, and a second PT_LOAD covers it. That segment has a
-   * file size of zero, which is what eco2exe and sioload select on, so
-   * neither writes anything there. An ELF is also 420KB smaller now:
-   * an INFO section is PROGBITS and occupies file space even unallocated,
-   * whereas NOBITS does not.
+  /* playstation-yaroze-symusr.S defines every libps entry point as an
+   * absolute symbol, so nothing here places the resident library: its code
+   * is already in RAM and the link only needs the addresses. The symbols used
+   * to be offsets into a NOLOAD section placed at 0x80000000, which size(1)
+   * then counted, reporting the library's 420KB as part of every program.
    *
    * It has to be an object defining these rather than assignments in this
    * script. A script assignment is applied only after the linker has scanned
@@ -64,7 +52,6 @@ SECTIONS
    * is linked first means no such member is extracted at all, which is how the
    * SDK's own symusr.o behaved as a member of libps.a.
    */
-  .libps 0x80000000 (NOLOAD) : { *(.libps) }
 
   . = __load;
 

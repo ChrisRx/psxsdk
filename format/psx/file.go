@@ -67,9 +67,8 @@ func parseFile(r io.Reader, bo binary.ByteOrder) (*File, error) {
 	if f.Magic != ExecutableSignature {
 		return nil, errors.New("file magic invalid")
 	}
-	if f.TextSize%2048 != 0 {
-		return nil, errors.New("text section must be aligned to 2048")
-	}
+	// The text need not fill whole sectors: the BIOS loads TextSize bytes,
+	// and linkers like COMBINE leave it unpadded.
 	if f.TextSize != 0 {
 		s := &Section{
 			Name: "text",
