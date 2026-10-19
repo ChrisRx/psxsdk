@@ -65,6 +65,7 @@ type dma struct {
 
 	bus  *Bus
 	ic   *ic
+	gpu  *gpu // where the GPU channel's words go, without the bus
 	stop func(error)
 }
 
@@ -256,17 +257,40 @@ func (d *dma) transferGPU() {
 	*d.bcr(dmaGPU) = 0
 }
 
+// The transfers to the GPU hand it their words directly rather than writing
+// each to GP0 through the bus, which would decode the address every time.
+// The bus is then left charged as its last write to GP0 would have left it.
+
 func (d *dma) transferGPURequest() {
 	n := d.size(dmaGPU) * d.blocks(dmaGPU)
 	madr := d.madr(dmaGPU)
-	toDevice := *d.chcr(dmaGPU)&chcrToDevice != 0
-	for range n {
-		if toDevice {
-			d.bus.Write32(0x1f801810, d.bus.Read32(*madr))
-		} else {
+	if *d.chcr(dmaGPU)&chcrToDevice == 0 {
+		for range n {
 			d.bus.Write32(*madr, d.bus.Read32(0x1f801810))
+			*madr += d.step(dmaGPU)
 		}
-		*madr += d.step(dmaGPU)
+		d.pending[dmaGPU] = int(n)
+		return
+	}
+	g, step := d.gpu, d.step(dmaGPU)
+	for i := uint32(0); i < n; {
+		// The words of an upload into VRAM go straight from RAM, as many
+		// as the upload wants and the transfer has in RAM.
+		if g.state == gpuRecvData && step == 4 {
+			k := min(n-i, g.tsiz/2)
+			if words, ok := d.bus.ramBytes(*madr, 4*k); ok {
+				g.uploadWords(words)
+				*madr += 4 * k
+				i += k
+				continue
+			}
+		}
+		g.gp0(d.bus.Read32(*madr))
+		*madr += step
+		i++
+	}
+	if n > 0 {
+		d.chargeGPU()
 	}
 	d.pending[dmaGPU] = int(n)
 }
@@ -278,11 +302,13 @@ func (d *dma) transferGPULinked() {
 	addr := *d.madr(dmaGPU)
 	hdr := d.bus.Read32(addr)
 	size := hdr >> 24
+	toGPU := false // whether the last access was a word to the GPU
 	for range 16384 {
 		for ; size > 0; size-- {
 			addr = (addr + d.step(dmaGPU)) & 0x1ffffc
-			d.bus.Write32(0x1f801810, d.bus.Read32(addr))
+			d.gpu.gp0(d.bus.Read32(addr))
 			d.pending[dmaGPU]++
+			toGPU = true
 		}
 		addr = hdr & 0xffffff
 		if addr == 0xffffff {
@@ -290,6 +316,18 @@ func (d *dma) transferGPULinked() {
 		}
 		hdr = d.bus.Read32(addr)
 		size = hdr >> 24
+		toGPU = false
+	}
+	if toGPU {
+		d.chargeGPU()
+	}
+}
+
+// chargeGPU leaves the bus charged as a write to GP0 through it would.
+func (d *dma) chargeGPU() {
+	d.bus.cycles = 0
+	if m, _, ok := d.bus.find(0x1f801810); ok {
+		d.bus.cycles = m.delay
 	}
 }
 

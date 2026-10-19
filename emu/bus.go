@@ -172,6 +172,22 @@ func (b *Bus) direct(ram window, code ...window) {
 	b.code = code
 }
 
+// ramBytes returns the n bytes of RAM from addr, if they are all within
+// RAM's window and do not wrap round its memory, for a device moving a run
+// of words at once.
+func (b *Bus) ramBytes(addr, n uint32) ([]byte, bool) {
+	addr &= segmentMask[addr>>29]
+	off := addr - b.ram.base
+	if off >= b.ram.size {
+		return nil, false
+	}
+	off &= uint32(len(b.ram.mem) - 1)
+	if n > uint32(len(b.ram.mem))-off {
+		return nil, false
+	}
+	return b.ram.mem[off : off+n], true
+}
+
 // Fetch reads an instruction. It costs what a 32-bit read costs, and
 // leaves nothing charged after it.
 //

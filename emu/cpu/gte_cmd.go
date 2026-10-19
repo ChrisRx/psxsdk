@@ -309,8 +309,9 @@ func (g *GTE) interpolate(c *cmd, a1, a2, a3 int64) {
 	g.pushRGB(g.MAC[1], g.MAC[2], g.MAC[3])
 }
 
-// gteCycles is what each command costs, by its function field.
-var gteCycles = map[uint32]uint32{
+// gteCycles is what each command costs, by its function field, and zero
+// for a function the GTE does not have.
+var gteCycles = [64]uint32{
 	0x01: 15, 0x06: 8, 0x0c: 6, 0x10: 8, 0x11: 8, 0x12: 8, 0x13: 19,
 	0x14: 13, 0x16: 44, 0x1b: 17, 0x1c: 11, 0x1e: 14, 0x20: 30, 0x28: 5,
 	0x29: 8, 0x2a: 17, 0x2d: 5, 0x2e: 6, 0x30: 23, 0x3d: 5, 0x3e: 5,
@@ -321,8 +322,8 @@ var gteCycles = map[uint32]uint32{
 // one the GTE does not have, which leaves the registers alone.
 func (g *GTE) Command(op uint32) uint32 {
 	fn := op & 0x3f
-	cycles, ok := gteCycles[fn]
-	if !ok {
+	cycles := gteCycles[fn]
+	if cycles == 0 {
 		return 0
 	}
 	c := &cmd{

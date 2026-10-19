@@ -15,6 +15,9 @@
 //	                            display as RGBA into pixels, a
 //	                            Uint8ClampedArray, if it is large enough,
 //	                            and returns {width, height}, or {error}.
+//	                            With null for pixels the display is not
+//	                            read at all, and the size is the last
+//	                            one's.
 //	psx.setButtons(buttons)     sets the buttons held on the pad in port 1,
 //	                            as emu's Button bits.
 //	psx.takeOutput()            returns what the BIOS and the program have
@@ -137,6 +140,14 @@ func runFrame(_ js.Value, args []js.Value) any {
 		return map[string]any{"error": fmt.Sprintf("no vertical blank in %d instructions", frameBudget)}
 	}
 
+	// A frontend behind on its frames runs them without the display.
+	if len(args) > 0 && args[0].IsNull() {
+		var w, h int
+		if frame != nil {
+			w, h = frame.Rect.Dx(), frame.Rect.Dy()
+		}
+		return map[string]any{"width": w, "height": h}
+	}
 	frame = machine.DisplayInto(frame)
 	w, h := frame.Rect.Dx(), frame.Rect.Dy()
 	if len(args) > 0 && args[0].Truthy() && args[0].Length() >= len(frame.Pix) {

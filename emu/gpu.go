@@ -520,6 +520,38 @@ func (g *gpu) uploadPixel(p uint16) {
 	}
 }
 
+// uploadWords takes a run of an upload's words, two pixels each, as gp0
+// would take them one at a time, for a DMA that has the run in RAM. There
+// must be at least one, and no more than the upload still wants.
+func (g *gpu) uploadWords(words []byte) {
+	n := uint32(len(words) / 2) // pixels
+	for px := uint32(0); px < n; {
+		x := (g.xpos + g.xcnt) & 0x3ff
+		y := (g.ypos + g.ycnt) & 0x1ff
+		// Pixels to the end of the upload's row, of VRAM's row, or of
+		// the run, whichever comes first, go into one row of VRAM.
+		k := min(g.xsiz-g.xcnt, vramWidth-x, n-px)
+		dst := g.vram[x+y*vramWidth : x+y*vramWidth+k]
+		src := words[2*px : 2*(px+k)]
+		for i := range dst {
+			dst[i] = uint16(src[2*i]) | uint16(src[2*i+1])<<8
+		}
+		px += k
+		g.xcnt += k
+		if g.xcnt == g.xsiz {
+			g.ycnt++
+			g.xcnt = 0
+		}
+	}
+	last := words[len(words)-4:]
+	g.recvData = uint32(last[0]) | uint32(last[1])<<8 | uint32(last[2])<<16 | uint32(last[3])<<24
+	g.tsiz -= n
+	if g.tsiz == 0 {
+		g.xcnt, g.ycnt = 0, 0
+		g.state = gpuRecvCmd
+	}
+}
+
 // download sets up a rectangle of VRAM to be read through GPUREAD.
 func (g *gpu) download() {
 	if !g.expect(2) {

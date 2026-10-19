@@ -73,23 +73,27 @@ function schedule() {
   else wake.port2.postMessage(null);
 }
 
-// tick runs the frames that are due, a batch at a time, draws the last,
-// sends its sound, and schedules the next.
+// tick runs the frames that are due, a batch at a time, copies out and
+// draws the last of them, sends their sound, and schedules the next.
 function tick() {
   clock.scheduled = false;
   if (!clock.running) return;
   const now = performance.now();
   if (now - clock.next > MAX_BEHIND) clock.next = now;
 
-  let ran = 0;
-  while (ran < BATCH && performance.now() >= clock.next) {
-    const res = psx.runFrame(image?.data);
+  // Behind, after a stall or on a slow device, more than one frame is due:
+  // only the last is worth copying out.
+  let due = 0;
+  if (now >= clock.next) due = Math.min(BATCH, Math.floor((now - clock.next) / FRAME_MS) + 1);
+  for (let i = 0; i < due; i++) {
+    const last = i === due - 1;
+    const res = psx.runFrame(last ? image?.data : null);
     if (res.error) {
       stop(res.error);
       return;
     }
     // A frame at a new size has nowhere to go; the next one does.
-    if (!image || image.width !== res.width || image.height !== res.height) {
+    if (last && (!image || image.width !== res.width || image.height !== res.height)) {
       image = res.width && res.height ? new ImageData(res.width, res.height) : null;
       if (image && ctx) {
         ctx.canvas.width = res.width;
@@ -97,13 +101,12 @@ function tick() {
       }
     }
     clock.next += FRAME_MS;
-    ran++;
   }
-  if (ran > 0) {
+  if (due > 0) {
     if (image && ctx) ctx.putImageData(image, 0, 0);
     const sound = psx.takeAudio();
     if (sound && audioPort) audioPort.postMessage(sound.buffer, [sound.buffer]);
-    clock.frames += ran;
+    clock.frames += due;
   }
 
   clock.output.push(...psx.takeOutput());
