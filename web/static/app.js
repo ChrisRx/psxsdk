@@ -10,6 +10,17 @@
 // is used.
 "use strict";
 
+// The build's stamp, which the site put after this script's name, and
+// versioned, which puts it after the name of a file loaded from beside the
+// page, so that a browser keeping the files of one deploy for a while, as
+// GitHub Pages lets it, does not run them under the page of the next.
+const BUILD = (() => {
+  try { return new URL(document.currentScript.src).searchParams.get("v") ?? ""; } catch { return ""; }
+})();
+function versioned(url) {
+  return BUILD ? `${url}?v=${BUILD}` : url;
+}
+
 // Pad bits, as emu's Button constants.
 const BUTTON = {
   select: 1 << 0, l3: 1 << 1, r3: 1 << 2, start: 1 << 3,
@@ -56,7 +67,7 @@ const state = {
 // The emulator's worker: requests to it, each answered by a reply with the
 // same id, and what it reports unasked, its frame rate and the BIOS's
 // output, and that it has stopped.
-const worker = new Worker("worker.js");
+const worker = new Worker(versioned("worker.js"));
 const pending = new Map();
 let nextID = 0;
 

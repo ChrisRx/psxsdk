@@ -33,7 +33,12 @@
 // {event: "stopped", error} if the emulator stops.
 "use strict";
 
-importScripts("wasm_exec.js");
+// The build's stamp, which app.js put after this worker's name, carried on
+// to the files it loads; see versioned there.
+const BUILD = new URL(self.location.href).searchParams.get("v") ?? "";
+const versioned = (url) => (BUILD ? `${url}?v=${BUILD}` : url);
+
+importScripts(versioned("wasm_exec.js"));
 
 // A frame is 263 lines of 3413 GPU cycles at 53.693175MHz, as the emulator
 // times it: about 59.83 a second. At that rate the SPU makes exactly the
@@ -49,7 +54,7 @@ const FAST_MS = 12;
 
 const ready = (async () => {
   const go = new Go();
-  const { instance } = await WebAssembly.instantiateStreaming(fetch("psx.wasm"), go.importObject);
+  const { instance } = await WebAssembly.instantiateStreaming(fetch(versioned("psx.wasm")), go.importObject);
   go.run(instance);
   return self.psx;
 })();

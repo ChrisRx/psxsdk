@@ -38,7 +38,9 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -994,11 +996,86 @@ func (s *Site) write(out, static string) error {
 		}
 	}
 	if static != "" {
-		if err := copyFS(os.DirFS(static), ".", filepath.Join(out, "play")); err != nil {
+		if err := copyPlayer(os.DirFS(static), filepath.Join(out, "play")); err != nil {
 			return fmt.Errorf("copying the player: %w", err)
 		}
 	}
 	return nil
+}
+
+// copyPlayer copies the player's files under dst, stamping the pages and
+// the modules with a version: a short hash of all the files, put after the
+// name of each script, style and module they load from beside them, as
+// app.js?v=1a2b3c4d. GitHub Pages lets a browser keep a file for ten
+// minutes without asking again, so without the stamp a visitor who reloads
+// across a deploy gets the new page running the old scripts, and sees a
+// page with nothing working. The scripts carry the stamp on to the files
+// they load themselves, the workers and the data beside them, by
+// versioned() in app.js and worker.js.
+func copyPlayer(fsys fs.FS, dst string) error {
+	v, err := stamp(fsys)
+	if err != nil {
+		return err
+	}
+	return fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, filepath.FromSlash(p))
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		if ext := path.Ext(p); ext != ".html" && ext != ".js" {
+			in, err := fsys.Open(p)
+			if err != nil {
+				return err
+			}
+			defer in.Close()
+			return writeFrom(in, target)
+		}
+		data, err := fs.ReadFile(fsys, p)
+		if err != nil {
+			return err
+		}
+		return writeFrom(bytes.NewReader(stampRefs(data, v)), target)
+	})
+}
+
+// stamp returns eight hex digits of a hash over the files under fsys, their
+// paths and contents, the same for the same files.
+func stamp(fsys fs.FS) (string, error) {
+	h := sha256.New()
+	err := fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		data, err := fs.ReadFile(fsys, p)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(h, "%s %d\n", p, len(data))
+		h.Write(data)
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil))[:8], nil
+}
+
+// The references a page or module makes to a file beside it: a script's
+// src or a style's href naming a file with no directory, and a module
+// import from ./NAME.js. Anything with a directory, a scheme or a query is
+// left as it is.
+var (
+	htmlRef = regexp.MustCompile(`\b(src|href)="([\w.-]+\.(?:js|css))"`)
+	jsRef   = regexp.MustCompile(`\bfrom "\./([\w.-]+\.js)"`)
+)
+
+// stampRefs puts ?v=v after each such reference in data.
+func stampRefs(data []byte, v string) []byte {
+	data = htmlRef.ReplaceAll(data, []byte(`$1="$2?v=`+v+`"`))
+	return jsRef.ReplaceAll(data, []byte(`from "./$1?v=`+v+`"`))
 }
 
 // prevNext returns the pages either side of p in its section.

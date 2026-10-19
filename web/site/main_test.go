@@ -180,7 +180,8 @@ func TestTOCAndText(t *testing.T) {
 func TestWrite(t *testing.T) {
 	s, dir := site(t)
 	static := filepath.Join(dir, "static")
-	write(t, static, "index.html", "<p>player</p>")
+	write(t, static, "index.html", `<link rel="stylesheet" href="style.css"><a href="../docs/">Docs</a><script src="app.js"></script><script src="https://cdn.example/x.js"></script>`)
+	write(t, static, "compile-worker.js", `import { x } from "./wasi.js";`+"\n"+`const w = new Worker("worker.js");`)
 	write(t, static, "fonts/a.woff2", "font")
 	out := filepath.Join(dir, "out")
 	assert.NoError(t, s.write(out, static))
@@ -194,6 +195,16 @@ func TestWrite(t *testing.T) {
 		_, err := os.Stat(filepath.Join(out, name))
 		assert.NoError(t, err, name)
 	}
+
+	// The player's pages and modules name the files beside them with a
+	// stamp, the same in each, and nothing else.
+	v, err := stamp(os.DirFS(static))
+	assert.NoError(t, err)
+	assert.Equal(t, 8, len(v))
+	player, _ := os.ReadFile(filepath.Join(out, "play/index.html"))
+	assert.Equal(t, `<link rel="stylesheet" href="style.css?v=`+v+`"><a href="../docs/">Docs</a><script src="app.js?v=`+v+`"></script><script src="https://cdn.example/x.js"></script>`, string(player))
+	module, _ := os.ReadFile(filepath.Join(out, "play/compile-worker.js"))
+	assert.Equal(t, `import { x } from "./wasi.js?v=`+v+`";`+"\n"+`const w = new Worker("worker.js");`, string(module))
 
 	html, _ := os.ReadFile(filepath.Join(out, "guide/getting-started/index.html"))
 	page := string(html)

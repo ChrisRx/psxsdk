@@ -25,6 +25,13 @@ import { Pipeline, readTar } from "./pipeline.js";
 
 let pipeline = null; // a promise of the Pipeline, once loading has started
 
+// The build's stamp, which playground.js put after this worker's name,
+// carried on to the tools and the sysroot, which go with the pipeline; see
+// versioned in app.js. The compiler itself is not stamped: it is large,
+// changes on its own schedule, and speaks WASI whatever the build.
+const BUILD = new URL(import.meta.url).searchParams.get("v") ?? "";
+const versioned = (url) => (BUILD ? `${url}?v=${BUILD}` : url);
+
 async function fetchModule(url) {
 	const res = await fetch(url);
 	if (!res.ok) throw new Error(`${url}: ${res.status} ${res.statusText}`);
@@ -35,7 +42,7 @@ async function fetchModule(url) {
 const tools = new Map(); // name to a promise of its module
 function loadTool(name) {
 	if (!tools.has(name)) {
-		tools.set(name, fetchModule(`tools/${name}.wasm`).catch((err) => {
+		tools.set(name, fetchModule(versioned(`tools/${name}.wasm`)).catch((err) => {
 			tools.delete(name);
 			throw err;
 		}));
@@ -63,11 +70,11 @@ async function load(log) {
 	log("Loading the compiler…\n");
 	const [tinygo, discgen, mips1fix, eco2exe, mkpsxiso, tar] = await Promise.all([
 		fetchModule("tinygo.wasm"),
-		fetchModule("tools/discgen.wasm"),
-		fetchModule("tools/mips1fix.wasm"),
-		fetchModule("tools/eco2exe.wasm"),
-		fetchModule("tools/mkpsxiso.wasm"),
-		fetchTar("sysroot.tar.gz"),
+		fetchModule(versioned("tools/discgen.wasm")),
+		fetchModule(versioned("tools/mips1fix.wasm")),
+		fetchModule(versioned("tools/eco2exe.wasm")),
+		fetchModule(versioned("tools/mkpsxiso.wasm")),
+		fetchTar(versioned("sysroot.tar.gz")),
 	]);
 	const fs = new FileSystem();
 	readTar(fs, tar, "/");
@@ -84,7 +91,7 @@ let gofmt = null; // a promise of the compiled gofmt.wasm
 // goes through a backup file, which the file system here has no need to
 // support.
 async function format(files) {
-	gofmt ??= fetchModule("tools/gofmt.wasm").catch((err) => {
+	gofmt ??= fetchModule(versioned("tools/gofmt.wasm")).catch((err) => {
 		gofmt = null;
 		throw err;
 	});

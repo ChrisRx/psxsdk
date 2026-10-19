@@ -16,7 +16,7 @@
 let catalog = [];
 const catalogLoaded = (async () => {
   try {
-    const res = await fetch("examples.json");
+    const res = await fetch(versioned("examples.json"));
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     catalog = (await res.json()).filter((ex) => ex.data?.length);
   } catch {

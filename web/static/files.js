@@ -14,14 +14,14 @@
 // examples the site lists in starters.json, the scene example unless
 // another is named, its sources and its data files.
 async function startingFiles(name = "scene") {
-  const res = await fetch("starters.json");
+  const res = await fetch(versioned("starters.json"));
   if (!res.ok) throw new Error(`starters.json: ${res.status} ${res.statusText}`);
   const starters = await res.json();
   const starter = starters.find((s) => s.name === name) ?? starters[0];
   if (!starter) throw new Error("the site lists no program to start from");
   const files = [];
   for (const [path, url] of Object.entries(starter.files)) {
-    const r = await fetch(url);
+    const r = await fetch(versioned(url));
     if (!r.ok) throw new Error(`${url}: ${r.status} ${r.statusText}`);
     // Sources under art/ and files under pack/ are bytes.
     files.push({ path, data: path.startsWith("art/") || path.startsWith("pack/") ? new Uint8Array(await r.arrayBuffer()) : await r.text() });
@@ -46,7 +46,7 @@ const files = (() => {
   // The completion index, fetched once for every editor.
   (async () => {
     try {
-      const res = await fetch("yaroze.json");
+      const res = await fetch(versioned("yaroze.json"));
       if (!res.ok) return;
       const entries = await res.json();
       api = { entries, byName: new Map(entries.map((e) => [e.name, e])) };

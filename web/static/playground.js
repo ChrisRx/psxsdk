@@ -21,7 +21,7 @@ let nextBuild = 0;
 // has not been, and resolves to its reply; log gets its output meanwhile.
 function request(type, data, log) {
   if (!compiler) {
-    compiler = new Worker("compile-worker.js", { type: "module" });
+    compiler = new Worker(versioned("compile-worker.js"), { type: "module" });
     compiler.onmessage = (e) => {
       const msg = e.data;
       const build = builds.get(msg.id);
