@@ -1,50 +1,17 @@
-// The playground: one Go file written in the editor, and the data files
-// beside it (assets.js), built by the compiler
+// The playground: a project (project.js), its Go files in the editor and
+// its data files beside them (files.js, files-tab.js), built by the compiler
 // running in compile-worker.js, and booted like an example by app.js, with
 // the compiler's output and the emulator's beside the picture.
 //
 // The compiler is large, so its worker starts, and fetches it, the first
-// time the editor is used rather than when the page loads. What is typed is
-// kept in this browser until the next visit.
+// time the editor is used rather than when the page loads. The project is
+// kept in this browser as it changes.
 //
 // Run formats the program with gofmt, then builds it, showing the
 // compiler's output, and once it builds, boots it and shows the emulator's:
 // what the BIOS and the program print, with the emulator's log, at the
 // level chosen beside the tabs, interleaved.
 "use strict";
-
-const DRAFT = "playground-source";
-
-const editor = new GoEditor($("editor"), {
-  label: "Program source",
-  onRun: () => buildAndRun(),
-  onChange: (text) => saveDraft(text),
-});
-
-let draftTimer = 0;
-function saveDraft(text) {
-  clearTimeout(draftTimer);
-  draftTimer = setTimeout(() => {
-    try { localStorage.setItem(DRAFT, text); } catch { /* not kept */ }
-  }, 300);
-}
-
-async function startingProgram() {
-  const res = await fetch("default.go.txt");
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-  return res.text();
-}
-
-// startingData adds the data files of the program the playground starts
-// with, the example default.json names, so that it runs as it is.
-async function startingData() {
-  try {
-    const res = await fetch("default.json");
-    if (!res.ok) return;
-    const { example } = await res.json();
-    if (example) await addExampleData(example);
-  } catch { /* the program is left to say what it could not read */ }
-}
 
 let compiler = null;
 const builds = new Map();
@@ -190,43 +157,44 @@ function warm() {
   })();
 }
 
-// The compiler names a place in the program as main.go:LINE:COL.
-const ERROR_AT = /(?:^|[\s/])main\.go:(\d+):(\d+)?:?\s*(.*)$/gm;
+// The compiler names a place in the program as FILE.go:LINE:COL.
+const ERROR_AT = /(?:^|[\s/])([\w.-]+\.go):(\d+):(\d+)?:?\s*(.*)$/gm;
 
 // showErrors makes each error in the log a link to its line, and marks
-// those lines in the editor.
+// those lines in the editors.
 function showErrors(log) {
   const errors = [];
   buildLog.replaceChildren();
   let last = 0;
   for (const m of log.matchAll(ERROR_AT)) {
-    const line = Number(m[1]);
-    const col = Number(m[2] ?? 1);
-    errors.push({ line, message: m[3] });
-    const start = m.index + m[0].indexOf("main.go");
+    const file = m[1];
+    const line = Number(m[2]);
+    const col = Number(m[3] ?? 1);
+    errors.push({ file, line, message: m[4] });
+    const start = m.index + m[0].indexOf(file);
     buildLog.append(log.slice(last, start));
     const a = document.createElement("a");
     a.href = "#";
     a.textContent = log.slice(start, m.index + m[0].length);
     a.addEventListener("click", (e) => {
       e.preventDefault();
-      editor.goTo(line, col);
+      files.open(file, line, col);
     });
     buildLog.append(a);
     last = m.index + m[0].length;
   }
   buildLog.append(log.slice(last));
-  editor.markErrors(errors);
+  files.markErrors(errors);
   return errors;
 }
 
 let building = false;
 
-// format runs gofmt over the program and puts the result in the editor. It
-// returns whether gofmt could parse the program; when it could not, its
-// complaints are in the compiler's tab and marked in the editor.
+// format runs gofmt over the program's Go files and puts the results in
+// the project. It returns whether gofmt could parse them all; when it could
+// not, its complaints are in the compiler's tab and marked in the editors.
 async function format() {
-  const reply = await request("format", { source: editor.value }, appendLog);
+  const reply = await request("format", { files: files.goTexts() }, appendLog);
   if (!reply.ok) {
     showTab("build");
     buildLog.textContent = "";
@@ -234,7 +202,7 @@ async function format() {
     buildStatus.textContent = errors.length ? `${errors.length} syntax error${errors.length > 1 ? "s" : ""}` : `Could not format: ${reply.error}`;
     return false;
   }
-  editor.replaceText(reply.source);
+  for (const { path, text } of reply.files) projects.current.set(path, text, "format");
   return true;
 }
 
@@ -243,7 +211,7 @@ $("format").addEventListener("click", async () => {
   button.disabled = true;
   try {
     if (await format()) {
-      editor.markErrors([]);
+      files.markErrors([]);
       buildStatus.textContent = "Formatted";
     }
   } finally {
@@ -252,7 +220,7 @@ $("format").addEventListener("click", async () => {
 });
 
 async function buildAndRun() {
-  if (building) return;
+  if (building || !projects.current) return;
   building = true;
   $("run").disabled = true;
   showTab("build");
@@ -270,7 +238,8 @@ async function buildAndRun() {
   buildStatus.textContent = "Building…";
   const t0 = performance.now();
   let log = "";
-  const result = await request("build", { source: editor.value, assets: playgroundAssets() }, (text) => {
+  const project = projects.current;
+  const result = await request("build", { files: project.list() }, (text) => {
     log += text;
     appendLog(text);
   });
@@ -283,9 +252,9 @@ async function buildAndRun() {
     showOverlay("The build failed; the compiler's tab says why.");
     return;
   }
-  editor.markErrors([]);
+  files.markErrors([]);
   buildStatus.textContent = `Built in ${((performance.now() - t0) / 1000).toFixed(1)}s`;
-  state.current = { name: "your program" };
+  state.current = { name: project.name, id: project.id };
   state.disc = { cue: "prog.cue", files: result.files, elf: result.elf };
   ttyLog.textContent = "";
   showTab("tty");
@@ -295,23 +264,12 @@ async function buildAndRun() {
     // clicked again.
     document.querySelector(".screen").focus({ preventScroll: true });
   } catch (e) {
-    showOverlay(`Could not start your program: ${e.message}`);
+    showOverlay(`Could not start ${project.name}: ${e.message}`);
   }
 }
 
 $("run").addEventListener("click", () => buildAndRun());
-
-$("revert").addEventListener("click", async () => {
-  if (!confirm("Replace your program with the one the playground starts with, and add its data files?")) return;
-  try {
-    editor.value = await startingProgram();
-    saveDraft(editor.value);
-    editor.focus();
-    await startingData();
-  } catch (e) {
-    buildStatus.textContent = `Could not load the starting program: ${e.message}`;
-  }
-});
+files.onRun(buildAndRun);
 
 // The screen takes the keys as the pad while it has the focus; a click on
 // it gives it the focus, as the canvas under it cannot hold it.
@@ -320,7 +278,9 @@ document.querySelector(".screen").addEventListener("pointerdown", (e) => {
 });
 
 // Ctrl+Enter runs, and Ctrl+Shift+F formats, from anywhere on the page,
-// not only the editor.
+// not only the editor. Ctrl+Z and Ctrl+Y go to the Scene tab's history
+// while it shows and the keys are not in a text field, and Ctrl+Z puts
+// back what the Files tab removed.
 addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey) || e.defaultPrevented) return;
   if (e.key === "Enter") {
@@ -329,8 +289,53 @@ addEventListener("keydown", (e) => {
   } else if (e.shiftKey && e.code === "KeyF") {
     e.preventDefault();
     $("format").click();
+  } else if ((e.key === "z" || e.key === "Z" || e.key === "y" || e.key === "Y") && !e.target.closest("input, textarea, select, [contenteditable]")) {
+    if (sceneTab.shown()) {
+      e.preventDefault();
+      if (e.key === "y" || e.key === "Y" || e.shiftKey) sceneTab.redo(); else sceneTab.undo();
+    } else if (filesTab.shown() && filesTab.canUndo() && (e.key === "z" || e.key === "Z")) {
+      e.preventDefault();
+      filesTab.undoRemove();
+    }
   }
 });
+
+// The live pill by Run: lit while the program running is this project's,
+// whose scene then follows the Scene tab without a rebuild.
+const livePill = $("live-pill");
+function updateLivePill() {
+  const mine = state.current?.id && state.current.id === projects.current?.id;
+  livePill.hidden = !mine;
+  livePill.classList.toggle("on", !!(mine && state.running));
+  livePill.title = mine && state.running ? "This project is running: changes to its scene show on the console at once" : "This project's program is paused";
+  projectEvents.dispatchEvent(new CustomEvent("live", { detail: { live: !!(mine && state.running) } }));
+}
+{
+  const base = setRunning;
+  setRunning = function (running) {
+    base(running);
+    updateLivePill();
+  };
+}
+projectEvents.addEventListener("open", updateLivePill);
+
+// The theme: dark, the Net Yaroze, unless light, the grey PlayStation, was
+// chosen; index.html sets it before the first paint from the same key.
+const THEME = "playground-theme";
+const themeButton = $("theme");
+function showTheme() {
+  const dark = document.documentElement.dataset.theme !== "light";
+  themeButton.setAttribute("aria-pressed", String(dark));
+  themeButton.textContent = dark ? "Dark" : "Light";
+  for (const meta of document.querySelectorAll('meta[name="theme-color"]')) meta.content = dark ? "#1b1b1e" : "#e3e2dd";
+}
+themeButton.addEventListener("click", () => {
+  const theme = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+  document.documentElement.dataset.theme = theme;
+  try { localStorage.setItem(THEME, theme); } catch { /* not kept */ }
+  showTheme();
+});
+showTheme();
 
 // The divider between the editor and the emulator: dragged, or moved with
 // the arrow keys, it sets how wide the emulator's side is.
@@ -375,17 +380,9 @@ split.addEventListener("keydown", (e) => {
 });
 
 for (const type of ["focusin", "pointerdown"]) {
-  $("editor").addEventListener(type, warm, { once: true });
+  $("editors").addEventListener(type, warm, { once: true });
 }
 
-(async () => {
-  editor.loadAPI("yaroze.json");
-  let draft = null;
-  try { draft = localStorage.getItem(DRAFT); } catch { /* none */ }
-  try {
-    editor.value = draft ?? await startingProgram();
-    if (draft === null) await startingData();
-  } catch (e) {
-    buildStatus.textContent = `Could not load the starting program: ${e.message}`;
-  }
-})();
+projects.start(startingFiles).catch((e) => {
+  buildStatus.textContent = `Could not load the starting program: ${e.message}`;
+});

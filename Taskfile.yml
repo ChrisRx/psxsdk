@@ -1,5 +1,11 @@
 version: '3'
 
+# Most tasks here name what they read (sources) and what they write
+# (generates), so that task skips them when nothing they read has changed
+# since they last ran; task serve builds the whole site that way and serves
+# it. The fingerprints are kept under .task/, which git ignores. A task
+# whose outputs are large, such as the discs, is still skipped in a moment.
+
 tasks:
   test:
     cmds:
@@ -16,6 +22,17 @@ tasks:
       - task: discs
       - task: disc:tutorial
       - PSX_BIOS="${PSX_BIOS:-$PWD/emu/openbios/openbios.bin}" PSX_DISCS="$PWD/.build" go test -v ./tests/...
+
+  # Builds whatever has changed of the site and the playground, and serves
+  # the site on localhost:8000. The playground needs the compiler from
+  # task compiler, which takes most of an hour and is not built here; see
+  # compiler:check.
+  serve:
+    desc: Build what has changed and serve the site on localhost:8000
+    cmds:
+      - task: site
+      - task: playground
+      - go run ./web/serve -dir .build/site
 
   # Builds the check example onto .build/check/check.cue.
   disc:check:
@@ -44,13 +61,35 @@ tasks:
   # OPT=z is TinyGo's own default, for size. COMPILER=wasm builds with
   # TinyGo compiled to WebAssembly instead of the tinygo command, from
   # NYC_WASM or a nyc built by task nyc.
+  #
+  # It is skipped when neither the program nor the packages a program may
+  # use nor nyc has changed since it last ran.
   disc:
+    label: 'disc:{{.NAME}}'
     requires:
       vars: [NAME]
     vars:
       DIR: '{{.DIR | default (printf "examples/%s" .NAME)}}'
       OPT: '{{.OPT | default "2"}}'
       COMPILER: '{{.COMPILER | default "auto"}}'
+    sources:
+      - '{{.DIR}}/**/*'
+      - 'yaroze/**/*.go'
+      - 'disc/**/*.go'
+      - 'scene/**/*.go'
+      - 'format/**/*.go'
+      - 'examples/internal/**/*.go'
+      - 'internal/**/*'
+      - 'cmd/nyc/**/*.go'
+      - 'binutils/**/*.go'
+      - 'tools/**/*.go'
+      - go.mod
+      - go.sum
+      - exclude: 'internal/toolchain/wasm/**'
+    generates:
+      - '.build/{{.NAME}}/{{.NAME}}.cue'
+      - '.build/{{.NAME}}/{{.NAME}}.bin'
+      - '.build/{{.NAME}}/prog.elf'
     cmds:
       - rm -rf .build/{{.NAME}}
       - mkdir -p .build/{{.NAME}}
@@ -75,41 +114,83 @@ tasks:
     cmds:
       - go run ./cmd/nyc run {{.CLI_ARGS}} ./{{.DIR}}
 
-  # Builds the site into .build/site, replacing what is there: the
-  # documentation from docs/ and the examples' package comments, rendered
-  # by web/site, and under play/ the playground and the player from
-  # web/static, the yaroze.json the playground's completion reads, also
-  # written by web/site, the OpenBIOS image the examples boot with from
-  # emu/openbios, every example's disc and the tutorial's, and the emulator
-  # compiled to WebAssembly from web/.
+  # Builds the site into .build/site: the documentation from docs/ and the
+  # examples' package comments, rendered by web/site, and under play/ the
+  # playground and the player from web/static, the yaroze.json the
+  # playground's completion reads and the starters it begins a project
+  # from, also written by web/site, the OpenBIOS image the examples boot
+  # with from emu/openbios, every example's disc and the tutorial's, and
+  # the emulator compiled to WebAssembly from web/. Each part is skipped
+  # when what it reads has not changed; task site:clean starts over.
   # Sony's BIOS must never be copied in.
   #
   # .github/workflows/pages.yml publishes this directory to GitHub Pages
   # through the gh-pages branch, so it is never committed here. The
   # .nojekyll file keeps Pages from running the branch through Jekyll.
   site:
+    desc: Build what has changed of the site into .build/site
+    cmds:
+      - task: discs
+      - task: disc:tutorial
+      - task: site:docs
+      - task: site:play
+      - task: site:emu
+
+  # Removes the built site and the fingerprints, for a build from nothing.
+  site:clean:
+    cmds:
+      - rm -rf .build/site .task
+
+  # Renders the documentation and copies the playground's page into
+  # .build/site, over whatever is there, which is enough to look at a page
+  # while writing it.
+  site:docs:
+    sources:
+      - 'docs/**/*'
+      - 'examples/*/main.go'
+      - 'examples/*/scenes/*.json'
+      - 'examples/*/art/**/*'
+      - 'examples/*/pack/**/*'
+      - 'web/site/**/*'
+      - 'web/static/**/*'
+      - 'yaroze/**/*.go'
+    generates:
+      - .build/site/index.html
+      - .build/site/play/index.html
+      - .build/site/play/yaroze.json
+      - .build/site/play/starters.json
+    cmds:
+      - go run ./web/site -out .build/site
+
+  # The player's files beside the page: the BIOS, each example's disc and
+  # its data files as well, which the playground offers to start a
+  # program from, and examples.json listing them.
+  site:play:
     vars:
-      SITE: .build/site
       PLAY: .build/site/play
       EXAMPLES:
         # Every directory under examples with a main.go; examples/internal
         # holds what they share, and is not one. The tutorial's first
         # program joins them.
         sh: for f in examples/*/main.go; do basename "$(dirname "$f")"; done; echo hello
+    sources:
+      - 'emu/openbios/*'
+      - '.build/*/*.cue'
+      - '.build/*/*.bin'
+      - 'examples/*/data/**/*'
+      - 'docs/tutorial/*/data/**/*'
+    generates:
+      - '{{.PLAY}}/examples.json'
+      - '{{.PLAY}}/openbios.bin'
     cmds:
-      - task: discs
-      - task: disc:tutorial
-      - rm -rf {{.SITE}}
-      - go run ./web/site -out {{.SITE}}
-      - cp emu/openbios/openbios.bin emu/openbios/OPENBIOS-LICENSE.txt {{.PLAY}}/
       - mkdir -p {{.PLAY}}/examples
-      # Each example's disc, and its data files as well, which the
-      # playground offers to start a program from.
+      - cp emu/openbios/openbios.bin emu/openbios/OPENBIOS-LICENSE.txt {{.PLAY}}/
       - for: { var: EXAMPLES }
         cmd: |
           mkdir -p {{.PLAY}}/examples/{{.ITEM}}
           cp .build/{{.ITEM}}/{{.ITEM}}.cue .build/{{.ITEM}}/{{.ITEM}}.bin {{.PLAY}}/examples/{{.ITEM}}/
           src=examples/{{.ITEM}}; [ -d "$src" ] || src=docs/tutorial/{{.ITEM}}
+          rm -rf {{.PLAY}}/examples/{{.ITEM}}/data
           if [ -d "$src/data" ]; then cp -R "$src/data" {{.PLAY}}/examples/{{.ITEM}}/; fi
       - |
         {
@@ -124,9 +205,33 @@ tasks:
           done
           printf '\n]\n'
         } > {{.PLAY}}/examples.json
-      - GOEXPERIMENT=simd GOOS=js GOARCH=wasm go build -trimpath -ldflags=-s -o {{.PLAY}}/psx.wasm ./web
-      - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" {{.PLAY}}/
-      - touch {{.SITE}}/.nojekyll
+      - touch .build/site/.nojekyll
+
+  # The emulator compiled to WebAssembly, with the loader Go ships.
+  site:emu:
+    sources:
+      - 'emu/**/*.go'
+      - 'web/*.go'
+      - 'format/**/*.go'
+      - 'binutils/**/*.go'
+      - 'internal/**/*.go'
+      - go.mod
+      - go.sum
+    generates:
+      - .build/site/play/psx.wasm
+      - .build/site/play/wasm_exec.js
+    cmds:
+      - mkdir -p .build/site/play
+      - GOEXPERIMENT=simd GOOS=js GOARCH=wasm go build -trimpath -ldflags=-s -o .build/site/play/psx.wasm ./web
+      # The loader comes from a GOROOT that may be read-only, as Nix's is,
+      # and a copy of it is then read-only too, which a second cp cannot
+      # write over; install gives the copy its own mode.
+      - install -m 644 "$(go env GOROOT)/lib/wasm/wasm_exec.js" .build/site/play/wasm_exec.js
+
+  # Serves .build/site on localhost:8000 as it is, without building.
+  site:serve:
+    cmds:
+      - go run ./web/serve -dir .build/site
 
   # Builds the compiler the playground runs in the browser, TinyGo compiled
   # to WebAssembly with LLVM and lld linked in, onto .build/compiler. It
@@ -138,49 +243,133 @@ tasks:
     cmds:
       - TINYGO_SRC="${TINYGO_SRC:-$HOME/src/ChrisRx/tinygo}" web/compiler/build.sh .build/compiler
 
+  # Says how to get the compiler when .build/compiler has none: task
+  # compiler builds it, or another checkout's build can be linked in.
+  compiler:check:
+    silent: true
+    cmds:
+      - |
+        if [ ! -f .build/compiler/tinygo.wasm ]; then
+          echo "The playground needs the compiler in .build/compiler, which takes most of an hour to build:" >&2
+          echo "  nix develop .#playground --command task compiler" >&2
+          echo "or link another checkout's build in:" >&2
+          echo "  ln -s /path/to/psxsdk/.build/compiler .build/compiler" >&2
+          exit 1
+        fi
+
   # Adds the playground to the built site: the compiler from the compiler
-  # task, the disc tools, discgen and gofmt compiled to WebAssembly, and the
-  # sysroot, the standard library and psx packages the examples use
-  # together with the target files and the compiler's cache, packed for the
-  # compiler to read.
-  # tinygo-sysroot comes from the patched TinyGo tree the compiler task
-  # leaves in .build/compiler/tinygo; wasmtime runs the compiler to fill
-  # the cache.
+  # task, the disc tools, the converters, discgen and gofmt compiled to
+  # WebAssembly, and the sysroot, the standard library and psx packages
+  # the examples use together with the target files and the compiler's
+  # cache, packed for the compiler to read. Each part is skipped when what
+  # it reads has not changed; the sysroot and its cache take minutes.
   playground:
+    desc: Add what has changed of the playground to the built site
+    cmds:
+      - task: compiler:check
+      - task: playground:compiler
+      - task: playground:tools
+      - task: playground:sysroot
+
+  playground:compiler:
+    sources:
+      - .build/compiler/tinygo.wasm
+    generates:
+      - .build/site/play/tinygo.wasm
+    cmds:
+      - mkdir -p .build/site/play
+      - cp .build/compiler/tinygo.wasm .build/site/play/tinygo.wasm
+
+  # The disc tools, the converters the page runs from a program's
+  # go:generate lines, and gofmt, for the playground's Format button and
+  # to format on Run.
+  playground:tools:
+    cmds:
+      - for: [discgen, mips1fix, eco2exe, mkpsxiso, png2tim, obj2tmd, wav2vag, mkvab, smf2seq, mkscene, mkarc]
+        task: playground:tool
+        vars: { NAME: '{{.ITEM}}' }
+      - task: playground:gofmt
+
+  playground:tool:
+    label: 'playground:tool:{{.NAME}}'
+    requires:
+      vars: [NAME]
+    sources:
+      - 'tools/{{.NAME}}/**/*.go'
+      - 'format/**/*.go'
+      - 'internal/**/*.go'
+      - 'disc/**/*.go'
+      - 'binutils/**/*.go'
+      - go.mod
+      - go.sum
+    generates:
+      - '.build/site/play/tools/{{.NAME}}.wasm'
+    cmds:
+      - mkdir -p .build/site/play/tools
+      - GOOS=wasip1 GOARCH=wasm go build -trimpath -ldflags=-s -o .build/site/play/tools/{{.NAME}}.wasm ./tools/{{.NAME}}
+
+  playground:gofmt:
+    status:
+      - test -f .build/site/play/tools/gofmt.wasm
+    cmds:
+      - mkdir -p .build/site/play/tools
+      - GOOS=wasip1 GOARCH=wasm go build -trimpath -ldflags=-s -o .build/site/play/tools/gofmt.wasm cmd/gofmt
+
+  # The sysroot: tinygo-sysroot, from the patched TinyGo tree the compiler
+  # task leaves in .build/compiler/tinygo, gathers the merged GOROOT, the
+  # psx packages and the target files; then the full compiler, which has
+  # clang where the shipped one does not, runs under wasmtime over every
+  # example to fill the cache with the target's C and the standard
+  # library, at -opt=z, the level the playground builds at. It is skipped
+  # when no Go package an example may use, no example and neither compiler
+  # has changed.
+  playground:sysroot:
     vars:
-      PLAY: .build/site/play
       TREE: .build/compiler/tinygo
+    sources:
+      - '**/*.go'
+      - 'docs/tutorial/hello/**/*'
+      - 'examples/*/data/**/*'
+      - 'examples/*/art/**/*'
+      - 'examples/*/pack/**/*'
+      - .build/compiler/tinygo.wasm
+      - .build/compiler/tinygo-full.wasm
+      - web/compiler/mkcache.sh
+      - go.mod
+      - go.sum
+      - exclude: 'web/**'
+      - exclude: 'tests/**'
+      - exclude: 'emu/**'
+      - exclude: 'cmd/**'
+      - exclude: 'tools/**'
+      - exclude: 'internal/toolchain/**'
+    generates:
+      - .build/site/play/sysroot.tar.gz
     cmds:
       # The patched TinyGo tree's tinygo-sysroot, built here when the
       # compiler task has not: it links LLVM, so it builds in the
       # playground shell.
       - test -x {{.TREE}}/build/tinygo-sysroot || (cd {{.TREE}} && GOFLAGS=-mod=mod go build -tags llvm22 -ldflags "-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=$(clang-22 -print-resource-dir)" -o build/tinygo-sysroot ./cmd/tinygo-sysroot)
-      - mkdir -p {{.PLAY}}/tools
-      - cp .build/compiler/tinygo.wasm {{.PLAY}}/tinygo.wasm
-      - for: [discgen, mips1fix, eco2exe, mkpsxiso]
-        cmd: GOOS=wasip1 GOARCH=wasm go build -trimpath -ldflags=-s -o {{.PLAY}}/tools/{{.ITEM}}.wasm ./tools/{{.ITEM}}
-      # gofmt, for the playground's Format button and to format on Run.
-      - GOOS=wasip1 GOARCH=wasm go build -trimpath -ldflags=-s -o {{.PLAY}}/tools/gofmt.wasm cmd/gofmt
       - rm -rf .build/sysroot
       - '{{.TREE}}/build/tinygo-sysroot -target=playstation-yaroze -o .build/sysroot ./examples/... ./docs/tutorial/hello'
-      # The shipped compiler has no clang, so the full one runs here over
-      # every example to fill the cache with the target's C and the
-      # standard library, at -opt=z, the level the playground builds at.
       - web/compiler/mkcache.sh .build/compiler/tinygo-full.wasm .build/compiler/tinygo.wasm .build/sysroot $(cd .build/sysroot && ls -d mod/go.chrisrx.dev/psx/examples/*/ mod/go.chrisrx.dev/psx/docs/tutorial/hello/ | grep -v /internal/)
-      - tar --format=ustar -C .build -cf - sysroot | gzip -9 > {{.PLAY}}/sysroot.tar.gz
+      - mkdir -p .build/site/play
+      - tar --format=ustar -C .build -cf - sysroot | gzip -9 > .build/site/play/sysroot.tar.gz
 
   # Builds nyc onto .build/nyc with TinyGo compiled to WebAssembly built
   # in, so that it compiles programs with nothing else installed: the
   # compiler from the compiler task, and a sysroot of its own, a copy of
-  # the one the playground task leaves in .build/sysroot with the cache
-  # filled at -opt=2 as well, the level nyc builds at by default, which
-  # the playground's leaves out to stay small. Both are written under
-  # internal/toolchain/wasm, which git ignores, for the nyc_embed build tag
-  # to embed.
+  # the one the playground:sysroot task leaves in .build/sysroot with the
+  # cache filled at -opt=2 as well, the level nyc builds at by default,
+  # which the playground's leaves out to stay small. Both are written
+  # under internal/toolchain/wasm, which git ignores, for the nyc_embed
+  # build tag to embed.
   nyc:
     vars:
       SYSROOT: .build/nyc-sysroot
     cmds:
+      - task: compiler:check
+      - task: playground:sysroot
       - rm -rf {{.SYSROOT}}
       - cp -R .build/sysroot {{.SYSROOT}}
       - OPTS=2 web/compiler/mkcache.sh .build/compiler/tinygo-full.wasm .build/compiler/tinygo.wasm {{.SYSROOT}} $(cd {{.SYSROOT}} && ls -d mod/go.chrisrx.dev/psx/examples/*/ mod/go.chrisrx.dev/psx/docs/tutorial/hello/ | grep -v /internal/)
@@ -189,6 +378,20 @@ tasks:
       # The archive's directory is sysroot, as the playground's is.
       - tar --format=ustar -C .build --transform 's,^nyc-sysroot,sysroot,' -cf - nyc-sysroot | gzip -9 > internal/toolchain/wasm/sysroot.tar.gz
       - go build -tags nyc_embed -trimpath -ldflags=-s -o .build/nyc ./cmd/nyc
+
+  # The compression benchmark behind docs/topics/compression.md: packs
+  # three of the examples' files with deflate and LZ4, builds the program
+  # that unpacks them onto a disc, and times both decoders on the emulated
+  # console. The test prints each decoder's speed.
+  bench:compress:
+    vars:
+      DATA: internal/compressbench/data
+    cmds:
+      - go run ./internal/compressbench/gen {{.DATA}} examples/dino/data/CASTLE.TIM examples/dogtale/data/DOG.DAT examples/dino/data/MD0.TMD
+      - cd internal/compressbench && go run go.chrisrx.dev/psx/tools/discgen data
+      - task: disc
+        vars: { NAME: compressbench, DIR: internal/compressbench }
+      - PSX_BIOS=$PWD/emu/openbios/openbios.bin PSX_DISCS=$PWD/.build go test ./tests -run TestCompressionBench -v | grep -E 'KB/s|ok|FAIL'
 
   # Copies the files the TinyGo fork adds, the PlayStation targets and
   # their runtime, from its last commit in TINYGO_SRC into
@@ -205,17 +408,6 @@ tasks:
           mkdir -p "{{.DST}}/$(dirname "$f")"
           git -C "$src" show "HEAD:$f" > "{{.DST}}/$f"
         done
-
-  # Renders the documentation alone into .build/site, over whatever is
-  # there, which is enough to look at a page while writing it.
-  site:docs:
-    cmds:
-      - go run ./web/site -out .build/site
-
-  # Serves .build/site on localhost:8000 to try the site.
-  site:serve:
-    cmds:
-      - go run ./web/serve -dir .build/site
 
   examples:check:
     cmds:

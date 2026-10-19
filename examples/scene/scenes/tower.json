@@ -1,0 +1,60 @@
+{
+  "camera": {
+    "from": [700, -350, -700],
+    "at": [0, 0, 0]
+  },
+  "projection": 320,
+  "ambient": [768, 768, 1024],
+  "lights": [
+    {
+      "direction": [-1, 1, 1],
+      "color": [140, 160, 255]
+    }
+  ],
+  "textures": [
+    "DATA/CUBE.TIM",
+    "DATA/BADGE.TIM"
+  ],
+  "models": [
+    "DATA/CUBE.TMD"
+  ],
+  "objects": [
+    {
+      "name": "cube",
+      "model": "DATA/CUBE.TMD",
+      "position": [0, 0, 0],
+      "rotation": [0, 0, 0],
+      "fields": [3, 0]
+    },
+    {
+      "name": "left",
+      "model": "DATA/CUBE.TMD",
+      "position": [0, -220, 0],
+      "rotation": [0, 512, 0],
+      "fields": [4, 1]
+    },
+    {
+      "name": "right",
+      "model": "DATA/CUBE.TMD",
+      "position": [0, 220, 0],
+      "rotation": [0, 1024, 0],
+      "fields": [5, 2]
+    }
+  ],
+  "sprites": [
+    {
+      "name": "badge",
+      "texture": "DATA/BADGE.TIM",
+      "x": 96,
+      "y": 48,
+      "w": 64,
+      "h": 64,
+      "tpage": 11,
+      "cx": 0,
+      "cy": 482,
+      "r": 128,
+      "g": 128,
+      "b": 128
+    }
+  ]
+}

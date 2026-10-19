@@ -11,7 +11,7 @@ psxsdk is a Go toolchain for the original PlayStation, built around the Net Yaro
 - **Build** them into bootable discs with tools that convert executables and write CD-XA images, including streamed XA/STR files and CD audio tracks.
 - **Run** them in a PlayStation emulator written in Go, which drives the test suite headless, runs in a browser as WebAssembly, and opens a window on the desktop.
 
-**[The documentation](https://chrisrx.github.io/psxsdk/)** has the guide, a tutorial that writes a program from nothing, topic pages on controllers, memory cards, CD audio and more, the reference for every tool, and [Sony's manuals](https://chrisrx.github.io/psxsdk/manuals/), with the FAQs, supplements and tutorial the Net Yaroze members' websites carried. **[The examples](https://chrisrx.github.io/psxsdk/examples/)** are twenty-four Net Yaroze programs ported to Go, running in the browser on the discs this repository builds, in the emulator it contains.
+**[The documentation](https://chrisrx.github.io/psxsdk/)** has the guide, a tutorial that writes a program from nothing, topic pages on controllers, memory cards, CD audio and more, the reference for every tool, and [Sony's manuals](https://chrisrx.github.io/psxsdk/manuals/), with the FAQs, supplements and tutorial the Net Yaroze members' websites carried. **[The examples](https://chrisrx.github.io/psxsdk/examples/)** are twenty-five programs in Go, most of them Net Yaroze demos ported, running in the browser on the discs this repository builds, in the emulator it contains.
 
 ## Getting started
 
@@ -30,7 +30,7 @@ Building the examples also needs TinyGo with the `playstation-yaroze` target. Th
 nix develop            # or: direnv allow
 task discs             # every example onto .build/NAME/NAME.cue
 task test:emu          # boot each disc in the emulator and compare screenshots
-task site site:serve   # build the documentation site and serve it on localhost:8000
+task serve             # build the documentation site and the playground and serve it on localhost:8000
 ```
 
 The tutorial's [first chapter](https://chrisrx.github.io/psxsdk/tutorial/setting-up/) starts a program of your own outside the repository, with the tools as `go tool` dependencies.

@@ -2,6 +2,9 @@ package tests
 
 import (
 	"bytes"
+	"encoding/binary"
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -9,6 +12,7 @@ import (
 
 	"go.chrisrx.dev/psx/emu"
 	"go.chrisrx.dev/psx/emu/emutest"
+	"go.chrisrx.dev/psx/format/scene"
 )
 
 // bootExample boots the BIOS with an example's disc in the drive and runs
@@ -173,6 +177,63 @@ func TestDogTaleScreenshot(t *testing.T) {
 	m.Hold(1, emu.ButtonCross|emu.ButtonRight, 3)
 	m.RunFrames(10)
 	emutest.Golden(t, m.Display(), "dogtale.png")
+}
+
+// TestSceneScreenshot checks the three cubes a scene file places, under
+// its camera and light, with the sprite in the corner, after the middle
+// cube has turned by the screen's count and been turned further to the
+// right, and that Cross stops it turning: a frame held after the press
+// then matches a frame fifteen later.
+func TestSceneScreenshot(t *testing.T) {
+	m := bootExample(t, "scene")
+	m.RunUntilCount("main.screen", 120, frameBudget)
+	m.Hold(1, emu.ButtonRight, 10)
+	m.Hold(1, emu.ButtonCross, 2)
+	m.RunFrames(2)
+	still := m.Display()
+	m.RunFrames(15)
+	assert.Equal(t, true, bytes.Equal(still.Pix, m.Display().Pix), "the cube should have stopped turning")
+	emutest.Golden(t, m.Display(), "scene.png")
+
+	// Start loads the other scene file: the tower, under its own camera.
+	m.Hold(1, emu.ButtonStart, 2)
+	m.RunFrames(5)
+	emutest.Golden(t, m.Display(), "scene-tower.png")
+}
+
+// TestSceneLive checks the playground's live view of a scene: a new scene
+// file written over the one the program loaded, with the scene package's
+// reload flag set, moves the cubes on the next frame without a rebuild.
+func TestSceneLive(t *testing.T) {
+	m := bootExample(t, "scene")
+	m.RunUntilCount("main.screen", 60, frameBudget)
+	live := m.Sym("go.chrisrx.dev/psx/scene.live")
+	ptr, words := m.Read32(live), m.Read32(live+4)
+	assert.Equal(t, true, ptr != 0 && words > 0, "the scene should have recorded its file")
+	assert.Equal(t, uint32(0x41544144), m.Read32(live+16), "the file's name, DATA/CUBES.DAT, should follow") // "DATA"
+
+	// The example's scene with the cubes raised and the middle one far
+	// to the left, which must fit the sectors the file was loaded into.
+	src, err := os.ReadFile("../examples/scene/scenes/cubes.json")
+	assert.NoError(t, err)
+	var sc scene.Scene
+	assert.NoError(t, json.Unmarshal(src, &sc))
+	for i := range sc.Objects {
+		sc.Objects[i].Position[1] -= 100
+	}
+	sc.Objects[0].Position[0] = -400
+	data, err := sc.Bytes()
+	assert.NoError(t, err)
+	assert.Equal(t, true, len(data) <= int(words)*4, "the new scene should fit")
+	before := m.Display()
+	for i := 0; i+4 <= len(data); i += 4 {
+		m.Bus.Write32(ptr+uint32(i), binary.LittleEndian.Uint32(data[i:]))
+	}
+	m.Bus.Write32(live+8, 1)
+	m.RunFrames(3)
+	assert.Equal(t, uint32(0), m.Read32(live+8), "the program should have taken the flag")
+	assert.Equal(t, false, bytes.Equal(before.Pix, m.Display().Pix), "the picture should have changed")
+	emutest.Golden(t, m.Display(), "scene-live.png")
 }
 
 // TestSquareScreenshot checks the box after it is moved up and to the right

@@ -14,3 +14,6 @@ type Register32 = volatile.Register32
 //
 //go:inline
 func LoadUint32(p *uint32) uint32 { return volatile.LoadUint32(p) }
+
+// StoreUint32 writes the word at p, every time it is called.
+func StoreUint32(p *uint32, v uint32) { volatile.StoreUint32(p, v) }

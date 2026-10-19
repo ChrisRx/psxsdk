@@ -26,3 +26,9 @@ testdata
 
 # The WebAssembly compiler task nyc builds into nyc (internal/toolchain)
 internal/toolchain/wasm/
+
+# The fingerprints task keeps, to skip what has not changed
+.task/
+
+# The compression benchmark's packed files, made by task bench:compress
+internal/compressbench/data/

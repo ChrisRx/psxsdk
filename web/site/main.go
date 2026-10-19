@@ -25,11 +25,12 @@
 //   - to anything else in the repository, by its path from the root there:
 //     "examples/check", the same on every page
 //
-// The playground starts from the square example, copied to
-// play/default.go.txt, so that the program a newcomer first sees is one that
-// builds as an example does and cannot drift from the package; and
-// play/default.json names the example, for the playground to add its data
-// files from the example's beside it.
+// The playground starts a project from one of the examples, square or
+// scene, whose sources are copied under play/starters and listed in
+// play/starters.json, so that the program a newcomer first sees is one that
+// builds as an example does and cannot drift from the package; the list
+// names each example, for the playground to add its data files from the
+// example's beside it.
 //
 // task site runs it after building the examples' discs and the emulator,
 // then puts those under play/ beside the player.
@@ -79,7 +80,7 @@ var opts = struct {
 	Docs     string
 	Examples string
 	Static   string
-	Default  string
+	Starters string
 	API      string
 	Out      string
 	Repo     string
@@ -88,7 +89,7 @@ var opts = struct {
 	Docs:     "docs",
 	Examples: "examples",
 	Static:   "web/static",
-	Default:  "examples/square/main.go",
+	Starters: "square,scene",
 	API:      "yaroze",
 	Out:      ".build/site",
 	Repo:     "https://github.com/ChrisRx/psxsdk",
@@ -99,7 +100,7 @@ func main() {
 	flag.StringVar(&opts.Docs, "docs", opts.Docs, "directory of pages")
 	flag.StringVar(&opts.Examples, "examples", opts.Examples, "directory of example programs, one page each")
 	flag.StringVar(&opts.Static, "static", opts.Static, "the playground and the player, copied under play/")
-	flag.StringVar(&opts.Default, "default", opts.Default, "the program the playground starts with, written to play/default.go.txt")
+	flag.StringVar(&opts.Starters, "starters", opts.Starters, "the examples the playground starts a project from, copied under play/starters")
 	flag.StringVar(&opts.API, "api", opts.API, "package whose exported names the playground completes, written to play/yaroze.json")
 	flag.StringVar(&opts.Out, "out", opts.Out, "directory to write the site into")
 	flag.StringVar(&opts.Repo, "repo", opts.Repo, "repository that paths in links refer to")
@@ -113,8 +114,8 @@ func main() {
 	if err := s.write(opts.Out, opts.Static); err != nil {
 		log.Fatal(err)
 	}
-	if opts.Static != "" && opts.Default != "" {
-		if err := writeDefault(opts.Default, filepath.Join(opts.Out, "play")); err != nil {
+	if opts.Static != "" && opts.Starters != "" {
+		if err := writeStarters(opts.Examples, strings.Split(opts.Starters, ","), filepath.Join(opts.Out, "play")); err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -844,18 +845,75 @@ func headingText(h *comment.Heading) string {
 	return b.String()
 }
 
-// writeDefault copies the program the playground starts with, src, into
-// play as default.go.txt, and writes default.json naming the example it is,
-// the directory it is in, whose data the site publishes under play/examples.
-func writeDefault(src, play string) error {
-	if err := copyFile(src, filepath.Join(play, "default.go.txt")); err != nil {
+// A Starter is an example the playground starts a project from: its name,
+// whose data the site publishes under play/examples, and its files, by the
+// path each takes in the project, as copied under play/starters.
+type Starter struct {
+	Name  string            `json:"name"`
+	Files map[string]string `json:"files"`
+}
+
+// writeStarters copies each named example's main.go, its scenes under
+// scenes/, the sources under its art/ directory and the files under its
+// pack/ directories, under play/starters, and writes play/starters.json
+// listing them.
+func writeStarters(examples string, names []string, play string) error {
+	dir := filepath.Join(play, "starters")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	data, err := json.Marshal(map[string]string{"example": filepath.Base(filepath.Dir(src))})
+	var starters []Starter
+	for _, name := range names {
+		st := Starter{Name: name, Files: map[string]string{}}
+		files := []struct{ src, dst string }{{"main.go", name + ".go.txt"}}
+		for _, dir := range []string{"scenes", "art"} {
+			entries, err := os.ReadDir(filepath.Join(examples, name, dir))
+			if err != nil {
+				continue
+			}
+			for _, e := range entries {
+				if !e.IsDir() {
+					files = append(files, struct{ src, dst string }{dir + "/" + e.Name(), name + "." + dir + "." + e.Name()})
+				}
+			}
+		}
+		// The files packed into archives, a directory each under pack/.
+		if packs, err := os.ReadDir(filepath.Join(examples, name, "pack")); err == nil {
+			for _, d := range packs {
+				if !d.IsDir() {
+					continue
+				}
+				entries, err := os.ReadDir(filepath.Join(examples, name, "pack", d.Name()))
+				if err != nil {
+					continue
+				}
+				for _, e := range entries {
+					if !e.IsDir() {
+						files = append(files, struct{ src, dst string }{"pack/" + d.Name() + "/" + e.Name(), name + ".pack." + d.Name() + "." + e.Name()})
+					}
+				}
+			}
+		}
+		for _, f := range files {
+			src := filepath.Join(examples, name, f.src)
+			if _, err := os.Stat(src); err != nil {
+				if f.src == "main.go" {
+					return err
+				}
+				continue
+			}
+			if err := copyFile(src, filepath.Join(dir, f.dst)); err != nil {
+				return err
+			}
+			st.Files[f.src] = "starters/" + f.dst
+		}
+		starters = append(starters, st)
+	}
+	data, err := json.MarshalIndent(starters, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(play, "default.json"), data, 0o644)
+	return os.WriteFile(filepath.Join(play, "starters.json"), append(data, '\n'), 0o644)
 }
 
 // write renders every page into out, and copies the assets and the player.

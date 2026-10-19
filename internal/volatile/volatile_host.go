@@ -19,3 +19,6 @@ func (r *Register32) Set(v uint32) { r.Reg = v }
 
 // LoadUint32 reads the word at p, every time it is called.
 func LoadUint32(p *uint32) uint32 { return *p }
+
+// StoreUint32 writes the word at p, every time it is called.
+func StoreUint32(p *uint32, v uint32) { *p = v }

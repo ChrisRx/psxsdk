@@ -41,6 +41,15 @@
 //	                            "debug", "info", "warn" and "error", or with
 //	                            "off", stops logging, which is how a machine
 //	                            starts. It holds for machines booted later.
+//	psx.symbol(name)            returns the address of the program's variable
+//	                            of that name, from the ELF boot was given, or
+//	                            -1: the playground's way to a running
+//	                            program's scene.
+//	psx.read(addr, n)           returns n bytes of RAM at addr as a
+//	                            Uint8Array, or null when the range is not
+//	                            RAM or nothing is running.
+//	psx.write(addr, bytes)      puts a Uint8Array into RAM at addr, and
+//	                            returns whether it could.
 //	psx.setAudio(on)            turns the sound on or off, now and for
 //	                            machines booted later.
 //	psx.takeAudio()             returns the sound made since the last
@@ -50,7 +59,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"debug/elf"
 	"encoding/binary"
 	"fmt"
 	"image"
@@ -99,6 +110,9 @@ func main() {
 		"setLogLevel": js.FuncOf(setLogLevel),
 		"setAudio":    js.FuncOf(setAudio),
 		"takeAudio":   js.FuncOf(takeAudio),
+		"symbol":      js.FuncOf(symbol),
+		"read":        js.FuncOf(readMemory),
+		"write":       js.FuncOf(writeMemory),
 	}))
 	select {}
 }
@@ -108,12 +122,15 @@ func boot(_ js.Value, args []js.Value) any {
 		return "boot takes a BIOS, a cue sheet name and the disc's files"
 	}
 	syms = nil
+	globals = nil
 	if len(args) > 3 && args[3].Truthy() {
-		s, err := emu.SymbolsFromELF(bytesFromJS(args[3]))
+		elfData := bytesFromJS(args[3])
+		s, err := emu.SymbolsFromELF(elfData)
 		if err != nil {
 			return fmt.Sprintf("reading the program's symbols: %v", err)
 		}
 		syms = s
+		globals, _ = globalsFromELF(elfData)
 	}
 	bios := bytesFromJS(args[0])
 	fsys := fstest.MapFS{}
@@ -354,6 +371,86 @@ func bytesFromJS(v js.Value) []byte {
 	b := make([]byte, v.Length())
 	js.CopyBytesToGo(b, v)
 	return b
+}
+
+// The program's variables, by name, for the playground's live view of a
+// scene: emu's symbols are the functions, for naming addresses in the log.
+var globals map[string]uint32
+
+// globalsFromELF reads the addresses of an executable's variables.
+func globalsFromELF(data []byte) (map[string]uint32, error) {
+	f, err := elf.NewFile(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	syms, err := f.Symbols()
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]uint32, len(syms))
+	for _, s := range syms {
+		if s.Name != "" && elf.ST_TYPE(s.Info) == elf.STT_OBJECT {
+			out[s.Name] = uint32(s.Value)
+		}
+	}
+	return out, nil
+}
+
+// symbol returns a variable's address, or -1 when the program has none of
+// that name.
+func symbol(_ js.Value, args []js.Value) any {
+	if len(args) < 1 {
+		return -1
+	}
+	addr, ok := globals[args[0].String()]
+	if !ok {
+		return -1
+	}
+	return int(addr)
+}
+
+// inRAM says whether n bytes at addr lie in the console's RAM, in any of
+// the segments it is seen through.
+func inRAM(addr uint32, n int) bool {
+	off := addr &^ 0xe0000000
+	return n >= 0 && off < 2<<20 && uint64(off)+uint64(n) <= 2<<20
+}
+
+// readMemory returns n bytes of RAM at addr as a Uint8Array, or null when
+// nothing is running or the range is not RAM.
+func readMemory(_ js.Value, args []js.Value) any {
+	if machine == nil || len(args) < 2 {
+		return nil
+	}
+	addr, n := uint32(args[0].Int()), args[1].Int()
+	if !inRAM(addr, n) {
+		return nil
+	}
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = machine.Bus.Read8(addr + uint32(i))
+	}
+	out := js.Global().Get("Uint8Array").New(n)
+	js.CopyBytesToJS(out, b)
+	return out
+}
+
+// writeMemory puts bytes, a Uint8Array, into RAM at addr, and returns
+// whether it could.
+func writeMemory(_ js.Value, args []js.Value) any {
+	if machine == nil || len(args) < 2 {
+		return false
+	}
+	addr := uint32(args[0].Int())
+	b := bytesFromJS(args[1])
+	if !inRAM(addr, len(b)) {
+		return false
+	}
+	for i, c := range b {
+		machine.Bus.Write8(addr+uint32(i), c)
+	}
+	return true
 }
 
 func setAudio(_ js.Value, args []js.Value) any {

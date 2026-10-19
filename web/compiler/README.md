@@ -60,11 +60,27 @@ In the page, `compile-worker.js` fetches all of that once and
 `pipeline.js` runs each build: the compiler, then `mips1fix`, `eco2exe`
 and `mkpsxiso` compiled to wasip1 by the Go toolchain, through `wasi.js`,
 a WASI host over an in-memory file system. The output is a disc the
-player boots like an example. The data files the page holds beside the
-program (`assets.js`), uploaded or copied from an example's data, which
-the `site` task publishes under `examples/NAME/data/` and lists in
-`examples.json`, go into the build's `data/` for mkpsxiso to put on the
-disc where the program registers them with package disc.
+player boots like an example. What is built is a project (`project.js`):
+the program's Go files, shown a tab each over the editor (`files.js`),
+and the data files beside them, shown with everything else in the Files
+tab (`files-tab.js`, with `inspect.js` for the previews), uploaded or
+copied from an example's data, which the `site` task publishes under
+`examples/NAME/data/` and lists in `examples.json`. The whole project
+goes into the build's directory, the data files under `data/` for
+mkpsxiso to put on the disc where the program registers them with
+package disc. Projects are kept in the browser's IndexedDB as they
+change, and go out and come in as zips laid out like the examples, so a
+download runs with `go run`. The sources under `art/` are converted by
+the program's own `//go:generate` lines (`convert.js`), which the worker
+runs with the converters built to wasip1 and the build runs again before
+the compiler; a scene, `scene.json`, is placed in the Scene tab
+(`scene-tab.js`, drawing with `preview.js`) and cooked by `mkscene` the
+same way, for package scene to read on the console. While the project's
+program runs, each cooked scene is also written into the emulator's RAM
+over the file the program loaded (`psx.symbol`, `psx.read` and
+`psx.write` in `web/main.go`, through the worker's `symbol`, `peek` and
+`poke` messages), and package scene's `live` variable tells it to read
+the file again, so the console follows the editor without a rebuild.
 
 ## In the workflows
 

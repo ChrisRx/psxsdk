@@ -16,6 +16,13 @@
 //	{type: "buttons", buttons}          the pad's buttons, as they change
 //	{type: "audio", on, port}           turns the sound on or off; port,
 //	                                    once, is audio.js's, to send it to
+//	{type: "symbol", name}              answers {address}, the program's
+//	                                    variable of that name, or -1
+//	{type: "peek", address, length}     answers {data}, bytes of RAM
+//	{type: "poke", address, data}       writes bytes into RAM: the
+//	                                    playground's live view of a scene
+//	{type: "frame"}                     answers {bitmap}, the last picture
+//	                                    drawn, as an ImageBitmap, or null
 //	{type: "log", level}                sets the level the emulator logs at,
 //	                                    as psx.setLogLevel does
 //
@@ -202,6 +209,21 @@ self.onmessage = async (e) => {
         logging = msg.level !== "off";
         psx.setLogLevel(msg.level);
         break;
+      case "symbol":
+        reply = { error: null, address: psx.symbol(msg.name) };
+        break;
+      case "peek":
+        reply = { error: null, data: booted ? psx.read(msg.address, msg.length) : null };
+        break;
+      case "poke":
+        reply = { error: booted && psx.write(msg.address, msg.data) ? null : "could not write there" };
+        break;
+      case "frame": {
+        // The last picture drawn, for the page to show elsewhere.
+        const bitmap = image ? await createImageBitmap(image) : null;
+        self.postMessage({ id: msg.id, error: null, bitmap }, bitmap ? [bitmap] : []);
+        return;
+      }
       default:
         reply = { error: `unknown request ${msg.type}` };
     }

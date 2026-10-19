@@ -3,10 +3,11 @@
 // also WebAssembly, fix the executable, convert it and write it onto a disc
 // image, all against one file system held in memory.
 //
-// It is the same pipeline as the Taskfile's disc task, after go generate
-// for the one generator a program may name, discgen:
+// It is the same pipeline as the Taskfile's disc task, after go generate,
+// which here runs the lines naming this repo's converters and discgen:
 //
-//	discgen data             (for a //go:generate line naming it)
+//	png2tim ..., obj2tmd ..., discgen data   (the //go:generate lines, in
+//	                                          order, in any of the Go files)
 //	tinygo build -target=playstation-yaroze -o prog.elf ./prog
 //	mips1fix prog.elf
 //	eco2exe prog.elf prog.exe
@@ -55,14 +56,49 @@ export function readTar(fs, bytes, prefix) {
 	}
 }
 
-// discgenArgs returns the arguments a //go:generate line in source gives
-// discgen, run as "go run go.chrisrx.dev/psx/tools/discgen" or "go tool
-// discgen", or null if there is no such line. It is the one generator the
-// playground runs, since its output, the declarations of the program's data
-// files, is what a program in one file cannot otherwise have beside it.
-export function discgenArgs(source) {
-	const m = source.match(/^\/\/go:generate\s+go\s+(?:run\s+go\.chrisrx\.dev\/psx\/tools\/discgen(?:@\S+)?|tool\s+discgen)((?:[ \t]+\S+)*)[ \t]*$/m);
-	return m ? m[1].trim().split(/\s+/).filter(Boolean) : null;
+// The tools a //go:generate line may name that the page has as WebAssembly:
+// discgen, whose output, the declarations of the program's data files, the
+// program needs beside it, and the converters that make those files from
+// the sources under art/.
+export const GENERATORS = new Set(["discgen", "png2tim", "obj2tmd", "wav2vag", "mkvab", "smf2seq", "mkscene", "mkarc"]);
+
+// generateLines returns the //go:generate lines of a Go source, in order,
+// as {tool, args, line}: tool is what the line runs, "go run
+// go.chrisrx.dev/psx/tools/NAME" or "go tool NAME" giving NAME, and any
+// other command as its first word; args are the rest, split on spaces.
+export function generateLines(source) {
+	const out = [];
+	for (const m of source.matchAll(/^\/\/go:generate[ \t]+(.+?)[ \t]*$/gm)) {
+		const line = m[1];
+		const words = line.split(/\s+/);
+		let tool = words[0];
+		let args = words.slice(1);
+		if (words[0] === "go" && words[1] === "run" && /^go\.chrisrx\.dev\/psx\/tools\/[\w-]+(@\S+)?$/.test(words[2] ?? "")) {
+			tool = words[2].replace(/^.*\//, "").replace(/@.*$/, "");
+			args = words.slice(3);
+		} else if (words[0] === "go" && words[1] === "tool" && words[2]) {
+			tool = words[2];
+			args = words.slice(3);
+		}
+		out.push({ tool, args, line });
+	}
+	return out;
+}
+
+// isGoSource says whether a project file, by its path, is one of the
+// program's Go files: at the root, beside main.go.
+export function isGoSource(path) {
+	return /^[^/]+\.go$/.test(path);
+}
+
+// projectGenerateLines gathers the generate lines of a project's Go files,
+// main.go first and the rest by name, as go generate orders them.
+export function projectGenerateLines(project) {
+	const decoder = new TextDecoder();
+	const gos = project.filter((f) => isGoSource(f.path)).sort((a, b) => (a.path === "main.go" ? -1 : b.path === "main.go" ? 1 : a.path.localeCompare(b.path)));
+	const out = [];
+	for (const f of gos) out.push(...generateLines(decoder.decode(f.data)));
+	return out;
 }
 
 // A Pipeline holds what every build shares: the compiled modules, the
@@ -72,30 +108,61 @@ export function discgenArgs(source) {
 // the next one.
 export class Pipeline {
 	// modules: {tinygo, discgen, mips1fix, eco2exe, mkpsxiso} as
-	// WebAssembly.Module;
+	// WebAssembly.Module; loadModule: a function from a tool's name to a
+	// promise of its module, for the converters, fetched when first named;
 	// sysroot: the Dir the sysroot tarball was read into; env: its env.json.
-	constructor(modules, sysroot, env) {
+	constructor(modules, sysroot, env, loadModule = null) {
 		this.modules = modules;
 		this.sysroot = sysroot;
 		this.env = env;
+		this.loadModule = loadModule;
 		this.cache = sysroot.children.get("cache") ?? new Dir();
 	}
 
-	// build compiles source, the text of a main package in one file, and
-	// returns {ok, log, files, elf}, where files holds prog.cue and prog.bin
-	// when ok, and elf is the executable, for its symbols. log is called
-	// with each line of output as it comes. assets, a list of {path, data},
-	// are the files beside main.go, such as data/CUBE.TIM, that the program
-	// registers with package disc and mkpsxiso puts on the disc.
-	async build(source, log, assets = []) {
+	// stage puts a project's files, {path, data}, under /work/prog in a new
+	// file system, with data/ made, and returns it.
+	stage(project) {
 		const fs = new FileSystem();
+		fs.mkdir("/work/prog/data");
+		for (const { path, data } of project) fs.put("/work/prog/" + path, data);
+		return fs;
+	}
+
+	// generate runs the project's generate lines in fs, as go generate would
+	// in the package directory, those naming the tools the page has; the
+	// rest are noted and skipped. It returns whether every one succeeded.
+	async generate(project, fs, log) {
+		for (const { tool, args, line } of projectGenerateLines(project)) {
+			if (tool === "mkdir") continue; // data/ is made already
+			if (!GENERATORS.has(tool)) {
+				log(`skipped: ${line} (not a tool the page runs)\n`);
+				continue;
+			}
+			const started = performance.now();
+			const code = await this.run(tool, [tool, ...args], { PWD: "/work/prog", GOPACKAGE: "main", GOFILE: "main.go" }, fs, log);
+			const took = ((performance.now() - started) / 1000).toFixed(1);
+			if (code !== 0) {
+				log(`${tool} failed with exit code ${code} after ${took}s\n`);
+				return false;
+			}
+			log(`${tool}: ${took}s\n`);
+		}
+		return true;
+	}
+
+	// build compiles a project, a list of {path, data} with the program's Go
+	// files at the root, its data files under data/ and its sources under
+	// art/, and returns {ok, files, elf}, where files holds prog.cue and
+	// prog.bin when ok, and elf is the executable, for its symbols. log is
+	// called with each line of output as it comes. The data files, such as
+	// data/CUBE.TIM, are what the program registers with package disc and
+	// mkpsxiso puts on the disc.
+	async build(project, log) {
+		const fs = this.stage(project);
 		fs.root.children.set("sysroot", this.sysroot);
 		fs.mkdir("/tmp");
 		fs.mkdir("/tmp/cache");
 		fs.lookup([], "/tmp/cache").node.children.set("tinygo", this.cache);
-		fs.mkdir("/work/prog");
-		fs.put("/work/prog/main.go", new TextEncoder().encode(source));
-		for (const { path, data } of assets) fs.put("/work/prog/" + path, data);
 		const replaces = this.env.modules.map((m) => `replace ${m.path} => /sysroot/${m.dir}`).join("\n");
 		const requires = this.env.modules.map((m) => `require ${m.path} v0.0.0`).join("\n");
 		fs.put("/work/go.mod", new TextEncoder().encode(`module play\n\ngo ${this.env.GOVERSION.replace(/^go/, "").split(".").slice(0, 2).join(".")}\n\n${requires}\n\n${replaces}\n`));
@@ -113,20 +180,16 @@ export class Pipeline {
 			// The cache is keyed by the compiler the host filled it with.
 			TINYGO_BUILD_ID: this.env.buildID ?? "",
 		};
-		const steps = [];
-		const generate = discgenArgs(source);
-		if (generate) {
-			steps.push(["discgen", ["discgen", ...generate], { PWD: "/work/prog", GOPACKAGE: "main" }]);
-		}
-		steps.push(
+		if (!(await this.generate(project, fs, log))) return { ok: false };
+		const steps = [
 			["tinygo", ["tinygo", "-target=" + this.env.target, "-o", "/work/prog.elf", "/work/prog"]],
 			["mips1fix", ["mips1fix", "-q", "/work/prog.elf"]],
 			["eco2exe", ["eco2exe", "/work/prog.elf", "/work/prog.exe"]],
 			["mkpsxiso", ["mkpsxiso", "-o", "/work/prog.bin", "--volume-id", "prog.exe", "--boot", "MAIN.EXE", "--file", "MAIN.EXE=/work/prog.exe", "--src", "/work/prog"]],
-		);
-		for (const [name, args, extra] of steps) {
+		];
+		for (const [name, args] of steps) {
 			const started = performance.now();
-			const code = await this.run(name, args, { ...env, ...extra }, fs, log);
+			const code = await this.run(name, args, env, fs, log);
 			const took = ((performance.now() - started) / 1000).toFixed(1);
 			if (code !== 0) {
 				log(`${name} failed with exit code ${code} after ${took}s\n`);
@@ -144,9 +207,43 @@ export class Pipeline {
 		};
 	}
 
+	// convert runs the project's generate lines other than discgen's, and
+	// returns {ok, files}: the files under data/ and art/ that the tools
+	// made or changed, as {path, data}, for the page to keep.
+	async convert(project, log) {
+		const fs = this.stage(project);
+		const lines = project.filter((f) => !isGoSource(f.path));
+		const sources = new Map(lines.map((f) => [f.path, f.data]));
+		const ok = await this.generate(project.map((f) => (isGoSource(f.path) ? { path: f.path, data: withoutDiscgen(f.data) } : f)), fs, log);
+		const files = [];
+		for (const dir of ["data", "art"]) {
+			const node = fs.lookup([], "/work/prog/" + dir).node;
+			if (!node) continue;
+			for (const [name, child] of node.children) {
+				if (!(child instanceof File)) continue;
+				const path = `${dir}/${name}`;
+				const data = child.data.slice();
+				const before = sources.get(path);
+				if (before && before.length === data.length && before.every((b, i) => b === data[i])) continue;
+				files.push({ path, data });
+			}
+		}
+		return { ok, files };
+	}
+
 	async run(name, args, env, fs, log) {
+		let module = this.modules[name];
+		if (!module && this.loadModule) module = this.modules[name] = await this.loadModule(name);
+		if (!module) throw new Error(`no ${name} to run`);
 		const wasi = new WASI({ args, env, fs, stdout: log, stderr: log });
-		const instance = await WebAssembly.instantiate(this.modules[name], wasi.imports);
+		const instance = await WebAssembly.instantiate(module, wasi.imports);
 		return wasi.start(instance);
 	}
+}
+
+// withoutDiscgen takes the discgen line out of a Go source's bytes, for
+// convert, which makes the data files and not the declarations.
+function withoutDiscgen(data) {
+	const text = new TextDecoder().decode(data);
+	return new TextEncoder().encode(text.replace(/^\/\/go:generate[ \t]+go[ \t]+(?:run[ \t]+go\.chrisrx\.dev\/psx\/tools\/discgen(?:@\S+)?|tool[ \t]+discgen)\b.*$/gm, ""));
 }

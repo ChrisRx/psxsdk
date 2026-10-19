@@ -12,16 +12,18 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.chrisrx.dev/psx/format/iso9660"
 	"go.chrisrx.dev/psx/format/tim"
 	"go.chrisrx.dev/psx/format/tmd"
 )
 
 var opts struct {
-	Output string
-	Scale  float64
-	Smooth bool
-	Unlit  bool
-	Both   bool
+	Output   string
+	Scale    float64
+	Smooth   bool
+	Unlit    bool
+	Both     bool
+	Textures string
 }
 
 func main() {
@@ -44,9 +46,11 @@ Faces are lit by the library, flat with a normal worked out from each face,
 or with --smooth gouraud with the file's vertex normals. --unlit draws the
 colours, or the textures, as they are. A material's Kd is the colour of an
 untextured face. A material with map_Kd is textured from a TIM made with
-png2tim: the map's name with the extension .TIM beside the MTL file, or the
-map itself when it is a TIM. The texture's place in video memory comes from
-the TIM, so a program must load the same TIM.
+png2tim: the map's name with the extension .TIM beside the MTL file, or in
+the directory --textures names, such as the program's data, under the map's
+name or the disc's form of it (capitals, underscores, eight characters), or
+the map itself when it is a TIM. The texture's place in video memory comes
+from the TIM, so a program must load the same TIM.
 
 The Net Yaroze library does not draw double-sided polygons, as Sony's FAQ
 says; --both makes two faces of each, back to back, instead.`,
@@ -60,6 +64,7 @@ says; --both makes two faces of each, back to back, instead.`,
 	f.BoolVar(&opts.Smooth, "smooth", false, "gouraud shading with the vertex normals")
 	f.BoolVar(&opts.Unlit, "unlit", false, "draw colours and textures as they are, unlit")
 	f.BoolVar(&opts.Both, "both", false, "make every face two-sided, with a second face back to back")
+	f.StringVar(&opts.Textures, "textures", "", "a directory to look for the maps' TIMs in, after the MTL file's")
 
 	if err := cmd.Execute(); err != nil {
 		log.Fatal(err)
@@ -205,10 +210,28 @@ func (c *converter) normal(n vec) uint16 {
 func (c *converter) texture(m *material) (*tim.TIM, error) {
 	path := filepath.Join(m.dir, filepath.FromSlash(strings.ReplaceAll(m.texture, `\`, "/")))
 	if !strings.EqualFold(filepath.Ext(path), ".tim") {
+		// Beside the MTL file, then in the textures directory, under the
+		// map's own name and under the disc's form of it, as .TIM or
+		// .tim: the first that exists, or the first for the error.
 		stem := strings.TrimSuffix(path, filepath.Ext(path))
-		path = stem + ".TIM"
-		if _, err := os.Stat(path); err != nil {
-			path = stem + ".tim"
+		tries := []string{stem + ".TIM", stem + ".tim"}
+		if opts.Textures != "" {
+			base := filepath.Base(stem)
+			disc := iso9660.NormalizeName(base)
+			if len(disc) > 8 {
+				disc = disc[:8]
+			}
+			for _, name := range []string{base, disc} {
+				in := filepath.Join(opts.Textures, name)
+				tries = append(tries, in+".TIM", in+".tim")
+			}
+		}
+		path = tries[0]
+		for _, try := range tries {
+			if _, err := os.Stat(try); err == nil {
+				path = try
+				break
+			}
 		}
 	}
 	if t, ok := c.textures[path]; ok {

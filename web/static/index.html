@@ -11,37 +11,150 @@
   <link rel="preload" href="fonts/barlow-500.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="icon" href="favicon.png" type="image/png">
   <link rel="stylesheet" href="style.css">
+  <script>
+    // Dark, as the Net Yaroze was, unless the visitor chose light: set
+    // before the first paint so that nothing flashes.
+    (() => {
+      let theme = "dark";
+      try { theme = localStorage.getItem("playground-theme") || theme; } catch { /* dark */ }
+      document.documentElement.dataset.theme = theme;
+    })();
+  </script>
 </head>
 <body class="playground">
   <header class="pg-top">
     <h1>psxsdk playground</h1>
+    <details id="project-menu" class="pg-project">
+      <summary title="This project. Open another, make a new one, or download this one."><span id="project-name"></span></summary>
+      <div class="pg-menu">
+        <ul id="project-list" class="pg-projects" aria-label="Projects kept in this browser"></ul>
+        <div class="pg-menu-actions">
+          <button id="project-new-scene" type="button" title="A new project from the scene example: cubes, a tile map and a badge placed by a scene file, with a picture converted from art/">New</button>
+          <button id="project-new" type="button" title="A new project from the square example, the tutorial's: a box, a cube and music, with no scene">New from square</button>
+          <button id="project-import" type="button" title="A project from a zip saved from here, or Go and data files to add to this one">Import…</button>
+          <input id="project-files" type="file" accept=".zip,.go,.tim,.tmd,.vab,.vh,.vb,.seq,.vag,.bin,.dat,.txt,application/zip,application/octet-stream" multiple hidden>
+          <button id="project-download" type="button" title="Save this project to this computer as a zip, laid out to run with go run">Download</button>
+          <button id="project-duplicate" type="button" title="A copy of this project">Duplicate</button>
+          <button id="project-rename" type="button">Rename</button>
+          <button id="project-start-over" type="button" title="Replace this project's files with the program the playground starts with">Start over</button>
+          <button id="project-delete" type="button" class="danger" title="Delete this project from this browser">Delete</button>
+        </div>
+      </div>
+    </details>
     <button id="run" class="primary" type="button" title="Format, build and run (Ctrl+Enter)">Run</button>
     <button id="format" type="button" title="Format the program with gofmt (Ctrl+Shift+F)">Format</button>
-    <button id="revert" type="button" title="Replace the program with the one the playground starts with">Start over</button>
+    <span id="live-pill" class="live-pill" hidden title="This project is running: changes to its scene show on the console at once">Live</span>
     <span class="pg-hint muted"><kbd>Ctrl</kbd> <kbd>Enter</kbd> runs, <kbd>Ctrl</kbd> <kbd>Space</kbd> completes</span>
     <div class="pg-links">
       <a href="../examples/">Examples</a>
       <a href="../docs/">Docs</a>
       <a href="https://github.com/ChrisRx/psxsdk">GitHub</a>
+      <button id="theme" class="small-button" type="button" aria-pressed="true" title="Switch between the black Net Yaroze and the grey PlayStation">Dark</button>
     </div>
   </header>
 
   <main id="pg" class="pg">
     <section class="pg-code" aria-label="Program">
-      <div id="editor"></div>
-      <details id="assets" class="pg-assets">
-        <summary>Data files <span id="asset-count" class="muted"></span></summary>
-        <div class="pg-assets-bar">
-          <button id="add-assets" class="small-button" type="button" title="Add files from this computer under data/, as the program registers them">Add files…</button>
-          <input id="asset-files" type="file" multiple hidden>
-          <select id="example-data" aria-label="Add an example's data files" disabled>
-            <option value="">Add an example's data…</option>
-          </select>
-          <button id="clear-assets" class="small-button" type="button" hidden>Remove all</button>
-          <span id="asset-status" class="muted" aria-live="polite">Files dropped on the editor are added too.</span>
+      <div class="tabs pg-files">
+        <div id="file-tabs" role="tablist" aria-label="Go files"></div>
+        <button id="file-add" class="small-button file-add" type="button" title="Add a Go file, a scene, or files from this computer" aria-label="Add to the project">+</button>
+        <span id="save-status" class="status" aria-live="polite"></span>
+      </div>
+      <div id="editors" class="pg-editors">
+        <div id="files-pane" class="files" hidden>
+          <div class="files-tree">
+            <div class="files-bar">
+              <button id="add-assets" class="small-button" type="button" title="Add a Go file, a scene, or files from this computer: pictures, models and sounds under art/, to be converted, and anything else under data/">New…</button>
+              <input id="asset-files" type="file" multiple hidden>
+              <select id="example-data" aria-label="Add an example's data files" disabled>
+                <option value="">Add an example's data…</option>
+              </select>
+            </div>
+            <ul id="file-tree" role="tree" aria-label="The project's files"></ul>
+            <p id="asset-status" class="muted files-status" aria-live="polite">Pictures, models and sounds dropped on the page go under art/ to be converted; anything else under data/.</p>
+          </div>
+          <div class="files-view">
+            <div class="pg-preview-head">
+              <span id="preview-title"></span>
+              <select id="preview-object" aria-label="Which object of the model" hidden></select>
+              <select id="preview-row" aria-label="Which palette" hidden></select>
+            </div>
+            <canvas id="preview-canvas" width="1" height="1"></canvas>
+            <form id="source-options" class="pg-options" hidden></form>
+            <p id="preview-info" class="muted"></p>
+            <table id="preview-table" class="preview-table" hidden><thead><tr><th>Entry</th><th>Size</th><th>Held</th><th></th></tr></thead><tbody></tbody></table>
+            <canvas id="preview-vram" class="vram" width="1024" height="512" aria-label="Video memory, with this picture marked; drag a block to move it" hidden></canvas>
+          </div>
         </div>
-        <ul id="asset-list" class="pg-assets-list"></ul>
-      </details>
+        <div id="scene-pane" class="scene" hidden>
+          <div class="scene-bar">
+            <select id="scene-add-model" aria-label="Add a model"><option value="">Add model…</option></select>
+            <select id="scene-add-sprite" aria-label="Add a sprite"><option value="">Add sprite…</option></select>
+            <button id="scene-duplicate" class="small-button" type="button" title="A copy of what is picked, beside it (Ctrl+D)">Duplicate</button>
+            <button id="scene-remove" class="small-button" type="button" title="Take what is picked out of the scene (Delete)">Remove</button>
+            <span class="scene-sep" aria-hidden="true"></span>
+            <button id="scene-undo" class="small-button" type="button" title="Undo (Ctrl+Z)" disabled>Undo</button>
+            <button id="scene-redo" class="small-button" type="button" title="Redo (Ctrl+Y)" disabled>Redo</button>
+            <span class="scene-sep" aria-hidden="true"></span>
+            <span id="scene-modes" class="scene-modes" role="group" aria-label="What dragging the gizmo does">
+              <button class="small-button" type="button" data-mode="move" aria-pressed="true" title="Move: drag an axis, a square for a plane, elsewhere freely (W)">Move</button>
+              <button class="small-button" type="button" data-mode="rotate" aria-pressed="false" title="Rotate: drag a ring to turn about its axis (E)">Rotate</button>
+              <button class="small-button" type="button" data-mode="scale" aria-pressed="false" title="Scale: drag a cube to scale along its axis, the middle for all (R)">Scale</button>
+            </span>
+            <button id="scene-snap" class="small-button" type="button" aria-pressed="false" title="Snap positions to 16 units and turns to a sixty-fourth while dragging (N)">Snap</button>
+            <button id="scene-look" class="small-button" type="button" title="Turn the camera on what is picked and stand back to see it whole (F)">Frame</button>
+            <button id="scene-console" class="small-button" type="button" aria-pressed="false" title="Show the running program's own picture here instead of the editor's drawing, while this project runs" disabled>Console</button>
+            <span id="scene-live" class="muted" aria-live="polite"></span>
+          </div>
+          <div class="scene-main">
+            <div class="scene-side">
+              <select id="scene-pick" aria-label="Which scene" title="The scene being placed; the program loads whichever it likes, and the + menu adds one"></select>
+              <input id="scene-search" type="search" placeholder="Find" aria-label="Find in the scene">
+              <ul id="scene-outline" class="scene-outline" role="listbox" aria-label="What the scene holds"></ul>
+            </div>
+            <div id="scene-view" class="scene-view">
+              <canvas id="scene-canvas" width="320" height="240" tabindex="0" aria-label="The scene, drawn as the console draws it; click to pick, drag to move"></canvas>
+              <p id="scene-status" class="muted"></p>
+            </div>
+          </div>
+          <div class="tabs scene-tabs">
+            <div role="tablist" aria-label="The scene's panels">
+              <button id="stab-object" role="tab" type="button" aria-selected="true">Picked</button>
+              <button id="stab-camera" role="tab" type="button" aria-selected="false" tabindex="-1">Camera</button>
+              <button id="stab-lights" role="tab" type="button" aria-selected="false" tabindex="-1">Lights</button>
+              <button id="stab-tiles" role="tab" type="button" aria-selected="false" tabindex="-1">Tile map</button>
+            </div>
+          </div>
+          <div id="spanel-object" class="scene-panel" role="tabpanel">
+            <form id="scene-inspector" class="scene-fields" aria-label="What is picked"></form>
+          </div>
+          <div id="spanel-camera" class="scene-panel" role="tabpanel" hidden>
+            <div class="scene-presets">
+              <button id="scene-view-front" class="small-button" type="button" title="From in front of what it looks at">Front</button>
+              <button id="scene-view-top" class="small-button" type="button" title="From above what it looks at">Top</button>
+              <button id="scene-view-side" class="small-button" type="button" title="From the side of what it looks at">Side</button>
+            </div>
+            <form id="scene-camera" class="scene-fields"></form>
+          </div>
+          <div id="spanel-lights" class="scene-panel" role="tabpanel" hidden>
+            <form id="scene-lights" class="scene-fields"></form>
+          </div>
+          <div id="spanel-tiles" class="scene-panel" role="tabpanel" hidden>
+            <form id="scene-tiles" class="scene-fields"></form>
+            <div id="scene-tile-tools" class="scene-presets" hidden>
+              <button type="button" class="small-button" data-tool="pen" aria-pressed="true" title="Lay the picked cells where you click or drag; Shift draws a line from the last (B)">Pen</button>
+              <button type="button" class="small-button" data-tool="fill" aria-pressed="false" title="Flood the cells like the one you click (F)">Fill</button>
+              <button type="button" class="small-button" data-tool="rect" aria-pressed="false" title="Fill the rectangle you drag over (R)">Rectangle</button>
+              <button type="button" class="small-button" data-tool="erase" aria-pressed="false" title="Empty the cells you click or drag over (E)">Eraser</button>
+            </div>
+            <p id="scene-tiles-info" class="muted"></p>
+            <canvas id="scene-tile-palette" class="scene-tiles" width="16" height="16" aria-label="The cells; click one to pick it" hidden></canvas>
+            <div class="scene-map-scroll">
+              <canvas id="scene-tile-map" class="scene-tiles" width="16" height="16" tabindex="0" aria-label="The map; click or drag to lay the picked cell" hidden></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <div id="split" class="pg-split" role="separator" aria-orientation="vertical" aria-label="Resize the editor" tabindex="0"></div>
@@ -92,7 +205,13 @@
 
   <script src="app.js"></script>
   <script src="editor.js"></script>
-  <script src="assets.js"></script>
+  <script src="project.js"></script>
+  <script src="preview.js"></script>
+  <script src="inspect.js"></script>
+  <script src="convert.js"></script>
+  <script src="scene-tab.js"></script>
+  <script src="files-tab.js"></script>
+  <script src="files.js"></script>
   <script src="playground.js"></script>
 </body>
 </html>
