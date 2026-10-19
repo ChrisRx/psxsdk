@@ -19,7 +19,7 @@ Everything is built with Go 1.27 or newer:
 ```bash
 git clone https://github.com/ChrisRx/psxsdk
 cd psxsdk
-go build -o bin/ ./tools/...
+go build -o bin/ ./cmd/... ./tools/...
 go test $(go list ./... | grep -v examples)   # or: task test
 ```
 
@@ -39,7 +39,8 @@ The tutorial's [first chapter](https://chrisrx.github.io/psxsdk/tutorial/setting
 | Directory | Purpose |
 | --- | --- |
 | [`yaroze`](yaroze) | TinyGo bindings for the resident Net Yaroze library, generated from the SDK's header, with stubs for every other build, and the host-side `libps` image |
-| [`disc`](disc) | Registering the files a program reads off the disc, which `mkpsxiso` reads out of the executable |
+| [`cmd/nyc`](cmd/nyc) | The build command: a Go program to a PSX-EXE or a disc image in one step, with the tinygo command or TinyGo compiled to WebAssembly |
+| [`disc`](disc) | Registering the files a program reads off the disc, which the build reads out of the executable |
 | [`examples`](examples) | The ported demos, one directory each, with the data they load |
 | [`tools`](tools) | `eco2exe`, `mkpsxiso`, `dumpsxiso`, `psxemu`, `psxplay` and the rest; the [tools section](https://chrisrx.github.io/psxsdk/tools/) describes each |
 | [`emu`](emu) | The emulator, with [`emu/emutest`](emu/emutest) for driving it from tests |
@@ -66,6 +67,7 @@ The goals have not changed:
 - [x] PSX ISO reader and extractor (dumpsxiso)
 - [x] Go bindings for the Net Yaroze library, and examples in Go
 - [x] Emulator, headless test harness and browser demo
+- [x] One build command (nyc), with TinyGo native or compiled to WebAssembly
 - [ ] Document code
 - [ ] Tests for all packages
 - [ ] Include collected PDFs and other Net Yaroze documents in repo

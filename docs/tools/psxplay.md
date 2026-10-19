@@ -23,6 +23,6 @@ The keyboard is laid out as the player has it:
 
 A gamepad with a standard layout works as itself, with the left stick doubling as the d-pad. F11 toggles full screen and Escape leaves it.
 
-In the repository, `task play NAME=check` builds an example's disc and runs it, with flags after `--` passed on: `task play NAME=check -- --mute`.
+[`nyc run`](nyc.md) builds a program onto a disc and runs it in the same window, with the same flags: `nyc run --mute ./examples/check`. In the repository, `task play NAME=check` does that for an example, with flags after `--` passed on: `task play NAME=check -- --mute`.
 
 The window is drawn with [Ebitengine](https://ebitengine.org), which loads X11, OpenGL and ALSA at run time rather than linking against them, so building needs nothing beyond Go. On Linux the libraries must be on the loader's path to run it; the Nix development shell puts them there.

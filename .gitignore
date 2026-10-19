@@ -23,3 +23,6 @@ testdata
 
 # Discs built for the emulator tests (task test:emu)
 .build/
+
+# The WebAssembly compiler task nyc builds into nyc (internal/toolchain)
+internal/toolchain/wasm/

@@ -38,7 +38,7 @@ That is all of the square:
 ```go src=../../examples/square/main.go
 ```
 
-It runs here as it does on a console, built as [files from the disc](disc.md) builds it. The directions move the box, and Start pauses the music:
+`go generate` and then `go tool nyc run` build it and play it in a window, with Enter as Start. It runs here as it does on a console, built as [files from the disc](disc.md) builds it. The directions move the box, and Start pauses the music:
 
 <!-- player square -->
 

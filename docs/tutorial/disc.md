@@ -1,7 +1,7 @@
 ---
 title: Files from the disc
 weight: 3
-description: The square example's model, texture and music put on the disc with discgen and mkpsxiso, and read with a disc.Loader while the frames go on.
+description: The square example's model, texture and music put on the disc with discgen and nyc, and read with a disc.Loader while the frames go on.
 ---
 
 Everything bigger than the program's own code comes off the CD: models, pictures, sound. The square reads five files, and this page puts them on the disc and reads them.
@@ -28,9 +28,9 @@ and `go generate` then writes `zz_generated.disc.go`:
 ```go src=../../examples/square/zz_generated.disc.go#cubeTIM,files
 ```
 
-Each name is the file's name in camel case with its extension in capitals, and `files` is all of them, in the order they will be read. Run `go generate` again whenever a file is added or renamed.
+Each name is the file's name in camel case with its extension in capitals, and `files` is all of them, in the order they will be read. Run `go generate` again whenever a file is added or renamed. `discgen` is also `nyc generate`, so with `nyc` as the module's tool the line can be `//go:generate go tool nyc generate data`; the [playground](/play/) recognizes only the first form.
 
-A registration does more than it looks like it does. TinyGo works the call out when it compiles the program, so each one ends up as a small record of constant data in the executable. When `mkpsxiso` builds the disc it finds the records in the executable it is told to boot, places each file at its path, and, once it knows where on the disc each one landed, writes the file's first sector and its length back into the record. The program is built knowing where its files are, and reads each from its sector directly, without searching the disc's directory for it by name. A file that is missing or misnamed fails the build, not the program.
+A registration does more than it looks like it does. TinyGo works the call out when it compiles the program, so each one ends up as a small record of constant data in the executable. When `nyc` builds the disc it finds the records in the executable it is told to boot, places each file at its path, and, once it knows where on the disc each one landed, writes the file's first sector and its length back into the record. The program is built knowing where its files are, and reads each from its sector directly, without searching the disc's directory for it by name. A file that is missing or misnamed fails the build, not the program.
 
 ## Reading them while the frames go on
 
@@ -47,14 +47,11 @@ Each file's memory is allocated the first time it is read, enough for the whole 
 
 ## Building the disc
 
-The build is the one from [setting up](setting-up.md), with `--src` added to tell `mkpsxiso` the directory the registered files' host paths are relative to:
+The build is the one from [setting up](setting-up.md), after `go generate` has written the registrations. `nyc disc` finds the records in the executable it builds and takes each file from its path relative to the package directory:
 
 ```bash
 go generate
-tinygo build -target=playstation-yaroze -o prog.elf .
-go tool mips1fix prog.elf
-go tool eco2exe prog.elf MAIN.EXE
-go tool mkpsxiso -v -o square.bin --boot MAIN.EXE --file MAIN.EXE=MAIN.EXE --src .
+go tool nyc disc -v
 ```
 
 `-v` lists what was placed where, with the five files under `DATA` among it. The next page draws the cube: [a model in 3D](model.md).

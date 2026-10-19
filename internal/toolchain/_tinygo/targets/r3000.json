@@ -1,0 +1,30 @@
+{
+	"comment": "The MIPS R3000A as the PlayStation uses it: MIPS I, little endian, o32, no FPU and no MMU. Inherited by the playstation and playstation-yaroze targets, which differ only in where the program loads and what is already in memory when it gets there.",
+	"inheritable-only": true,
+	"llvm-target": "mipsel-unknown-none",
+	"cpu": "mips1",
+	"features": "+mips1,+soft-float,+noabicalls",
+	"build-tags": ["r3000", "baremetal"],
+	"goos": "linux",
+	"goarch": "mipsle",
+	"linker": "ld.lld",
+	"scheduler": "none",
+	"gc": "leaking",
+	"default-stack-size": 16384,
+	"cflags": [
+		"-march=mips1",
+		"-msoft-float",
+		"-mno-abicalls",
+		"-fno-pic",
+		"-G0",
+		"-fno-builtin",
+		"-fno-exceptions",
+		"-fno-unwind-tables",
+		"-fno-asynchronous-unwind-tables",
+		"-ffunction-sections",
+		"-fdata-sections"
+	],
+	"ldflags": [
+		"--gc-sections"
+	]
+}

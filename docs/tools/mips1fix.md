@@ -16,3 +16,5 @@ $ mips1fix prog.o
 A trap and a nop are the same width, so nothing moves and no relocation or symbol needs adjusting. Clang suppresses these with `-mno-check-zero-division`, but that is an LLVM backend option rather than a target feature and so cannot be reached through TinyGo. Either way, integer division by zero becomes undefined rather than trapping.
 
 `-n` reports without writing.
+
+`nyc` does the same to every program it builds, so a build with [`nyc`](nyc.md) needs no separate step.

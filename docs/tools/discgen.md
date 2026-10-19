@@ -47,3 +47,5 @@ var (
 ```
 
 A name is the file's path under the directory, its words run together in camel case, then its extension in capitals: `sound/STD0.VH` is `soundStd0VH`. Two files that would get the same name are an error. Files are placed under the directory's name in capitals unless `--root` says otherwise, `-o` names the output, and `--files` the slice. With `--into`, a file that grows needs the command run again, and `mkpsxiso` fails the build of a disc for one that has outgrown its array.
+
+[`nyc`](nyc.md) has it as `nyc generate`, with the same flags.

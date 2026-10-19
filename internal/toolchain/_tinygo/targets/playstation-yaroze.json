@@ -1,0 +1,13 @@
+{
+	"comment": "Net Yaroze (DTL-H3001): a PlayStation whose boot disc leaves Sony's development library resident in RAM at fixed addresses. The program loads above it at 0x80090000, where Sony's memory map starts the application area, and calls into it rather than linking a copy. The address table, the crt0, the library members that are real code rather than an address, and the link script are all here, so the target alone is enough to link. For a plain console that owns the machine, use playstation.",
+	"inherits": ["r3000"],
+	"build-tags": ["yaroze"],
+	"linkerscript": "targets/playstation-yaroze.ld",
+	"extra-files": [
+		"targets/playstation-yaroze.S",
+		"targets/playstation-yaroze-symusr.S",
+		"targets/playstation-yaroze-libps.S",
+		"targets/playstation-yaroze-gte.S",
+		"targets/r3000-builtins.c"
+	]
+}

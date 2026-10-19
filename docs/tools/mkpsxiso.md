@@ -96,3 +96,5 @@ $ xorriso -indev test.iso -find /
 Every image carries the 64-byte string that identifies it as a PlayStation disc, written into the system area at sector 4. This is format identification: without it mednafen cannot tell the image from any other CD-XA disc and rejects it outright with *"Could not find a system that supports this CD"*. It is not a protection bypass, and could not be: an unmodified console decides whether to boot from the wobble encoded in a pressed disc's lead-in groove, a physical property no file can reproduce.
 
 Booting on real hardware additionally wants Sony's licence data, which holds the logo shown at startup. That cannot be redistributed, so supply your own copy with `--license`; it replaces the whole system area.
+
+[`nyc`](nyc.md) builds a program onto a disc with it in one step, `nyc disc`, and `nyc iso` is this command, with every flag.

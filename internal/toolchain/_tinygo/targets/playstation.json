@@ -1,0 +1,11 @@
+{
+	"comment": "Sony PlayStation (R3000A), standalone: the program is loaded at 0x80010000 and owns the machine, with only the BIOS underneath. Ships its own crt0 and link script, so the target alone is enough to link. For a Net Yaroze, where the boot disc leaves Sony's development library resident in RAM, use playstation-yaroze.",
+	"inherits": ["r3000"],
+	"build-tags": ["playstation"],
+	"linkerscript": "targets/playstation.ld",
+	"extra-files": [
+		"targets/playstation.S",
+		"targets/playstation-libc.c",
+		"targets/r3000-builtins.c"
+	]
+}

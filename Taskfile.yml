@@ -36,24 +36,25 @@ tasks:
         vars: { NAME: '{{.ITEM}}' }
 
   # Builds the program in DIR, examples/NAME unless told otherwise, onto
-  # .build/NAME/NAME.cue, with the files it registers, which mkpsxiso reads
-  # out of the executable and takes from DIR. The output directory starts
-  # with a dot so that go list ./... leaves it alone. The build optimizes
-  # for speed, OPT=2, since a game's frame has a budget; OPT=z is TinyGo's
-  # own default, for size.
+  # .build/NAME/NAME.cue with nyc, with the files it registers, which nyc
+  # reads out of the executable and takes from DIR, and keeps the ELF in
+  # prog.elf for its symbols, which the emulator tests read. The output
+  # directory starts with a dot so that go list ./... leaves it alone. The
+  # build optimizes for speed, OPT=2, since a game's frame has a budget;
+  # OPT=z is TinyGo's own default, for size. COMPILER=wasm builds with
+  # TinyGo compiled to WebAssembly instead of the tinygo command, from
+  # NYC_WASM or a nyc built by task nyc.
   disc:
     requires:
       vars: [NAME]
     vars:
       DIR: '{{.DIR | default (printf "examples/%s" .NAME)}}'
       OPT: '{{.OPT | default "2"}}'
+      COMPILER: '{{.COMPILER | default "auto"}}'
     cmds:
       - rm -rf .build/{{.NAME}}
       - mkdir -p .build/{{.NAME}}
-      - tinygo build -opt={{.OPT}} -target=playstation-yaroze -o .build/{{.NAME}}/prog.elf ./{{.DIR}}
-      - go tool mips1fix .build/{{.NAME}}/prog.elf
-      - go tool eco2exe .build/{{.NAME}}/prog.elf .build/{{.NAME}}/prog.exe
-      - go tool mkpsxiso -o .build/{{.NAME}}/{{.NAME}}.bin --volume-id {{.NAME}}.exe --boot MAIN.EXE --file MAIN.EXE=.build/{{.NAME}}/prog.exe --src {{.DIR}}
+      - go run ./cmd/nyc disc --compiler={{.COMPILER}} --opt={{.OPT}} --elf .build/{{.NAME}}/prog.elf -o .build/{{.NAME}}/{{.NAME}}.bin ./{{.DIR}}
 
   # Builds the tutorial's first program onto .build/hello/hello.cue, so
   # that it runs on its page like the examples and in the emulator tests.
@@ -64,17 +65,15 @@ tasks:
         vars: { NAME: hello, DIR: docs/tutorial/hello }
 
   # Builds the program in DIR, examples/NAME unless told otherwise, onto a
-  # disc and runs it in a window with psxplay, booting OpenBIOS. Flags
-  # after -- go to psxplay: task play NAME=check -- --mute
+  # disc and runs it in a window with nyc run, booting OpenBIOS. Flags
+  # after -- go to nyc run: task play NAME=check -- --mute
   play:
     requires:
       vars: [NAME]
     vars:
       DIR: '{{.DIR | default (printf "examples/%s" .NAME)}}'
     cmds:
-      - task: disc
-        vars: { NAME: '{{.NAME}}', DIR: '{{.DIR}}' }
-      - go run ./tools/psxplay {{.CLI_ARGS}} .build/{{.NAME}}/{{.NAME}}.cue
+      - go run ./cmd/nyc run {{.CLI_ARGS}} ./{{.DIR}}
 
   # Builds the site into .build/site, replacing what is there: the
   # documentation from docs/ and the examples' package comments, rendered
@@ -166,9 +165,46 @@ tasks:
       - '{{.TREE}}/build/tinygo-sysroot -target=playstation-yaroze -o .build/sysroot ./examples/... ./docs/tutorial/hello'
       # The shipped compiler has no clang, so the full one runs here over
       # every example to fill the cache with the target's C and the
-      # standard library.
+      # standard library, at -opt=z, the level the playground builds at.
       - web/compiler/mkcache.sh .build/compiler/tinygo-full.wasm .build/compiler/tinygo.wasm .build/sysroot $(cd .build/sysroot && ls -d mod/go.chrisrx.dev/psx/examples/*/ mod/go.chrisrx.dev/psx/docs/tutorial/hello/ | grep -v /internal/)
       - tar --format=ustar -C .build -cf - sysroot | gzip -9 > {{.PLAY}}/sysroot.tar.gz
+
+  # Builds nyc onto .build/nyc with TinyGo compiled to WebAssembly built
+  # in, so that it compiles programs with nothing else installed: the
+  # compiler from the compiler task, and a sysroot of its own, a copy of
+  # the one the playground task leaves in .build/sysroot with the cache
+  # filled at -opt=2 as well, the level nyc builds at by default, which
+  # the playground's leaves out to stay small. Both are written under
+  # internal/toolchain/wasm, which git ignores, for the nyc_embed build tag
+  # to embed.
+  nyc:
+    vars:
+      SYSROOT: .build/nyc-sysroot
+    cmds:
+      - rm -rf {{.SYSROOT}}
+      - cp -R .build/sysroot {{.SYSROOT}}
+      - OPTS=2 web/compiler/mkcache.sh .build/compiler/tinygo-full.wasm .build/compiler/tinygo.wasm {{.SYSROOT}} $(cd {{.SYSROOT}} && ls -d mod/go.chrisrx.dev/psx/examples/*/ mod/go.chrisrx.dev/psx/docs/tutorial/hello/ | grep -v /internal/)
+      - mkdir -p internal/toolchain/wasm
+      - gzip -9 -c .build/compiler/tinygo.wasm > internal/toolchain/wasm/tinygo.wasm.gz
+      # The archive's directory is sysroot, as the playground's is.
+      - tar --format=ustar -C .build --transform 's,^nyc-sysroot,sysroot,' -cf - nyc-sysroot | gzip -9 > internal/toolchain/wasm/sysroot.tar.gz
+      - go build -tags nyc_embed -trimpath -ldflags=-s -o .build/nyc ./cmd/nyc
+
+  # Copies the files the TinyGo fork adds, the PlayStation targets and
+  # their runtime, from its last commit in TINYGO_SRC into
+  # internal/toolchain/_tinygo, which nyc lays over a TinyGo without them.
+  # Run it when the fork's pin in flake.nix moves.
+  nyc:fork:
+    vars:
+      DST: internal/toolchain/_tinygo
+    cmds:
+      - rm -rf {{.DST}}
+      - |
+        src="${TINYGO_SRC:-$HOME/src/ChrisRx/tinygo}"
+        git -C "$src" diff --name-only --diff-filter=A HEAD~1 HEAD | while read -r f; do
+          mkdir -p "{{.DST}}/$(dirname "$f")"
+          git -C "$src" show "HEAD:$f" > "{{.DST}}/$f"
+        done
 
   # Renders the documentation alone into .build/site, over whatever is
   # there, which is enough to look at a page while writing it.
@@ -185,8 +221,7 @@ tasks:
     cmds:
       - mkdir -p tmp
       - defer: rm -rf tmp
-      - tinygo build -target=playstation-yaroze -o tmp/prog.elf ./examples/check
-      - go tool mips1fix tmp/prog.elf
+      - go run ./cmd/nyc build --opt=z -o tmp/prog.elf ./examples/check
       - |
         LIBPS=$(mipsel-none-elf-size -A tmp/prog.elf | awk '$1 == ".libps" { print $2; exit }')
         mipsel-none-elf-size tmp/prog.elf | awk -v window="${LIBPS:-0}" '

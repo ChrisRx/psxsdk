@@ -2,10 +2,12 @@
 title: Tools
 weight: 4
 section: Tools
+order: nyc
 ---
 
 | Tool | Purpose |
 | --- | --- |
+| [nyc](nyc.md) | Build a Go program into a PSX-EXE or a disc image in one step, with the tinygo command or TinyGo compiled to WebAssembly |
 | [eco2exe](eco2exe.md) | Combine a Net Yaroze program with `libps` into a bootable PSX-EXE |
 | [elf2exe](elf2exe.md) | Write a standalone ELF or ECOFF program as a PSX-EXE |
 | [mips1fix](mips1fix.md) | Replace the MIPS II traps LLVM emits with nops so the code runs on an R3000A |

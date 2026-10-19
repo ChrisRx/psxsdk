@@ -17,6 +17,12 @@
 # along, which is what makes a first build in the browser quick; their
 # entries are keyed by the compiler's hash, so a new compiler never picks
 # up an old cache.
+#
+# The C and assembly entries are keyed by the optimization level too, so
+# each program is built at every level in OPTS: z by default, TinyGo's own
+# and the playground's. task nyc runs it again over a copy of the
+# playground's sysroot with OPTS=2, the level nyc builds at by default.
+# env.json's opts lists the levels the cache holds.
 set -euo pipefail
 usage="usage: mkcache.sh FULL.wasm TINYGO.wasm SYSROOT PROGRAM..."
 FULL=$(realpath "${1:?$usage}")
@@ -26,11 +32,14 @@ shift 3
 [ $# -gt 0 ] || { echo "mkcache.sh: no programs given" >&2; exit 2; }
 
 BUILDID=$(sha256sum "$TINYGO" | cut -c1-16)
-python3 - "$SYSROOT/env.json" "$BUILDID" <<'PY'
+python3 - "$SYSROOT/env.json" "$BUILDID" "${OPTS:-z}" <<'PY'
 import json, sys
-p, id = sys.argv[1], sys.argv[2]
+p, id, opts = sys.argv[1], sys.argv[2], sys.argv[3].split()
 env = json.load(open(p))
 env["buildID"] = id
+# The levels the cache holds, those of an earlier run on the same sysroot
+# included, which nyc reads to know what it can build at.
+env["opts"] = env.get("opts", []) + [o for o in opts if o not in env.get("opts", [])]
 json.dump(env, open(p, "w"), indent="\t")
 open(p, "a").write("\n")
 PY
@@ -58,12 +67,14 @@ for prog in "$@"; do
   rm -rf "$WORK/prog"
   mkdir -p "$WORK/prog"
   cp "$SYSROOT/$prog"/*.go "$WORK/prog/"
-  echo "mkcache: $prog"
-  wasmtime run --allow-precompiled \
-    --dir "$SYSROOT::/sysroot" --dir "$WORK::/work" --dir "$WORK/tmp::/tmp" --dir "$SYSROOT/cache::/tmp/cache/tinygo" \
-    --env GOROOT="$GOROOT" --env GOVERSION="$GOVERSION" --env GOTOOLTAGS="$GOTOOLTAGS" \
-    --env TINYGOROOT="$TINYGOROOT" --env GOMODCACHE="$GOMODCACHE" --env TINYGO_BUILD_ID="$BUILDID" \
-    --env HOME=/tmp --env XDG_CACHE_HOME=/tmp/cache --env TMPDIR=/tmp --env PWD=/work \
-    -- "$WORK/tinygo.cwasm" -target="$target" -o /work/prog.elf /work/prog
+  for opt in ${OPTS:-z}; do
+    echo "mkcache: $prog -opt=$opt"
+    wasmtime run --allow-precompiled \
+      --dir "$SYSROOT::/sysroot" --dir "$WORK::/work" --dir "$WORK/tmp::/tmp" --dir "$SYSROOT/cache::/tmp/cache/tinygo" \
+      --env GOROOT="$GOROOT" --env GOVERSION="$GOVERSION" --env GOTOOLTAGS="$GOTOOLTAGS" \
+      --env TINYGOROOT="$TINYGOROOT" --env GOMODCACHE="$GOMODCACHE" --env TINYGO_BUILD_ID="$BUILDID" \
+      --env HOME=/tmp --env XDG_CACHE_HOME=/tmp/cache --env TMPDIR=/tmp --env PWD=/work \
+      -- "$WORK/tinygo.cwasm" -target="$target" -opt="$opt" -o /work/prog.elf /work/prog
+  done
 done
 echo "mkcache: $(ls "$SYSROOT/cache" | wc -l) entries, $(du -sh "$SYSROOT/cache" | cut -f1), build id $BUILDID"
