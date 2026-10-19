@@ -14,6 +14,7 @@ const (
 	soundCapacity = sampleRate * 4      // a second, in bytes of stereo 16-bit
 	soundStart    = sampleRate * 4 / 10 // buffered before playing (100ms)
 	soundMax      = sampleRate * 4 / 4  // buffered at most (250ms)
+	soundFrame    = sampleRate * 4 / 60 // about a frame's worth
 )
 
 // soundBuffer is a ring of interleaved 16-bit little-endian stereo samples,
@@ -51,6 +52,13 @@ func (s *soundBuffer) write(samples []int16) {
 	if !s.playing && s.count >= soundStart {
 		s.playing = true
 	}
+}
+
+// buffered is how many bytes are waiting to be played.
+func (s *soundBuffer) buffered() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.count
 }
 
 // Read fills p with what is buffered, and silence for the rest.

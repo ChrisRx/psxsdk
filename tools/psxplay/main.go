@@ -150,7 +150,10 @@ func run(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		player.SetBufferSize(20 * time.Millisecond)
+		// The player's buffer has to hold more than the sound server takes
+		// at once, PipeWire's quantum being 1323 samples (30ms) at this
+		// rate, or each take runs it dry and the gap plays as silence.
+		player.SetBufferSize(60 * time.Millisecond)
 		player.Play()
 	}
 
@@ -177,6 +180,9 @@ type game struct {
 	frame   *image.RGBA
 	image   *ebiten.Image
 	samples []int16
+
+	level  float64 // the sound buffered, averaged, for frames
+	settle int     // ticks before frames may adjust again
 }
 
 // keys is the keyboard's pad, laid out as the site's player has it.
@@ -272,16 +278,52 @@ func (g *game) Update() error {
 
 	// A tick runs to the next vertical blank. Without one in the budget,
 	// the display is whatever it was, and the next tick tries again.
-	if _, err := g.machine.RunFrame(frameBudget); err != nil {
-		return fmt.Errorf("the emulator stopped: %w", err)
+	for range g.frames() {
+		if _, err := g.machine.RunFrame(frameBudget); err != nil {
+			return fmt.Errorf("the emulator stopped: %w", err)
+		}
+		if g.sound != nil {
+			g.samples = g.machine.Audio(g.samples[:0])
+			g.sound.write(g.samples)
+		}
 	}
 	g.frame = g.machine.DisplayInto(g.frame)
-
-	if g.sound != nil {
-		g.samples = g.machine.Audio(g.samples[:0])
-		g.sound.write(g.samples)
-	}
 	return nil
+}
+
+// frames is how many frames a tick runs. The ticks come at 60 a second
+// and the machine's frames at a little under, so with sound, the sound
+// paces it: a frame is left out while too much is buffered, and an extra
+// one run while too little is, which keeps the buffer near soundStart
+// rather than filling until it drops what is in it. Without sound, every
+// tick runs a frame.
+//
+// The player takes its buffer's worth at once, so the level is a sawtooth;
+// it is averaged over half a second or so, and after a frame is left out
+// or added, the average is given that long to follow before another.
+func (g *game) frames() int {
+	if g.sound == nil {
+		return 1
+	}
+	n := float64(g.sound.buffered())
+	if g.level == 0 {
+		g.level = n
+	}
+	g.level += (n - g.level) / 32
+	if g.settle > 0 {
+		g.settle--
+		return 1
+	}
+	const slack = 2 * soundFrame
+	switch {
+	case g.level > soundStart+slack:
+		g.settle = 32
+		return 0
+	case g.level < soundStart-slack:
+		g.settle = 32
+		return 2
+	}
+	return 1
 }
 
 func (g *game) Draw(screen *ebiten.Image) {
