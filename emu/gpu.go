@@ -95,13 +95,27 @@ type gpu struct {
 // newGPU returns a GPU with its display off, reporting an error that stops
 // the run to stop.
 func newGPU(ic *ic, stop func(error)) *gpu {
-	return &gpu{
-		state:       gpuRecvCmd,
-		gpustat:     gpustatDisplayOff,
-		displayMode: 1,
-		ic:          ic,
-		stop:        stop,
+	g := &gpu{
+		state: gpuRecvCmd,
+		ic:    ic,
+		stop:  stop,
 	}
+	g.resetDisplay()
+	return g
+}
+
+// resetDisplay puts the display registers as the hardware has them after a
+// reset, and GP1(00h): the display off, the horizontal range 0x200 to
+// 0xc00 and the vertical 0x10 to 0x100, 240 lines, so that a program that
+// never sets the vertical range, which Sony's library leaves to the
+// reset, still shows something. psxe starts with every range at zero,
+// which only works because its BIOS sets them before any program runs.
+func (g *gpu) resetDisplay() {
+	g.gpustat = gpustatDisplayOff
+	g.displayMode = 1
+	g.dispX, g.dispY = 0, 0
+	g.dispX1, g.dispX2 = 0x200, 0xc00
+	g.dispY1, g.dispY2 = 0x10, 0x100
 }
 
 func (g *gpu) Read32(off uint32) uint32 {
@@ -144,8 +158,15 @@ func (g *gpu) gpuread() uint32 {
 		g.c0Tsiz -= 2
 	}
 
+	// GP1(10h) answers through GPUREAD: the texture window, the drawing
+	// area's corners and the drawing offset, each packed as the command
+	// that set it takes them, the GPU's type, and nothing for the rest.
+	// The drawing offset's Y is at bit 11, as in GP0(E5h): the library's
+	// ClearImage reads the offset back here to restore it afterwards, and
+	// an answer with Y at bit 10 put every program that clears its screen
+	// through it 60 lines too high.
 	if g.gp1InfoReq != 0 {
-		switch g.gp1InfoReq & 7 {
+		switch g.gp1InfoReq & 0xf {
 		case 2:
 			data = (g.texwOY/8)<<15 | (g.texwOX/8)<<10 | (g.texwMY/8)<<5 | g.texwMX/8
 		case 3:
@@ -153,7 +174,11 @@ func (g *gpu) gpuread() uint32 {
 		case 4:
 			data = g.drawY2<<10 | g.drawX2
 		case 5:
-			data = uint32(g.offY<<10 | g.offX)
+			data = uint32(g.offY&0x7ff)<<11 | uint32(g.offX&0x7ff)
+		case 7:
+			data = 2
+		case 8:
+			data = 0
 		}
 		g.gp1InfoReq = 0
 	}
@@ -198,6 +223,8 @@ func (g *gpu) push(v uint32) {
 
 func (g *gpu) gp1(v uint32) {
 	switch v >> 24 {
+	case 0x00: // reset
+		g.resetDisplay()
 	case 0x03: // display enable
 		was := g.gpustat & gpustatDisplayOff
 		g.gpustat = g.gpustat&^gpustatDisplayOff | (v<<23)&gpustatDisplayOff
@@ -220,10 +247,11 @@ func (g *gpu) gp1(v uint32) {
 		}
 		g.displayMode = v & 0xffffff
 	case 0x10: // information request
-		g.gp1InfoReq = v & 7
+		g.gp1InfoReq = v & 0xf
 	}
-	// psxe does not implement the rest, including the resets (00h and
-	// 01h) and the interrupt acknowledge (02h).
+	// psxe does not implement the rest, including the command buffer reset
+	// (01h) and the interrupt acknowledge (02h), nor 00h beyond what
+	// resetDisplay does.
 }
 
 // command acts on the command buffer, as psxe's psx_gpu_update_cmd does
