@@ -2,10 +2,10 @@
 title: Examples
 weight: 3
 section: Examples
-description: Sixteen Net Yaroze programs ported to Go, running in the browser.
+description: Seventeen Net Yaroze programs ported to Go, running in the browser.
 ---
 
-The examples are ports of Sony's Net Yaroze samples and demos, and of one of the games members wrote, chosen to put a different part of the machine to work each:
+The examples are ports of Sony's Net Yaroze samples and demos, and of two of the games members wrote, chosen to put a different part of the machine to work each:
 
 | Example | Original | What it exercises |
 | --- | --- | --- |
@@ -25,5 +25,6 @@ The examples are ports of Sony's Net Yaroze samples and demos, and of one of the
 | [oden](oden.md) | Sony, 1993 | the lighting calculation: three shapes under three lights you aim and color |
 | [morph](morph.md) | S. Ashley, 1997 | a textured sheet morphing into a cylinder, a torus and a sphere, vertex by vertex |
 | [mdec](mdec.md) | new | full-color video through the motion decoder, driven by its registers |
+| [terra](terra.md) | Team Fatal, 1997 | Terra Incognita, a 3D action adventure reconstructed from its executable: a voxel island built into a mesh, skinned animated models drawn with the GTE directly, an entity system, scripted scenes and conversations |
 
 Every example runs in the browser, in the emulator this repository contains, on the pages that follow and together in [the player](/play/player.html). Each example's `data/` directory holds the files it reads off the CD, each registered in its `main.go` with the [`disc`](disc) package so that `mkpsxiso` places it, and `task disc NAME=check` builds one. The header comment of each `main.go` notes where the port departs from the original and why.

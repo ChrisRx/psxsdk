@@ -203,6 +203,27 @@ func TestSquareScreenshot(t *testing.T) {
 	emutest.Golden(t, m.Display(), "square.png")
 }
 
+// TestTerraScreenshot checks the first conversation at the port: the
+// opening's logo flies by until its counter reaches its end, the title
+// comes up over the ship and holds at its count, Cross takes it down, and
+// the camera's tour ends on the two of them with the first line said. The
+// counts are the scene counter's, which the opening and the title each
+// run from zero, so the picture is the same however long the BIOS took.
+func TestTerraScreenshot(t *testing.T) {
+	m := bootExample(t, "terra")
+	sceneT := m.Sym("main.sceneT")
+	m.RunUntilCount("main.sceneT", 0x11f, frameBudget)
+	// The port is built while the counter still reads the opening's end.
+	m.RunUntil(func() bool { return m.Read32(sceneT) < 0x11f }, frameBudget, "the title starting")
+	m.RunUntilCount("main.sceneT", 0xe0, frameBudget)
+	// The program reads the controller every other vertical blank, so a
+	// press must last two of its frames to be sure of being seen.
+	m.Hold(1, emu.ButtonCross, 4)
+	m.RunUntilCount("main.sceneT", 0x2c0, frameBudget)
+	m.RunFrames(80)
+	emutest.Golden(t, m.Display(), "terra.png")
+}
+
 // peak runs the machine for frames frames and returns the loudest sample
 // the SPU made meanwhile.
 func peak(m *emutest.Machine, frames int) int {
