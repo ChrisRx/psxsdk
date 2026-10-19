@@ -38,16 +38,19 @@ tasks:
   # Builds the program in DIR, examples/NAME unless told otherwise, onto
   # .build/NAME/NAME.cue, with the files it registers, which mkpsxiso reads
   # out of the executable and takes from DIR. The output directory starts
-  # with a dot so that go list ./... leaves it alone.
+  # with a dot so that go list ./... leaves it alone. The build optimizes
+  # for speed, OPT=2, since a game's frame has a budget; OPT=z is TinyGo's
+  # own default, for size.
   disc:
     requires:
       vars: [NAME]
     vars:
       DIR: '{{.DIR | default (printf "examples/%s" .NAME)}}'
+      OPT: '{{.OPT | default "2"}}'
     cmds:
       - rm -rf .build/{{.NAME}}
       - mkdir -p .build/{{.NAME}}
-      - tinygo build -target=playstation-yaroze -o .build/{{.NAME}}/prog.elf ./{{.DIR}}
+      - tinygo build -opt={{.OPT}} -target=playstation-yaroze -o .build/{{.NAME}}/prog.elf ./{{.DIR}}
       - go tool mips1fix .build/{{.NAME}}/prog.elf
       - go tool eco2exe .build/{{.NAME}}/prog.elf .build/{{.NAME}}/prog.exe
       - go tool mkpsxiso -o .build/{{.NAME}}/{{.NAME}}.bin --volume-id {{.NAME}}.exe --boot MAIN.EXE --file MAIN.EXE=.build/{{.NAME}}/prog.exe --src {{.DIR}}
