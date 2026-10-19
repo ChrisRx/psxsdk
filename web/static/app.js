@@ -403,18 +403,29 @@ $("pause").addEventListener("click", () => pause(state.running));
 $("reset").addEventListener("click", reset);
 
 // Sound: audio.js, an AudioWorklet, plays what the worker sends it, over a
-// port between the two that the page sets up. Browsers only start audio
-// after the visitor does something on the page, so it is set up at the
-// first click or key press, and the choice of on or off is remembered.
+// port between the two that the page sets up. Most browsers hold a page's
+// audio until the visitor does something on it, so it is set up when the
+// page loads and started at the first click or key press, and the button
+// says Unmute while it is held: sound that is on but held is not playing.
+// The choice of on or off is remembered.
 const sound = {
   on: (() => { try { return localStorage.getItem("sound") !== "off"; } catch { return true; } })(),
   ctx: null,
   setup: null, // the setting up, once started
 };
 
+// held is whether the sound is on but the browser has not let it start.
+function held() {
+  return sound.on && sound.ctx?.state !== "running";
+}
+
 function showSound() {
-  $("sound").textContent = sound.on ? "Mute" : "Unmute";
-  $("sound").setAttribute("aria-pressed", String(!sound.on));
+  const playing = sound.on && !held();
+  $("sound").textContent = playing ? "Mute" : "Unmute";
+  $("sound").setAttribute("aria-pressed", String(!playing));
+  if (!$("sound").disabled) {
+    $("sound").title = held() ? "The browser holds the sound until you click or press a key on the page" : "";
+  }
 }
 
 async function setUpSound() {
@@ -430,8 +441,16 @@ async function setUpSound() {
   node.connect(ctx.destination);
   const { port1, port2 } = new MessageChannel();
   node.port.postMessage({ port: port1 }, [port1]);
-  await call("audio", { on: sound.on, port: port2 }, [port2]);
+  // The emulator makes sound only while it can be heard, so none from
+  // while it was held plays when it starts.
+  const audible = () => sound.on && ctx.state === "running";
+  await call("audio", { on: audible(), port: port2 }, [port2]);
   sound.ctx = ctx;
+  ctx.addEventListener("statechange", () => {
+    showSound();
+    call("audio", { on: audible() });
+  });
+  showSound();
 }
 
 async function startSound() {
@@ -445,12 +464,21 @@ async function startSound() {
 }
 
 // Which events count as an interaction differs between browsers, so the
-// first of each kind is tried; starting again is harmless.
+// first of each kind is tried; starting again is harmless. The button's
+// own are left to it, which would otherwise see the sound started by the
+// time it is clicked, and turn it off.
 for (const type of ["pointerdown", "pointerup", "click", "keydown"]) {
-  addEventListener(type, () => { if (sound.on) startSound().catch(() => {}); }, { capture: true, once: true });
+  addEventListener(type, (e) => {
+    if (sound.on && e.target !== $("sound")) startSound().catch(() => {});
+  }, { capture: true, once: true });
 }
 
 $("sound").addEventListener("click", async () => {
+  // Held, the click is what lets it start: the sound stays on.
+  if (held()) {
+    startSound().catch(() => {});
+    return;
+  }
   sound.on = !sound.on;
   try { localStorage.setItem("sound", sound.on ? "on" : "off"); } catch { /* not remembered */ }
   showSound();
@@ -462,6 +490,9 @@ $("sound").addEventListener("click", async () => {
 });
 
 showSound();
+// Set up now, so that a browser that allows sound without a click plays it
+// from the start; one that does not leaves it held.
+if (sound.on) startSound().catch(() => {});
 
 function showBIOS() {
   if (!$("bios-name")) return;
