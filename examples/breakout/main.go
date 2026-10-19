@@ -1,4 +1,4 @@
-// The breakout demo, in Go.
+// Breakout in sprites, ten levels of it, with music and a high score table.
 //
 // A port of L. Evans's Net Yaroze demo "breakout" (Sony, 1996): Breakout in
 // sprites. A bat slides along the bottom of the screen under a wall of
@@ -15,10 +15,6 @@
 // softens the sprites' black edges, the library's font prints the frame,
 // the lives and the score, and music plays from a sequence off the disc.
 //
-// Left and right move the bat, and R1 and R2 make it faster and slower. L1
-// pauses for as long as it is held, and Start and Select together quit. On
-// the score screen Cross starts a new game and L1 and R1 together quit.
-//
 // Differences from the original:
 //
 //   - The textures and the sound are read off the disc into the program's
@@ -27,6 +23,12 @@
 //   - The missing data is reported, where the original would hang.
 //
 // Nothing allocates after startup.
+//
+// # Controls
+//
+// Left and right move the bat, and R1 and R2 make it faster and slower. L1
+// pauses for as long as it is held, and Start and Select together quit. On
+// the score screen Cross starts a new game and L1 and R1 together quit.
 package main
 
 import (

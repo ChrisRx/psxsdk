@@ -32,13 +32,18 @@
     <a class="repo" href="{{$site.Repo}}">GitHub</a>
   </header>
 
-  <div class="layout{{if not $page.Section}} front{{end}}">
+  {{- $described := and $page.Section $page.Section.Described}}
+  <div class="layout{{if not $page.Section}} front{{end}}{{if $described}} described{{end}}">
     {{- with $page.Section}}
     <aside class="side">
       <nav aria-label="{{.Title}}">
         <ul>
           {{- range .Pages}}
+          {{- if $described}}
+          <li><a href="{{$root}}{{.URL}}"{{if eq . $page}} aria-current="page"{{end}}><b>{{.Title}}</b>{{if and .Description (ne . $page.Section.Index)}}<small>{{.Description}}</small>{{end}}</a></li>
+          {{- else}}
           <li><a href="{{$root}}{{.URL}}"{{if eq . $page}} aria-current="page"{{end}}>{{.Title}}</a></li>
+          {{- end}}
           {{- end}}
         </ul>
       </nav>
@@ -48,10 +53,28 @@
     <main>
       <article>
         <h1>{{$page.Title}}</h1>
+        {{- if and $described $page.Description}}
+        <p class="lede">{{$page.Description}}</p>
+        {{- end}}
         {{- if $page.Embed}}
         {{player $root $page.Embed}}
         {{- end}}
+        {{- with $page.Controls}}
+        <section class="controls" aria-label="Controls">
+          <h2>Controls</h2>
+          {{.}}
+        </section>
+        {{- end}}
         {{$page.Content}}
+        {{- if and $described (eq $page $page.Section.Index)}}
+        <ul class="cards">
+          {{- range $page.Section.Pages}}
+          {{- if ne . $page}}
+          <li><a href="{{$root}}{{.URL}}"><b>{{.Title}}</b><span>{{.Description}}</span></a></li>
+          {{- end}}
+          {{- end}}
+        </ul>
+        {{- end}}
         {{- if $page.Source}}
         <p class="source"><a href="{{$site.Repo}}/tree/main/{{$page.Source}}">Source on GitHub</a></p>
         {{- end}}
@@ -64,7 +87,7 @@
       {{- end}}
     </main>
 
-    {{- if $page.TOC}}
+    {{- if and $page.TOC (not $described)}}
     <aside class="toc">
       <nav aria-label="On this page">
         <p>On this page</p>

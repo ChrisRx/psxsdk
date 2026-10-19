@@ -1,4 +1,5 @@
-// The chrome sample, in Go.
+// A chrome torus turning: environment mapping with the GTE, worked out again
+// every frame.
 //
 // A port of Sony's Net Yaroze demo "chrome" (S. Ashley, 1997): a textured
 // torus, turning, whose texture coordinates are worked out again every frame
@@ -18,6 +19,8 @@
 //     silently overwrites the kernel's memory at address 0.
 //   - A loading message, and a report if the data is missing, rather than a
 //     black screen.
+//
+// # Controls
 //
 // Hold Start and Select together to quit.
 package main

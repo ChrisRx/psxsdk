@@ -101,44 +101,11 @@ body {
 a { color: var(--accent); text-underline-offset: 2px; }
 .muted { color: var(--muted); }
 
-.top, main { max-width: 1080px; margin: 0 auto; }
-
-.top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 28px;
-  margin-bottom: 20px;
-}
 h1 {
   margin: 0;
   font: 600 2.125rem/1 "Barlow Condensed", Barlow, system-ui, sans-serif;
   letter-spacing: 0.005em;
 }
-.top p { margin: 0; color: var(--muted); max-width: 64ch; }
-
-main {
-  display: grid;
-  grid-template-columns: 232px minmax(0, 1fr);
-  gap: 28px;
-  align-items: start;
-}
-
-/* The examples. */
-nav ul { list-style: none; margin: 0; padding: 0; }
-nav a {
-  display: block;
-  padding: 8px 12px;
-  border-left: 3px solid transparent;
-  border-radius: 0 6px 6px 0;
-  color: var(--ink);
-  text-decoration: none;
-}
-nav a b { display: block; font-weight: 500; }
-nav a small { display: block; margin-top: 1px; color: var(--muted); font-size: 0.875rem; line-height: 1.35; }
-nav a:hover { background: var(--surface); }
-nav a[aria-current="true"] { border-left-color: var(--accent); background: var(--surface); }
-
 /* The player. */
 .screen {
   position: relative;
@@ -193,7 +160,7 @@ button:hover:not(:disabled), .file:hover { background: var(--surface-2); }
 button:disabled { opacity: 0.45; cursor: default; }
 .file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 
-button:focus-visible, .file:focus-within, nav a:focus-visible, summary:focus-visible, a:focus-visible {
+button:focus-visible, .file:focus-within, summary:focus-visible, a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -204,8 +171,6 @@ button:focus-visible, .file:focus-within, nav a:focus-visible, summary:focus-vis
   font-variant-numeric: tabular-nums;
 }
 
-.hint { margin: 8px 0 0; color: var(--muted); }
-.hint:empty { display: none; }
 
 .panel {
   margin-top: 12px;
@@ -464,35 +429,9 @@ body.has-full { overflow: hidden; }
   }
 }
 
-/* Narrow screens, and short ones such as a phone turned sideways: the
-   examples become a row of chips to scroll along, so the picture and the
-   controller come first. */
+/* Narrow screens, and short ones such as a phone turned sideways. */
 @media (max-width: 759px), (orientation: landscape) and (max-height: 560px) {
-  body { padding-top: 16px; }
-  .top { margin-bottom: 12px; }
-  h1 { font-size: 1.75rem; }
-  .top p { font-size: 0.9375rem; }
-  main { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .bar button { padding: 6px 11px; }
-  nav ul {
-    display: flex;
-    gap: 8px;
-    margin: 0 -16px;
-    padding: 2px 16px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  nav ul::-webkit-scrollbar { display: none; }
-  nav li { flex: none; }
-  nav a {
-    padding: 6px 14px;
-    border: 1px solid var(--line-strong);
-    border-radius: 999px;
-    font-weight: 500;
-  }
-  nav a small { display: none; }
-  nav a:hover { background: transparent; }
-  nav a[aria-current="true"] { border-color: var(--ink); background: var(--ink); color: var(--bg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -500,14 +439,10 @@ body.has-full { overflow: hidden; }
   .panel summary::before { transition: none; }
 }
 
-/* Embedded in the documentation (?embed): the picture, its buttons and the
-   hint alone. The heading, the list of examples and the panels are the
-   page's to provide, and the page sizes the frame to what is left, so
-   nothing here may scroll. */
-.embed, .embed body { overflow: hidden; }
-.embed body { padding: 8px; }
-.embed .top, .embed main > nav, .embed .panel { display: none; }
-.embed .hint { margin-bottom: 0; }
+/* The player (player.html), framed in an example's page, which sizes the
+   frame to what is here, so nothing may scroll. */
+#player-page { padding: 8px; overflow: hidden; }
+html:has(#player-page) { overflow: hidden; }
 
 /* The playground (index.html): the editor on the left, the emulator on the
    right with the compiler's and the emulator's output under it, filling the

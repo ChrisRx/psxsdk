@@ -1,7 +1,15 @@
 // Command site builds the documentation site: the pages under docs/, a page
 // for each example from its own package comment, and the playground and the
 // player, which are web/static, under play/: the playground is its index,
-// and the player, which the example pages embed, is play/player.html.
+// and the player, which the example pages frame, is play/player.html.
+//
+// An example's package comment is all there is to say about it, and its
+// page is laid out from the comment's parts: the first paragraph, one
+// sentence, is what the example is, shown under its name in the list of
+// examples and under the heading on its page; a "# Controls" heading's
+// section is what the controller does in it, shown under the player; and
+// the rest is the page's text. The examples' index page orders them, by an
+// order line in its front matter naming the ones that come first.
 //
 // There is no framework behind it. A page is a Markdown file with a short
 // front matter, rendered with goldmark and chroma into one template, and the
@@ -34,7 +42,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"go/ast"
 	"go/doc/comment"
+	"go/format"
 	"go/parser"
 	"go/token"
 	"html/template"
@@ -45,6 +55,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -131,8 +142,12 @@ type Section struct {
 	Title  string
 	URL    string // from the root, with a trailing slash
 	Index  *Page
-	Pages  []*Page // the index first, then by weight and title
+	Pages  []*Page // the index first, then by its order, weight and title
 	weight int
+
+	// Described lists the section's pages with their descriptions, in the
+	// sidebar and on the index, as the examples are.
+	Described bool
 }
 
 // A Page is one Markdown file, or one example, rendered.
@@ -144,10 +159,12 @@ type Page struct {
 	URL         string // from the root, with a trailing slash; "" for the front page
 	Content     template.HTML
 	TOC         []Heading
-	Text        string // the body as plain text, for search
-	Embed       string // an example to show the player for
-	Source      string // a path in the repository the page documents
-	section     string // for an index, the section's name when not the title
+	Text        string        // the body as plain text, for search
+	Embed       string        // an example to show the player for
+	Controls    template.HTML // what the controller does, for an example
+	Source      string        // a path in the repository the page documents
+	section     string        // for an index, the section's name when not the title
+	order       []string      // for an index, the pages that come first, by name
 
 	src   string // the Markdown file, relative to docs/, or "" when generated
 	index bool
@@ -231,10 +248,27 @@ func load(docs, examples string) (*Site, error) {
 		}
 	}
 	for _, sec := range s.Sections {
+		// The pages the index's order names come first, in that order.
+		rank := map[string]int{}
+		for i, name := range sec.Index.order {
+			if !slices.ContainsFunc(sec.Pages, func(p *Page) bool { return !p.index && path.Base(p.URL) == name }) {
+				return nil, fmt.Errorf("docs/%s/index.md orders %q, which is not one of its pages", sec.Name, name)
+			}
+			rank[name] = i + 1
+		}
+		first := func(p *Page) int {
+			if r, ok := rank[path.Base(p.URL)]; ok {
+				return r
+			}
+			return len(rank) + 1
+		}
 		sort.SliceStable(sec.Pages, func(i, j int) bool {
 			a, b := sec.Pages[i], sec.Pages[j]
 			if a.index != b.index {
 				return a.index
+			}
+			if ra, rb := first(a), first(b); ra != rb {
+				return ra < rb
 			}
 			if a.Weight != b.Weight {
 				return a.Weight < b.Weight
@@ -243,6 +277,17 @@ func load(docs, examples string) (*Site, error) {
 		})
 	}
 	return s, nil
+}
+
+// splitList splits a front matter value of names separated by commas.
+func splitList(v string) []string {
+	var out []string
+	for name := range strings.SplitSeq(v, ",") {
+		if name = strings.TrimSpace(name); name != "" {
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 // readPage renders the Markdown file rel, under docs/.
@@ -260,6 +305,7 @@ func (s *Site) readPage(rel string) (*Page, error) {
 		Description: meta["description"],
 		Embed:       meta["embed"],
 		section:     meta["section"],
+		order:       splitList(meta["order"]),
 		src:         rel,
 		index:       path.Base(rel) == "index.md",
 	}
@@ -289,7 +335,8 @@ func (s *Site) readPage(rel string) (*Page, error) {
 // from the body. The keys are title, which every page needs, weight, which
 // orders pages in a section and sections in the header, description, embed,
 // which names an example to show the player for, and on an index, section,
-// which names the section when its page's title would not.
+// which names the section when its page's title would not, and order, the
+// names of the section's pages to put first, separated by commas.
 func frontMatter(src []byte) (map[string]string, []byte, error) {
 	meta := map[string]string{}
 	if !bytes.HasPrefix(src, []byte("---\n")) {
@@ -316,9 +363,13 @@ func frontMatter(src []byte) (map[string]string, []byte, error) {
 // expand resolves what a page pulls in from outside its own text, before it
 // is parsed as Markdown:
 //
-//   - an empty fenced code block whose info string names a file beside the
-//     page, "```go src=square/main.go", is filled with that file, so that a
-//     program a page shows is the one that is built and tested
+//   - an empty fenced code block whose info string names a file relative to
+//     the page, "```go src=square/main.go", is filled with that file, so
+//     that a program a page shows is the one that is built and tested; with
+//     names after the path, "src=square/main.go#main,setUp", it is filled
+//     with those declarations of the Go file alone, each with its comment,
+//     a function or method, or a var, const or type, out of its group if it
+//     is in one
 //   - a line "<!-- player NAME -->" becomes the player, running the disc
 //     built for NAME, as an example's page has above its text
 func (s *Site) expand(p *Page, body []byte) ([]byte, error) {
@@ -335,8 +386,12 @@ func (s *Site) expand(p *Page, body []byte) ([]byte, error) {
 			if p.src == "" {
 				return nil, fmt.Errorf("src= in a page that is not a file")
 			}
-			rel := path.Join(path.Dir(p.src), src)
+			file, names, _ := strings.Cut(src, "#")
+			rel := path.Join(path.Dir(p.src), file)
 			data, err := os.ReadFile(filepath.Join(s.docs, filepath.FromSlash(rel)))
+			if err == nil && names != "" {
+				data, err = declarations(data, splitList(names))
+			}
 			if err != nil {
 				return nil, fmt.Errorf("including %s: %w", src, err)
 			}
@@ -352,11 +407,102 @@ func (s *Site) expand(p *Page, body []byte) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
+// declarations returns the declarations of names in the Go source src, in
+// the order named, separated by blank lines. A function is named by its
+// name and a method by its receiver's type and its name, "Screen.Open". A
+// var, const or type in a parenthesized group is taken out of the group,
+// with the keyword put in front of it.
+func declarations(src []byte, names []string) ([]byte, error) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "", src, parser.ParseComments|parser.SkipObjectResolution)
+	if err != nil {
+		return nil, err
+	}
+	text := func(from, to token.Pos) string {
+		return string(src[fset.Position(from).Offset:fset.Position(to).Offset])
+	}
+	// start is where a node's text begins, its comment if it has one.
+	start := func(doc *ast.CommentGroup, n ast.Node) token.Pos {
+		if doc != nil {
+			return doc.Pos()
+		}
+		return n.Pos()
+	}
+	find := func(name string) (string, bool) {
+		for _, d := range f.Decls {
+			switch d := d.(type) {
+			case *ast.FuncDecl:
+				if funcName(d) == name {
+					return text(start(d.Doc, d), d.End()), true
+				}
+			case *ast.GenDecl:
+				for _, spec := range d.Specs {
+					var doc *ast.CommentGroup
+					var idents []*ast.Ident
+					switch spec := spec.(type) {
+					case *ast.ValueSpec:
+						doc, idents = spec.Doc, spec.Names
+					case *ast.TypeSpec:
+						doc, idents = spec.Doc, []*ast.Ident{spec.Name}
+					}
+					if !slices.ContainsFunc(idents, func(id *ast.Ident) bool { return id.Name == name }) {
+						continue
+					}
+					if !d.Lparen.IsValid() {
+						return text(start(d.Doc, d), d.End()), true
+					}
+					// Out of its group: one tab less indented, with its
+					// keyword between its comment and itself, and
+					// formatted again, since the group aligned it with
+					// its neighbors.
+					var b strings.Builder
+					if doc != nil {
+						b.WriteString(text(doc.Pos(), spec.Pos()))
+					}
+					b.WriteString(d.Tok.String() + " " + text(spec.Pos(), spec.End()))
+					decl := strings.ReplaceAll(b.String(), "\n\t", "\n")
+					if formatted, err := format.Source([]byte(decl)); err == nil {
+						decl = string(formatted)
+					}
+					return decl, true
+				}
+			}
+		}
+		return "", false
+	}
+	var out []string
+	for _, name := range names {
+		decl, ok := find(name)
+		if !ok {
+			return nil, fmt.Errorf("no declaration of %s", name)
+		}
+		out = append(out, decl)
+	}
+	return []byte(strings.Join(out, "\n\n")), nil
+}
+
+// funcName is a function's name, or a method's receiver type and name.
+func funcName(d *ast.FuncDecl) string {
+	if d.Recv == nil || len(d.Recv.List) == 0 {
+		return d.Name.Name
+	}
+	t := d.Recv.List[0].Type
+	if star, ok := t.(*ast.StarExpr); ok {
+		t = star.X
+	}
+	if idx, ok := t.(*ast.IndexExpr); ok {
+		t = idx.X
+	}
+	if id, ok := t.(*ast.Ident); ok {
+		return id.Name + "." + d.Name.Name
+	}
+	return d.Name.Name
+}
+
 // playerHTML is the player framed in a page, booted into the disc built
-// for name, as the player's own page would be with that name in its hash.
+// for name, which the player takes from its hash.
 func playerHTML(root, name string) string {
-	return fmt.Sprintf(`<iframe class="player" src="%[1]splay/player.html?embed#%[2]s" title="%[2]s, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>
-<p class="muted"><a href="%[1]splay/player.html#%[2]s">Open in the player</a>, with the keyboard and gamepad reference.</p>`, root, name)
+	return fmt.Sprintf(`<iframe class="player" src="%[1]splay/player.html#%[2]s" title="%[2]s, running in the emulator" allow="fullscreen; gamepad" allowfullscreen scrolling="no" loading="lazy"></iframe>`, root, name)
 }
 
 // render turns a page's Markdown into its content, table of contents and
@@ -522,6 +668,7 @@ func (s *Site) addExamples(dir string, sections map[string]*Section) error {
 	if sec == nil {
 		return fmt.Errorf("no docs/examples/index.md to put the example pages under")
 	}
+	sec.Described = true
 	ents, err := os.ReadDir(dir)
 	if err != nil {
 		return err
@@ -541,8 +688,9 @@ func (s *Site) addExamples(dir string, sections map[string]*Section) error {
 	return nil
 }
 
-// examplePage renders a program's package comment as its page, with the
-// player showing the program above it.
+// examplePage makes a program's page from its package comment, as the
+// package comment of this command describes, with the player showing the
+// program above the text.
 func (s *Site) examplePage(name, main string) (*Page, error) {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, main, nil, parser.ParseComments|parser.PackageClauseOnly)
@@ -555,34 +703,50 @@ func (s *Site) examplePage(name, main string) (*Page, error) {
 	var cp comment.Parser
 	d := cp.Parse(f.Doc.Text())
 	pr := &comment.Printer{HeadingLevel: 2}
+	text := func(blocks ...comment.Block) string {
+		return strings.Join(strings.Fields(string(pr.Text(&comment.Doc{Content: blocks, Links: d.Links}))), " ")
+	}
 
 	p := &Page{
 		Title:  name,
-		Weight: 0,
 		URL:    "examples/" + name + "/",
 		Embed:  name,
 		Source: path.Join(filepath.Base(filepath.Dir(filepath.Dir(main))), name),
 	}
-	// The first sentence says what the program is.
-	p.Description = firstSentence(f.Doc.Text())
-	p.Content = anchored(string(pr.HTML(d)))
-	p.Text = strings.Join(strings.Fields(string(pr.Text(d))), " ")
-	for _, b := range d.Content {
+
+	// The first paragraph says what the program is.
+	lead, ok := d.Content[0].(*comment.Paragraph)
+	if !ok {
+		return nil, errors.New("the package comment does not start with a paragraph saying what the program is")
+	}
+	p.Description = text(lead)
+
+	// The Controls section goes under the player, and the rest is the text.
+	var body, controls []comment.Block
+	inControls := false
+	for _, b := range d.Content[1:] {
+		if h, ok := b.(*comment.Heading); ok {
+			if inControls = headingText(h) == "Controls"; inControls {
+				continue
+			}
+		}
+		if inControls {
+			controls = append(controls, b)
+		} else {
+			body = append(body, b)
+		}
+	}
+	if len(controls) > 0 {
+		p.Controls = template.HTML(pr.HTML(&comment.Doc{Content: controls, Links: d.Links}))
+	}
+	p.Content = anchored(string(pr.HTML(&comment.Doc{Content: body, Links: d.Links})))
+	p.Text = p.Description + " " + text(append(controls, body...)...)
+	for _, b := range body {
 		if h, ok := b.(*comment.Heading); ok {
 			p.TOC = append(p.TOC, Heading{Level: 2, ID: h.DefaultID(), Text: headingText(h)})
 		}
 	}
 	return p, nil
-}
-
-func firstSentence(s string) string {
-	s = strings.Join(strings.Fields(s), " ")
-	for i := 0; i < len(s); i++ {
-		if s[i] == '.' && (i+1 == len(s) || s[i+1] == ' ') {
-			return s[:i+1]
-		}
-	}
-	return s
 }
 
 func headingText(h *comment.Heading) string {

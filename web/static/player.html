@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>psxsdk examples</title>
-  <meta name="description" content="Play the psxsdk example programs in an emulator written in Go, compiled to WebAssembly.">
+  <title>psxsdk player</title>
+  <meta name="description" content="A psxsdk example program, running in an emulator written in Go, compiled to WebAssembly.">
   <meta name="theme-color" content="#e3e2dd" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1b1b1e" media="(prefers-color-scheme: dark)">
   <link rel="preload" href="fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
@@ -12,17 +12,11 @@
   <link rel="icon" href="favicon.png" type="image/png">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <header class="top">
-    <h1>psxsdk examples</h1>
-    <p>PlayStation programs written in Go with <a href="https://github.com/ChrisRx/psxsdk">psxsdk</a>, running in an emulator that is also written in Go, compiled to WebAssembly. Or <a href="./">write your own</a>.</p>
-  </header>
-
+<body id="player-page">
+  <!-- The player that an example's page frames, booting the example its
+       hash names. The page gives the heading, the list of examples and the
+       description; this is the picture, its buttons and the panels. -->
   <main>
-    <nav aria-label="Examples">
-      <ul id="examples"><li class="muted">Loading…</li></ul>
-    </nav>
-
     <section class="player" aria-label="Player">
       <div id="stage" class="stage">
         <div class="screen">
@@ -78,7 +72,6 @@
         <button id="fullscreen" type="button">Fullscreen</button>
         <span id="status" class="status" aria-live="polite"></span>
       </div>
-      <p id="hint" class="hint"></p>
 
       <details id="keys" class="panel">
         <summary>Keyboard and gamepad</summary>

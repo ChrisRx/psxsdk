@@ -1,4 +1,5 @@
-// The morph demo, in Go.
+// A textured sheet morphing into a cylinder, a torus and a sphere, vertex by
+// vertex, as it tumbles.
 //
 // A port of Sony's Net Yaroze demo "morph" (S. Ashley, 1997): a textured
 // sheet that turns into a cylinder, a torus, a sphere and back into a
@@ -8,7 +9,6 @@
 // towards the matching vertex of the shape it is becoming, so that the
 // shape changes over a few hundred frames while the whole thing tumbles.
 // The library's font prints the count of horizontal syncs a frame takes.
-// Start and Select together quit.
 //
 // Differences from the original:
 //
@@ -23,6 +23,10 @@
 //     shapes are the tables the original's mesh generator wrote.
 //
 // Nothing allocates after startup.
+//
+// # Controls
+//
+// Start and Select together quit.
 package main
 
 import (

@@ -1,4 +1,4 @@
-// The mdec example: full-color video through the motion decoder.
+// Full-color video through the motion decoder, driven by its registers.
 //
 // The GPU draws in 15-bit color, but it can show 24-bit pictures, and the
 // MDEC, the PlayStation's motion decoder, is how games made them: it takes
@@ -11,6 +11,8 @@
 // loop that gen renders and format/mdec encodes, is read off the disc whole
 // and played at 20 frames a second. Each frame is decoded a column of
 // macroblocks at a time, while the other is on screen.
+//
+// # Controls
 //
 // Hold Start and Select together to quit.
 package main

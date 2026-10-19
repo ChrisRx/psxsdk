@@ -1,4 +1,5 @@
-// The tunnel tutorial, in Go.
+// A ship down an endless tunnel, shooting waves of enemies under three
+// colored lights.
 //
 // A port of L. Evans's Net Yaroze game demo "tunnel" (Sony, 1997), the last
 // of the tutorial series it was built up over: a ship flying down an
@@ -17,10 +18,6 @@
 // robot. Pick-ups give a life, faster shots or movement, or set the lights
 // or the view swinging. The game gets faster every thousand frames.
 //
-// The directional buttons and L1 and L2 move the ship, R1 fires, Select
-// makes moves faster, Select and L2 step slowly, Start pauses, and Start and
-// Select together quit.
-//
 // Differences from the original:
 //
 //   - The data is read off the disc to the addresses the original's batch
@@ -33,6 +30,12 @@
 //     the original uses floating point.
 //   - What the original prints to the serial console is left out, and so
 //     are its assertions.
+//
+// # Controls
+//
+// The directional buttons and L1 and L2 move the ship, R1 fires, Select
+// makes moves faster, Select and L2 step slowly, Start pauses, and Start and
+// Select together quit.
 package main
 
 import (

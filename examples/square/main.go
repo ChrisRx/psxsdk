@@ -1,10 +1,16 @@
-// A box to move around the screen with the directional buttons, in front of
-// a turning cube, to music: a program to start from.
+// A box to move around the screen in front of a turning cube, to music: the
+// program to start from, which the tutorial writes.
 //
-// Start pauses the music and starts it again. The music and the cube are
-// read off the disc while the frames go on, with a bar for how far the
-// reading has got; if the disc cannot be read, the program shows the box
-// alone and says which file it could not read.
+// It is the smallest program that has the parts most programs need: the
+// frame loop, the controller, files read off the disc, a model drawn in
+// 3D, and music. The music and the cube are read off the disc while the
+// frames go on, with a bar for how far the reading has got; if the disc
+// cannot be read, the program shows the box alone and says which file it
+// could not read.
+//
+// # Controls
+//
+// The directions move the box. Start pauses the music and starts it again.
 package main
 
 // The files under data/ are declared, ready to load, in

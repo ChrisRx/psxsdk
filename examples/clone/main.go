@@ -1,4 +1,5 @@
-// The clone sample, in Go.
+// A first-person maze shooter, three levels deep, in fog, with a heartbeat
+// that quickens as the monsters close in.
 //
 // A port of Sony's Net Yaroze demo "clone" (S. Ashley, 1997): a first-person
 // maze shooter. Walk a fogged, textured maze, shoot the monsters before they
@@ -10,10 +11,6 @@
 // boxes and text, a palette rewritten every frame, and sound effects played
 // straight on SPU voices, which the check example's sequenced music does
 // not use.
-//
-// Controls: the d-pad walks and turns, L1 and R1 sidestep, X fires, and
-// circle shows the map of where you have been. Hold Start and Select
-// together to quit.
 //
 // Differences from the original:
 //
@@ -34,6 +31,12 @@
 //     where the original would hang or exit.
 //
 // Nothing allocates after startup.
+//
+// # Controls
+//
+// The d-pad walks and turns, L1 and R1 sidestep, Cross fires, and Circle
+// shows the map of where you have been. Hold Start and Select together to
+// quit.
 package main
 
 import (

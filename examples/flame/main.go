@@ -1,4 +1,5 @@
-// The flame demo, in Go.
+// A sheet of fire at 640 by 480: a model built in memory and recolored every
+// frame.
 //
 // A port of Sony's Net Yaroze demo "flame" (S. Ashley, 1997): a sheet of
 // fire, drawn at 640 by 480. A grid of heat values is seeded along its
@@ -9,9 +10,8 @@
 // four corner colors of each quad are rewritten from the heat values
 // through a palette running from black through red and yellow to white.
 // The GTE and the 3D library then draw it like any other model, so the
-// sheet can be turned and moved: the d-pad tilts it, L1 and L2 roll it,
-// and R1 and R2 move it nearer and further. The library's font prints the
-// count of horizontal syncs a frame takes. Start and Select together quit.
+// sheet can be turned and moved. The library's font prints the count of
+// horizontal syncs a frame takes.
 //
 // Differences from the original:
 //
@@ -25,6 +25,11 @@
 //     the kernel's memory at address 0.
 //
 // Nothing allocates after startup.
+//
+// # Controls
+//
+// The d-pad tilts the sheet, L1 and L2 roll it, and R1 and R2 move it nearer
+// and further. Start and Select together quit.
 package main
 
 import (

@@ -3,10 +3,11 @@
 // emulator runs in worker.js, off this thread, keeping its own time and
 // drawing onto the canvas itself.
 //
-// Two pages share it: the player (player.html), with the list of examples,
-// and the playground (index.html), whose editor.js builds the disc it boots.
-// What only the player has, the list, the hint and the BIOS panel, is
-// looked for before it is used.
+// Two pages share it: the player (player.html), which the example pages of
+// the documentation frame, each naming its example in the hash, and the
+// playground (index.html), whose editor.js builds the disc it boots. What
+// only the player has, the BIOS panel and the keys, is looked for before it
+// is used.
 "use strict";
 
 // Pad bits, as emu's Button constants.
@@ -32,47 +33,6 @@ const PAD_BUTTONS = [
   BUTTON.up, BUTTON.down, BUTTON.left, BUTTON.right,
 ];
 
-// What each example is, and what the pad does in it, from its package
-// documentation. An example that is not here is listed by name alone.
-const INFO = {
-  check: {
-    about: "Bouncing balls, with music, after the SDK's own first sample.",
-    controls: "Up and down change how many balls bounce. L1 pauses. Select quits.",
-  },
-  chrome: {
-    about: "A chrome-mapped torus turning, a Net Yaroze demo of environment mapping.",
-    controls: "Start and Select together quit.",
-  },
-  clone: {
-    about: "A first-person maze shooter, three levels deep, a Net Yaroze demo.",
-    controls: "Up and down walk, left and right turn, L1 and R1 sidestep. Cross fires, Circle shows the map. Start and Select together quit.",
-  },
-  dungeon: {
-    about: "A random maze of stone walls walked in the first person, a Japanese Net Yaroze demo.",
-    controls: "The directions turn and walk, L1 and R1 sidestep, L2 and R2 look up and down, and Circle speeds everything up. Start switches to steering the ship instead; Start and Select together quit.",
-  },
-  flying: {
-    about: "A ship over a plane of tiles, hunted by enemies that track and shoot, a Net Yaroze tutorial.",
-    controls: "Up and down move the ship, Square and Circle turn it, and L2 fires. R1 and R2 change the view and L1 puts it back. Start pauses. Start and Select together quit.",
-  },
-  mdec: {
-    about: "Full-color video played through the motion decoder.",
-    controls: "Start and Select together quit.",
-  },
-  cube: {
-    about: "A textured cube read off the disc, the program the tutorial writes.",
-    controls: "The directions turn the cube.",
-  },
-  offscr: {
-    about: "A sprite painted onto a sphere's texture while it runs, a Net Yaroze tutorial.",
-    controls: "The directions, L1 and L2 move the ship, and the symbol buttons move the sprite; hold Select to move faster. Start pauses. Start and Select together quit.",
-  },
-  tunnel: {
-    about: "A ship down an endless tunnel, shooting waves of enemies, a Net Yaroze game demo.",
-    controls: "The directions, L1 and L2 move the ship, and R1 fires; hold Select to move faster. Start pauses. Start and Select together quit.",
-  },
-};
-
 const $ = (id) => document.getElementById(id);
 const canvas = $("screen");
 const overlay = $("overlay");
@@ -80,7 +40,6 @@ const status = $("status");
 const tty = $("tty");
 
 const state = {
-  examples: [],
   current: null,  // the example running
   disc: null,     // its files, kept to boot again with another BIOS
   bios: null,     // {name, data}, the visitor's own, or null for OpenBIOS
@@ -269,13 +228,6 @@ async function boot() {
 async function start(example) {
   setRunning(false);
   state.current = example;
-  for (const a of document.querySelectorAll("#examples a")) {
-    const current = a.dataset.name === example.name;
-    a.setAttribute("aria-current", String(current));
-    // In the row of chips on a narrow screen, bring the current one into view.
-    if (current && narrow.matches) a.scrollIntoView({ block: "nearest", inline: "center" });
-  }
-  if ($("hint")) $("hint").textContent = INFO[example.name]?.controls ?? "";
   tty.textContent = "";
   status.textContent = "";
   showOverlay(`Loading ${example.name}…`);
@@ -412,7 +364,6 @@ addEventListener("pointercancel", release, { capture: true });
 
 // The touch controls show on a touchscreen, or once one is used.
 const coarse = matchMedia("(pointer: coarse)");
-const narrow = matchMedia("(max-width: 759px)");
 const showTouch = () => document.body.classList.add("touch");
 if (coarse.matches) showTouch();
 coarse.addEventListener("change", () => { if (coarse.matches) showTouch(); });
@@ -540,26 +491,29 @@ $("bios-clear")?.addEventListener("click", async () => {
   if (state.disc) boot().catch((e) => showOverlay(`Could not start: ${e.message}`));
 });
 
+// The example the hash names, with the disc the site publishes for it.
 function exampleFromHash() {
   const name = decodeURIComponent(location.hash.slice(1));
-  return state.examples.find((x) => x.name === name);
+  return name ? { name, cue: `examples/${encodeURIComponent(name)}/${encodeURIComponent(name)}.cue` } : null;
 }
 
-addEventListener("hashchange", () => {
-  const example = exampleFromHash();
-  if (example && example !== state.current) start(example);
-});
-
 async function init() {
-  // Embedded in a page of the documentation, which supplies its own
-  // heading and picks the example through the hash, the page is only the
-  // player.
-  if (new URLSearchParams(location.search).has("embed")) {
-    document.documentElement.classList.add("embed");
+  // The player is framed in an example's page, which supplies the
+  // heading, the controls and the description around it. Opened on its
+  // own, as the player's address once was, it goes to that page instead.
+  const player = $("player-page");
+  if (player && window.top === window) {
+    const example = exampleFromHash();
+    location.replace(example ? `../examples/${encodeURIComponent(example.name)}/` : "../examples/");
+    return;
+  }
+  if (player) {
     // The page around the frame sizes it to fit, so that the player never
     // scrolls inside it: it is told the height whenever that changes, as
-    // it does when the touch controller appears.
-    const report = () => parent.postMessage({ type: "psx-player-height", height: document.documentElement.scrollHeight }, "*");
+    // it does when the touch controller appears or a panel opens.
+    // The body's own height, since the document's is never less than the
+    // frame's, which would keep the frame from shrinking.
+    const report = () => parent.postMessage({ type: "psx-player-height", height: Math.ceil(document.body.getBoundingClientRect().height) }, "*");
     new ResizeObserver(report).observe(document.body);
     report();
   }
@@ -569,35 +523,9 @@ async function init() {
 
   requestAnimationFrame(loop);
 
-  const list = $("examples");
-  if (!list) return;
-  try {
-    state.examples = await (await fetch("examples.json")).json();
-  } catch (e) {
-    list.innerHTML = `<li class="muted">Could not load the examples: ${e.message}</li>`;
-    return;
-  }
-  list.replaceChildren(...state.examples.map((x) => {
-    const li = document.createElement("li");
-    const a = document.createElement("a");
-    a.href = `#${encodeURIComponent(x.name)}`;
-    a.dataset.name = x.name;
-    const name = document.createElement("b");
-    name.textContent = x.name;
-    a.append(name);
-    if (INFO[x.name]) {
-      const about = document.createElement("small");
-      about.textContent = INFO[x.name].about;
-      a.append(about);
-    }
-    li.append(a);
-    return li;
-  }));
-
-  // With a keyboard, the keys are worth seeing before starting.
-  if (!coarse.matches) $("keys").open = true;
-
-  const example = exampleFromHash();
+  // The playground boots what its editor builds; only the player boots
+  // the example its hash names.
+  const example = player && exampleFromHash();
   if (example) start(example);
 }
 

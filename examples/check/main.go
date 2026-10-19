@@ -1,4 +1,4 @@
-// The check sample, in Go.
+// Bouncing balls, with music, after the SDK's own first sample.
 //
 // A port of sdk/sample/check/main.c: bouncing balls over a cleared
 // background, the count adjustable with the d-pad, with the sound data read
@@ -20,6 +20,11 @@
 //
 // Nothing allocates after startup. With no collector running, anything
 // allocated in the frame loop would never be reclaimed.
+//
+// # Controls
+//
+// Up and down change how many balls bounce. L1 pauses while it is held.
+// Select quits.
 package main
 
 import (

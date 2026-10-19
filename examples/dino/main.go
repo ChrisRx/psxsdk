@@ -1,4 +1,5 @@
-// The dino demo, in Go.
+// A dinosaur walking in front of a castle, animated vertex by vertex by the
+// GTE, to music with reverb.
 //
 // A port of Sony's Net Yaroze demo "dino" (1996): a dinosaur walking in
 // front of a castle, at 640 by 240. The dinosaur is one model of 2,724
@@ -14,16 +15,6 @@
 // drawing buffer every frame before the model is drawn over it, in fog,
 // under three lights. Music plays from a sequence, with reverb.
 //
-// The dinosaur walks by itself. Square and Circle turn it, Triangle and
-// Cross tip it, the d-pad moves it across and up and down, and Start and
-// Select bring it nearer and further. R2 opens its mouth, L2 blinks, R1
-// turns its head and L1 lifts its tail. Holding L1 and R1 with Select
-// stops the walk and puts the legs on the buttons instead: R1, R2, L1 and
-// L2 lift each in turn, with Down the feet and with Up the knees. L1 and R1
-// with Start starts the walk again, and then Up and Down choose between
-// the buttons above and R1 and R2 changing the walk's speed, with L1
-// putting it back. Start and Select together quit.
-//
 // Differences from the original:
 //
 //   - The data is read off the disc into the program's own memory rather
@@ -38,6 +29,18 @@
 //     step tables rather than reading before them.
 //
 // Nothing allocates after startup.
+//
+// # Controls
+//
+// The dinosaur walks by itself. Square and Circle turn it, Triangle and
+// Cross tip it, the d-pad moves it across and up and down, and Start and
+// Select bring it nearer and further. R2 opens its mouth, L2 blinks, R1
+// turns its head and L1 lifts its tail. Holding L1 and R1 with Select stops
+// the walk and puts the legs on the buttons instead: R1, R2, L1 and L2 lift
+// each in turn, with Down the feet and with Up the knees. L1 and R1 with
+// Start starts the walk again, and then Up and Down choose between the
+// buttons above and R1 and R2 changing the walk's speed, with L1 putting it
+// back. Start and Select together quit.
 package main
 
 import (

@@ -1,4 +1,5 @@
-// The car demo, in Go.
+// A textured car driving in from the distance, at sixty frames a second or
+// thirty.
 //
 // A port of Sony's Net Yaroze demo "car" (Sony, 1995, "60frame" in its
 // source): an Alfa Romeo Giulietta, a textured model wearing seven
@@ -7,9 +8,7 @@
 // demo is about frame rate: Start switches it between sixty frames a
 // second and thirty, which the library's font reports, and the controls
 // double their steps at thirty so that the car moves at the same speed
-// either way. The d-pad moves the car across and up and down, the symbol
-// buttons turn it, and L1 and L2 bring it nearer and push it further.
-// Select quits.
+// either way.
 //
 // Differences from the original:
 //
@@ -24,6 +23,12 @@
 //     original prints without opening one.
 //
 // Nothing allocates after startup.
+//
+// # Controls
+//
+// The d-pad moves the car across and up and down, the symbol buttons turn
+// it, and L1 and L2 bring it nearer and push it further. Start switches
+// between sixty frames a second and thirty. Select quits.
 package main
 
 import (

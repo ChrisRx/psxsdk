@@ -1,4 +1,5 @@
-// Terra Incognita, in Go.
+// Terra Incognita, a 3D action adventure on an island, reconstructed from
+// its executable.
 //
 // A port of Team Fatal's Net Yaroze game "Terra Incognita" (M. Kamiyama,
 // S. Tajima, K. Tachi, 1996-97), the international version from Sony's
@@ -16,14 +17,6 @@
 // executable, as no source survives: the island, its creatures and its
 // scenes are the data files the original shipped with, read off the disc
 // and decoded here, and everything that moves them is Go.
-//
-// The directional buttons walk, relative to the camera; Cross jumps;
-// Square swings the sword, lifts and throws what can be lifted, and reads
-// the signs; Circle drinks a potion; L1 and R1 turn the camera and L2 and
-// R2 bring it closer or farther. On the title, left and right choose
-// Japanese or English and Cross or Start begins; Cross or Square takes a
-// conversation on. Start and Select together quit the program, which the
-// original, with nowhere to quit to, could not.
 //
 // Differences from the original:
 //
@@ -52,6 +45,16 @@
 // guardian, the returns with and without the pedestal, the day running
 // out, and the endings. The port runs at thirty frames a second as the
 // original did, with the disc build optimizing for speed.
+//
+// # Controls
+//
+// The directional buttons walk, relative to the camera; Cross jumps; Square
+// swings the sword, lifts and throws what can be lifted, and reads the
+// signs; Circle drinks a potion; L1 and R1 turn the camera and L2 and R2
+// bring it closer or farther. On the title, left and right choose Japanese
+// or English and Cross or Start begins; Cross or Square takes a conversation
+// on. Start and Select together quit the program, which the original, with
+// nowhere to quit to, could not.
 package main
 
 import (

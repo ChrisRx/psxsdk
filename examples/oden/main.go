@@ -1,18 +1,12 @@
-// The oden demo, in Go.
+// The lighting calculation: a ball, a cone and a cube under three lights you
+// aim and color.
 //
 // A port of Sony's Net Yaroze demo "oden" (Sony, 1993 to 1996): a
 // demonstration of the lighting calculation. A ball, a cone and a cube,
 // each scaled by its own matrix, stand under three directional lights at
 // 640 by 480 interlaced, and every light can be aimed and recolored while
-// the scene turns. The symbol buttons turn the scene, Start brings it
-// nearer and Select pushes it away. Holding L1, L2 or R2 gives the symbol
-// buttons and the d-pad to the first, second or third light: Triangle and
-// Cross change its red, Circle and Square its green, Select and Start its
-// blue, and the d-pad aims it. Holding R1 with Triangle and Cross raises
-// and lowers the ambient light. The d-pad alone swaps each model for the
-// textured version the TMD also carries, Left the ball, Right the cube and
-// Up the cone, and Down puts the plain versions back. Start and Select
-// together quit.
+// the scene turns. The d-pad also swaps each model for the textured
+// version the TMD carries beside it.
 //
 // Differences from the original:
 //
@@ -20,6 +14,17 @@
 //     memory. The original's batch script sent them to fixed addresses.
 //
 // Nothing allocates after startup.
+//
+// # Controls
+//
+// The symbol buttons turn the scene, Start brings it nearer and Select
+// pushes it away. Holding L1, L2 or R2 gives the symbol buttons and the
+// d-pad to the first, second or third light: Triangle and Cross change its
+// red, Circle and Square its green, Select and Start its blue, and the d-pad
+// aims it. Holding R1 with Triangle and Cross raises and lowers the ambient
+// light. The d-pad alone swaps each model for the textured version the TMD
+// also carries, Left the ball, Right the cube and Up the cone, and Down puts
+// the plain versions back. Start and Select together quit.
 package main
 
 import (

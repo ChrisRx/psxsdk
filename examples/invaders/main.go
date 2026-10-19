@@ -1,4 +1,5 @@
-// The invaders demo, in Go.
+// Space Invaders in sprites, ten levels of it, with music and a high score
+// table.
 //
 // A port of L. Evans's Net Yaroze demo "invaders" (Sony, 1996): Space
 // Invaders in sprites. Four rows of eight invaders march across the screen,
@@ -11,11 +12,6 @@
 // a semi-transparent black box covers the screen, which the original uses to
 // soften the black edges its sprites have, and the library's font prints the
 // frame, the lives and the score. Music plays from a sequence off the disc.
-//
-// Left and right push the ship, which has momentum, and Triangle fires. L1
-// pauses for as long as it is held, and Start and Select together quit. On
-// the score screen Cross starts a new game and L1 and R1 together quit. If
-// the invaders reach the bottom of the screen the program ends.
 //
 // Differences from the original:
 //
@@ -34,6 +30,13 @@
 //   - The missing data is reported, where the original would hang.
 //
 // Nothing allocates after startup.
+//
+// # Controls
+//
+// Left and right push the ship, which has momentum, and Triangle fires. L1
+// pauses for as long as it is held, and Start and Select together quit. On
+// the score screen Cross starts a new game and L1 and R1 together quit. If
+// the invaders reach the bottom of the screen the program ends.
 package main
 
 import (

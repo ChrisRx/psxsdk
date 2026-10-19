@@ -1,4 +1,5 @@
-// A Dog Tale, in Go.
+// A Dog Tale, a platform game across a desert in parallax, to free a dog
+// chained up with five padlocks.
 //
 // A port of Ira Rainey's Net Yaroze game "A Dog Tale" (1997), which went
 // out on the cover disc of the Official UK PlayStation Magazine and on
@@ -16,13 +17,6 @@
 // sample plays, which the author's message says was borrowed. The
 // author's readme asks anyone using the code for a thank you: thanks,
 // Ira.
-//
-// Left and right walk, Cross jumps, straight up or the way you are
-// walking, and Triangle shows the keys found so far. Select pauses, and
-// any direction or Cross goes on; Start while paused gives up and goes
-// back to the title. On the title, left and right choose between About
-// and Play and Cross chooses; Select closes the about box. There is no
-// way to quit the program, as in the original.
 //
 // Differences from the original:
 //
@@ -48,6 +42,15 @@
 //     to whatever happened to be in a register or on the stack.
 //
 // Nothing allocates after startup.
+//
+// # Controls
+//
+// Left and right walk, Cross jumps, straight up or the way you are walking,
+// and Triangle shows the keys found so far. Select pauses, and any direction
+// or Cross goes on; Start while paused gives up and goes back to the title.
+// On the title, left and right choose between About and Play and Cross
+// chooses; Select closes the about box. There is no way to quit the program,
+// as in the original.
 package main
 
 import (

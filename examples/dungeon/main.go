@@ -1,4 +1,5 @@
-// The dungeon demo, in Go.
+// A random maze of stone walls walked in the first person, built around the
+// viewpoint every frame, in blue fog.
 //
 // A port of "dungeon" (Mizuki, 1996), a demo posted to the Japanese Net
 // Yaroze members' forum, in the form the LPGE team's copy of it took, with
@@ -11,13 +12,6 @@
 // closes in behind them, and two lights follow the view, one from above
 // and one from below.
 //
-// The directional buttons turn and walk, L1 and R1 sidestep, L2 and R2
-// look up and down, and Circle makes everything faster. Start switches to
-// steering the ship, which sits near the start: the directional buttons and
-// L1 and L2 move it along its own axes, the symbol buttons and R1 and R2
-// spin it about them, and Select makes those faster. Start and Select
-// together quit.
-//
 // Differences from the original:
 //
 //   - The data is read off the disc to the addresses the original's batch
@@ -29,6 +23,15 @@
 //   - The checks for the edge of the maze come before the reads they
 //     guard, which the original makes a cell past the edge first.
 //   - Quitting returns to the BIOS. The original calls exit.
+//
+// # Controls
+//
+// The directional buttons turn and walk, L1 and R1 sidestep, L2 and R2 look
+// up and down, and Circle makes everything faster. Start switches to
+// steering the ship, which sits near the start: the directional buttons and
+// L1 and L2 move it along its own axes, the symbol buttons and R1 and R2
+// spin it about them, and Select makes those faster. Start and Select
+// together quit.
 package main
 
 import (

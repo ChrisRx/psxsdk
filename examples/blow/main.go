@@ -1,4 +1,5 @@
-// The blow demo, in Go.
+// A model viewer that blows a space shuttle apart, with every light and fog
+// parameter on a menu.
 //
 // A port of Sony's Net Yaroze demo "blow" (S. Ashley, 1997): a model
 // viewer that blows its model up. A space shuttle, in five pieces, is read
@@ -12,16 +13,6 @@
 // set of vertices for every polygon, since a TMD shares its vertices
 // between the polygons that meet at them, and the copy is what is drawn.
 //
-// R1 and R2 step through the menu's pages and Select and Start through
-// the pieces. On each page the d-pad, L1 and L2 adjust three values, and
-// the symbol buttons the rest: the first page turns the piece, and Triangle
-// and Cross bring the viewpoint nearer and further; the second moves the
-// viewpoint; the third scales the piece; the next three aim and color the
-// lights, Square and Circle choosing the component and Triangle and Cross
-// changing it; then the ambient light; then the fog, its distance and
-// color, and whether it is on; and last the explosion, its speed and
-// whether it is going. Start and Select together quit.
-//
 // Differences from the original:
 //
 //   - The viewpoint moves in and out by fiftieths, where the original
@@ -33,6 +24,18 @@
 //     data's report, which the original would hang on.
 //
 // Nothing allocates after startup.
+//
+// # Controls
+//
+// R1 and R2 step through the menu's pages and Select and Start through the
+// pieces. On each page the d-pad, L1 and L2 adjust three values, and the
+// symbol buttons the rest: the first page turns the piece, and Triangle and
+// Cross bring the viewpoint nearer and further; the second moves the
+// viewpoint; the third scales the piece; the next three aim and color the
+// lights, Square and Circle choosing the component and Triangle and Cross
+// changing it; then the ambient light; then the fog, its distance and color,
+// and whether it is on; and last the explosion, its speed and whether it is
+// going. Start and Select together quit.
 package main
 
 import (

@@ -1,4 +1,5 @@
-// The offscr tutorial, in Go.
+// A sprite painted onto a sphere's texture while it runs: drawing into video
+// memory off the screen.
 //
 // A port of L. Evans's Net Yaroze tutorial on retexturing at run time
 // (Sony, 1997). A sphere, textured from a 16-bit image, sits over a square
@@ -9,10 +10,6 @@
 // next frame on. Four seconds in, it also copies a block of VRAM over
 // another, the simplest way to change a texture. The sprite is also drawn on
 // screen, in the top left, as it is.
-//
-// The right-hand buttons move the sprite over the texture, the directional
-// buttons and L1 and L2 move the sphere, Select makes either faster, Start
-// pauses and resumes, and Start and Select together quit.
 //
 // Differences from the original:
 //
@@ -28,6 +25,12 @@
 //   - Code the original never runs is left out: the sprite placement for
 //     objects drawn as sprites, of which it has none, and the palette copy
 //     it has commented out.
+//
+// # Controls
+//
+// The right-hand buttons move the sprite over the texture, the directional
+// buttons and L1 and L2 move the sphere, Select makes either faster, Start
+// pauses and resumes, and Start and Select together quit.
 package main
 
 import (

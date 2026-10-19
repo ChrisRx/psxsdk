@@ -29,10 +29,12 @@ func site(t *testing.T) (*Site, string) {
 	write(t, docs, "tools/listing.md", "---\ntitle: Listing\n---\n\nThe program:\n\n```go src=prog/main.go\n```\n\nTry it:\n\n<!-- player prog -->\n")
 	write(t, docs, "tools/prog/main.go", "package main\n\nfunc main() {}\n")
 	write(t, docs, "tools/mkpsxiso.md", "---\ntitle: mkpsxiso\n---\n\n## Streams\n\nRaw sectors.\n")
-	write(t, docs, "examples/index.md", "---\ntitle: Examples\nweight: 3\n---\n\nThe examples.\n")
+	write(t, docs, "examples/index.md", "---\ntitle: Examples\nweight: 3\norder: zebra\n---\n\nThe examples.\n")
 
 	examples := filepath.Join(dir, "examples")
-	write(t, examples, "demo/main.go", "// The demo, in Go.\n//\n// A port of something. It draws a thing.\n//\n// # Differences from the original\n//\n//   - It is in Go.\npackage main\n")
+	write(t, examples, "demo/main.go", "// A demo that draws a\n// thing.\n//\n// A port of something. It draws a thing.\n//\n// # Controls\n//\n// Cross draws it.\n//\n// # Differences from the original\n//\n//   - It is in Go.\npackage main\n")
+	write(t, examples, "apple/main.go", "// An apple.\npackage main\n")
+	write(t, examples, "zebra/main.go", "// A zebra, first.\npackage main\n")
 	write(t, examples, "internal/shared.go", "package shared\n")
 
 	s, err := load(docs, examples)
@@ -62,15 +64,34 @@ func TestSections(t *testing.T) {
 	assert.Equal(t, []string{"How it fits", "Getting started"}, titles(guide.Pages))
 
 	// The example's page joins the examples section, named by its directory,
-	// with the package comment's first sentence describing it.
+	// with the package comment's first paragraph describing it and its
+	// Controls section taken out of the text.
 	ex := page(s, "examples/demo/")
 	assert.Equal(t, "demo", ex.Title)
-	assert.Equal(t, "The demo, in Go.", ex.Description)
+	assert.Equal(t, "A demo that draws a thing.", ex.Description)
 	assert.Equal(t, "demo", ex.Embed)
 	assert.Equal(t, "examples/demo", ex.Source)
 	assert.Equal(t, s.Sections[2], ex.Section)
+	assert.Equal(t, "<p>Cross draws it.\n", string(ex.Controls))
+	assert.Equal(t, false, strings.Contains(string(ex.Content), "Cross"), string(ex.Content))
+	assert.Equal(t, false, strings.Contains(string(ex.Content), "A demo that"), string(ex.Content))
 	assert.Equal(t, true, strings.Contains(string(ex.Content), "<h2 id=\"hdr-Differences_from_the_original\">"))
 	assert.Equal(t, []Heading{{2, "hdr-Differences_from_the_original", "Differences from the original"}}, ex.TOC)
+	assert.Equal(t, true, strings.Contains(ex.Text, "Cross draws it."), ex.Text)
+
+	// The examples are described, and ordered by the index's order line
+	// first, then by name.
+	assert.Equal(t, true, s.Sections[2].Described)
+	assert.Equal(t, false, guide.Described)
+	assert.Equal(t, []string{"Examples", "zebra", "apple", "demo"}, titles(s.Sections[2].Pages))
+}
+
+func TestOrderUnknown(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "docs/examples/index.md", "---\ntitle: Examples\norder: missing\n---\n")
+	write(t, dir, "examples/demo/main.go", "// A demo.\npackage main\n")
+	_, err := load(filepath.Join(dir, "docs"), filepath.Join(dir, "examples"))
+	assert.Error(t, `orders "missing"`, err)
 }
 
 func titles(pages []*Page) []string {
@@ -140,7 +161,13 @@ func TestWrite(t *testing.T) {
 	assert.Equal(t, true, strings.Contains(page, `<small>Previous</small>How it fits<`), page)
 
 	ex, _ := os.ReadFile(filepath.Join(out, "examples/demo/index.html"))
-	assert.Equal(t, true, strings.Contains(string(ex), `src="../../play/player.html?embed#demo"`), string(ex))
+	assert.Equal(t, true, strings.Contains(string(ex), `src="../../play/player.html#demo"`), string(ex))
+	// The list of examples says what each is, and so does the page.
+	assert.Equal(t, true, strings.Contains(string(ex), `aria-current="page"><b>demo</b><small>A demo that draws a thing.</small>`), string(ex))
+	assert.Equal(t, true, strings.Contains(string(ex), `<p class="lede">A demo that draws a thing.</p>`), string(ex))
+	assert.Equal(t, true, strings.Contains(string(ex), `<section class="controls" aria-label="Controls">`), string(ex))
+	index, _ := os.ReadFile(filepath.Join(out, "examples/index.html"))
+	assert.Equal(t, true, strings.Contains(string(index), `<li><a href="../examples/zebra/"><b>zebra</b><span>A zebra, first.</span></a></li>`), string(index))
 
 	css, _ := os.ReadFile(filepath.Join(out, "assets/chroma.css"))
 	assert.Equal(t, true, strings.HasPrefix(string(css), "@media (prefers-color-scheme: light) {"))
@@ -174,8 +201,7 @@ func TestExpand(t *testing.T) {
 	p := page(s, "tools/listing/")
 	content := string(p.Content)
 	assert.Equal(t, true, strings.Contains(content, `<span class="kn">package</span>`), content)
-	assert.Equal(t, true, strings.Contains(content, `<iframe class="player" src="../../play/player.html?embed#prog"`), content)
-	assert.Equal(t, true, strings.Contains(content, `href="../../play/player.html#prog"`), content)
+	assert.Equal(t, true, strings.Contains(content, `<iframe class="player" src="../../play/player.html#prog"`), content)
 	// What was pulled in is searchable like the rest.
 	assert.Equal(t, true, strings.Contains(p.Text, "func main() {}"), p.Text)
 
@@ -183,4 +209,60 @@ func TestExpand(t *testing.T) {
 	write(t, dir, "x/index.md", "---\ntitle: X\n---\n\n```go src=missing.go\n```\n")
 	_, err := load(dir, "")
 	assert.Error(t, "including missing.go", err)
+}
+
+func TestDeclarations(t *testing.T) {
+	src := []byte(`package main
+
+// speed is how fast.
+const speed = 2
+
+var (
+	// The screen.
+	screen = Screen{
+		Depth: 4,
+	}
+	pad  Pad
+)
+
+type T struct{}
+
+// Open opens.
+func (t *T) Open() {}
+
+// main runs.
+func main() {
+	screen.Open()
+}
+`)
+	got, err := declarations(src, []string{"main", "screen", "speed", "pad", "T.Open"})
+	assert.NoError(t, err)
+	assert.Equal(t, `// main runs.
+func main() {
+	screen.Open()
+}
+
+// The screen.
+var screen = Screen{
+	Depth: 4,
+}
+
+// speed is how fast.
+const speed = 2
+
+var pad Pad
+
+// Open opens.
+func (t *T) Open() {}`, string(got))
+
+	_, err = declarations(src, []string{"nothing"})
+	assert.Error(t, "no declaration of nothing", err)
+
+	dir := t.TempDir()
+	write(t, dir, "x/index.md", "---\ntitle: X\n---\n\n```go src=prog.go#main\n```\n")
+	write(t, dir, "x/prog.go", string(src))
+	s, err := load(dir, "")
+	assert.NoError(t, err)
+	assert.Equal(t, true, strings.Contains(page(s, "x/").Text, "main runs. func main() { screen.Open() }"), page(s, "x/").Text)
+	assert.Equal(t, false, strings.Contains(page(s, "x/").Text, "speed"), page(s, "x/").Text)
 }
