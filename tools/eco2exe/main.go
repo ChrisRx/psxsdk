@@ -14,6 +14,7 @@ import (
 
 var opts struct {
 	Patch bool
+	Loads []string
 }
 
 func NewEco2ExeCommand() *cobra.Command {
@@ -25,7 +26,13 @@ development library and writes the result as a PSX-EXE.
 
 The input may be either the ECOFF produced by the SDK's own toolchain or the
 ELF produced by a current mipsel-none-elf toolchain. Only the flat image and
-the entry point are needed, and both formats carry those.`,
+the entry point are needed, and both formats carry those.
+
+--load file@addr puts a file into the image at a hexadecimal address, as
+siocons' "local dload" put a program's data in memory before the program
+ran, so that a program written for the serial loader runs from a disc:
+
+  eco2exe --load data1.arc@80090000 --load data2.arc@80098000 game.exe MAIN.EXE`,
 		Args: cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
 			input, err := binutils.LoadImage(args[0])
@@ -62,6 +69,15 @@ the entry point are needed, and both formats carry those.`,
 			if err != nil {
 				log.Fatal(err)
 			}
+			for _, spec := range opts.Loads {
+				l, err := binutils.ParseLoad(spec)
+				if err != nil {
+					log.Fatal(err)
+				}
+				if err := binutils.Embed(exe, l.Addr, l.Data); err != nil {
+					log.Fatal(err)
+				}
+			}
 
 			if err := exe.WriteFile(args[1]); err != nil {
 				log.Fatal(err)
@@ -71,6 +87,7 @@ the entry point are needed, and both formats carry those.`,
 	}
 
 	cmd.PersistentFlags().BoolVarP(&opts.Patch, "patch", "p", true, "patch Net Yaroze executable")
+	cmd.PersistentFlags().StringArrayVar(&opts.Loads, "load", nil, "file@addr: put a file into the image at a hexadecimal address, as siocons' local dload did")
 	return cmd
 }
 

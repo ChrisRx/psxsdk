@@ -18,6 +18,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/spf13/cobra"
 
+	"go.chrisrx.dev/psx/binutils"
 	"go.chrisrx.dev/psx/emu"
 	"go.chrisrx.dev/psx/emu/openbios"
 	"go.chrisrx.dev/psx/format/psx"
@@ -43,6 +44,7 @@ var opts struct {
 	Card  string
 	Scale int
 	Mute  bool
+	Loads []string
 }
 
 func main() {
@@ -70,6 +72,7 @@ and Escape leaves it.`,
 	f := cmd.Flags()
 	f.StringVar(&opts.BIOS, "bios", "", "BIOS image to boot instead of the OpenBIOS built in")
 	f.StringVar(&opts.EXE, "exe", "", "PSX-EXE to load when the BIOS reaches its shell, as psxe -x does")
+	f.StringArrayVar(&opts.Loads, "load", nil, "file@addr: copy a file into RAM at a hexadecimal address, with --exe, as siocons' local dload did")
 	f.StringVar(&opts.Card, "card", "", "memory card image for slot 1, made blank if it does not exist, and written back on exit")
 	f.IntVar(&opts.Scale, "scale", 2, "the window's initial size, as a multiple of 320x240")
 	f.BoolVar(&opts.Mute, "mute", false, "leave the sound off")
@@ -127,6 +130,15 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 		if err := m.SideloadEXE(exe, bootBudget); err != nil {
 			return err
+		}
+		for _, spec := range opts.Loads {
+			l, err := binutils.ParseLoad(spec)
+			if err != nil {
+				return err
+			}
+			if err := m.LoadRAM(l.Addr, l.Data); err != nil {
+				return err
+			}
 		}
 		title += " - " + opts.EXE
 	}
