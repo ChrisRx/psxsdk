@@ -59,6 +59,11 @@ type Machine struct {
 	// or fails, so that the CPU hands back to run.
 	wake bool
 
+	// spin is what the machine knows of the loop it skips (see spin.go),
+	// unless noSpin.
+	spin   spin
+	noSpin bool
+
 	// log is where the machine logs, if anywhere; log.go says what it
 	// logs. syms names addresses in it, and stuckAt is where the CPU was
 	// last reported looping, so that it is reported once.
@@ -394,6 +399,10 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 		Busy: &dma.active,
 		Hook: 0xb4, HookMask: 0x3fffffff, Hooked: tty,
 		Wake: &m.wake,
+		Spin: spinNone,
+	}
+	if !trace && !m.noSpin && m.spinAt() {
+		k.Spin = vsyncWaitHead
 	}
 
 	// Logging, the CPU stops anywhere in the first 256 bytes, which takes
@@ -423,6 +432,8 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 			if err := m.writeTrace(); err != nil {
 				return i, err
 			}
+		} else if c.PC == k.Spin || m.spin.learning {
+			i += m.spinStep(&k, n-i)
 		} else {
 			i += c.Run(n-i, &k)
 		}
