@@ -46,6 +46,12 @@ type gpu struct {
 	log  *logger
 	vram [vramWidth * vramHeight]uint16
 
+	// polygons counts the polygon commands drawn since the machine was
+	// made, for a frontend measuring a program's load, and polygonKinds
+	// counts them by the command's shaded, quad and textured bits.
+	polygons     uint64
+	polygonKinds [8]uint64
+
 	state         int
 	buf           [16]uint32
 	bufIndex      int
@@ -316,9 +322,11 @@ func (g *gpu) expect(n int) bool {
 }
 
 func (g *gpu) polygon() {
+	g.polygons++
 	shaded := g.buf[0]&0x10000000 != 0
 	quad := g.buf[0]&0x08000000 != 0
 	textured := g.buf[0]&0x04000000 != 0
+	g.polygonKinds[g.buf[0]>>26&7]++
 
 	perVertex := 1 + b2i(shaded) + b2i(textured)
 	vertices := 3 + b2i(quad)

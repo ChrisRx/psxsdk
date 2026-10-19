@@ -283,6 +283,28 @@ func (m *Machine) Frames() uint64 {
 	return m.gpu.frames
 }
 
+// Polygons returns how many polygons the GPU has drawn, in all, for a
+// frontend measuring a program's load from one frame to the next.
+func (m *Machine) Polygons() uint64 {
+	return m.gpu.polygons
+}
+
+// GPUState describes the GPU's drawing and display setup: the display's
+// start in VRAM and its ranges, the drawing area and the drawing offset,
+// for a frontend showing why a picture is where it is.
+func (m *Machine) GPUState() string {
+	g := m.gpu
+	return fmt.Sprintf("display at %d,%d range x %d-%d y %d-%d; draw area %d,%d-%d,%d offset %d,%d; stat %08x",
+		g.dispX, g.dispY, g.dispX1, g.dispX2, g.dispY1, g.dispY2, g.drawX1, g.drawY1, g.drawX2, g.drawY2, g.offX, g.offY, g.gpustat)
+}
+
+// PolygonKinds returns how many polygons the GPU has drawn of each kind,
+// indexed by the command's shaded, quad and textured bits: shaded is 4,
+// quad 2 and textured 1.
+func (m *Machine) PolygonKinds() [8]uint64 {
+	return m.gpu.polygonKinds
+}
+
 // SetAudio turns on or off keeping the SPU's sound for Audio to return. A
 // machine starts with it off. The sound is made either way, since the
 // reverb writes to SPU RAM as it plays, so this changes nothing a program

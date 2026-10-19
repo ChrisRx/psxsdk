@@ -6,13 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"image/png"
+	"io"
 	"io/fs"
 	"log"
 	"os"
 	"runtime/pprof"
+	"strings"
 
 	"github.com/spf13/cobra"
 
+	"go.chrisrx.dev/psx/binutils"
 	"go.chrisrx.dev/psx/emu"
 	"go.chrisrx.dev/psx/format/psx"
 	"go.chrisrx.dev/psx/format/psxtrace"
@@ -29,6 +32,20 @@ var opts struct {
 	VRAM       string
 	PNG        string
 	Card       string
+	Loads      []string
+
+	// Driving a program: see drive.go.
+	Untils        []string
+	UntilBudget   int
+	Script        string
+	Every         int
+	Frames        string
+	Watches       []string
+	Pokes         []string
+	Profile       string
+	ProfileWindow string
+	Polygons      bool
+	Quiet         bool
 }
 
 func main() {
@@ -44,7 +61,15 @@ choose which instructions, as PSXE_TRACE_SKIP and PSXE_TRACE_COUNT do:
 
   PSXE_TRACE=psxe.trace PSXE_TRACE_COUNT=1000000 psxe -a -b bios.bin
   psxemu --bios bios.bin --trace emu.trace --count 1000000
-  psxtrace diff psxe.trace emu.trace`,
+  psxtrace diff psxe.trace emu.trace
+
+--until, --script, --every, --watch, --poke, --profile and --polygons drive
+the program frame by frame instead, which is how a port is compared with
+what it was ported from: both run the same script and the words watched are
+compared frame by frame.
+
+  psxemu --bios bios.bin --disc game.cue --until 8017fa54:e0 \
+      --script "x:4;400" --watch "*801742a4+64:2" --every 100`,
 		Args:         cobra.NoArgs,
 		RunE:         run,
 		SilenceUsage: true,
@@ -60,6 +85,18 @@ choose which instructions, as PSXE_TRACE_SKIP and PSXE_TRACE_COUNT do:
 	f.StringVar(&opts.VRAM, "vram", "", "at the end, write VRAM here, as psxe does with PSXE_TRACE_VRAM")
 	f.StringVar(&opts.PNG, "png", "", "at the end, write what the display shows here")
 	f.StringVar(&opts.Card, "card", "", "memory card image for slot 1, made blank if it does not exist, and written back at the end")
+	f.StringArrayVar(&opts.Loads, "load", nil, "file@addr: copy a file into RAM at a hexadecimal address, with --exe, as siocons' local dload did")
+	f.StringArrayVar(&opts.Untils, "until", nil, "addr:value, hexadecimal: run until the word at addr equals value, before the script; repeatable")
+	f.IntVar(&opts.UntilBudget, "until-budget", 6000, "frames each --until may take")
+	f.StringVar(&opts.Script, "script", "", "buttons to hold, frame by frame: steps like x:60 or u+r:30 or 300, separated by semicolons")
+	f.IntVar(&opts.Every, "every", 0, "save the display every n frames of the script into --frames")
+	f.StringVar(&opts.Frames, "frames", "frames", "directory for the displays --every saves")
+	f.StringArrayVar(&opts.Watches, "watch", nil, "addr:words, hexadecimal: print the words whenever one changes, with the frame; *addr+off:words follows the pointer at addr; repeatable")
+	f.StringArrayVar(&opts.Pokes, "poke", nil, "frame:addr:value: write the word after that frame of the script; a value starting with | is ORed in; repeatable")
+	f.StringVar(&opts.Profile, "profile", "", "symbol file, lines of a hexadecimal address and a name: sample where the cycles go through the script")
+	f.StringVar(&opts.ProfileWindow, "profile-window", "", "a:b, frames of the script to sample, with --profile")
+	f.BoolVar(&opts.Polygons, "polygons", false, "print the polygons drawn per vertical blank over the script")
+	f.BoolVar(&opts.Quiet, "quiet", false, "do not echo what the program writes to the TTY")
 	cmd.MarkFlagRequired("bios")
 
 	if err := cmd.Execute(); err != nil {
@@ -88,7 +125,12 @@ func run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	m.TTY = os.Stdout
+	var tty strings.Builder
+	if opts.Quiet {
+		m.TTY = &tty
+	} else {
+		m.TTY = io.MultiWriter(os.Stdout, &tty)
+	}
 	// psxe leaves CD audio out while tracing, so a trace to compare with
 	// its has to as well.
 	if opts.Trace != "" {
@@ -127,6 +169,14 @@ func run(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
+	var loads []binutils.Load
+	for _, spec := range opts.Loads {
+		l, err := binutils.ParseLoad(spec)
+		if err != nil {
+			return err
+		}
+		loads = append(loads, l)
+	}
 	// run runs n instructions, one at a time while the executable is still
 	// to be loaded, and then as many at once as it can. It returns how many
 	// it ran, counting one a device could not emulate.
@@ -136,6 +186,11 @@ func run(cmd *cobra.Command, args []string) error {
 			if m.AtShell() {
 				if err := m.LoadEXE(exe); err != nil {
 					return ran, err
+				}
+				for _, l := range loads {
+					if err := m.LoadRAM(l.Addr, l.Data); err != nil {
+						return ran, err
+					}
 				}
 				exe = nil
 				break
@@ -165,12 +220,27 @@ func run(cmd *cobra.Command, args []string) error {
 		m.Trace(tw)
 	}
 
-	count := opts.Count
-	if count == 0 {
-		count = ^uint64(0)
-	}
-	if ran, err := run(count); err != nil {
-		return fmt.Errorf("instruction %d: %w", opts.Skip+ran-1, err)
+	if driving() {
+		if exe != nil {
+			// The executable is loaded at the shell, as above, before
+			// the frames are counted.
+			for exe != nil {
+				if _, err := run(1); err != nil {
+					return err
+				}
+			}
+		}
+		if err := drive(m, &tty); err != nil {
+			return err
+		}
+	} else {
+		count := opts.Count
+		if count == 0 {
+			count = ^uint64(0)
+		}
+		if ran, err := run(count); err != nil {
+			return fmt.Errorf("instruction %d: %w", opts.Skip+ran-1, err)
+		}
 	}
 
 	if opts.VRAM != "" {
