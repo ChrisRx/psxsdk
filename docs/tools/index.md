@@ -1,6 +1,6 @@
 ---
 title: Tools
-weight: 4
+weight: 5
 section: Tools
 order: nyc
 ---
@@ -15,6 +15,12 @@ order: nyc
 | [mkpsxiso](mkpsxiso.md) | Build a CD-XA disc image from a directory |
 | [dumpsxiso](dumpsxiso.md) | List or extract a disc image |
 | [mdecenc](mdecenc.md) | Encode pictures into an MDEC movie |
+| [png2tim](png2tim.md) | Convert pictures into TIM images for sprites and textures, and `tim2png` back |
+| [wav2vag](wav2vag.md) | Encode WAV or AIFF sounds into the SPU's ADPCM, as VAG files |
+| [mkvab](mkvab.md) | Build a VAB sound bank from a definition file and VAGs, or read one back, and `vabsplit` it into VH and VB |
+| [smf2seq](smf2seq.md) | Convert MIDI files into SEQ scores for the sound library |
+| [rsdlink](rsdlink.md) | Link Sony's RSD models into a TMD, byte for byte as Sony's rsdlink did |
+| [obj2tmd](obj2tmd.md) | Convert a Wavefront OBJ model into a TMD |
 | [hdr2go](hdr2go.md) | Generate layout-checked Go bindings from a C header |
 | [psxemu](psxemu.md) | Run the emulator headless, with traces, VRAM dumps and screenshots, or drive a program with scripted presses, watched and poked memory, and a profile |
 | [psxplay](psxplay.md) | Run the emulator in a window, booting the built-in OpenBIOS, with the keyboard or a gamepad as the pad |
