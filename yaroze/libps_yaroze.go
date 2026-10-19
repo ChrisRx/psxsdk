@@ -104,6 +104,9 @@ var gsDISPENV DISPENV
 //go:extern POSITION
 var position _GsPOSITION
 
+//go:extern GsOUT_PACKET_P
+var gsOUT_PACKET_P *PACKET
+
 // GsDRAWENV returns the drawing environment the library draws with, which a
 // program changes and then registers with PutDrawEnv.
 func GsDRAWENV() *DRAWENV { return &gsDRAWENV }
@@ -120,6 +123,15 @@ func GsDISPENV() *DISPENV { return &gsDISPENV }
 // mode: the offset GsSwapDispBuff adds to every coordinate, which
 // GsInitGraph sets to the top left corner and GsInit3D to the middle.
 func POSITION() *GsPOSITION { return &position }
+
+// PacketPointer returns GsOUT_PACKET_P, where the library builds the next
+// GPU packet in the space GsSetWorkBase gave it, and SetPacketPointer moves
+// it, for a program that builds packets of its own there; AllocPacket does
+// both.
+func PacketPointer() *PACKET { return gsOUT_PACKET_P }
+
+// SetPacketPointer sets GsOUT_PACKET_P; see PacketPointer.
+func SetPacketPointer(p *PACKET) { gsOUT_PACKET_P = p }
 
 // NativeVideoMode returns the video mode the console is made for, MODE_PAL
 // for a European one and MODE_NTSC for any other, from the region letter

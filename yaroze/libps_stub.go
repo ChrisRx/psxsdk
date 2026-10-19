@@ -72,6 +72,15 @@ func GsDRAWENV() *DRAWENV { panic(stub("GsDRAWENV")) }
 // GsInitGraph sets to the top left corner and GsInit3D to the middle.
 func POSITION() *GsPOSITION { panic(stub("POSITION")) }
 
+// PacketPointer returns GsOUT_PACKET_P, where the library builds the next
+// GPU packet in the space GsSetWorkBase gave it, and SetPacketPointer moves
+// it, for a program that builds packets of its own there; AllocPacket does
+// both.
+func PacketPointer() *PACKET { panic(stub("PacketPointer")) }
+
+// SetPacketPointer sets GsOUT_PACKET_P; see PacketPointer.
+func SetPacketPointer(p *PACKET) { panic(stub("SetPacketPointer")) }
+
 // NativeVideoMode returns the video mode the console is made for, MODE_PAL
 // for a European one and MODE_NTSC for any other, from the region letter
 // at the end of the version string Sony's BIOS carries: "System ROM

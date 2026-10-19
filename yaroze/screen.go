@@ -53,7 +53,21 @@ type Screen struct {
 	// frames a second on an NTSC console, 2 for thirty.
 	Interval int
 
+	// SideBySide puts the two display buffers next to each other at the
+	// top of video memory, at 0, 0 and Width, 0, rather than one above the
+	// other, leaving the rows below Height whole for textures. It is for a
+	// picture no wider than 512.
+	SideBySide bool
+
+	// OverlayDepth, when it is not zero, gives the screen a second ordering
+	// table per buffer, of 1<<OverlayDepth depths, which End draws after
+	// the frame's: for what goes in front of everything the frame sorted,
+	// a game's panels and text, sorted among themselves. Overlay returns
+	// it.
+	OverlayDepth int
+
 	ot      [2]GsOT
+	overlay [2]GsOT
 	packets [2][]uint32
 	active  int
 
@@ -89,13 +103,24 @@ func (s *Screen) Open() {
 		GsDefDispBuff(0, 0, 0, 0)
 	} else {
 		GsInitGraph(s.Width, s.Height, GsNONINTER|GsOFSGPU, 1, 0)
-		GsDefDispBuff(0, 0, 0, s.Height)
+		if s.SideBySide {
+			GsDefDispBuff(0, 0, s.Width, 0)
+		} else {
+			GsDefDispBuff(0, 0, 0, s.Height)
+		}
 	}
 	if s.ot[0].Org == nil {
 		if s.Depth == 0 {
 			s.Depth = 8
 		}
 		s.Init(make([]GsOT_TAG, 2<<s.Depth), make([]uint32, 2*s.Packets/4))
+	}
+	if s.OverlayDepth != 0 && s.overlay[0].Org == nil {
+		tags := make([]GsOT_TAG, 2<<s.OverlayDepth)
+		for i := range s.overlay {
+			s.overlay[i].Length = uint32(s.OverlayDepth)
+			s.overlay[i].Org = &tags[i<<s.OverlayDepth]
+		}
 	}
 }
 
@@ -159,14 +184,27 @@ func (s *Screen) Begin() *GsOT {
 	s.active = int(GsGetActiveBuff())
 	GsSetWorkBase(Packets(&s.packets[s.active][0]))
 	GsClearOt(0, 0, &s.ot[s.active])
+	if s.OverlayDepth != 0 {
+		GsClearOt(0, 0, &s.overlay[s.active])
+	}
 	return &s.ot[s.active]
+}
+
+// Overlay returns the frame's second ordering table, which End draws after
+// the one Begin returned, or nil without OverlayDepth.
+func (s *Screen) Overlay() *GsOT {
+	if s.OverlayDepth == 0 {
+		return nil
+	}
+	return &s.overlay[s.active]
 }
 
 // End finishes the frame: it waits for the GPU to finish the last one and
 // for the display to reach the vertical blank, or the Interval'th, swaps the
 // buffers, sorts a clear of the screen to Background in front of
-// everything, starts the GPU on the frame's table, and then draws the
-// frame's text if Font opened the font. It returns what VSync reported,
+// everything, starts the GPU on the frame's table, then on the overlay's
+// if there is one, and then draws the frame's text if Font opened the
+// font. It returns what VSync reported,
 // the frame's length in horizontal lines. Without Font, text goes after
 // it, since FntFlush draws into the buffer the swap has just made current.
 func (s *Screen) End() int32 {
@@ -181,6 +219,9 @@ func (s *Screen) End() int32 {
 	GsSwapDispBuff()
 	GsSortClear(s.Background.R, s.Background.G, s.Background.B, ot)
 	GsDrawOt(ot)
+	if s.OverlayDepth != 0 {
+		GsDrawOt(&s.overlay[s.active])
+	}
 	if s.text {
 		FntFlush(s.font)
 	}
