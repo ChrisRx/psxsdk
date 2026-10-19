@@ -29,7 +29,7 @@ or on its own with `go install go.chrisrx.dev/psx/cmd/nyc@latest`. In this repos
 
 - **`nyc build [package]`** writes the PSX-EXE, named after the package's directory unless `-o` names it. A name ending in `.elf` writes the ELF TinyGo linked instead, with the traps replaced, which has the symbols an emulator's debugger wants.
 - **`nyc disc [package]`** writes the disc image, a `.bin` with its `.cue` beside it. `--elf` keeps the ELF too, `--file DISC=HOST` places more files, `--audio` adds CD audio tracks, and `-v` lists what went where.
-- **`nyc run [package]`** builds the disc in a temporary directory and plays it in a window, booting the OpenBIOS built in. It is [`psxplay`](psxplay.md), inside `nyc`, with its keys and its flags: `--bios` boots another BIOS, `--card` attaches a memory card image, `--scale` sizes the window, and `--mute` leaves the sound off. The window loads X11, OpenGL and the sound library at run time, so `nyc` still builds with nothing but Go.
+- **`nyc run [package]`** builds the disc in a temporary directory and plays it in a window, booting the OpenBIOS built in. It is [`psxplay`](psxplay.md), inside `nyc`, with its keys and its flags: `--bios` boots another BIOS, `--card` attaches a memory card image, `--scale` sizes the window, `--mute` leaves the sound off, and `--fast-start=false` plays the start in real time rather than running it as fast as it goes until the first picture. The window loads X11, OpenGL and the sound library at run time, so `nyc` still builds with nothing but Go.
 - **`nyc generate`** is [`discgen`](discgen.md), and **`nyc iso`** is [`mkpsxiso`](mkpsxiso.md) with every flag, for a disc laid out by hand.
 - **`nyc env`** says which compiler a build would use, and where it is.
 

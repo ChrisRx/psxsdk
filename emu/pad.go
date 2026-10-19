@@ -22,12 +22,58 @@ const (
 	ButtonSquare   = 1 << 15
 )
 
-// Pad is a digital controller.
+// PadKind is what a controller is, which its reply's first byte says: its
+// type in the high four bits and the half-words of data that follow in the
+// low four.
+type PadKind uint8
+
+const (
+	PadDigital        PadKind = 0x41 // the standard controller: two button bytes
+	PadMouse          PadKind = 0x12 // buttons, then X and Y movement
+	PadNeGcon         PadKind = 0x23 // buttons, then twist, I, II and L
+	PadAnalogJoystick PadKind = 0x53 // buttons, then the sticks: right X, Y, left X, Y
+	PadGunCon         PadKind = 0x63 // buttons, then the X and Y the gun points at, 16 bits each
+	PadAnalog         PadKind = 0x73 // the analog controller in analog mode, laid out as the joystick
+)
+
+// Mouse buttons, as bits of the buttons Press takes.
+const (
+	MouseRight = 1 << 10
+	MouseLeft  = 1 << 11
+)
+
+// GunCon buttons.
+const (
+	GunConA       = 1 << 3
+	GunConTrigger = 1 << 13
+	GunConB       = 1 << 14
+)
+
+// Pad is a controller: by default the standard digital one, or with
+// NewPad another kind, whose sticks, movement or aim the test sets.
 type Pad struct {
+	Kind    PadKind
 	buttons uint16 // active low, as sent
-	state   int
-	tx      uint8
-	ready   bool
+
+	// axes are the four bytes after the buttons of an analog controller,
+	// a joystick or a neGcon, in the order they are sent.
+	axes [4]uint8
+	// dx, dy are a mouse's movement since it was last read.
+	dx, dy int
+	// gunX, gunY are where a GunCon points, in its own units.
+	gunX, gunY uint16
+
+	reply [8]uint8 // what the pad sends after its ID, made as a transfer starts
+	n     int      // bytes of reply in all, the ID's two included
+	state int      // bytes sent so far
+	tx    uint8
+	ready bool
+}
+
+// NewPad returns a controller of the given kind, its buttons up, its sticks
+// centred, unmoved and aimed at nothing.
+func NewPad(kind PadKind) *Pad {
+	return &Pad{Kind: kind, buttons: 0xffff, axes: [4]uint8{0x80, 0x80, 0x80, 0x80}, tx: 0xff, ready: true}
 }
 
 // Press holds buttons down until they are released.
@@ -36,49 +82,74 @@ func (p *Pad) Press(buttons uint16) { p.buttons &^= buttons }
 // Release lets buttons go.
 func (p *Pad) Release(buttons uint16) { p.buttons |= buttons }
 
-func newDigitalPad() *Pad {
-	return &Pad{buttons: 0xffff, tx: 0xff, ready: true}
+// SetAxes sets the four bytes after the buttons: an analog controller's or a
+// joystick's right X, right Y, left X and left Y, 0x80 centred, or a
+// neGcon's twist, I, II and L.
+func (p *Pad) SetAxes(a, b, c, d uint8) { p.axes = [4]uint8{a, b, c, d} }
+
+// Move moves a mouse, by dx and dy counts, which it reports at its next read
+// and then forgets, as a mouse does.
+func (p *Pad) Move(dx, dy int) { p.dx += dx; p.dy += dy }
+
+// Aim points a GunCon at x, y in its own units: x counts the GPU's dot
+// clock from the horizontal sync, about 77 to 461 across a 320-wide
+// picture, and y the line, about 25 to 264.
+func (p *Pad) Aim(x, y uint16) { p.gunX, p.gunY = x, y }
+
+func newDigitalPad() *Pad { return NewPad(PadDigital) }
+
+// prepare makes the reply a transfer sends: the ID, 5Ah, the buttons, and
+// what the kind sends after them.
+func (p *Pad) prepare() {
+	kind := p.Kind
+	if kind == 0 {
+		kind = PadDigital
+	}
+	r := p.reply[:0]
+	r = append(r, uint8(kind), 0x5a, uint8(p.buttons), uint8(p.buttons>>8))
+	switch kind {
+	case PadMouse:
+		clamp := func(v int) uint8 { return uint8(int8(max(min(v, 127), -128))) }
+		r = append(r, clamp(p.dx), clamp(p.dy))
+		p.dx, p.dy = 0, 0
+	case PadNeGcon, PadAnalogJoystick, PadAnalog:
+		r = append(r, p.axes[:]...)
+	case PadGunCon:
+		r = append(r, uint8(p.gunX), uint8(p.gunX>>8), uint8(p.gunY), uint8(p.gunY>>8))
+	}
+	p.n = len(r)
 }
 
-// Transfer states: high impedance before the ID, the two ID bytes, the two
-// button bytes.
-const (
-	padHiZ = iota
-	padIDLow
-	padIDHigh
-	padButtonsLow
-	padButtonsHigh
-)
-
-// read clocks out the next byte of the pad's reply.
+// read clocks out the next byte of the pad's reply: high impedance while
+// the address byte goes out, then the reply.
 func (p *Pad) read() uint8 {
-	switch p.state {
-	case padHiZ:
+	if p.state == 0 {
+		p.prepare()
 		p.tx = 0xff
-	case padIDLow:
-		p.tx = 0x41 // digital pad
-	case padIDHigh:
-		p.tx = 0x5a
-	case padButtonsLow:
-		p.tx = uint8(p.buttons)
-	case padButtonsHigh:
+		p.ready = true
+		p.state = 1
+		return p.tx
+	}
+	v := p.reply[p.state-1]
+	if p.state == p.n {
 		// The last byte: the pad has nothing more to send.
 		p.ready = false
-		p.state = padHiZ
-		return uint8(p.buttons >> 8)
+		p.state = 0
+		return v
 	}
 	p.ready = true
 	p.state++
-	return p.tx
+	p.tx = v
+	return v
 }
 
 // write receives a command byte. Only 43h, which enters configuration mode
-// on an analog pad, does anything: a digital pad answers it by going quiet.
+// on an analog pad, does anything: these pads answer it by going quiet.
 func (p *Pad) write(v uint16) {
 	if v == 0x43 {
 		p.tx = 0xff
 		p.ready = false
-		p.state = padHiZ
+		p.state = 0
 	}
 }
 
@@ -107,6 +178,7 @@ type sio0 struct {
 	dest  [2]int
 
 	mode, ctrl, baud, stat uint16
+	rxData                 uint32 // the byte the last exchange received
 	cyclesUntilIRQ         int
 	irqBit                 bool
 
@@ -131,41 +203,22 @@ func newSIO0(ic *ic, cycles *uint64, wake *bool, pads [2]*Pad) *sio0 {
 func (s *sio0) slot() int { return int(s.ctrl>>13) & 1 }
 
 func (s *sio0) rx() uint32 {
-	slot := s.slot()
-	if s.dest[slot] == 0 {
-		return 0xffffffff
-	}
 	if s.ctrl&joyOutput == 0 && s.ctrl&joyRXEnable == 0 {
 		return 0xffffffff
 	}
-	if s.dest[slot] == joyDestPad {
-		p := s.pads[slot]
-		if p == nil {
-			s.dest[slot] = 0
-			return 0xffffffff
-		}
-		v := p.read()
-		if !p.ready {
-			s.dest[slot] = 0
-		}
-		return uint32(v)
-	}
-	c := s.cards[slot]
-	if c == nil {
-		s.dest[slot] = 0
-		return 0xffffffff
-	}
-	v := c.read()
-	if !c.ready {
-		s.dest[slot] = 0
-	}
-	return uint32(v)
+	return s.rxData
 }
 
+// tx sends a byte, and takes the byte the device sends back at the same
+// time, which rx then returns: the exchange happens as the byte goes out,
+// as on the console, so a program that reads the reply twice, as the BIOS
+// does after a card write's checksum, gets the same byte twice rather than
+// clocking the device on. psxe clocked the device on each read.
 func (s *sio0) tx(v uint16) {
 	if s.ctrl&joyTXEnable == 0 {
 		return
 	}
+	s.rxData = 0xffffffff
 	slot := s.slot()
 	if s.dest[slot] == 0 {
 		if v != joyDestPad && v != joyDestCard {
@@ -173,7 +226,14 @@ func (s *sio0) tx(v uint16) {
 		}
 		s.dest[slot] = int(v)
 		if v == joyDestPad && s.pads[slot] == nil || v == joyDestCard && s.cards[slot] == nil {
+			s.dest[slot] = 0
 			return
+		}
+		// The address byte: the device answers it with high impedance.
+		if v == joyDestPad {
+			s.rxData = uint32(s.pads[slot].read())
+		} else {
+			s.rxData = uint32(s.cards[slot].read())
 		}
 		if s.ctrl&joyAckIRQ != 0 {
 			s.cyclesUntilIRQ = joyIRQDelay
@@ -188,6 +248,9 @@ func (s *sio0) tx(v uint16) {
 			return
 		}
 		p.write(v)
+		if p.ready {
+			s.rxData = uint32(p.read())
+		}
 		if !p.ready {
 			s.dest[slot] = 0
 		}
@@ -198,15 +261,14 @@ func (s *sio0) tx(v uint16) {
 			return
 		}
 		c.write(uint8(v))
-		// psxe acknowledges a card's byte later than a pad's, and leaves
-		// ending the transfer to the read.
+		s.rxData = uint32(c.read())
+		if !c.ready {
+			s.dest[slot] = 0
+		}
+		// psxe acknowledges a card's byte later than a pad's.
 		if s.ctrl&joyAckIRQ != 0 {
 			s.irqBit = true
 			s.cyclesUntilIRQ = 2 * joyIRQDelay
-			return
-		}
-		if !c.ready {
-			s.dest[slot] = 0
 		}
 		return
 	}

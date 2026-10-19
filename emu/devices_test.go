@@ -165,15 +165,18 @@ func TestPadTransfer(t *testing.T) {
 	m.Pad(1).Press(ButtonStart | ButtonCross)
 
 	m.Bus.Write16(ctrl, joyTXEnable|joyOutput) // select port 1
-	m.Bus.Write8(data, 0x01)                   // address the pad
-	m.Bus.Write8(data, 0x42)                   // read buttons
 
+	// Each byte sent brings one back: the address, 01h, then the read
+	// command, 42h, and zeroes for the rest.
 	var reply [5]uint8
-	for i := range reply {
+	for i, v := range [5]uint8{0x01, 0x42, 0, 0, 0} {
+		m.Bus.Write8(data, v)
 		reply[i] = m.Bus.Read8(data)
 	}
 	// Buttons are active low: Start is bit 3 of the first, Cross bit 6 of
 	// the second.
 	assert.Equal(t, [5]uint8{0xff, 0x41, 0x5a, 0xf7, 0xbf}, reply)
+	assert.Equal(t, uint8(0xbf), m.Bus.Read8(data), "reading again gives the same byte")
+	m.Bus.Write8(data, 0)
 	assert.Equal(t, uint8(0xff), m.Bus.Read8(data), "the transfer is over")
 }

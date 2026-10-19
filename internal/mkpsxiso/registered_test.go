@@ -221,3 +221,62 @@ func TestPlace(t *testing.T) {
 	_, err = place(root, "", host)
 	assert.Error(t, "is not a path on the disc", err)
 }
+
+// TestRegisteredTracks builds an image from an executable that declares two
+// audio tracks with disc.Track, one of them twice, beside a file and a track
+// given with --audio: the program's tracks follow the given one, each is
+// recorded once, and the executable on the disc carries each track's
+// number, the given track being 2, and its length in sectors.
+func TestRegisteredTracks(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "assets/wall0.tmd", "wall zero")
+	sector := string(make([]byte, 2352))
+	write(t, dir, "given.raw", sector)
+	write(t, dir, "audio/one.raw", sector+sector)
+	write(t, dir, "audio/two.raw", sector)
+	prog := exe(t, dir,
+		reg{name: disc.TrackName, src: "audio/one.raw"},
+		reg{name: "DATA/WALL0.TMD", src: "assets/wall0.tmd"},
+		reg{name: disc.TrackName, src: "audio/two.raw"},
+		reg{name: disc.TrackName, src: "audio/one.raw"},
+	)
+	cdroot := filepath.Join(dir, "cdroot")
+	assert.NoError(t, os.MkdirAll(cdroot, 0o755))
+	data, err := os.ReadFile(prog)
+	assert.NoError(t, err)
+	assert.NoError(t, os.WriteFile(filepath.Join(cdroot, "MAIN.EXE"), data, 0o644))
+
+	opts := NewOptions()
+	opts.Output = filepath.Join(dir, "out.bin")
+	opts.Dir = cdroot
+	opts.Boot = "MAIN.EXE"
+	opts.Src = dir
+	opts.Audio = []string{filepath.Join(dir, "given.raw")}
+	if !assert.NoError(t, Build(opts)) {
+		t.FailNow()
+	}
+	cue, err := os.ReadFile(filepath.Join(dir, "out.cue"))
+	assert.NoError(t, err)
+	assert.Equal(t, 3, bytes.Count(cue, []byte("AUDIO")), "the given track and the program's two")
+
+	// The patched executable is the first file after the root's
+	// directory: find its records in the image's sectors.
+	img, err := os.ReadFile(opts.Output)
+	assert.NoError(t, err)
+	var user []byte
+	for s := 0; s+2352 <= len(img); s += 2352 {
+		user = append(user, img[s+24:s+24+2048]...)
+	}
+	i := bytes.Index(user, []byte("PS-X EXE"))
+	if i < 0 {
+		t.Fatal("the executable is not on the disc")
+	}
+	recs := disc.Find(user[i+psx.HeaderSize:], textAddr)
+	got := map[string][2]uint32{}
+	for _, r := range recs {
+		off := i + psx.HeaderSize + r.Offset
+		got[r.Src] = [2]uint32{binary.LittleEndian.Uint32(user[off+20:]), binary.LittleEndian.Uint32(user[off+24:])}
+	}
+	assert.Equal(t, [2]uint32{3, 2}, got["audio/one.raw"], "the first of the program's tracks, two sectors")
+	assert.Equal(t, [2]uint32{4, 1}, got["audio/two.raw"], "the second")
+}

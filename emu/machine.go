@@ -35,6 +35,10 @@ type Machine struct {
 	// printf output go.
 	TTY io.Writer
 
+	// shown is whether the display has shown a picture yet, which Shown
+	// keeps once it has.
+	shown bool
+
 	ram  *ram
 	ic   *ic
 	exp2 *exp2
@@ -259,6 +263,47 @@ func (m *Machine) DisplayInto(img *image.RGBA) *image.RGBA {
 	return img
 }
 
+// Shown reports whether the display has shown anything yet: whether, with
+// the display on, the part of VRAM it shows has a pixel in it that is not
+// black. Once it has, it goes on reporting so without looking again.
+//
+// It is for a frontend's fast start: the BIOS and a program's start take
+// a few seconds before the first picture, which a frontend can run as fast
+// as the host allows rather than in real time, drawing none of it, and then
+// fall back to real time from the first frame there is something to see.
+func (m *Machine) Shown() bool {
+	if m.shown {
+		return true
+	}
+	g := m.gpu
+	if g.gpustat&gpustatDisplayOff != 0 {
+		return false
+	}
+	width := [4]int{256, 320, 512, 640}[g.displayMode&3]
+	if g.displayMode&0x40 != 0 {
+		width = 384
+	}
+	mask := uint16(0x7fff)
+	if g.displayMode&0x10 != 0 {
+		// Three bytes a pixel, packed into the halfwords.
+		width, mask = width*3/2, 0xffff
+	}
+	height := 240
+	if g.displayMode&0x4 != 0 {
+		height = 480
+	}
+	for y := range height {
+		row := g.vram[((int(g.dispY)+y)&(vramHeight-1))*vramWidth:][:vramWidth]
+		for x := range width {
+			if row[(int(g.dispX)+x)&(vramWidth-1)]&mask != 0 {
+				m.shown = true
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // display24 draws a 24-bit display area. psxe's frontend hands VRAM to SDL
 // as rows of 24-bit pixels from the display area on; a row running off the
 // right of VRAM wraps to its left here, as in 15-bit mode.
@@ -321,7 +366,8 @@ func (m *Machine) SetAudio(on bool) { m.spu.setAudio(on) }
 // 768 CPU cycles. Up to a second's worth is kept between calls; past that,
 // the oldest is dropped.
 //
-// It is psxe's mix of the voices and reverb. CD audio is not emulated.
+// It is psxe's mix of the voices and reverb, with the drive's CD audio
+// mixed in while SetCDAudio is on, as it is from the start.
 func (m *Machine) Audio(dst []int16) []int16 { return m.spu.takeAudio(dst) }
 
 // SetCDAudio turns CD audio, CD-DA and XA-ADPCM, on or off. A machine starts
@@ -338,6 +384,12 @@ func (m *Machine) SetCDAudio(on bool) {
 // connects a digital pad to port 1 only.
 func (m *Machine) Pad(port int) *Pad {
 	return m.sio.pads[port-1]
+}
+
+// ConnectPad plugs a controller into port 1 or 2, or with nil, unplugs the
+// one there: NewPad makes a mouse, an analog controller and the rest.
+func (m *Machine) ConnectPad(port int, p *Pad) {
+	m.sio.pads[port-1] = p
 }
 
 // InsertCard puts a memory card in slot 1 or 2, or with nil, takes out

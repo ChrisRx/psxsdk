@@ -72,7 +72,7 @@ worker.onmessage = (e) => {
   const msg = e.data;
   switch (msg.event) {
     case "stats":
-      if (state.driving) status.textContent = `${msg.fps.toFixed(1)} fps`;
+      if (state.driving) status.textContent = `${msg.fps.toFixed(1)} fps${msg.fast ? ", starting" : ""}`;
       // The playground shows the log along with what was printed.
       if (msg.output && typeof showEmulatorOutput === "function") {
         showEmulatorOutput(msg.output);

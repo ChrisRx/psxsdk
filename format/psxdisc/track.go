@@ -26,7 +26,8 @@ const (
 	audioBytesPerSample = AudioChannels * AudioBitsPerSample / 8
 
 	// StandardPregap is the two second pause the Red Book requires between
-	// a data track and the audio that follows it. A drive uses it to settle
+	// a data track and the audio that follows it, which Write puts before
+	// every audio track. A drive uses it to settle
 	// after the mode change, and a player that starts reading at the track
 	// boundary finds silence rather than the tail of the data track.
 	StandardPregap = 2 * 75
@@ -240,13 +241,15 @@ func (img *Image) Write(w io.Writer) (Layout, error) {
 	pos := img.Data.TotalBlocks()
 
 	for i, a := range img.Audio {
-		// The pause belongs before the first audio track only. Audio
-		// tracks after it run on without a gap, which is what a program
-		// playing one track after another expects to hear.
-		pregap := uint32(0)
-		if i == 0 {
-			pregap = StandardPregap
-		}
+		// A pause goes before every audio track, as on most CDs. The one
+		// before the first is the Red Book's; the rest are for the library,
+		// whose CdPlay starts a track at the time GetTD gives for it, which
+		// is to the second, and so up to a second early. In a gap that is
+		// silence the drive counts as the track's own; without one it is
+		// the end of the track before, and with AutoPause on, as CdPlay
+		// has it, the drive stops at the change of track a moment later
+		// and the library moves on to the next.
+		pregap := uint32(StandardPregap)
 		if err := writeSilence(w, pregap); err != nil {
 			return l, fmt.Errorf("writing the pause before %s: %w", a.Name, err)
 		}

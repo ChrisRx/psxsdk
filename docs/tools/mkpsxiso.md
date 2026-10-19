@@ -68,11 +68,11 @@ Every image is a CD-XA disc: the `CD-XA001` signature in the volume descriptor a
 
 ## Audio tracks
 
-`--audio` appends a CD audio track, which a program plays by its number rather than opening as a file. Input is a WAV file or headerless samples, in both cases 44.1kHz 16-bit stereo, which is the only thing a CD holds. The two second pause the standard requires between the data track and the audio that follows it is inserted automatically, and the `.cue` describes the result:
+`--audio` appends a CD audio track, which a program plays by its number rather than opening as a file. Input is a WAV file or headerless samples, in both cases 44.1kHz 16-bit stereo, which is the only thing a CD holds. A two second pause goes before every audio track, as on most CDs: the standard requires one between the data track and the audio after it, and the library's `CdPlay` needs one before each of the rest, since it starts a track at the second `GetTD` gives for it, up to a second early, and without a gap that second is the end of the track before. The `.cue` describes the result:
 
 ```bash
 $ mkpsxiso -o game.bin --boot MAIN.EXE --audio track1.wav --audio track2.wav ./disc
-created "game.bin": 789 blocks (150 of run-out) and 2 audio track(s), 15489 sectors in all, "game.cue"
+created "game.bin": 789 blocks (150 of run-out) and 2 audio track(s), 15639 sectors in all, "game.cue"
 $ cat game.cue
 FILE "game.bin" BINARY
   TRACK 01 MODE2/2352
@@ -81,8 +81,11 @@ FILE "game.bin" BINARY
     INDEX 00 00:10:39
     INDEX 01 00:12:39
   TRACK 03 AUDIO
-    INDEX 01 01:44:00
+    INDEX 00 01:44:00
+    INDEX 01 01:46:00
 ```
+
+A program can declare its own tracks instead, with [`disc.Track`](disc), which `nyc disc` and `mkpsxiso --boot` record after any `--audio` tracks and whose numbers they write into the program, as they do the sectors of its files. The [cdda example](../examples/cdda.md) plays three.
 
 ## Plain ISO 9660
 

@@ -47,6 +47,7 @@ type Options struct {
 	Card  string   // a memory card image for slot 1
 	Scale int      // the window's initial size, as a multiple of 320x240
 	Mute  bool     // leave the sound off
+	Fast  bool     // run as fast as the host allows, showing nothing, until the first picture
 	Loads []string // file@addr: files to copy into RAM, with EXE
 	Title string   // the window's title, psxplay and what it runs if empty
 }
@@ -74,6 +75,7 @@ func (o *Options) AddFlags(fs *pflag.FlagSet, exe bool) {
 	fs.StringVar(&o.Card, "card", "", "memory card image for slot 1, made blank if it does not exist, and written back on exit")
 	fs.IntVar(&o.Scale, "scale", 2, "the window's initial size, as a multiple of 320x240")
 	fs.BoolVar(&o.Mute, "mute", false, "leave the sound off")
+	fs.BoolVar(&o.Fast, "fast-start", true, "run as fast as possible until the first picture, rather than through the BIOS's start in real time")
 }
 
 // Command returns the psxplay command, as use.
@@ -163,7 +165,7 @@ func Run(opts Options) error {
 		title += " - " + opts.EXE
 	}
 
-	g := &game{machine: m}
+	g := &game{machine: m, fast: opts.Fast}
 	if !opts.Mute {
 		g.sound = newSoundBuffer()
 		player, err := audio.NewContext(sampleRate).NewPlayer(g.sound)
@@ -206,6 +208,38 @@ type game struct {
 
 	level  float64 // the sound buffered, averaged, for frames
 	settle int     // ticks before frames may adjust again
+
+	// fast is whether the machine is still in its fast start, and
+	// fastFrames how many frames it has run so far.
+	fast       bool
+	fastFrames int
+}
+
+// The fast start's limits: how long a tick may run frames for, which
+// leaves the window its own share of the tick, and the frames it runs at
+// most, half a minute of them, after which a program that shows nothing,
+// one that only plays music say, runs in real time anyway.
+const (
+	fastTick      = 12 * time.Millisecond
+	maxFastFrames = 30 * 60
+)
+
+// fastStart runs frames as fast as the host allows for a tick's worth of
+// time, or until the display shows something, dropping their sound. It
+// reports whether the fast start is still going.
+func (g *game) fastStart() (bool, error) {
+	deadline := time.Now().Add(fastTick)
+	for !g.machine.Shown() && g.fastFrames < maxFastFrames {
+		if time.Now().After(deadline) {
+			return true, nil
+		}
+		if _, err := g.machine.RunFrame(frameBudget); err != nil {
+			return false, err
+		}
+		g.samples = g.machine.Audio(g.samples[:0])
+		g.fastFrames++
+	}
+	return false, nil
 }
 
 // keys is the keyboard's pad, laid out as the site's player has it.
@@ -299,6 +333,19 @@ func (g *game) Update() error {
 	pad.Release(0xffff)
 	pad.Press(buttons())
 
+	if g.fast {
+		fast, err := g.fastStart()
+		if err != nil {
+			return fmt.Errorf("the emulator stopped: %w", err)
+		}
+		g.fast = fast
+		if fast {
+			return nil
+		}
+		// Real time from here: the sound's pacing starts afresh.
+		g.level, g.settle = 0, 0
+	}
+
 	// A tick runs to the next vertical blank. Without one in the budget,
 	// the display is whatever it was, and the next tick tries again.
 	for range g.frames() {
@@ -350,6 +397,10 @@ func (g *game) frames() int {
 }
 
 func (g *game) Draw(screen *ebiten.Image) {
+	// Nothing is shown during the fast start, before the first frame.
+	if g.frame == nil {
+		return
+	}
 	w, h := g.frame.Rect.Dx(), g.frame.Rect.Dy()
 	if w == 0 || h == 0 {
 		return

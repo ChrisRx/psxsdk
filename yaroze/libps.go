@@ -132,9 +132,15 @@ const (
 	SS_REV      = 1
 )
 
-// RCntCNT2 is the root counter that counts the system clock divided by
-// eight, for GetRCnt.
-const RCntCNT2 = 0xf2000002
+// The root counters, the CPU's four timers, as StartRCnt, ResetRCnt and
+// GetRCnt name them. Each counts up from zero to 65535 and round again; the
+// library uses the vertical blank's, RCntCNT3, for VSync.
+const (
+	RCntCNT0 = 0xf2000000 // the GPU's dot clock
+	RCntCNT1 = 0xf2000001 // horizontal lines, 15,734 a second on NTSC and 15,625 on PAL
+	RCntCNT2 = 0xf2000002 // the system clock divided by eight, 4,233,600 a second
+	RCntCNT3 = 0xf2000003 // vertical blanks
+)
 
 // Commands and modes for CdControl and CdRead, from libcd.h.
 const (

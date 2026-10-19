@@ -6,9 +6,11 @@
 // carries back:
 //
 //	{type: "init", canvas}              the canvas to draw on
-//	{type: "boot", bios, cue, files, elf}
+//	{type: "boot", bios, cue, files, elf, fastStart}
 //	                                    boots a disc, as psx.boot does, and
-//	                                    runs it
+//	                                    runs it, as fast as it goes until
+//	                                    the first picture unless fastStart
+//	                                    is false
 //	{type: "reset"}                     boots the same disc again
 //	{type: "pause"}, {type: "resume"}   stops and starts running
 //	{type: "buttons", buttons}          the pad's buttons, as they change
@@ -17,11 +19,11 @@
 //	{type: "log", level}                sets the level the emulator logs at,
 //	                                    as psx.setLogLevel does
 //
-// It sends the page, unasked, {event: "stats", fps, tty, output} twice a
-// second, with what the BIOS and the program printed meanwhile, as text in
-// tty and, while logging, interleaved with the log in output, as
-// psx.takeOutput returns it; and {event: "stopped", error} if the emulator
-// stops.
+// It sends the page, unasked, {event: "stats", fps, fast, tty, output}
+// twice a second, fast while the fast start is running, with what the BIOS
+// and the program printed meanwhile, as text in tty and, while logging,
+// interleaved with the log in output, as psx.takeOutput returns it; and
+// {event: "stopped", error} if the emulator stops.
 "use strict";
 
 importScripts("wasm_exec.js");
@@ -35,6 +37,8 @@ const FRAME_MS = (263 * 3413) / 53693.175;
 const BATCH = 2;
 const MAX_BEHIND = FRAME_MS * 4;
 const STATS_MS = 500;
+// How long a tick of the fast start runs frames for before yielding.
+const FAST_MS = 12;
 
 const ready = (async () => {
   const go = new Go();
@@ -52,6 +56,7 @@ let buttons = 0;
 
 const clock = {
   running: false,
+  fast: false,   // in the fast start, until the first picture
   next: 0,       // when the next frame is due
   scheduled: false,
   frames: 0,     // run since the last stats
@@ -78,13 +83,28 @@ function schedule() {
 function tick() {
   clock.scheduled = false;
   if (!clock.running) return;
+  if (clock.fast) {
+    const res = psx.runFast(FAST_MS);
+    if (res.error) {
+      stop(res.error);
+      return;
+    }
+    clock.frames += res.frames;
+    if (res.shown) {
+      // Real time from the first picture on, with no sound from before.
+      clock.fast = false;
+      clock.next = performance.now();
+      psx.takeAudio();
+      audioPort?.postMessage("flush");
+    }
+  }
   const now = performance.now();
   if (now - clock.next > MAX_BEHIND) clock.next = now;
 
   // Behind, after a stall or on a slow device, more than one frame is due:
   // only the last is worth copying out.
   let due = 0;
-  if (now >= clock.next) due = Math.min(BATCH, Math.floor((now - clock.next) / FRAME_MS) + 1);
+  if (!clock.fast && now >= clock.next) due = Math.min(BATCH, Math.floor((now - clock.next) / FRAME_MS) + 1);
   for (let i = 0; i < due; i++) {
     const last = i === due - 1;
     const res = psx.runFrame(last ? image?.data : null);
@@ -113,7 +133,7 @@ function tick() {
   if (now - clock.since >= STATS_MS) {
     const fps = (clock.frames * 1000) / (now - clock.since);
     const tty = clock.output.filter((c) => !c.level).map((c) => c.text).join("");
-    self.postMessage({ event: "stats", fps, tty, output: logging ? clock.output : undefined });
+    self.postMessage({ event: "stats", fps, fast: clock.fast, tty, output: logging ? clock.output : undefined });
     clock.frames = 0;
     clock.since = now;
     clock.output = [];
@@ -133,14 +153,15 @@ function stop(error) {
   if (error) self.postMessage({ event: "stopped", error });
 }
 
-function boot({ bios, cue, files, elf }) {
+function boot({ bios, cue, files, elf, fastStart }) {
   stop();
   clock.output = [];
   const error = psx.boot(bios, cue, files, elf ?? null);
   audioPort?.postMessage("flush");
-  booted = error ? null : { bios, cue, files, elf };
+  booted = error ? null : { bios, cue, files, elf, fastStart };
   if (!error) {
     psx.setButtons(buttons);
+    clock.fast = fastStart !== false;
     start();
   }
   return { error };

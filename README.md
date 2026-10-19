@@ -7,10 +7,11 @@
 psxsdk is a Go toolchain for the original PlayStation, built around the Net Yaroze. It covers the whole path from source to screen:
 
 - **Write** PlayStation programs in Go, compiled with TinyGo against generated bindings for the Net Yaroze library.
+- **Make** their data with converters from PNG, WAV, MIDI and OBJ files to the console's TIM, VAG, VAB, SEQ and TMD formats, each tested against what Sony's own tools made.
 - **Build** them into bootable discs with tools that convert executables and write CD-XA images, including streamed XA/STR files and CD audio tracks.
 - **Run** them in a PlayStation emulator written in Go, which drives the test suite headless, runs in a browser as WebAssembly, and opens a window on the desktop.
 
-**[The documentation](https://chrisrx.github.io/psxsdk/)** has the guide, a tutorial that writes a program from nothing, and the reference for every tool. **[The examples](https://chrisrx.github.io/psxsdk/examples/)** are seventeen Net Yaroze programs ported to Go, running in the browser on the discs this repository builds, in the emulator it contains.
+**[The documentation](https://chrisrx.github.io/psxsdk/)** has the guide, a tutorial that writes a program from nothing, topic pages on controllers, memory cards, CD audio and more, the reference for every tool, and [Sony's manuals](https://chrisrx.github.io/psxsdk/manuals/), with the FAQs, supplements and tutorial the Net Yaroze members' websites carried. **[The examples](https://chrisrx.github.io/psxsdk/examples/)** are twenty-four Net Yaroze programs ported to Go, running in the browser on the discs this repository builds, in the emulator it contains.
 
 ## Getting started
 
@@ -42,11 +43,11 @@ The tutorial's [first chapter](https://chrisrx.github.io/psxsdk/tutorial/setting
 | [`cmd/nyc`](cmd/nyc) | The build command: a Go program to a PSX-EXE or a disc image in one step, with the tinygo command or TinyGo compiled to WebAssembly |
 | [`disc`](disc) | Registering the files a program reads off the disc, which the build reads out of the executable |
 | [`examples`](examples) | The ported demos, one directory each, with the data they load |
-| [`tools`](tools) | `eco2exe`, `mkpsxiso`, `dumpsxiso`, `psxemu`, `psxplay` and the rest; the [tools section](https://chrisrx.github.io/psxsdk/tools/) describes each |
+| [`tools`](tools) | `eco2exe`, `mkpsxiso`, `dumpsxiso`, `psxemu`, `psxplay`, the data converters `png2tim`, `wav2vag`, `mkvab`, `smf2seq`, `rsdlink` and `obj2tmd`, and the rest; the [tools section](https://chrisrx.github.io/psxsdk/tools/) describes each |
 | [`emu`](emu) | The emulator, with [`emu/emutest`](emu/emutest) for driving it from tests |
-| [`format`](format) | PSX-EXE, ECOFF, CD-ROM sectors, ISO 9660 with CD-XA, whole discs, MDEC movies, instruction traces |
+| [`format`](format) | PSX-EXE, ECOFF, CD-ROM sectors, ISO 9660 with CD-XA, whole discs, MDEC movies, instruction traces, and the data formats: TIM, TMD, RSD, VAG, VAB and SEQ |
 | [`web`](web) | The emulator's WebAssembly build, the player, and the generator for the documentation site |
-| [`docs`](docs) | The documentation's pages; the examples' pages come from their package comments |
+| [`docs`](docs) | The documentation's pages, and Sony's manuals in `docs/manuals`; the examples' pages come from their package comments |
 
 ## Background
 
@@ -58,19 +59,6 @@ The goals have not changed:
 * Modern languages with features that help the software last
 * Libraries and tools that are well-defined and well-documented
 * Source code for everything, always available
-
-## TODO
-
-- [x] ECOFF to PSX-EXE converter (eco2exe)
-- [x] Net Yaroze executable serial loader (sioload)
-- [x] PSX ISO builder (mkpsxiso), with CD-XA attributes, streamed XA/STR files and CD audio tracks
-- [x] PSX ISO reader and extractor (dumpsxiso)
-- [x] Go bindings for the Net Yaroze library, and examples in Go
-- [x] Emulator, headless test harness and browser demo
-- [x] One build command (nyc), with TinyGo native or compiled to WebAssembly
-- [ ] Document code
-- [ ] Tests for all packages
-- [ ] Include collected PDFs and other Net Yaroze documents in repo
 
 ## License
 

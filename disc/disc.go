@@ -68,6 +68,32 @@ func Register(path, src string) File {
 	return File{magic: magic, Name: path, src: src}
 }
 
+// TrackName is the disc path Track registers an audio track under, which
+// mkpsxiso takes to mean a track of CD audio rather than a file.
+const TrackName = "#CDDA"
+
+// Track declares that the host file src, a WAV or raw 44.1 kHz 16-bit
+// stereo samples, is to be recorded on the disc as a track of CD audio,
+// after the data track and any tracks before it, and returns the File that
+// says which track it became:
+//
+//	var music = disc.Track("audio/theme.wav")
+//
+//	tracks := [2]int32{music.TrackNumber(), 0}
+//	yaroze.CdPlay(2, &tracks[0], 0)
+//
+// Like Register, the call must initialize a package-level variable with a
+// constant. Tracks are numbered in the order the program declares them.
+func Track(src string) File {
+	return File{magic: magic, Name: TrackName, src: src}
+}
+
+// TrackNumber is the number of the audio track Track registered, 2 for the
+// first after the data track, as CdPlay takes it, or 0 if it was not
+// recorded. A track's Size is its length in sectors of 2352 bytes, 75 to a
+// second.
+func (f *File) TrackNumber() int32 { return int32(f.Sector()) }
+
 // Into gives the file the memory it is read into, in place of what Load
 // would allocate, and tells mkpsxiso where that is, so that a file too
 // large for it fails the build rather than overrunning it. The drive delivers whole sectors of 2048

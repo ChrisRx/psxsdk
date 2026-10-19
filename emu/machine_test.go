@@ -234,3 +234,25 @@ func TestRunMatchesStep(t *testing.T) {
 	assert.Equal(t, true, slices.Equal(stepped.VRAM(), run.VRAM()), "VRAM")
 	assert.Equal(t, steppedTTY.String(), runTTY.String(), "TTY")
 }
+
+// TestShown checks that the display counts as showing something only once
+// it is on and its area has a pixel that is not black, and that it goes on
+// counting once it has.
+func TestShown(t *testing.T) {
+	m := newTestMachine(t)
+	const gp1 = 0x1f801814
+	assert.Equal(t, false, m.Shown(), "a machine just made")
+
+	// A red square at the display area's corner, with the display off.
+	m.Bus.Write32(gp0, 0x020000ff)
+	m.Bus.Write32(gp0, 0x00000000)
+	m.Bus.Write32(gp0, 0x00100010)
+	m.Bus.Write32(gp1, 0x03000001)
+	assert.Equal(t, false, m.Shown(), "the display is off")
+
+	m.Bus.Write32(gp1, 0x03000000)
+	assert.Equal(t, true, m.Shown(), "on, with red in it")
+
+	m.Bus.Write32(gp1, 0x03000001)
+	assert.Equal(t, true, m.Shown(), "it has shown something")
+}

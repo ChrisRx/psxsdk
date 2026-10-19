@@ -197,7 +197,7 @@ func TestImageLayout(t *testing.T) {
 	want := []Track{
 		{Number: 1, Start: 0, Sectors: dataSectors},
 		{Number: 2, Audio: true, Name: "first.wav", Pregap: dataSectors, Start: dataSectors + StandardPregap, Sectors: 2},
-		{Number: 3, Audio: true, Name: "second.wav", Pregap: dataSectors + StandardPregap + 2, Start: dataSectors + StandardPregap + 2, Sectors: 1},
+		{Number: 3, Audio: true, Name: "second.wav", Pregap: dataSectors + StandardPregap + 2, Start: dataSectors + 2*StandardPregap + 2, Sectors: 1},
 	}
 	if len(l.Tracks) != len(want) {
 		t.Fatalf("image has %d tracks, want %d", len(l.Tracks), len(want))
@@ -276,10 +276,10 @@ func TestCueSheet(t *testing.T) {
 		}
 	}
 
-	// The recorded pause is index zero of the track it belongs to, and only
-	// the track that has one gets the line.
-	if n := strings.Count(got, "INDEX 00"); n != 1 {
-		t.Errorf("cue sheet has %d index zero lines, want 1:\n%s", n, got)
+	// The recorded pause is index zero of the track it belongs to, which
+	// every audio track has.
+	if n := strings.Count(got, "INDEX 00"); n != 2 {
+		t.Errorf("cue sheet has %d index zero lines, want 2:\n%s", n, got)
 	}
 
 	// A data track with no audio is the single track cue sheet a disc

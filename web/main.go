@@ -18,6 +18,17 @@
 //	                            With null for pixels the display is not
 //	                            read at all, and the size is the last
 //	                            one's.
+//	psx.runFast(ms)             runs frames as fast as they go, for up to ms
+//	                            milliseconds, until the display first shows
+//	                            something, without reading the display and
+//	                            dropping their sound: the fast start, which
+//	                            gets through the BIOS and a program's
+//	                            loading without waiting on them in real
+//	                            time. It returns {shown, frames}, shown
+//	                            being whether the fast start is over, which
+//	                            it is too after half a minute of frames,
+//	                            for a program that never shows anything,
+//	                            or {error}.
 //	psx.setButtons(buttons)     sets the buttons held on the pad in port 1,
 //	                            as emu's Button bits.
 //	psx.takeOutput()            returns what the BIOS and the program have
@@ -47,6 +58,7 @@ import (
 	"strings"
 	"syscall/js"
 	"testing/fstest"
+	"time"
 
 	"go.chrisrx.dev/psx/emu"
 )
@@ -68,12 +80,20 @@ var (
 	audioOn bool
 	sound   []int16
 	soundJS []byte
+
+	// fastFrames is how many frames the fast start has run.
+	fastFrames int
 )
+
+// maxFastFrames is the most frames the fast start runs, half a minute of
+// them.
+const maxFastFrames = 30 * 60
 
 func main() {
 	js.Global().Set("psx", js.ValueOf(map[string]any{
 		"boot":        js.FuncOf(boot),
 		"runFrame":    js.FuncOf(runFrame),
+		"runFast":     js.FuncOf(runFast),
 		"setButtons":  js.FuncOf(setButtons),
 		"takeOutput":  js.FuncOf(takeOutput),
 		"setLogLevel": js.FuncOf(setLogLevel),
@@ -124,7 +144,31 @@ func boot(_ js.Value, args []js.Value) any {
 	m.SetAudio(audioOn)
 	m.InsertDisc(d)
 	machine, disc = m, d
+	fastFrames = 0
 	return nil
+}
+
+func runFast(_ js.Value, args []js.Value) any {
+	if machine == nil {
+		return map[string]any{"error": "nothing is running"}
+	}
+	ms := 12
+	if len(args) > 0 {
+		ms = args[0].Int()
+	}
+	deadline := time.Now().Add(time.Duration(ms) * time.Millisecond)
+	n := 0
+	for !machine.Shown() && fastFrames < maxFastFrames && time.Now().Before(deadline) {
+		if _, err := machine.RunFrame(frameBudget); err != nil {
+			machine = nil
+			return map[string]any{"error": err.Error()}
+		}
+		sound = machine.Audio(sound[:0])
+		fastFrames++
+		n++
+	}
+	shown := machine.Shown() || fastFrames >= maxFastFrames
+	return map[string]any{"shown": shown, "frames": n}
 }
 
 func runFrame(_ js.Value, args []js.Value) any {

@@ -54,6 +54,18 @@ type discTrack struct {
 // single track holds just that track, offset by its pregap when both of
 // its indexes are given; a file with several holds them at their INDEX 01
 // positions plus 150.
+//
+// Where a track ends departs from psxe, which would not play a disc's audio
+// as a drive does. psxe ends a track at the next one's INDEX 01, so the gap
+// before the next track, its INDEX 00, belongs to the track before, and a
+// program that starts play in the gap, as the library's CdPlay does, since
+// GetTD gives a track's start to the second, sees the track change at
+// INDEX 01 and takes the track for ended. A drive counts the gap as the
+// next track's, and so does this: a track ends where the next one's gap
+// begins, and the gap, in no track, reads as silence and reports as the
+// next track. And psxe ends the last track of a file at the file's length
+// in sectors, not counting from where the file starts, which cuts off its
+// last two seconds.
 func OpenDisc(path string) (*Disc, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -214,15 +226,17 @@ func layoutTracks(file *discFile, tracks []*discTrack, lba uint32) uint32 {
 	for i, t := range tracks {
 		t.start = uint32(t.index[1]) + 150
 		if i == len(tracks)-1 {
-			// psxe ends the last track at the file's length in sectors,
-			// not counting from where the file starts, and leaves the LBA
-			// for the next file where it was.
-			t.end = sectors
+			t.end = lba + sectors
 		} else {
-			t.end = uint32(tracks[i+1].index[1]) + 150 - 1
+			next := tracks[i+1]
+			gap := next.index[0]
+			if gap == -1 {
+				gap = next.index[1]
+			}
+			t.end = uint32(gap) + 150
 		}
 	}
-	return lba
+	return lba + sectors
 }
 
 // splitCueLine splits a cue sheet line into words, keeping a quoted file

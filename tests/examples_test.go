@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"bytes"
 	"path/filepath"
 	"testing"
 
@@ -237,4 +238,227 @@ func peak(m *emutest.Machine, frames int) int {
 		}
 	}
 	return p
+}
+
+// TestPadsScreenshot plugs an analog controller into port 1 and a mouse into
+// port 2, holds Cross and pushes the left stick right while the mouse moves
+// up, and checks that the cursor went right and up and that the screen
+// names both and what they send.
+func TestPadsScreenshot(t *testing.T) {
+	m := bootExample(t, "pads")
+	analog := emu.NewPad(emu.PadAnalog)
+	mouse := emu.NewPad(emu.PadMouse)
+	m.ConnectPad(1, analog)
+	m.ConnectPad(2, mouse)
+	m.RunUntilCount("main.screen", 30, frameBudget)
+	cx, cy := m.Sym("main.cursorX"), m.Sym("main.cursorY")
+	x0, y0 := int32(m.Read32(cx)), int32(m.Read32(cy))
+
+	analog.SetAxes(0x80, 0x80, 0xff, 0x80) // left stick hard right
+	analog.Press(emu.ButtonCross)
+	mouse.Press(emu.MouseLeft)
+	for range 30 {
+		mouse.Move(0, -2)
+		m.RunFrames(1)
+	}
+	x1, y1 := int32(m.Read32(cx)), int32(m.Read32(cy))
+	assert.Equal(t, true, x1 > x0, "the stick moves the cursor right")
+	assert.Equal(t, true, y1 < y0, "the mouse moves the cursor up")
+	emutest.Golden(t, m.Display(), "pads.png")
+
+	// A GunCon in port 2, aimed at the middle of the picture, puts the
+	// cursor there; a neGcon in port 1 twisted right moves it right.
+	gun := emu.NewPad(emu.PadGunCon)
+	gun.Aim(269, 145) // the middle: (269-77)*320/384 and (145-25)*240/239
+	m.ConnectPad(1, emu.NewPad(emu.PadDigital))
+	m.ConnectPad(2, gun)
+	m.RunFrames(3)
+	assert.Equal(t, [2]int32{160, 120}, [2]int32{int32(m.Read32(cx)), int32(m.Read32(cy))}, "the GunCon aims the cursor")
+	negcon := emu.NewPad(emu.PadNeGcon)
+	negcon.SetAxes(0xc0, 0, 0, 0)
+	m.ConnectPad(1, negcon)
+	m.ConnectPad(2, nil)
+	m.RunFrames(10)
+	assert.Equal(t, true, int32(m.Read32(cx)) > 160, "the neGcon's twist steers the cursor")
+}
+
+// TestCardScreenshot formats a blank memory card in slot 1, saves a number
+// to it, changes the number and loads it back, and then lists the card's
+// files and dumps the save, whose first bytes are Sony's header: "SC", one
+// icon frame and one block, and the title in full-width Shift-JIS. It
+// passes under Sony's BIOS as well as OpenBIOS: run it with PSX_BIOS set to
+// one of Sony's to check the card against the BIOS that games used.
+func TestCardScreenshot(t *testing.T) {
+	m := bootExample(t, "card")
+	card, err := emu.NewMemoryCard(nil)
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	m.InsertCard(1, card)
+	m.RunUntilCount("main.screen", 60, frameBudget)
+	number, status := m.Sym("main.number"), m.Sym("main.status")
+	t.Logf("card status %d", int32(m.Read32(status)))
+
+	// The program runs at thirty frames a second, so a press lasts long
+	// enough for it to be read on one of them. Each action talks to the
+	// card, which Sony's BIOS takes a second or so over, while the program
+	// waits, so an action is given that before the next press.
+	press := func(b uint16) { m.Hold(1, b, 6) }
+	act := func() {
+		press(emu.ButtonCross)
+		m.RunFrames(90)
+	}
+	for range 5 {
+		press(emu.ButtonDown) // to FORMAT
+	}
+	act()
+	assert.Equal(t, int32(1), int32(m.Read32(status)), "the card is formatted")
+	press(emu.ButtonDown)
+	press(emu.ButtonDown) // round to SAVE
+	for range 3 {
+		press(emu.ButtonRight)
+	}
+	act()
+	assert.Equal(t, int32(3), int32(m.Read32(number)))
+	press(emu.ButtonLeft)
+	press(emu.ButtonLeft)
+	press(emu.ButtonDown) // LOAD
+	act()
+	assert.Equal(t, int32(3), int32(m.Read32(number)), "the number is loaded back")
+
+	// The save on the card: its directory entry names it, and the block
+	// the BIOS put it in starts with the header.
+	data := card.Data()
+	assert.Equal(t, true, bytes.Contains(data[:8192], []byte("BA-NETYAROZEPSXSDK")), "the directory names the save")
+	header := false
+	for b := 8192; b < len(data); b += 8192 {
+		header = header || bytes.HasPrefix(data[b:], []byte{'S', 'C', 0x11, 1, 0x82, 0x6f})
+	}
+	assert.Equal(t, true, header, "a block starts with the header and the title's first P")
+
+	press(emu.ButtonDown)
+	press(emu.ButtonDown)
+	press(emu.ButtonDown) // DUMP
+	act()
+	act()
+	emutest.Golden(t, m.Display(), "card.png")
+}
+
+// TestCDDAScreenshot checks that the program learns its tracks' numbers,
+// 2 to 4 after the data track, that cross plays the chosen one, which is
+// heard in what the SPU mixes and which the drive then reports playing, and
+// that circle stops it.
+func TestCDDAScreenshot(t *testing.T) {
+	m := bootExample(t, "cdda")
+	m.SetAudio(true)
+	m.RunUntilCount("main.screen", 30, frameBudget)
+	tracks, playing := m.Sym("main.tracks"), m.Sym("main.playing")
+	assert.Equal(t, [3]uint32{2, 3, 4}, [3]uint32{m.Read32(tracks), m.Read32(tracks + 4), m.Read32(tracks + 8)}, "the tracks' numbers")
+	quiet := peak(m, 30)
+
+	m.Hold(1, emu.ButtonRight, 3) // the second track
+	m.Hold(1, emu.ButtonCross, 3)
+	m.RunFrames(60)
+	assert.Equal(t, int32(1), int32(m.Read32(playing)), "the second track plays")
+	loud := peak(m, 30)
+	t.Logf("peak %d stopped, %d playing", quiet, loud)
+	assert.Equal(t, true, loud > 1000 && quiet < 100, "the track is heard")
+	emutest.Golden(t, m.Display(), "cdda.png")
+
+	m.Hold(1, emu.ButtonCircle, 3)
+	m.RunFrames(30)
+	assert.Equal(t, int32(-1), int32(m.Read32(playing)), "circle stops it")
+}
+
+// TestTimersScreenshot checks that the line counter runs and passes its
+// mark every four seconds or so, and that more sprites take more of the
+// frame, measured in lines.
+func TestTimersScreenshot(t *testing.T) {
+	m := bootExample(t, "timers")
+	m.RunUntilCount("main.screen", 60, frameBudget)
+	count, lines, wraps := m.Sym("main.count"), m.Sym("main.lines"), m.Sym("main.wraps")
+	few := int32(m.Read32(lines))
+	m.Pad(1).Press(emu.ButtonUp)
+	m.RunUntil(func() bool { return m.Read32(count) >= 400 }, 30*emutest.Second, "four hundred sprites")
+	m.Pad(1).Release(emu.ButtonUp)
+	m.RunFrames(300)
+	many := int32(m.Read32(lines))
+	t.Logf("%d lines with 20 sprites, %d with 400; the counter passed its mark %d times", few, many, m.Read32(wraps))
+	assert.Equal(t, true, many > few+20, "more sprites take more of the frame")
+	assert.Equal(t, true, m.Read32(wraps) >= 1, "the line counter passes its mark")
+	emutest.Golden(t, m.Display(), "timers.png")
+}
+
+// TestTilesScreenshot scrolls the map right and down, to where its four
+// screens meet, and checks the scroll stops at the map's far corner.
+func TestTilesScreenshot(t *testing.T) {
+	m := bootExample(t, "tiles")
+	m.RunUntilCount("main.screen", 30, frameBudget)
+	m.Hold(1, emu.ButtonRight|emu.ButtonDown, 60)
+	emutest.Golden(t, m.Display(), "tiles.png")
+	m.Hold(1, emu.ButtonRight|emu.ButtonDown, 200)
+	bg := m.Sym("main.bg")
+	scroll := m.Read32(bg + 12)
+	assert.Equal(t, [2]int16{40*16 - 320, 32*16 - 240}, [2]int16{int16(scroll), int16(scroll >> 16)}, "scrolled to the far corner")
+}
+
+// TestAIScreenshot checks that the enemy closes on the player while circle
+// is held and draws away when it is let go, that in the random states it
+// changes state, and shows the random states.
+func TestAIScreenshot(t *testing.T) {
+	m := bootExample(t, "ai")
+	m.RunUntilCount("main.screen", 30, frameBudget)
+	dist := m.Sym("main.distance")
+	far := int32(m.Read32(dist))
+	m.Pad(1).Press(emu.ButtonCircle)
+	m.RunFrames(60)
+	near := int32(m.Read32(dist))
+	m.Pad(1).Release(emu.ButtonCircle)
+	m.RunFrames(60)
+	away := int32(m.Read32(dist))
+	t.Logf("distance %d, %d attacking, %d evading", far, near, away)
+	assert.Equal(t, true, near < far-50, "attack closes in")
+	assert.Equal(t, true, away > near+20, "evade draws away")
+
+	for range 5 {
+		m.Hold(1, emu.ButtonR1, 6)
+		m.RunFrames(4)
+	}
+	assert.Equal(t, uint32(5), m.Read32(m.Sym("main.mode")), "the random states")
+	st := m.Sym("main.state")
+	first := m.Read32(st)
+	m.RunUntil(func() bool { return m.Read32(st) != first }, 60*emutest.Second, "a change of state")
+	m.RunFrames(40)
+	emutest.Golden(t, m.Display(), "ai.png")
+}
+
+// The layout of yaroze.Object on the console: a GsDOBJ2 of 16 bytes and a
+// GsCOORDINATE2 of 80, then Position, then Rotation and Scale.
+const (
+	objectPosition = 16 + 80
+	objectSize     = objectPosition + 16 + 8 + 16
+)
+
+// TestSplitScreenshot drives each player's cube, checks each moved, and
+// shows the halves one above the other and then side by side.
+func TestSplitScreenshot(t *testing.T) {
+	m := bootExample(t, "split")
+	frames := m.Sym("main.frames")
+	m.RunUntil(func() bool { return m.Read32(frames) >= 30 }, frameBudget, "thirty frames")
+	players := m.Sym("main.players")
+	// An Object's Position follows its GsDOBJ2 and coordinate system.
+	pos := func(i int) int32 { return int32(m.Read32(players + uint32(i)*objectSize + objectPosition)) }
+	x0, x1 := pos(0), pos(1)
+	m.Pad(1).Press(emu.ButtonRight | emu.ButtonSquare)
+	m.RunFrames(30)
+	m.Pad(1).Release(emu.ButtonRight | emu.ButtonSquare)
+	m.RunFrames(2)
+	t.Logf("player 1 %d to %d, player 2 %d to %d", x0, pos(0), x1, pos(1))
+	assert.Equal(t, true, pos(0) > x0, "the first cube moves right")
+	assert.Equal(t, true, pos(1) < x1, "the second cube moves left")
+	emutest.Golden(t, m.Display(), "split.png")
+
+	m.Hold(1, emu.ButtonSelect, 6)
+	assert.Equal(t, uint32(1), m.Read32(m.Sym("main.sideBySide"))&0xff, "side by side")
+	emutest.Golden(t, m.Display(), "split-side.png")
 }

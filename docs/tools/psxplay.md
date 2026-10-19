@@ -9,7 +9,7 @@ weight: 7
 $ psxplay .build/check/check.cue
 ```
 
-OpenBIOS is built in, so no BIOS image is needed; `--bios` boots another, such as Sony's. `--exe` loads a PSX-EXE when the BIOS reaches its shell instead of booting a disc, as `psxemu --exe` does, `--card` attaches a memory card image to slot 1 and writes it back on exit, `--scale` sets the window's initial size as a multiple of 320x240, and `--mute` leaves the sound off. What the BIOS prints to the TTY goes to standard output.
+OpenBIOS is built in, so no BIOS image is needed; `--bios` boots another, such as Sony's. `--exe` loads a PSX-EXE when the BIOS reaches its shell instead of booting a disc, as `psxemu --exe` does, `--card` attaches a memory card image to slot 1 and writes it back on exit, `--scale` sets the window's initial size as a multiple of 320x240, and `--mute` leaves the sound off. The BIOS's start and a program's loading, a few seconds of black screen, run as fast as the host allows, with no picture or sound, until the display first shows something, and in real time from then on; `--fast-start=false` runs them in real time too. What the BIOS prints to the TTY goes to standard output.
 
 The keyboard is laid out as the player has it:
 

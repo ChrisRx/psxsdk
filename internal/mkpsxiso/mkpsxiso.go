@@ -370,13 +370,26 @@ func Build(opts Options) error {
 	if err != nil {
 		return err
 	}
+	// The program's own tracks follow those given with --audio, and their
+	// records learn their numbers, the data track being 1.
+	audio := opts.Audio
 	if prog != nil {
-		prog.patch()
+		for _, t := range prog.tracks {
+			audio = append(audio, t.src)
+		}
 	}
-
-	tracks, err := audioTracks(opts.Audio)
+	tracks, err := audioTracks(audio)
 	if err != nil {
 		return err
+	}
+	if prog != nil {
+		first := len(opts.Audio)
+		for i, t := range prog.tracks {
+			for _, r := range t.records {
+				r.Patch(prog.image, uint32(2+first+i), uint32((tracks[first+i].Size+2351)/2352))
+			}
+		}
+		prog.patch()
 	}
 	if opts.ISO {
 		// Both of these would otherwise fail part way through writing,
@@ -501,10 +514,18 @@ func place(root *iso9660.Dir, path, host string) (*iso9660.Entry, error) {
 // the files it registers, found as package disc describes, can be filled in
 // once the image is laid out.
 type program struct {
-	entry *iso9660.Entry
-	data  []byte // the PSX-EXE as a whole
-	image []byte // its text, within data
-	files []registered
+	entry  *iso9660.Entry
+	data   []byte // the PSX-EXE as a whole
+	image  []byte // its text, within data
+	files  []registered
+	tracks []registeredTrack
+}
+
+// A registered track is an audio track the program declared with
+// disc.Track, the host file it is recorded from, and its records.
+type registeredTrack struct {
+	src     string
+	records []disc.Record
 }
 
 // A registered file is one the program asked for, and where it went.
@@ -541,7 +562,21 @@ func loadProgram(root *iso9660.Dir, name, src string) (*program, error) {
 	// might, is one file with two records to fill in. From different host
 	// files it is a mistake, since only one can be at the path.
 	placed := map[string]registered{}
+	tracks := map[string]int{}
 	for _, r := range disc.Find(p.image, exe.TextAddr) {
+		if r.Name == disc.TrackName {
+			// An audio track: recorded after the data, in the order
+			// declared, once for each host file.
+			src := filepath.Join(src, filepath.FromSlash(r.Src))
+			i, ok := tracks[src]
+			if !ok {
+				i = len(p.tracks)
+				tracks[src] = i
+				p.tracks = append(p.tracks, registeredTrack{src: src})
+			}
+			p.tracks[i].records = append(p.tracks[i].records, r)
+			continue
+		}
 		key := discPath(r.Name)
 		if prev, ok := placed[key]; ok {
 			if prev.Src != r.Src {
@@ -595,6 +630,9 @@ func (p *program) patch() {
 func (p *program) describe(w io.Writer) {
 	for _, f := range p.files {
 		fmt.Fprintf(w, "  %-40s registered by \\%s from %s\n", discPath(f.Name), p.entry.Name, f.Src)
+	}
+	for _, t := range p.tracks {
+		fmt.Fprintf(w, "  %-40s registered by \\%s from %s\n", "audio track", p.entry.Name, t.src)
 	}
 }
 

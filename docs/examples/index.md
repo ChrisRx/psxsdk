@@ -2,7 +2,7 @@
 title: Examples
 weight: 3
 section: Examples
-description: Eighteen PlayStation programs in Go, running in the browser.
+description: Twenty-five PlayStation programs in Go, running in the browser.
 order: dino, square
 ---
 
