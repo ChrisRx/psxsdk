@@ -7,6 +7,7 @@
 # Run by build.sh in the cross shell, with GOLLVM the go-llvm module's
 # directory; TinyGo's own files come from the prepared tree in $OUT/tinygo.
 set -euxo pipefail
+: "${GOLLVM:?GOLLVM is empty: go-llvm module directory not found}"
 OBJ=$OUT/glue/obj
 mkdir -p "$OBJ"
 export NIX_CXXSTDLIB_COMPILE_wasm32_unknown_wasip1=" "

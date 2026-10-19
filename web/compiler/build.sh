@@ -118,7 +118,9 @@ if [ ! -e "$OUT/llvm-build/lib/liblldELF.a" ]; then
 fi
 
 echo "==> glue"
-GOLLVM=$(dev "cd '$TREE' && go list -m -f '{{.Dir}}' tinygo.org/x/go-llvm")
+# go list -m leaves Dir empty for a module not in the module cache yet, as
+# on a fresh machine, so the module is downloaded first.
+GOLLVM=$(dev "cd '$TREE' && go mod download tinygo.org/x/go-llvm && go list -m -f '{{.Dir}}' tinygo.org/x/go-llvm")
 export GOLLVM
 cross "$HERE/glue/build.sh"
 
