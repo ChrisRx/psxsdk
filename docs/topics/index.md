@@ -1,6 +1,7 @@
 ---
 title: Topics
 weight: 4
+group: Docs
 section: Topics
 description: How games did the things most games do, a page each, with an example to run and read: controllers, memory cards, CD audio, timing, scrolling backgrounds, enemies and split screens.
 ---

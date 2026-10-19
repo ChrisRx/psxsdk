@@ -1,7 +1,9 @@
 ---
 title: How it fits together
 weight: 1
+group: Docs
 section: Guide
+description: How the SDK fits together, getting started, writing programs in Go, how the machine works, making its data, the emulator, and the packages.
 ---
 
 ```

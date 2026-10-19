@@ -149,6 +149,22 @@ a { color: var(--accent); text-underline-offset: 2px; }
 .side li a:hover { background: var(--surface-2); }
 .side li a[aria-current] { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); font-weight: 500; }
 
+/* A group's sections, as the docs are: each section's name, and under the
+   one the page is in, its pages. */
+.grouped nav { max-height: calc(100vh - 96px); overflow-y: auto; scrollbar-width: thin; }
+.grouped .head {
+  display: block;
+  padding: 5px 10px;
+  border-radius: 6px;
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 600;
+}
+.grouped .head:hover { background: var(--surface-2); }
+.grouped .head[aria-current="page"] { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.grouped .group + .group { margin-top: 2px; }
+.grouped .open ul { margin: 2px 0 10px 10px; padding-left: 6px; border-left: 1px solid var(--line); }
+
 /* A section whose pages are listed with what each is, as the examples are:
    the list as the player had it, a wider column for it, and the page's
    headings left out to give the player the room. */
@@ -350,6 +366,15 @@ footer {
   .side ul { display: flex; flex-wrap: wrap; gap: 4px; }
   .side li a { padding: 5px 9px; border: 1px solid var(--line); }
   article h1 { font-size: 1.9rem; }
+
+  /* The group's sections become a row of chips, with the pages of the one
+     the page is in in a row of their own below them. */
+  .grouped nav { display: flex; flex-wrap: wrap; gap: 4px; max-height: none; overflow: visible; }
+  .grouped .group { display: contents; }
+  .grouped .group + .group { margin-top: 0; }
+  .grouped .head { padding: 5px 9px; border: 1px solid var(--line); }
+  .grouped .head[aria-current] { border-color: var(--ink); background: var(--ink); color: var(--bg); box-shadow: none; }
+  .grouped .open ul { order: 1; flex-basis: 100%; margin: 8px 0 0; padding: 0; border-left: 0; }
 
   /* The examples become a row of chips to scroll along, so that the
      picture comes first, as the player had them. */

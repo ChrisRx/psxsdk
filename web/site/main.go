@@ -131,6 +131,8 @@ type Site struct {
 	Name     string
 	Repo     string
 	Sections []*Section
+	Groups   []*Group
+	Nav      []Tab // the header's links, to sections and groups, in order
 	docs     string
 	pages    []*Page
 	assets   map[string]string // files beside pages to copy, output path to source
@@ -143,11 +145,31 @@ type Section struct {
 	URL    string // from the root, with a trailing slash
 	Index  *Page
 	Pages  []*Page // the index first, then by its order, weight and title
+	Group  *Group  // the group the section is in, if any
 	weight int
 
 	// Described lists the section's pages with their descriptions, in the
 	// sidebar and on the index, as the examples are.
 	Described bool
+}
+
+// A Group is sections that share one link in the header, named by the
+// group key of their indexes, and a page of its own listing them, at the
+// group's name in lower case. A page in one has the group's sections down
+// its side, with its own section's pages under it.
+type Group struct {
+	Title    string
+	URL      string
+	Sections []*Section
+	Page     *Page
+}
+
+// A Tab is a link in the header: a section's, or a group's.
+type Tab struct {
+	Title   string
+	URL     string
+	Section *Section
+	Group   *Group
 }
 
 // A Page is one Markdown file, or one example, rendered.
@@ -156,6 +178,7 @@ type Page struct {
 	Description string
 	Weight      int
 	Section     *Section
+	Group       *Group // for a group's page, the group it lists
 	URL         string // from the root, with a trailing slash; "" for the front page
 	Content     template.HTML
 	TOC         []Heading
@@ -164,6 +187,7 @@ type Page struct {
 	Controls    template.HTML // what the controller does, for an example
 	Source      string        // a path in the repository the page documents
 	section     string        // for an index, the section's name when not the title
+	group       string        // for an index, the group its section is in
 	order       []string      // for an index, the pages that come first, by name
 
 	src   string // the Markdown file, relative to docs/, or "" when generated
@@ -175,6 +199,26 @@ type Heading struct {
 	Level int
 	ID    string
 	Text  string
+}
+
+// Docs is the group the page is in, as a page of one of its sections or
+// as the group's own page, or nil.
+func (p *Page) Docs() *Group {
+	if p.Group != nil {
+		return p.Group
+	}
+	if p.Section != nil {
+		return p.Section.Group
+	}
+	return nil
+}
+
+// Under is whether the page is under the header's link t.
+func (p *Page) Under(t Tab) bool {
+	if t.Group != nil {
+		return p.Docs() == t.Group
+	}
+	return p.Section != nil && p.Section == t.Section
 }
 
 // Root is the path from the page's directory back to the site's root, which
@@ -242,6 +286,9 @@ func load(docs, examples string) (*Site, error) {
 		}
 		return a.Title < b.Title
 	})
+	if err := s.group(); err != nil {
+		return nil, err
+	}
 	for _, p := range s.pages {
 		if p.Section != nil {
 			p.Section.Pages = append(p.Section.Pages, p)
@@ -279,6 +326,42 @@ func load(docs, examples string) (*Site, error) {
 	return s, nil
 }
 
+// group puts the sections whose indexes name a group into it, makes each
+// group's page, and lays out the header: a group's link goes where its first
+// section's would.
+func (s *Site) group() error {
+	groups := map[string]*Group{}
+	for _, sec := range s.Sections {
+		name := sec.Index.group
+		if name == "" {
+			s.Nav = append(s.Nav, Tab{Title: sec.Title, URL: sec.URL, Section: sec})
+			continue
+		}
+		g := groups[name]
+		if g == nil {
+			g = &Group{Title: name, URL: strings.ToLower(name) + "/"}
+			if i := slices.IndexFunc(s.pages, func(p *Page) bool { return p.URL == g.URL }); i >= 0 {
+				return fmt.Errorf("group %s's page would be at %s, where docs/%s is", name, g.URL, s.pages[i].src)
+			}
+			g.Page = &Page{Title: name, URL: g.URL, Group: g}
+			groups[name] = g
+			s.Groups = append(s.Groups, g)
+			s.pages = append(s.pages, g.Page)
+			s.Nav = append(s.Nav, Tab{Title: name, URL: g.URL, Group: g})
+		}
+		g.Sections = append(g.Sections, sec)
+		sec.Group = g
+	}
+	for _, g := range s.Groups {
+		var text strings.Builder
+		for _, sec := range g.Sections {
+			fmt.Fprintf(&text, "%s %s\n", sec.Title, sec.Index.Description)
+		}
+		g.Page.Text = text.String()
+	}
+	return nil
+}
+
 // splitList splits a front matter value of names separated by commas.
 func splitList(v string) []string {
 	var out []string
@@ -305,6 +388,7 @@ func (s *Site) readPage(rel string) (*Page, error) {
 		Description: meta["description"],
 		Embed:       meta["embed"],
 		section:     meta["section"],
+		group:       meta["group"],
 		order:       splitList(meta["order"]),
 		src:         rel,
 		index:       path.Base(rel) == "index.md",
@@ -335,8 +419,9 @@ func (s *Site) readPage(rel string) (*Page, error) {
 // from the body. The keys are title, which every page needs, weight, which
 // orders pages in a section and sections in the header, description, embed,
 // which names an example to show the player for, and on an index, section,
-// which names the section when its page's title would not, and order, the
-// names of the section's pages to put first, separated by commas.
+// which names the section when its page's title would not, group, which
+// puts the section in a group of that name, and order, the names of the
+// section's pages to put first, separated by commas.
 func frontMatter(src []byte) (map[string]string, []byte, error) {
 	meta := map[string]string{}
 	if !bytes.HasPrefix(src, []byte("---\n")) {

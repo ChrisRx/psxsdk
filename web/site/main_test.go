@@ -86,6 +86,49 @@ func TestSections(t *testing.T) {
 	assert.Equal(t, []string{"Examples", "zebra", "apple", "demo"}, titles(s.Sections[2].Pages))
 }
 
+func TestGroups(t *testing.T) {
+	dir := t.TempDir()
+	docs := filepath.Join(dir, "docs")
+	write(t, docs, "guide/index.md", "---\ntitle: How it fits\nsection: Guide\ngroup: Docs\nweight: 1\ndescription: The guide.\n---\n")
+	write(t, docs, "guide/getting-started.md", "---\ntitle: Getting started\n---\n")
+	write(t, docs, "examples/index.md", "---\ntitle: Examples\nweight: 2\n---\n")
+	write(t, docs, "tools/index.md", "---\ntitle: Tools\ngroup: Docs\nweight: 3\ndescription: The tools.\n---\n")
+	s, err := load(docs, "")
+	assert.NoError(t, err)
+
+	// The group's link goes where its first section's would, and it has a
+	// page of its own.
+	var nav []string
+	for _, tab := range s.Nav {
+		nav = append(nav, tab.Title+" "+tab.URL)
+	}
+	assert.Equal(t, []string{"Docs docs/", "Examples examples/"}, nav)
+	docsPage := page(s, "docs/")
+	assert.Equal(t, s.Groups[0], docsPage.Group)
+	assert.Equal(t, []*Section{s.Sections[0], s.Sections[2]}, s.Groups[0].Sections)
+	assert.Equal(t, s.Groups[0], page(s, "guide/getting-started/").Docs())
+	assert.Equal(t, true, page(s, "tools/").Under(s.Nav[0]))
+	assert.Equal(t, false, page(s, "examples/").Under(s.Nav[0]))
+
+	out := filepath.Join(dir, "out")
+	assert.NoError(t, s.write(out, ""))
+	html, _ := os.ReadFile(filepath.Join(out, "guide/getting-started/index.html"))
+	// The side lists the group's sections, and the pages of the page's own.
+	got := string(html)
+	assert.Equal(t, true, strings.Contains(got, `<a class="head" href="../../guide/" aria-current="true">Guide</a>`), got)
+	assert.Equal(t, true, strings.Contains(got, `<a class="head" href="../../tools/">Tools</a>`), got)
+	assert.Equal(t, true, strings.Contains(got, `aria-current="page">Getting started</a>`), got)
+	assert.Equal(t, true, strings.Contains(got, `<a href="../../docs/" aria-current="true">Docs</a>`), got)
+	html, _ = os.ReadFile(filepath.Join(out, "docs/index.html"))
+	got = string(html)
+	assert.Equal(t, true, strings.Contains(got, `<li><a href="../tools/"><b>Tools</b><span>The tools.</span></a></li>`), got)
+
+	// A group's page may not take a page's place.
+	write(t, docs, "docs/index.md", "---\ntitle: Docs\n---\n")
+	_, err = load(docs, "")
+	assert.Error(t, "where docs/docs/index.md is", err)
+}
+
 func TestOrderUnknown(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "docs/examples/index.md", "---\ntitle: Examples\norder: missing\n---\n")
