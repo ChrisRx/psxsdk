@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.chrisrx.dev/psx/binutils"
-	"go.chrisrx.dev/psx/format/psx"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -39,46 +38,18 @@ ran, so that a program written for the serial loader runs from a disc:
 			if err != nil {
 				log.Fatal(err)
 			}
-
-			exe := &psx.File{
-				FileHeader: psx.FileHeader{
-					Magic:     psx.ExecutableSignature,
-					PC0:       input.Entry,
-					TextAddr:  input.Addr,
-					TextSize:  input.Size(),
-					StackAddr: 0x801fff00,
-				},
-				Sections: []*psx.Section{
-					&psx.Section{
-						Name: "text",
-						Addr: input.Addr,
-						Data: input.Data,
-					},
-				},
-			}
-
-			if opts.Patch {
-				if err := yaroze.PatchExecutable(exe); err != nil {
-					log.Fatal(err)
-				}
-			}
-
-			psx.AlignTextData(exe, 2048)
-
-			exe, err = yaroze.Combine(exe)
-			if err != nil {
-				log.Fatal(err)
-			}
+			var loads []binutils.Load
 			for _, spec := range opts.Loads {
 				l, err := binutils.ParseLoad(spec)
 				if err != nil {
 					log.Fatal(err)
 				}
-				if err := binutils.Embed(exe, l.Addr, l.Data); err != nil {
-					log.Fatal(err)
-				}
+				loads = append(loads, l)
 			}
-
+			exe, err := yaroze.Executable(input, opts.Patch, loads...)
+			if err != nil {
+				log.Fatal(err)
+			}
 			if err := exe.WriteFile(args[1]); err != nil {
 				log.Fatal(err)
 			}

@@ -3,6 +3,7 @@ package binutils
 import (
 	"debug/elf"
 	"fmt"
+	"io"
 	"os"
 
 	"go.chrisrx.dev/psx/format/ecoff"
@@ -41,20 +42,26 @@ func LoadImage(path string) (*Image, error) {
 		return nil, err
 	}
 	defer f.Close()
+	img, err := ReadImage(f)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	return img, nil
+}
 
+// ReadImage reads a flat image from an executable held in r, as LoadImage
+// does from a file.
+func ReadImage(r io.ReaderAt) (*Image, error) {
 	// debug/elf is strict about the magic, so it is the cheaper check and
 	// cannot be confused by an ECOFF file.
-	if ef, err := elf.NewFile(f); err == nil {
+	if ef, err := elf.NewFile(r); err == nil {
 		defer ef.Close()
 		return elfImage(ef)
 	}
 
-	if _, err := f.Seek(0, 0); err != nil {
-		return nil, err
-	}
-	ec, err := ecoff.NewFile(f)
+	ec, err := ecoff.NewFile(r)
 	if err != nil {
-		return nil, fmt.Errorf("%s: not an ECOFF or ELF executable", path)
+		return nil, fmt.Errorf("not an ECOFF or ELF executable")
 	}
 	return &Image{
 		Entry: ec.Entry,

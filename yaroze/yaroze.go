@@ -13,6 +13,40 @@ func Combine(f *psx.File) (*psx.File, error) {
 	return binutils.Combine(Libps, f)
 }
 
+// Executable makes a PSX-EXE of a Net Yaroze program's image, as the
+// eco2exe command does: with patch, a startup stub that initializes the
+// resident library first (PatchExecutable), then the library combined in
+// (Combine), so that the result runs without the Net Yaroze boot disc, and
+// each of loads put into the image at its address.
+func Executable(img *binutils.Image, patch bool, loads ...binutils.Load) (*psx.File, error) {
+	exe := &psx.File{
+		FileHeader: psx.FileHeader{
+			Magic:     psx.ExecutableSignature,
+			PC0:       img.Entry,
+			TextAddr:  img.Addr,
+			TextSize:  img.Size(),
+			StackAddr: 0x801fff00,
+		},
+		Sections: []*psx.Section{{Name: "text", Addr: img.Addr, Data: img.Data}},
+	}
+	if patch {
+		if err := PatchExecutable(exe); err != nil {
+			return nil, err
+		}
+	}
+	psx.AlignTextData(exe, 2048)
+	exe, err := Combine(exe)
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range loads {
+		if err := binutils.Embed(exe, l.Addr, l.Data); err != nil {
+			return nil, err
+		}
+	}
+	return exe, nil
+}
+
 // libpsInit is the resident library's initialization routine, which has to
 // run before the program does.
 const libpsInit = 0x80010030

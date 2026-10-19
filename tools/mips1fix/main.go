@@ -29,26 +29,14 @@
 package main
 
 import (
-	"debug/elf"
 	"fmt"
 	"log"
 	"os"
 
 	"github.com/spf13/cobra"
+
+	"go.chrisrx.dev/psx/binutils"
 )
-
-// MIPS II trap-on-condition instructions, in the SPECIAL opcode's function
-// field. These are the ones LLVM emits that a MIPS I core does not have.
-var trapFuncs = map[uint32]string{
-	0x30: "tge",
-	0x31: "tgeu",
-	0x32: "tlt",
-	0x33: "tltu",
-	0x34: "teq",
-	0x36: "tne",
-}
-
-const nop = 0x00000000
 
 var opts struct {
 	DryRun bool
@@ -62,61 +50,22 @@ func patch(path string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	f, err := elf.NewFile(newReaderAt(data))
+	traps, err := binutils.MIPS1Traps(data)
 	if err != nil {
 		return 0, fmt.Errorf("%s: %v", path, err)
 	}
-	defer f.Close()
-
-	if f.Machine != elf.EM_MIPS && f.Machine != elf.EM_MIPS_RS3_LE {
-		return 0, fmt.Errorf("%s: machine is %v, not MIPS", path, f.Machine)
-	}
-	bo := f.ByteOrder
-
-	var found int
-	for _, s := range f.Sections {
-		if s.Type != elf.SHT_PROGBITS || s.Flags&elf.SHF_EXECINSTR == 0 {
-			continue
-		}
-		base := int(s.Offset)
-		for off := 0; off+4 <= int(s.Size); off += 4 {
-			word := bo.Uint32(data[base+off:])
-			// SPECIAL opcode with a trap function code.
-			if word>>26 != 0 {
-				continue
-			}
-			name, ok := trapFuncs[word&0x3f]
-			if !ok {
-				continue
-			}
-			found++
-			if !opts.Quiet {
-				fmt.Printf("  %s+0x%x: %s (%#08x) -> nop\n", s.Name, off, name, word)
-			}
-			if !opts.DryRun {
-				bo.PutUint32(data[base+off:], nop)
-			}
+	if !opts.Quiet {
+		for _, t := range traps {
+			fmt.Printf("  %s+0x%x: %s (%#08x) -> nop\n", t.Section, t.Offset, t.Name, t.Word)
 		}
 	}
-
-	if found > 0 && !opts.DryRun {
+	if len(traps) > 0 && !opts.DryRun {
+		binutils.RemoveTraps(data, traps)
 		if err := os.WriteFile(path, data, 0o644); err != nil {
-			return found, err
+			return len(traps), err
 		}
 	}
-	return found, nil
-}
-
-// newReaderAt adapts a byte slice for debug/elf.
-func newReaderAt(b []byte) *sliceReaderAt { return &sliceReaderAt{b} }
-
-type sliceReaderAt struct{ b []byte }
-
-func (r *sliceReaderAt) ReadAt(p []byte, off int64) (int, error) {
-	if off < 0 || off >= int64(len(r.b)) {
-		return 0, fmt.Errorf("offset %d out of range", off)
-	}
-	return copy(p, r.b[off:]), nil
+	return len(traps), nil
 }
 
 func main() {
