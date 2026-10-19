@@ -1,6 +1,6 @@
 ---
 title: Packages
-weight: 4
+weight: 7
 ---
 
 | Package | Purpose |
@@ -15,4 +15,10 @@ weight: 4
 | [`format/iso9660`](format/iso9660) | ISO 9660 with CD-XA extensions, reading and writing |
 | [`format/psxdisc`](format/psxdisc) | Whole PlayStation discs: tracks, cue sheets, audio |
 | [`format/mdec`](format/mdec) | MDEC bitstreams and movies |
+| [`format/tim`](format/tim) | TIM images, and pictures into them |
+| [`format/tmd`](format/tmd) | TMD models and their primitives |
+| [`format/rsd`](format/rsd) | Sony's RSD models, linked into TMDs |
+| [`format/vag`](format/vag) | SPU-ADPCM and VAG sounds |
+| [`format/vab`](format/vab) | VAB sound banks and mkvab's definition files |
+| [`format/seq`](format/seq) | SEQ scores from MIDI files |
 | [`format/psxtrace`](format/psxtrace) | Instruction traces shared with psxe |

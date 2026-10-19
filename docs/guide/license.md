@@ -1,6 +1,6 @@
 ---
 title: License
-weight: 7
+weight: 10
 ---
 
 [MIT](LICENSE). Two parts carry their own notices:
