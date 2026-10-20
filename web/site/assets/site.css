@@ -121,7 +121,7 @@ a.top-icon { color: var(--ink); }
   margin: 0 auto;
   padding: 32px 20px 48px;
 }
-.layout.front { grid-template-columns: minmax(0, 1fr) 200px; }
+.layout.front { grid-template-columns: minmax(0, 1fr); }
 .layout.front main { max-width: 760px; margin: 0 auto; }
 
 .side, .toc { font-size: 0.95rem; }
@@ -353,7 +353,7 @@ footer {
 }
 
 @media (max-width: 1100px) {
-  .layout, .layout.front { grid-template-columns: 200px minmax(0, 1fr); }
+  .layout { grid-template-columns: 200px minmax(0, 1fr); }
   .layout.described { grid-template-columns: 230px minmax(0, 1fr); }
   .toc { display: none; }
 }

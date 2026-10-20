@@ -139,7 +139,7 @@
       {{- end}}
     </main>
 
-    {{- if and $page.TOC (not $described)}}
+    {{- if and $page.TOC (not $described) (or $page.Section $docs)}}
     <aside class="toc">
       <nav aria-label="On this page">
         <p>On this page</p>
