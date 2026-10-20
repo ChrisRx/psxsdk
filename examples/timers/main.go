@@ -147,15 +147,15 @@ func main() {
 
 		seconds := yaroze.VSync(-1) / rate
 		text.Reset()
-		text.WriteString("~c990LINE COUNTER~c999 ").WriteInt(int(counter))
-		text.WriteString("\nPASSED ").WriteInt(passing).WriteString(" ").WriteInt(int(wraps)).WriteString(" TIMES\n")
-		text.WriteString("\n~c990CLOCK~c999 ").WriteInt(int(seconds / 60)).WriteString(":")
+		text.WriteString("~c990LINE COUNTER~c999 ").WriteInt(counter)
+		text.WriteString("\nPASSED ").WriteInt(passing).WriteString(" ").WriteInt(wraps).WriteString(" TIMES\n")
+		text.WriteString("\n~c990CLOCK~c999 ").WriteInt(seconds / 60).WriteString(":")
 		if seconds%60 < 10 {
 			text.WriteString("0")
 		}
-		text.WriteInt(int(seconds % 60))
-		text.WriteString("\n\n~c990FRAME~c999 ").WriteInt(int(count)).WriteString(" SPRITES, ")
-		text.WriteInt(int(lines)).WriteString(" OF ").WriteInt(int(frameLines)).WriteString(" LINES\n")
+		text.WriteInt(seconds % 60)
+		text.WriteString("\n\n~c990FRAME~c999 ").WriteInt(count).WriteString(" SPRITES, ")
+		text.WriteInt(lines).WriteString(" OF ").WriteInt(frameLines).WriteString(" LINES\n")
 		text.Print()
 
 		// The lines since the last vertical blank: this frame's work,

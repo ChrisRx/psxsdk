@@ -536,7 +536,7 @@ func initialiseTextStrings() {
 // do.
 func registerNumber(label string, n int32, x, y int16) {
 	number.Reset()
-	number.WriteString(label).WriteInt(int(n)).WriteString("\n")
+	number.WriteString(label).WriteInt(n).WriteString("\n")
 	registerTextStringForDisplay(number.Bytes(), x, y)
 }
 

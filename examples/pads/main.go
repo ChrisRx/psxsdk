@@ -128,7 +128,7 @@ func describe(port int, c *yaroze.Controller) {
 		text.WriteString("~c090GUNCON")
 		names = gunconButtons
 	default:
-		text.WriteString("~c990KIND ").WriteInt(int(c.Kind))
+		text.WriteString("~c990KIND ").WriteInt(c.Kind)
 	}
 	text.WriteString("~c999\n HELD:")
 	held := false
@@ -144,15 +144,15 @@ func describe(port int, c *yaroze.Controller) {
 	text.WriteString("\n ")
 	switch c.Kind {
 	case yaroze.KindAnalog, yaroze.KindAnalogJoystick:
-		text.WriteString("LEFT ").WriteInt(int(c.Axes[2])).WriteString(",").WriteInt(int(c.Axes[3]))
-		text.WriteString("  RIGHT ").WriteInt(int(c.Axes[0])).WriteString(",").WriteInt(int(c.Axes[1]))
+		text.WriteString("LEFT ").WriteInt(c.Axes[2]).WriteString(",").WriteInt(c.Axes[3])
+		text.WriteString("  RIGHT ").WriteInt(c.Axes[0]).WriteString(",").WriteInt(c.Axes[1])
 	case yaroze.KindMouse:
-		text.WriteString("MOVED ").WriteInt(int(c.DX)).WriteString(",").WriteInt(int(c.DY))
+		text.WriteString("MOVED ").WriteInt(c.DX).WriteString(",").WriteInt(c.DY)
 	case yaroze.KindNeGcon:
-		text.WriteString("TWIST ").WriteInt(int(c.Axes[0])).WriteString(" I ").WriteInt(int(c.Axes[1]))
-		text.WriteString(" II ").WriteInt(int(c.Axes[2])).WriteString(" L ").WriteInt(int(c.Axes[3]))
+		text.WriteString("TWIST ").WriteInt(c.Axes[0]).WriteString(" I ").WriteInt(c.Axes[1])
+		text.WriteString(" II ").WriteInt(c.Axes[2]).WriteString(" L ").WriteInt(c.Axes[3])
 	case yaroze.KindGunCon:
-		text.WriteString("AIM ").WriteInt(int(c.X)).WriteString(",").WriteInt(int(c.Y))
+		text.WriteString("AIM ").WriteInt(c.X).WriteString(",").WriteInt(c.Y)
 	}
 	text.WriteString("\n\n")
 }

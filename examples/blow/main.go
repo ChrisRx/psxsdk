@@ -191,8 +191,8 @@ func main() {
 		padStatus = yaroze.PadRead()
 
 		text.Reset()
-		text.WriteString("vsync ").WriteInt(int(t)).WriteString("\nObject ").WriteInt(int(dispObj + 1)).
-			WriteString(" of ").WriteInt(int(nObj)).WriteString("\n")
+		text.WriteString("vsync ").WriteInt(t).WriteString("\nObject ").WriteInt(dispObj + 1).
+			WriteString(" of ").WriteInt(nObj).WriteString("\n")
 		controlsMainMenu()
 		text.Print()
 		yaroze.FntFlush(-1)
@@ -285,7 +285,7 @@ func controlsMainMenu() {
 		delay(10)
 	}
 
-	text.WriteString("Menu ").WriteInt(int(menuOption)).WriteString(" ")
+	text.WriteString("Menu ").WriteInt(menuOption).WriteString(" ")
 
 	if menuOption != 8 && bang {
 		bang = false
@@ -364,8 +364,8 @@ func adjust3(x, y, z *int32, step int32) {
 }
 
 func controlsWRTObject() {
-	text.WriteString("Rotation ").WriteInt(int(rotateObj.Vx)).WriteString(" ").WriteInt(int(rotateObj.Vy)).
-		WriteString(" ").WriteInt(int(rotateObj.Vz)).WriteString("\n")
+	text.WriteString("Rotation ").WriteInt(rotateObj.Vx).WriteString(" ").WriteInt(rotateObj.Vy).
+		WriteString(" ").WriteInt(rotateObj.Vz).WriteString("\n")
 	x, y, z := int32(rotateObj.Vx), int32(rotateObj.Vy), int32(rotateObj.Vz)
 	adjust3(&x, &y, &z, 8)
 	rotateObj.Vx, rotateObj.Vy, rotateObj.Vz = int16(x), int16(y), int16(z)
@@ -373,15 +373,15 @@ func controlsWRTObject() {
 }
 
 func controlsWRTWorld() {
-	text.WriteString("View Point ").WriteInt(int(viewFrom.Vx)).WriteString(" ").WriteInt(int(viewFrom.Vy)).
-		WriteString(" ").WriteInt(int(viewFrom.Vz)).WriteString("\n")
+	text.WriteString("View Point ").WriteInt(viewFrom.Vx).WriteString(" ").WriteInt(viewFrom.Vy).
+		WriteString(" ").WriteInt(viewFrom.Vz).WriteString("\n")
 	adjust3(&viewFrom.Vx, &viewFrom.Vy, &viewFrom.Vz, 64)
 	zoom()
 }
 
 func controlsScaling() {
-	text.WriteString("Scaling ").WriteInt(int(scale.Vx)).WriteString(" ").WriteInt(int(scale.Vy)).
-		WriteString(" ").WriteInt(int(scale.Vz)).WriteString("\n")
+	text.WriteString("Scaling ").WriteInt(scale.Vx).WriteString(" ").WriteInt(scale.Vy).
+		WriteString(" ").WriteInt(scale.Vz).WriteString("\n")
 	adjust3(&scale.Vx, &scale.Vy, &scale.Vz, 4)
 }
 
@@ -391,13 +391,13 @@ func printColourDetails(r, g, b int32, highlight int8) {
 	text.WriteString("Colour ")
 	switch highlight {
 	case 0:
-		text.WriteString("~c0f0R ").WriteInt(int(r)).WriteString(" ~cfffG ").WriteInt(int(g)).WriteString(" B ").WriteInt(int(b)).WriteString("\n")
+		text.WriteString("~c0f0R ").WriteInt(r).WriteString(" ~cfffG ").WriteInt(g).WriteString(" B ").WriteInt(b).WriteString("\n")
 	case 1:
-		text.WriteString("R ").WriteInt(int(r)).WriteString(" ~c0f0G ").WriteInt(int(g)).WriteString(" ~cfffB ").WriteInt(int(b)).WriteString("\n")
+		text.WriteString("R ").WriteInt(r).WriteString(" ~c0f0G ").WriteInt(g).WriteString(" ~cfffB ").WriteInt(b).WriteString("\n")
 	case 2:
-		text.WriteString("R ").WriteInt(int(r)).WriteString(" G ").WriteInt(int(g)).WriteString(" ~c0f0B ").WriteInt(int(b)).WriteString("\n~cfff")
+		text.WriteString("R ").WriteInt(r).WriteString(" G ").WriteInt(g).WriteString(" ~c0f0B ").WriteInt(b).WriteString("\n~cfff")
 	default:
-		text.WriteString("R ").WriteInt(int(r)).WriteString(" G ").WriteInt(int(g)).WriteString(" B ").WriteInt(int(b)).WriteString("\n")
+		text.WriteString("R ").WriteInt(r).WriteString(" G ").WriteInt(g).WriteString(" B ").WriteInt(b).WriteString("\n")
 	}
 }
 
@@ -436,8 +436,8 @@ var lightRGB int8
 
 func controlsLighting(light int) {
 	l := &lightSource[light]
-	text.WriteString("Direction X ").WriteInt(int(l.Vx)).WriteString("\n          Y ").WriteInt(int(l.Vy)).
-		WriteString("\n          Z ").WriteInt(int(l.Vz)).WriteString("\n")
+	text.WriteString("Direction X ").WriteInt(l.Vx).WriteString("\n          Y ").WriteInt(l.Vy).
+		WriteString("\n          Z ").WriteInt(l.Vz).WriteString("\n")
 	printColourDetails(int32(l.R), int32(l.G), int32(l.B), lightRGB)
 
 	adjust3(&l.Vx, &l.Vy, &l.Vz, 8)
@@ -482,11 +482,11 @@ func controlsFogging() {
 	}
 	switch fogOption {
 	case 1:
-		text.WriteString("~c0f0dqa ").WriteInt(int(fogging.Dqa)).WriteString(" ~cfffdqb ").WriteInt(int(fogging.Dqb)).WriteString("\n")
+		text.WriteString("~c0f0dqa ").WriteInt(fogging.Dqa).WriteString(" ~cfffdqb ").WriteInt(fogging.Dqb).WriteString("\n")
 	case 2:
-		text.WriteString("dqa ").WriteInt(int(fogging.Dqa)).WriteString(" ~c0f0dqb ").WriteInt(int(fogging.Dqb)).WriteString("\n~cfff")
+		text.WriteString("dqa ").WriteInt(fogging.Dqa).WriteString(" ~c0f0dqb ").WriteInt(fogging.Dqb).WriteString("\n~cfff")
 	default:
-		text.WriteString("dqa ").WriteInt(int(fogging.Dqa)).WriteString(" dqb ").WriteInt(int(fogging.Dqb)).WriteString("\n")
+		text.WriteString("dqa ").WriteInt(fogging.Dqa).WriteString(" dqb ").WriteInt(fogging.Dqb).WriteString("\n")
 	}
 	highlight := int8(3)
 	if fogOption >= 3 {
@@ -554,9 +554,9 @@ func controlsExplosion() {
 	}
 	switch explosionOption {
 	case 0:
-		text.WriteString("~c0f0Speed ").WriteInt(int(explosionSpeed)).WriteString("\n~cfff").WriteString(onOff)
+		text.WriteString("~c0f0Speed ").WriteInt(explosionSpeed).WriteString("\n~cfff").WriteString(onOff)
 	case 1:
-		text.WriteString("Speed ").WriteInt(int(explosionSpeed)).WriteString("\n~c0f0").WriteString(onOff[:len(onOff)-1]).WriteString("~cfff\n")
+		text.WriteString("Speed ").WriteInt(explosionSpeed).WriteString("\n~c0f0").WriteString(onOff[:len(onOff)-1]).WriteString("~cfff\n")
 	}
 
 	if padStatus&(yaroze.PADRright|yaroze.PADRleft) != 0 {

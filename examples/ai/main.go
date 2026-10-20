@@ -159,7 +159,7 @@ func main() {
 		frames++
 
 		text.Reset()
-		text.WriteString("~c990").WriteInt(int(mode + 1)).WriteString(" ").WriteString(patternNames[mode]).WriteString("~c999\n")
+		text.WriteString("~c990").WriteInt(mode + 1).WriteString(" ").WriteString(patternNames[mode]).WriteString("~c999\n")
 		switch mode {
 		case attackEvade:
 			movePlayer()
@@ -201,7 +201,7 @@ func main() {
 		}
 		measure()
 		if mode == attackEvade || mode == randomStates {
-			text.WriteString("\nAPART ").WriteInt(int(distance))
+			text.WriteString("\nAPART ").WriteInt(distance)
 		}
 		text.Print()
 

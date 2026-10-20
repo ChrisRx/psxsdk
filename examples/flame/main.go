@@ -164,7 +164,7 @@ func main() {
 		controls()
 
 		line.Reset()
-		line.WriteInt(int(hsync)).WriteString("\n").Print()
+		line.WriteInt(hsync).WriteString("\n").Print()
 		yaroze.FntFlush(-1)
 		frameNumber++
 

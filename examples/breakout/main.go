@@ -193,7 +193,7 @@ func main() {
 
 		text.Reset()
 		text.WriteString("Breakout!\nFrame number: ").WriteInt(int(frameNumber)).
-			WriteString("\nLives: ").WriteInt(int(numberOfLives)).
+			WriteString("\nLives: ").WriteInt(numberOfLives).
 			WriteString("\nScore: ").WriteInt(int(currentScore.points)).WriteString("\n").Print()
 		yaroze.FntFlush(-1)
 

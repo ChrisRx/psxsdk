@@ -122,8 +122,10 @@ func TestLoad(t *testing.T) {
 	assert.Equal(t, want, got)
 	model, index := s.ObjectModel(1)
 	assert.Equal(t, [2]int32{0, 1}, [2]int32{int32(model), index})
-	assert.Equal(t, [2]int32{7, -3}, s.ObjectFields(1))
-	assert.Equal(t, [2]int32{0, 0}, s.ObjectFields(0))
+	f0, f1 := s.ObjectFields(1)
+	assert.Equal(t, [2]int32{7, -3}, [2]int32{f0, f1})
+	f0, f1 = s.ObjectFields(0)
+	assert.Equal(t, [2]int32{0, 0}, [2]int32{f0, f1})
 }
 
 func TestLoadBackground(t *testing.T) {

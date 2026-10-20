@@ -298,7 +298,7 @@ func main() {
 
 		line.Reset()
 		line.WriteString("sprites = ").WriteInt(nobj).
-			WriteString("\ntotal time = ").WriteInt(int(cnt)).
+			WriteString("\ntotal time = ").WriteInt(cnt).
 			WriteString("\n\nUP    : INCREASE\nDOWN  : DECREASE\n")
 		if !haveSound {
 			line.WriteString("\nsound data:\n")

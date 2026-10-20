@@ -102,7 +102,7 @@ func main() {
 			} else {
 				text.WriteString("  ")
 			}
-			text.WriteString("TRACK ").WriteInt(int(tracks[i])).WriteString("  ").WriteString(trackNames[i])
+			text.WriteString("TRACK ").WriteInt(tracks[i]).WriteString("  ").WriteString(trackNames[i])
 			if i == playing {
 				text.WriteString("  ~c990PLAYING~c999")
 			}

@@ -345,7 +345,9 @@ func (s *Scene) ObjectModel(i int) (model int, index int32) {
 // ObjectFields returns the two numbers the file gives object i, for the
 // program's own purposes: a kind, a score, a door's key, as the scene's
 // editor set them.
-func (s *Scene) ObjectFields(i int) [2]int32 { return s.objectFields[i] }
+func (s *Scene) ObjectFields(i int) (int32, int32) {
+	return s.objectFields[i][0], s.objectFields[i][1]
+}
 
 // Draw sorts the background, if there is one, at the far end of ot, the
 // objects into ot, and the sprites into sprites, which may be the screen's

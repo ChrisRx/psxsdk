@@ -396,9 +396,9 @@ func main() {
 
 		// The level, in red, and kills out of monsters.
 		line.Reset()
-		line.WriteString("~cF00").WriteInt(int(goodguy.level)).
-			WriteString("         ").WriteInt(int(goodguy.kills)).
-			WriteString("/").WriteInt(int(numBadGuys))
+		line.WriteString("~cF00").WriteInt(goodguy.level).
+			WriteString("         ").WriteInt(goodguy.kills).
+			WriteString("/").WriteInt(numBadGuys)
 		line.Print()
 
 		alterExitCLUT()

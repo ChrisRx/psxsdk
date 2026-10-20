@@ -156,12 +156,12 @@ func main() {
 	side := yaroze.GsGetActiveBuff()
 	for {
 		text.Reset()
-		text.WriteString("X = ").WriteInt(int(view.Vpx)).WriteString("\nZ = ").WriteInt(int(view.Vpz)).
-			WriteString("\nV = ").WriteInt(int(pvect.Vy)).WriteString("\n").Print()
+		text.WriteString("X = ").WriteInt(view.Vpx).WriteString("\nZ = ").WriteInt(view.Vpz).
+			WriteString("\nV = ").WriteInt(pvect.Vy).WriteString("\n").Print()
 		text.Reset()
-		text.WriteString("Num models: ").WriteInt(nModels).WriteString("\nHsync = ").WriteInt(int(hsync)).WriteString("\n").Print()
+		text.WriteString("Num models: ").WriteInt(nModels).WriteString("\nHsync = ").WriteInt(hsync).WriteString("\n").Print()
 		text.Reset()
-		text.WriteString("frame: ").WriteInt(int(frameNumber)).WriteString("\nmode: ")
+		text.WriteString("frame: ").WriteInt(frameNumber).WriteString("\nmode: ")
 		switch mainMode {
 		case moveView:
 			text.WriteString("move view\n")
@@ -170,8 +170,8 @@ func main() {
 		}
 		text.Print()
 		text.Reset()
-		text.WriteString("ship pos: \n").WriteInt(int(ship.position.Vx)).WriteString(" ").
-			WriteInt(int(ship.position.Vy)).WriteString(" ").WriteInt(int(ship.position.Vz)).WriteString("\n").Print()
+		text.WriteString("ship pos: \n").WriteInt(ship.position.Vx).WriteString(" ").
+			WriteInt(ship.position.Vy).WriteString(" ").WriteInt(ship.position.Vz).WriteString("\n").Print()
 		frameNumber++
 
 		if dealWithControllerPad() {

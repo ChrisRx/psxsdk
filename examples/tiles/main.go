@@ -141,7 +141,7 @@ func main() {
 		yaroze.GsSortFixBg16(&bg, &work[0], ot, 1)
 
 		text.Reset()
-		text.WriteString("~c000SCROLL ").WriteInt(int(bg.Scrollx)).WriteString(",").WriteInt(int(bg.Scrolly))
+		text.WriteString("~c000SCROLL ").WriteInt(bg.Scrollx).WriteString(",").WriteInt(bg.Scrolly)
 		text.WriteString(" OF ").WriteInt(mapW * tileSize).WriteString(" BY ").WriteInt(mapH * tileSize).WriteString("\n")
 		text.Print()
 	}

@@ -307,7 +307,7 @@ func drawObject(db *DB, frame int32) {
 	}
 
 	text.Reset()
-	text.WriteString("speed = ").WriteInt(int(30 * (frame + 1))).WriteString(" frame/sec\n").Print()
+	text.WriteString("speed = ").WriteInt(30 * (frame + 1)).WriteString(" frame/sec\n").Print()
 	yaroze.FntFlush(-1)
 
 	yaroze.GsSwapDispBuff()

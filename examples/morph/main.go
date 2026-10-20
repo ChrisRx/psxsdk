@@ -189,7 +189,7 @@ func main() {
 		yaroze.GsDrawOt(&ot[buffIdx])
 
 		line.Reset()
-		line.WriteString("hsync ").WriteInt(int(hsync)).WriteString("\n").Print()
+		line.WriteString("hsync ").WriteInt(hsync).WriteString("\n").Print()
 		yaroze.FntFlush(-1)
 
 		state++

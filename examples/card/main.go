@@ -260,7 +260,7 @@ func draw() {
 	if status >= 0 && int(status) < len(cardStates) {
 		text.WriteString(cardStates[status])
 	}
-	text.WriteString("\nNUMBER: ").WriteInt(int(number)).WriteString("\n\n")
+	text.WriteString("\nNUMBER: ").WriteInt(number).WriteString("\n\n")
 	if !listing {
 		for i := range int32(menuItems) {
 			name := menuNames[i]
@@ -275,7 +275,7 @@ func draw() {
 		text.Print()
 		return
 	}
-	text.WriteString(menuNames[menu]).WriteString(": ").WriteInt(int(nfiles)).WriteString(" FILE(S)\n")
+	text.WriteString(menuNames[menu]).WriteString(": ").WriteInt(nfiles).WriteString(" FILE(S)\n")
 	for i := range nfiles {
 		if i == chosen {
 			text.WriteString("~c990> ")
@@ -283,7 +283,7 @@ func draw() {
 			text.WriteString("~c999  ")
 		}
 		f := &dir[i]
-		text.WriteString(f.FileName()).WriteString(" ").WriteInt(int(f.Size / yaroze.CardBlock)).WriteString("\n")
+		text.WriteString(f.FileName()).WriteString(" ").WriteInt(f.Size / yaroze.CardBlock).WriteString("\n")
 	}
 	text.WriteString("~c999")
 	if dumped {

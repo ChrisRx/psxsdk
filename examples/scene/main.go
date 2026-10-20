@@ -60,8 +60,7 @@ var (
 	scenes = [...]*disc.File{&cubesDAT, &towerDAT}
 	which  = 0
 
-	text    yaroze.Buffer
-	textBuf [256]byte
+	text = yaroze.NewBuffer(256)
 )
 
 func main() {
@@ -69,7 +68,6 @@ func main() {
 	yaroze.GsInit3D()
 	b := screen.Bounds()
 	screen.Font(int32(b.X)+16, int32(b.Y)+16, 256, 64, 512)
-	text.Init(textBuf[:])
 
 	loader.Start(300, files...)
 	for ot := range screen.Frames() {
@@ -116,10 +114,16 @@ func main() {
 		// The scene's name, then each object's name and its two fields.
 		text.Reset()
 		text.WriteString("the directions turn the cube\ncross stops it, start swaps the scene\n")
-		text.WriteString(world.Name()).WriteString("\n")
+		text.WriteString(world.Name()).
+			WriteString("\n")
 		for i := range world.NObjects {
-			f := world.ObjectFields(i)
-			text.WriteString(world.ObjectName(i)).WriteString(" ").WriteInt(int(f[0])).WriteString(",").WriteInt(int(f[1])).WriteString("\n")
+			f0, f1 := world.ObjectFields(i)
+			text.WriteString(world.ObjectName(i)).
+				WriteString(" ").
+				WriteInt(f0).
+				WriteString(",").
+				WriteInt(f1).
+				WriteString("\n")
 		}
 		text.Print()
 	}

@@ -17,6 +17,18 @@ type Buffer struct {
 	n   int
 }
 
+// NewBuffer returns a buffer with n bytes of storage of its own, n-1 of them
+// usable, as Init gives it.
+//
+// It is meant for package-level variables, var text = yaroze.NewBuffer(256):
+// TinyGo runs package initializers while compiling, so the storage becomes a
+// static object like a [256]byte would be, with nothing allocated at run time.
+// Called in a function it allocates on the heap, which with no collector
+// running is never given back, so never call it in a frame loop.
+func NewBuffer(n int) *Buffer {
+	return &Buffer{buf: make([]byte, n)}
+}
+
 // Init points the buffer at storage. One byte is reserved for the
 // terminator, so the usable length is one less than len(buf).
 func (b *Buffer) Init(buf []byte) {
@@ -40,20 +52,31 @@ func (b *Buffer) WriteString(s string) *Buffer {
 	return b
 }
 
-// WriteInt appends a signed decimal integer.
-func (b *Buffer) WriteInt(v int) *Buffer {
+// WriteInt appends a decimal integer of any type an int holds every value of,
+// so a field needs no conversion. The wrapper inlines to a widening at the
+// call, leaving one copy of the formatting however many types a program
+// writes. uint32 is left out because its top half would print negative, and
+// 64-bit types because their division is a library call on the R3000.
+func (b *Buffer) WriteInt[T ~int | ~int8 | ~int16 | ~int32 | ~uint8 | ~uint16](v T) *Buffer {
+	return b.writeInt(int(v))
+}
+
+func (b *Buffer) writeInt(v int) *Buffer {
+	// The digits come from the magnitude as a uint32, which holds even the
+	// most negative int's, where -v overflows back to itself.
+	u := uint32(v)
 	if v < 0 {
 		b.WriteString("-")
-		v = -v
+		u = -u
 	}
 	// 10 digits is the most a 32-bit value needs.
 	var digits [10]byte
 	i := len(digits)
 	for {
 		i--
-		digits[i] = byte('0' + v%10)
-		v /= 10
-		if v == 0 {
+		digits[i] = byte('0' + u%10)
+		u /= 10
+		if u == 0 {
 			break
 		}
 	}

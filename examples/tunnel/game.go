@@ -158,7 +158,7 @@ func handlePlayerEndOfGame() {
 	basicText[0].Reset()
 	basicText[0].WriteString("You have died\n")
 	basicText[1].Reset()
-	basicText[1].WriteString("Your score: ").WriteInt(int(playersShip.MeritRating)).WriteString("\n")
+	basicText[1].WriteString("Your score: ").WriteInt(playersShip.MeritRating).WriteString("\n")
 	basicText[2].Reset()
 	basicText[2].WriteString("Press start\nto play again\n")
 	dummyGuiLoopForTextPrinting(3, yaroze.PADstart)

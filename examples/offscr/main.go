@@ -144,10 +144,10 @@ func main() {
 		}
 
 		line.Reset()
-		line.WriteString("frame: ").WriteInt(int(frameNumber)).WriteString("\n")
-		line.WriteString("hsync: ").WriteInt(int(hsync)).WriteString("\n")
+		line.WriteString("frame: ").WriteInt(frameNumber).WriteString("\n")
+		line.WriteString("hsync: ").WriteInt(hsync).WriteString("\n")
 		line.WriteString("ship pos:\n")
-		line.WriteString("sprite: ").WriteInt(int(theSprite.X)).WriteString(" ").WriteInt(int(theSprite.Y)).WriteString("\n")
+		line.WriteString("sprite: ").WriteInt(theSprite.X).WriteString(" ").WriteInt(theSprite.Y).WriteString("\n")
 
 		frameNumber++
 		if !dealWithControllerPad() {
