@@ -1,6 +1,6 @@
 ---
 title: Reference
-weight: 9
+weight: 2
 ---
 
 - [Nocash PSX Specification](https://problemkaputt.de/psx-spx.htm) - comprehensive PSX hardware information

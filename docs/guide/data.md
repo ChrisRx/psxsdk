@@ -1,6 +1,6 @@
 ---
 title: Making data
-weight: 4
+weight: 3
 description: Turning pictures, sounds, MIDI files and models into the files a program reads off its disc, with the converters, and planning video and sound memory for them.
 ---
 

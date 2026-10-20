@@ -1,10 +1,10 @@
 ---
 title: Troubleshooting
-weight: 5
+weight: 4
 description: What it usually is when the screen is empty, a sprite or a model is missing, the picture is garbled, the program freezes, or nothing sounds.
 ---
 
-Most of what goes wrong in a PlayStation program goes wrong in one of a few ways, and the same few went wrong for Net Yaroze members in 1998, which is why many of the answers here are Sony's [Programming FAQ](../manuals/faq.md)'s, said again for this toolchain. The [emulator](emulator.md) helps with all of them: `psxemu` prints what a program writes, saves what the screen shows and dumps video memory, and a test can read any of the program's variables by name.
+Most of what goes wrong in a PlayStation program goes wrong in one of a few ways, and the same few went wrong for Net Yaroze members in 1998, which is why many of the answers here are Sony's [Programming FAQ](../manuals/faq.md)'s, said again for this toolchain. The [emulator](../architecture/emulator.md) helps with all of them: `psxemu` prints what a program writes, saves what the screen shows and dumps video memory, and a test can read any of the program's variables by name.
 
 ## Nothing on the screen
 

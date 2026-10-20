@@ -10,7 +10,7 @@ tasks:
   test:
     cmds:
       - go vet ./...
-      - go test $(go list ./... | grep -v examples)
+      - go test ./...
 
   # Runs the example programs in the emulator, from the tests package. It
   # needs a BIOS, from PSX_BIOS or the OpenBIOS image the site ships, and
@@ -378,7 +378,7 @@ tasks:
       - tar --format=ustar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --mode=go-w -C .build --transform 's,^nyc-sysroot,sysroot,' -cf - nyc-sysroot | gzip -9 -n > cmd/nycw/wasm/sysroot.tar.gz
       - go build -trimpath -ldflags=-s -o .build/nycw ./cmd/nycw
 
-  # The compression benchmark behind docs/topics/compression.md: packs
+  # The compression benchmark behind docs/architecture/compression.md: packs
   # three of the examples' files with deflate and LZ4, builds the program
   # that unpacks them onto a disc, and times both decoders on the emulated
   # console. The test prints each decoder's speed.

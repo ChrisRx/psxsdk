@@ -10,7 +10,7 @@ import (
 
 // TestCompressionBench times package archive's inflate and the benchmark's
 // LZ4 decoder on the console over internal/compressbench's files, and
-// prints the speed of each: the measurements docs/topics/compression.md
+// prints the speed of each: the measurements docs/architecture/compression.md
 // rests on. It runs when task bench:compress has built the disc.
 func TestCompressionBench(t *testing.T) {
 	m := bootExample(t, "compressbench")

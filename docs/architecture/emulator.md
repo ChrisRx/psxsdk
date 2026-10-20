@@ -1,6 +1,6 @@
 ---
 title: The emulator
-weight: 6
+weight: 1
 ---
 
 [`emu`](emu) is a rewrite in Go of [psxe](https://github.com/allkern/psxe) by Allkern (Lisandro Alarcón), written with psxe as a guide and used under its MIT license (see [`emu/PSXE-LICENSE.txt`](emu/PSXE-LICENSE.txt)). It emulates the CPU, GTE, GPU, SPU (with reverb and gaussian interpolation), CD-ROM drive including XA and CD audio, MDEC, DMA, timers, controllers and memory cards. It was written to be driven from tests rather than played: it runs headless and deterministically, counting emulated cycles with no reference to the wall clock, so a run takes the same course however loaded the host is.
@@ -19,4 +19,4 @@ A program that runs an illegal instruction or makes a misaligned access fails th
 
 The emulator follows psxe closely so the two can be compared one instruction at a time: the flake builds psxe with a patch that writes an instruction trace, `psxemu --trace` writes the same format, and `psxtrace diff` reports the first record where they disagree.
 
-[`web`](web) compiles the emulator to WebAssembly (using Go's SIMD support for pixel conversion) and runs it in a worker behind the page in `web/static`. The player and [`psxplay`](../tools/psxplay.md) both start fast: until the display first shows something, which takes the BIOS and a program's loading a few seconds of black screen, they run the machine as fast as the host allows and draw and play none of it, and then go on in real time. `Machine.Shown` is what they ask. The Pages workflow builds every example's disc and publishes the site on each push to `main`, and publishes a preview for any pull request that changes an example.
+[`web`](web) compiles the emulator to WebAssembly (using Go's SIMD support for pixel conversion) and runs it in a worker behind the page in `web/static`. The player and [`psxplay`](../tools/psxplay.md) both start fast. The BIOS and a program's loading are a few seconds of black screen, so until the display first shows something they run the machine as fast as the host allows, drawing and playing none of it, and then go on in real time. `Machine.Shown` is what they ask. The Pages workflow builds every example's disc and publishes the site on each push to `main`, and publishes a preview for any pull request that changes an example.

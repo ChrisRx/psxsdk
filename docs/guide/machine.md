@@ -1,6 +1,6 @@
 ---
 title: How the machine works
-weight: 3
+weight: 2
 description: What a program for the PlayStation is working with, the memories, the frame, the GPU's ordering tables, the GTE, the SPU and the controllers, and how the yaroze package lays them out.
 ---
 

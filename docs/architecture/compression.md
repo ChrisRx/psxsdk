@@ -1,10 +1,10 @@
 ---
 title: Compression
-weight: 8
+weight: 3
 description: Why the archives pack with deflate and nothing else: what the games of the time did and why, how the examples' data compresses under each scheme, and how fast each decoder runs on the console.
 ---
 
-The PlayStation's games packed their data, and most packed it with their own schemes, often several in one game. This page is the reasoning and the measurements behind the toolchain's choice of one: the archives [`mkarc`](../tools/mkarc.md) writes and package `archive` reads pack with deflate, the format of zip and gzip, and store what deflate cannot shrink. The benchmark that produced the numbers is `internal/compressbench`, run by `task bench:compress`, so that the question can be asked again when something changes.
+Games for the PlayStation packed their data, most with schemes of their own, and often several in one game. This page is the reasoning and the measurements behind the toolchain's choice of just one: the archives [`mkarc`](../tools/mkarc.md) writes and package `archive` reads pack with deflate, the format of zip and gzip, and store what deflate cannot shrink. The benchmark behind the numbers is `internal/compressbench`, run by `task bench:compress`, so the question can be asked again when something changes.
 
 ## What the games did, and why
 
@@ -14,7 +14,7 @@ The PlayStation's games packed their data, and most packed it with their own sch
 - **Unpacking during play had to cost nothing.** Pieces streamed in while the game ran at thirty frames a second got the cheapest scheme there was, LZ or run lengths, while a loading screen could afford more. Two needs, two decoders.
 - **Memory.** Two megabytes, so a decoder could not want tables or a window of its own. LZ into the destination, with the packed bytes parked at its end, was the trick.
 - **Some data does not pack.** Sound is already ADPCM and movies are already MDEC; both were stored.
-- **Habit.** Studios carried their LZ and RLE tools over from the 16-bit era, and zlib was not a thing on consoles.
+- **Habit.** Studios carried their LZ and RLE tools over from the 16-bit era, and nobody was porting zlib to a console.
 
 ## How the examples' data packs
 
@@ -52,10 +52,10 @@ Against the drive, reading then unpacking with no overlap:
 | DOG.DAT | 0.97 s | 0.32 + 0.56 = 0.88 s | 0.45 + 0.25 = 0.70 s |
 | MD0.TMD | 0.38 s | 0.21 + 0.33 = 0.54 s | 0.27 + 0.13 = 0.40 s |
 
-On textures, and anything that packs well, deflate wins outright. On models it unpacks a little slower than the drive reads the raw file, and LZ4 only breaks even. Neither is a great load time win on its own at a Yaroze game's scale; the archive is, since one seek and one read replace one of each per file. Where packing clearly pays is memory and disc: an archive kept resident and unpacked piece by piece holds two to three times the assets in the same space.
+On textures, and anything that packs well, deflate wins outright. On models it unpacks a little slower than the drive reads the raw file, and LZ4 only breaks even. At the scale of a Yaroze game neither is much of a load time win on its own. The archive is, since one seek and one read replace one of each per file. Where packing clearly pays is memory and disc: an archive kept resident and unpacked piece by piece holds two to three times the assets in the same space.
 
 ## The choice
 
-One packing, deflate, and stored for what it cannot shrink by a tenth. It is the best ratio the R3000 can afford, the encoder comes from Go's standard library, and at a third to a whole megabyte a second it is at or above the drive's speed, so nothing loads slower packed than raw. The archive carries a method per entry, so a second packing can be added without a change to readers. The case for one would be unpacking during play: at thirty cycles a byte LZ4 costs about five percent of a sixty frame a second frame per kilobyte, and deflate three times that. A game streaming pieces mid-play would want LZ4, and its decoder is cheap to add then.
+One packing, deflate, with an entry stored when deflate cannot shrink it by a tenth. It is the best ratio the R3000 can afford, the encoder comes from Go's standard library, and at a third to a whole megabyte a second it is at or above the drive's speed, so nothing loads slower packed than raw. The archive carries a method per entry, so a second packing can be added without a change to readers. The case for one would be unpacking during play: at thirty cycles a byte, LZ4 costs about five percent of a sixty frame a second frame per kilobyte, and deflate three times that. A game streaming pieces mid-play would want LZ4, and its decoder is cheap to add then.
 
 These are the emulator's cycle costs; real memory timing may differ somewhat, not enough to reorder the conclusions.

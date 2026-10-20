@@ -1,5 +1,5 @@
 // The compression benchmark: the program behind the measurements in
-// docs/topics/compression.md, which chose deflate for the archives. It
+// docs/architecture/compression.md, which chose deflate for the archives. It
 // unpacks each packed file off its disc into memory a few times over,
 // with package archive's inflate and with an LZ4 decoder kept for the
 // comparison, counting rounds and bytes in globals that the emulator

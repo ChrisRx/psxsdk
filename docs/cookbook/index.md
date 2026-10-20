@@ -1,8 +1,8 @@
 ---
-title: Topics
-weight: 4
+title: Cookbook
+weight: 6
 group: Docs
-section: Topics
+section: Cookbook
 description: How games did the things most games do, a page each, with an example to run and read: controllers, memory cards, CD audio, timing, scrolling backgrounds, enemies and split screens.
 ---
 
@@ -12,7 +12,6 @@ Each page here takes one thing nearly every game needs and explains how the Play
 | --- | --- | --- |
 | [Controllers](controllers.md) | Every kind of controller: analog sticks, the mouse, the neGcon, the GunCon | [pads](../examples/pads.md) |
 | [Memory cards](memory-cards.md) | Saving and loading, the save header and icon, a card's files | [card](../examples/card.md) |
-| [Compression](compression.md) | What the games packed their data with and why, and the measurements behind the archives' deflate | |
 | [CD audio](cd-audio.md) | Music recorded on the disc as audio tracks, played by the drive | [cdda](../examples/cdda.md) |
 | [Timing](timing.md) | The root counters, a clock, and how much of a frame the work takes | [timers](../examples/timers.md) |
 | [Scrolling backgrounds](backgrounds.md) | A tile map bigger than the screen, drawn by the library | [tiles](../examples/tiles.md) |

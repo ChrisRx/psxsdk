@@ -13,7 +13,7 @@
 //
 // Deflate is the one packing, chosen over LZ4 and the LZSS of the time
 // on measurements of the examples' data and of both decoders on the
-// console, in docs/topics/compression.md: it packs textures and models a
+// console, in docs/architecture/compression.md: it packs textures and models a
 // quarter to a third smaller than LZ4, and unpacks at or above the speed
 // a double speed drive reads, so nothing loads slower packed. A file that
 // deflate shrinks by less than a tenth, as a sound bank or a movie is, is

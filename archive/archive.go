@@ -20,7 +20,7 @@
 // it. The deflate here decodes at about a third to a whole megabyte a
 // second on the console, at or above what a double speed drive reads, so
 // a packed file costs no more time to load than the raw one and takes a
-// third to a half of the space. docs/topics/compression.md has the
+// third to a half of the space. docs/architecture/compression.md has the
 // measurements the choice was made on.
 package archive
 

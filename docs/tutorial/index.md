@@ -1,6 +1,6 @@
 ---
 title: Tutorial
-weight: 2
+weight: 4
 group: Docs
 section: Tutorial
 description: Writing a PlayStation program in Go from nothing: a project of your own, then the square example, a box moved with the controller in front of a cube from the disc, to music.

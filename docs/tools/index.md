@@ -1,6 +1,6 @@
 ---
 title: Tools
-weight: 5
+weight: 7
 group: Docs
 section: Tools
 description: The commands: nyc to build a program onto a disc, the converters that make its pictures, sounds, music and models, and the tools for discs, executables and the emulator.

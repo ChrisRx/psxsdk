@@ -1,6 +1,6 @@
 ---
 title: Sony's manuals
-weight: 6
+weight: 8
 group: Docs
 section: Manuals
 description: The Net Yaroze manuals, Sony's supplements to them, the programming FAQs and the SCEE tutorial, as Sony published them.
