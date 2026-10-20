@@ -1,5 +1,6 @@
 ---
 title: psxsdk
+tagline: A Go toolchain for the Net Yaroze
 weight: 0
 description: Write, build and play Net Yaroze programs: a Go toolchain for the original PlayStation, with Sony's manuals and its members' demos, running in the browser.
 ---

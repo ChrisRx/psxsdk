@@ -90,7 +90,14 @@
 
     <main>
       <article>
+        {{- if $page.Tagline}}
+        <header class="hero">
+          <h1>{{$page.Title}}</h1>
+          <p>{{$page.Tagline}}</p>
+        </header>
+        {{- else}}
         <h1>{{$page.Title}}</h1>
+        {{- end}}
         {{- if and $described $page.Description}}
         <p class="lede">{{$page.Description}}</p>
         {{- end}}

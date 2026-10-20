@@ -186,6 +186,7 @@ type Page struct {
 	Content     template.HTML
 	TOC         []Heading
 	Text        string        // the body as plain text, for search
+	Tagline     string        // a line under the title, which makes the title a banner
 	Embed       string        // an example to show the player for
 	Controls    template.HTML // what the controller does, for an example
 	Source      string        // a path in the repository the page documents
@@ -389,6 +390,7 @@ func (s *Site) readPage(rel string) (*Page, error) {
 	p := &Page{
 		Title:       meta["title"],
 		Description: meta["description"],
+		Tagline:     meta["tagline"],
 		Embed:       meta["embed"],
 		section:     meta["section"],
 		group:       meta["group"],
@@ -420,8 +422,9 @@ func (s *Site) readPage(rel string) (*Page, error) {
 
 // frontMatter splits the "key: value" lines between the leading "---" lines
 // from the body. The keys are title, which every page needs, weight, which
-// orders pages in a section and sections in the header, description, embed,
-// which names an example to show the player for, and on an index, section,
+// orders pages in a section and sections in the header, description, tagline,
+// a line under the title that makes the title a banner, embed, which names
+// an example to show the player for, and on an index, section,
 // which names the section when its page's title would not, group, which
 // puts the section in a group of that name, and order, the names of the
 // section's pages to put first, separated by commas.

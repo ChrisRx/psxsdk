@@ -4,6 +4,10 @@
 
 :root {
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  /* The teal of the Net Yaroze User's Guide, the Software Development
+     Tool manual, from the SCEI catalog's picture of the three manuals,
+     lightened for the black. */
+  --teal: light-dark(#007394, #5cc3dd);
 }
 
 html { scroll-padding-top: 72px; }
@@ -218,6 +222,22 @@ article h1 {
   font: 600 2.375rem/1.05 "Barlow Condensed", Barlow, system-ui, sans-serif;
   letter-spacing: 0.005em;
 }
+
+/* A page with a tagline, the front page: the title as a banner, in the
+   teal with a band of it at the edge, and the tagline under it. */
+.hero {
+  margin: 8px 0 28px;
+  padding: 10px 0 10px 24px;
+  border-left: 12px solid var(--teal);
+}
+.hero h1 {
+  margin: 0;
+  font-size: clamp(3.25rem, 9vw, 5.5rem);
+  line-height: 0.95;
+  color: var(--teal);
+  text-shadow: 6px 6px 0 #000;
+}
+.hero p { margin: 10px 0 0; font-size: 1.25rem; color: var(--ink); }
 article h2 {
   margin: 2.2em 0 0.6em;
   padding-top: 0.4em;
@@ -354,6 +374,9 @@ footer {
   .side ul { display: flex; flex-wrap: wrap; gap: 4px; }
   .side li a { padding: 5px 9px; border: 1px solid var(--line); }
   article h1 { font-size: 1.9rem; }
+  .hero { margin-top: 0; padding-left: 16px; border-left-width: 8px; }
+  .hero h1 { font-size: 2.75rem; }
+  .hero p { font-size: 1.1rem; }
 
   /* The group's sections become a row of chips, with the pages of the one
      the page is in in a row of their own below them. */
