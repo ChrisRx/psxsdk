@@ -566,7 +566,7 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
    them dragged to share the height. */
 .pg-bar { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--line); background: var(--surface); }
 .pg-bar.dropping { outline: 2px dashed var(--accent); outline-offset: -4px; }
-.side-sect { display: flex; flex-direction: column; min-height: 0; }
+.side-sect { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 #side-scenes { flex: none; height: var(--scenes, 28%); }
 #side-files { flex: 1; }
 .side-head { display: flex; flex: none; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
@@ -574,7 +574,7 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
 .side-head svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .side-add { display: grid; place-items: center; width: 28px; height: 28px; min-height: 0; padding: 0; }
 .side-add svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
-.side-list { flex: 1; min-height: 0; margin: 0; padding: 4px 0; overflow: auto; list-style: none; font-size: 0.875rem; }
+.side-list { flex: 1; min-height: 0; margin: 0; padding: 4px 0; overflow-x: hidden; overflow-y: auto; list-style: none; font-size: 0.875rem; }
 .side-split { flex: none; height: 7px; border-top: 3px solid var(--surface); border-bottom: 3px solid var(--surface); background: var(--line); cursor: row-resize; touch-action: none; }
 .side-split:hover, .side-split:focus-visible, .resizing-rows .side-split { background: var(--accent); outline: none; }
 .side-foot { display: flex; flex: none; flex-direction: column; align-items: flex-start; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--line); }
@@ -602,7 +602,7 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
 .icon-sound { color: var(--t-num); }
 .icon-music, .icon-archive { color: var(--t-const); }
 .icon-scene { color: var(--t-kw); }
-.files-name { flex: 0 0 auto; max-width: calc(100% - 64px); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.files-name { flex: 0 1 auto; min-width: 0; max-width: calc(100% - 64px); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .files-row.folder .files-name { font-weight: 500; }
 .files-meta { flex: 1 1 0; min-width: 0; margin-left: auto; padding-left: 8px; overflow: hidden; font-size: 0.6875rem; text-align: right; white-space: nowrap; text-overflow: ellipsis; }
 #scene-list .files-row { padding-left: 14px; }
@@ -996,4 +996,17 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   .pg-out { flex: none; height: 340px; }
   .tabs { flex-wrap: wrap; }
   .tabs .status { order: 3; flex-basis: 100%; margin: 0 0 6px 10px; }
+}
+
+/* On a phone the sidebar's sections are too narrow side by side, so they
+   stack, each as wide as the page, the lists scrolling within a height of
+   their own, and the video memory is left out. */
+@media (max-width: 599px) {
+  .pg-bar { flex-direction: column; max-height: none; }
+  .side-sect, #side-scenes { flex: none; }
+  #side-vram { display: none; }
+  #side-scenes { border-right: 0; border-bottom: 1px solid var(--line); }
+  #side-files { border-right: 0; }
+  #scene-list { max-height: 128px; }
+  #file-tree { max-height: 40vh; }
 }
