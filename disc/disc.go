@@ -244,13 +244,16 @@ func LoadAll(frames int, files ...*File) *File {
 //
 //	loader.Start(300, files...)
 //	for ot := range screen.Frames() {
-//		if !loader.Step() {
+//		done, failed := loader.Step()
+//		if failed {
+//			yaroze.Print("could not read ")
+//			yaroze.Print(loader.Failed().Name)
+//			continue
+//		}
+//		if !done {
 //			bar.W = uint16(200 * loader.Loaded() / len(files))
 //			bar.Sort(ot, 0)
 //			continue
-//		}
-//		if f := loader.Failed(); f != nil {
-//			// f.Name is missing or unreadable
 //		}
 //		...
 //	}
@@ -275,8 +278,10 @@ func (l *Loader) Start(frames int, files ...*File) {
 // Step moves the reads on, once a frame: it starts the next file's read,
 // or sees whether the one in progress has finished, and starts the next as
 // soon as it has. It reports whether the loader is done, with every file
-// read or one failed, which Failed says.
-func (l *Loader) Step() bool {
+// read or one failed, and whether one has, which Failed names. There is no
+// error value: on this machine one costs its type's description in the
+// executable and a message made at run time, which is never freed.
+func (l *Loader) Step() (done, failed bool) {
 	for l.failed == nil && l.next < len(l.files) {
 		f := l.files[l.next]
 		if !l.reading {
@@ -300,7 +305,7 @@ func (l *Loader) Step() bool {
 		}
 		break
 	}
-	return l.Done()
+	return l.Done(), l.failed != nil
 }
 
 // Done reports whether every file has been read or one has failed.

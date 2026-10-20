@@ -49,11 +49,13 @@ func main() {
 			yaroze.Print("done\n")
 			continue
 		}
-		if !loader.Step() || !loader.Done() {
-			if loader.Failed() != nil {
-				yaroze.Print("could not read ")
-				yaroze.Print(loader.Failed().Name)
-			}
+		loaded, failed := loader.Step()
+		if failed {
+			yaroze.Print("could not read ")
+			yaroze.Print(loader.Failed().Name)
+			continue
+		}
+		if !loaded {
 			continue
 		}
 		dst := unsafe.Slice((*byte)(unsafe.Pointer(&out[0])), len(out)*4)

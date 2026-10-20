@@ -76,7 +76,7 @@ func main() {
 
 		switch {
 		case !loader.Done():
-			if loader.Step() && loader.Failed() == nil {
+			if done, failed := loader.Step(); done && !failed {
 				setUpCube()
 				startMusic()
 			}

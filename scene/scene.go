@@ -10,7 +10,7 @@
 //	loader.Start(300, files...)
 //	for ot := range screen.Frames() {
 //		if !world.Ready() {
-//			if loader.Step() && loader.Done() && loader.Failed() == nil {
+//			if done, failed := loader.Step(); done && !failed {
 //				world.Load(sceneDAT.Data(), files)
 //			}
 //			continue

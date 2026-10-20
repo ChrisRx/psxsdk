@@ -73,11 +73,12 @@ func main() {
 	for ot := range screen.Frames() {
 		pad.Update()
 		if !world.Ready() {
+			done, failed := loader.Step()
 			switch {
-			case loader.Failed() != nil:
+			case failed:
 				yaroze.Print("could not read ")
 				yaroze.Print(loader.Failed().Name)
-			case loader.Step() && loader.Done():
+			case done:
 				a, err := arc.Open(levelARC.Data())
 				if err != nil {
 					yaroze.Print(err.Error())
