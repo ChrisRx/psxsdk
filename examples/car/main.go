@@ -60,14 +60,14 @@ var (
 	tex7Data  [(19450 + 2047) / 2048 * 512]uint32
 	modelData [(52000 + 2047) / 2048 * 512]uint32
 
-	tex1File  = disc.Register("DATA/GIULI_BD.TIM", "data/GIULI_BD.TIM").Into(tex1Data[:])
-	tex2File  = disc.Register("DATA/GIULI_FR.TIM", "data/GIULI_FR.TIM").Into(tex2Data[:])
-	tex3File  = disc.Register("DATA/GIULI_PL.TIM", "data/GIULI_PL.TIM").Into(tex3Data[:])
-	tex4File  = disc.Register("DATA/GIULI_TL.TIM", "data/GIULI_TL.TIM").Into(tex4Data[:])
-	tex5File  = disc.Register("DATA/GIULI_TR.TIM", "data/GIULI_TR.TIM").Into(tex5Data[:])
-	tex6File  = disc.Register("DATA/GIULI_WN.TIM", "data/GIULI_WN.TIM").Into(tex6Data[:])
-	tex7File  = disc.Register("DATA/WHEEL256.TIM", "data/WHEEL256.TIM").Into(tex7Data[:])
-	modelFile = disc.Register("DATA/GIULIETA.TMD", "data/GIULIETA.TMD").Into(modelData[:])
+	tex1File  = disc.Register("ASSETS/GIULI_BD.TIM", "assets/GIULI_BD.TIM").Into(tex1Data[:])
+	tex2File  = disc.Register("ASSETS/GIULI_FR.TIM", "assets/GIULI_FR.TIM").Into(tex2Data[:])
+	tex3File  = disc.Register("ASSETS/GIULI_PL.TIM", "assets/GIULI_PL.TIM").Into(tex3Data[:])
+	tex4File  = disc.Register("ASSETS/GIULI_TL.TIM", "assets/GIULI_TL.TIM").Into(tex4Data[:])
+	tex5File  = disc.Register("ASSETS/GIULI_TR.TIM", "assets/GIULI_TR.TIM").Into(tex5Data[:])
+	tex6File  = disc.Register("ASSETS/GIULI_WN.TIM", "assets/GIULI_WN.TIM").Into(tex6Data[:])
+	tex7File  = disc.Register("ASSETS/WHEEL256.TIM", "assets/WHEEL256.TIM").Into(tex7Data[:])
+	modelFile = disc.Register("ASSETS/GIULIETA.TMD", "assets/GIULIETA.TMD").Into(modelData[:])
 	files     = []*disc.File{&tex1File, &tex2File, &tex3File, &tex4File, &tex5File, &tex6File, &tex7File, &modelFile}
 
 	textures = [...]yaroze.TIM{tex1Data[:], tex2Data[:], tex3Data[:], tex4Data[:], tex5Data[:], tex6Data[:], tex7Data[:]}

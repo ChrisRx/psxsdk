@@ -17,7 +17,7 @@
 // Hold Start and Select together to quit.
 package main
 
-//go:generate go run ./gen -o data/MOVIE.MDC
+//go:generate go run ./gen -o assets/MOVIE.MDC
 
 import (
 	"unsafe"
@@ -33,7 +33,7 @@ import (
 // whole sectors.
 var (
 	movieData [(647180 + 2047) / 2048 * 512]uint32
-	movieFile = disc.Register("DATA/MOVIE.MDC", "data/MOVIE.MDC").Into(movieData[:])
+	movieFile = disc.Register("ASSETS/MOVIE.MDC", "assets/MOVIE.MDC").Into(movieData[:])
 	files     = []*disc.File{&movieFile}
 )
 

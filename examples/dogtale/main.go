@@ -121,10 +121,10 @@ var (
 	vhData  [(60448 + 2047) / 2048 * 512]uint32
 	vbData  [(401360 + 2047) / 2048 * 512]uint32
 
-	dogFile = disc.Register("DATA/DOG.DAT", "data/DOG.DAT").Into(dogDat[:])
-	seqFile = disc.Register("DATA/SOUND/SAMPLE1.SEQ", "data/SAMPLE1.SEQ").Into(seqData[:])
-	vh      = disc.Register("DATA/SOUND/STD0.VH", "data/STD0.VH").Into(vhData[:])
-	vb      = disc.Register("DATA/SOUND/STD0.VB", "data/STD0.VB").Into(vbData[:])
+	dogFile = disc.Register("ASSETS/DOG.DAT", "assets/DOG.DAT").Into(dogDat[:])
+	seqFile = disc.Register("ASSETS/SOUND/SAMPLE1.SEQ", "assets/SAMPLE1.SEQ").Into(seqData[:])
+	vh      = disc.Register("ASSETS/SOUND/STD0.VH", "assets/STD0.VH").Into(vhData[:])
+	vb      = disc.Register("ASSETS/SOUND/STD0.VB", "assets/STD0.VB").Into(vbData[:])
 	files   = []*disc.File{&dogFile, &seqFile, &vh, &vb}
 )
 

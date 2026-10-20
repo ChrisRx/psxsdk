@@ -63,14 +63,14 @@ a WASI host over an in-memory file system. The output is a disc the
 player boots like an example. What is built is a project (`project.js`):
 the program's Go files, shown a tab each over the editor (`files.js`),
 and the data files beside them, shown with everything else in the Files
-tab (`files-tab.js`, with `inspect.js` for the previews), uploaded or
+sidebar (`sidebar.js`, with `inspect.js` for the viewer), uploaded or
 copied from an example's data, which the `site` task publishes under
-`examples/NAME/data/` and lists in `examples.json`. The whole project
-goes into the build's directory, the data files under `data/` for
+`examples/NAME/assets/` and lists in `examples.json`. The whole project
+goes into the build's directory, the data files under `assets/` for
 mkpsxiso to put on the disc where the program registers them with
-package disc. Projects are kept in the browser's IndexedDB as they
+package disc, their sources beside them left off by discgen. Projects are kept in the browser's IndexedDB as they
 change, and go out and come in as zips laid out like the examples, so a
-download runs with `go run`. The sources under `art/` are converted by
+download runs with `go run`. The sources under `assets/` are converted by
 the program's own `//go:generate` lines (`convert.js`), which the worker
 runs with the converters built to wasip1 and the build runs again before
 the compiler; a scene, `scene.json`, is placed in the Scene tab
@@ -106,7 +106,7 @@ the compiler in the browser is the TinyGo the examples were built with.
 ## Limits
 
 - The compiler is around 75MB, 22MB compressed, and the sysroot with the cache 3MB.
-- A program is one file, with its data files under `data/`, kept in the
+- A program is one file, with its data files under `assets/`, kept in the
   browser that added them. It cannot use cgo,
   or anything whose C is not already in the cache: there is no clang.
   Only the ELF flavor of lld is linked in, for the same reason of size.

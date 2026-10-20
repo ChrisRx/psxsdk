@@ -40,12 +40,14 @@ func hidden() {}
 `)
 	write(t, dir, "stub.go", "//go:build !yaroze\n\npackage yaroze\n\nfunc Stub() {}\n")
 
-	out := filepath.Join(t.TempDir(), "play", "yaroze.json")
-	assert.NoError(t, writeAPI(dir, out))
+	out := filepath.Join(t.TempDir(), "play", "api.json")
+	assert.NoError(t, writeAPI([]string{dir}, out))
 	data, err := os.ReadFile(out)
 	assert.NoError(t, err)
-	var entries []APIEntry
-	assert.NoError(t, json.Unmarshal(data, &entries))
+	var api map[string][]APIEntry
+	assert.NoError(t, json.Unmarshal(data, &api))
+	assert.Equal(t, 1, len(api))
+	entries := api["example.com/yaroze"]
 
 	byName := map[string]APIEntry{}
 	for _, e := range entries {

@@ -6,9 +6,9 @@ import (
 	"go.chrisrx.dev/psx/disc"
 )
 
-// The files under data, placed on the disc under DATA.
+// The files under assets, placed on the disc under ASSETS.
 var (
-	bgTIM = disc.Register("DATA/BG.TIM", "data/BG.TIM")
+	bgTIM = disc.Register("ASSETS/BG.TIM", "assets/BG.TIM")
 )
 
 // files is every file above, in the order disc.LoadAll reads them.

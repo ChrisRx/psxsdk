@@ -15,7 +15,7 @@ import (
 func TestCompressionBench(t *testing.T) {
 	m := bootExample(t, "compressbench")
 	names := []string{"CASTLE.TIM deflate", "CASTLE.TIM lz4", "DOG.DAT deflate", "DOG.DAT lz4", "MD0.TMD deflate", "MD0.TMD lz4"}
-	raws := []string{"../examples/dino/data/CASTLE.TIM", "../examples/dino/data/CASTLE.TIM", "../examples/dogtale/data/DOG.DAT", "../examples/dogtale/data/DOG.DAT", "../examples/dino/data/MD0.TMD", "../examples/dino/data/MD0.TMD"}
+	raws := []string{"../examples/dino/assets/CASTLE.TIM", "../examples/dino/assets/CASTLE.TIM", "../examples/dogtale/assets/DOG.DAT", "../examples/dogtale/assets/DOG.DAT", "../examples/dino/assets/MD0.TMD", "../examples/dino/assets/MD0.TMD"}
 	sums := make([]uint32, len(raws))
 	for i, p := range raws {
 		data, err := os.ReadFile(p)

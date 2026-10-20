@@ -65,9 +65,9 @@ var (
 	vbData  [(vbSize + 2047) / 2048 * 512]uint32
 	seqData [(seqSize + 2047) / 2048 * 512]uint32
 
-	vh  = disc.Register("DATA/SOUND/STD0.VH", "data/STD0.VH").Into(vhData[:])
-	vb  = disc.Register("DATA/SOUND/STD0.VB", "data/STD0.VB").Into(vbData[:])
-	seq = disc.Register("DATA/SOUND/SAMPLE1.SEQ", "data/SAMPLE1.SEQ").Into(seqData[:])
+	vh  = disc.Register("ASSETS/SOUND/STD0.VH", "assets/STD0.VH").Into(vhData[:])
+	vb  = disc.Register("ASSETS/SOUND/STD0.VB", "assets/STD0.VB").Into(vbData[:])
+	seq = disc.Register("ASSETS/SOUND/SAMPLE1.SEQ", "assets/SAMPLE1.SEQ").Into(seqData[:])
 
 	dataFiles = [...]*disc.File{&vh, &vb, &seq}
 )

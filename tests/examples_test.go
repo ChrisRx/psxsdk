@@ -210,7 +210,7 @@ func TestSceneLive(t *testing.T) {
 	live := m.Sym("go.chrisrx.dev/psx/scene.live")
 	ptr, words := m.Read32(live), m.Read32(live+4)
 	assert.Equal(t, true, ptr != 0 && words > 0, "the scene should have recorded its file")
-	assert.Equal(t, uint32(0x41544144), m.Read32(live+16), "the file's name, DATA/CUBES.DAT, should follow") // "DATA"
+	assert.Equal(t, uint32(0x45535341), m.Read32(live+16), "the file's name, ASSETS/CUBES.DAT, should follow") // "ASSE"
 
 	// The example's scene with the cubes raised and the middle one far
 	// to the left, which must fit the sectors the file was loaded into.

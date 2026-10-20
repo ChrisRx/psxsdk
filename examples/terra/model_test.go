@@ -22,7 +22,7 @@ func loadArchive(t *testing.T, name string) *archive {
 // checks that the vertices and normals it names, and the buffers a
 // transforming record fills, lie within the model.
 func TestModelsIndexWithinBounds(t *testing.T) {
-	a := loadArchive(t, "data/DATA2.ARC")
+	a := loadArchive(t, "assets/DATA2.ARC")
 	for i := range a.entries(4) {
 		words, _ := a.words(4, i)
 		m := parseModel(words)

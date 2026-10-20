@@ -3,7 +3,7 @@
 // memory of its own as it needs them. A program registers the archive
 // with package disc, loads it whole, and opens it:
 //
-//	var level = disc.Register("DATA/LEVEL.ARC", "data/LEVEL.ARC")
+//	var level = disc.Register("ASSETS/LEVEL.ARC", "assets/LEVEL.ARC")
 //
 //	a, err := arc.Open(level.Data())
 //	e, ok := a.Lookup("CUBE.TMD")

@@ -85,7 +85,7 @@ var (
 	pictureData [(131092 + 2047) / 2048 * 512]uint32
 	sheetData   [sheetWords]uint32
 
-	pictureFile = disc.Register("DATA/SB.TIM", "data/SB.TIM").Into(pictureData[:])
+	pictureFile = disc.Register("ASSETS/SB.TIM", "assets/SB.TIM").Into(pictureData[:])
 	files       = []*disc.File{&pictureFile}
 
 	pictureTIM = yaroze.TIM(pictureData[:])

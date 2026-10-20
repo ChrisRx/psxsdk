@@ -44,8 +44,8 @@ var (
 	textureData [(66080 + 2047) / 2048 * 512]uint32
 	torusData   [(12216 + 2047) / 2048 * 512]uint32
 
-	textureFile = disc.Register("DATA/TEXTURE.TIM", "data/TEXTURE.TIM").Into(textureData[:])
-	torusFile   = disc.Register("DATA/TORUS.TMD", "data/TORUS.TMD").Into(torusData[:])
+	textureFile = disc.Register("ASSETS/TEXTURE.TIM", "assets/TEXTURE.TIM").Into(textureData[:])
+	torusFile   = disc.Register("ASSETS/TORUS.TMD", "assets/TORUS.TMD").Into(torusData[:])
 	files       = []*disc.File{&textureFile, &torusFile}
 
 	textureTIM = yaroze.TIM(textureData[:])

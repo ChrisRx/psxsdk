@@ -4,7 +4,7 @@
 // text and scroll together inside one box, so nothing has to be kept in step
 // but the copy's contents.
 //
-// It offers the yaroze package's names as they are typed, from yaroze.json,
+// It offers the names of this repo's packages as they are typed, from api.json,
 // which web/site writes from the package's declarations: after the package's
 // name and a dot, and after a variable declared with one of its struct types,
 // that type's fields and methods.
@@ -56,7 +56,7 @@ class GoEditor {
   constructor(root, options = {}) {
     this.root = root;
     this.options = options;
-    this.api = null;     // {entries, byName}, once yaroze.json is fetched
+    this.api = null;     // {packages: Map(import path to {entries, byName})}, once api.json is fetched
     this.errors = new Map(); // line (from 1) to message
     this.lines = 0;
     this.popup = null;   // the completion list, while it is open
@@ -76,13 +76,17 @@ class GoEditor {
       <div class="ed-complete" hidden>
         <ul role="listbox" aria-label="Completions"></ul>
         <div class="ed-doc"><code></code><p></p></div>
-      </div>`;
+      </div>
+      <div class="ed-hover" role="tooltip" hidden><code></code><p></p></div>`;
     this.scroller = root.querySelector(".ed-scroll");
     this.gutter = root.querySelector(".ed-gutter");
     this.hl = root.querySelector(".ed-hl");
     this.ta = root.querySelector("textarea");
     this.box = root.querySelector(".ed-complete");
     this.list = this.box.querySelector("ul");
+    this.hover = root.querySelector(".ed-hover");
+    this.hovered = null;  // the word the tooltip is for, or waits for
+    this.hoverTimer = 0;
     this.ta.setAttribute("aria-label", options.label ?? "Source");
 
     this.ta.addEventListener("input", (e) => this.onInput(e));
@@ -98,8 +102,17 @@ class GoEditor {
       this.ta.scrollTop = 0;
       this.ta.scrollLeft = 0;
     });
-    this.ta.addEventListener("pointerdown", () => this.close());
-    this.scroller.addEventListener("scroll", () => this.close());
+    this.ta.addEventListener("pointerdown", () => {
+      this.close();
+      this.hideHover();
+    });
+    this.scroller.addEventListener("scroll", () => {
+      this.close();
+      this.hideHover();
+    });
+    this.ta.addEventListener("pointermove", (e) => this.onHover(e));
+    this.ta.addEventListener("pointerleave", () => this.hideHover());
+    this.ta.addEventListener("keydown", () => this.hideHover());
     // A press on the list must not take the focus from the textarea.
     this.box.addEventListener("pointerdown", (e) => e.preventDefault());
     this.list.addEventListener("click", (e) => {
@@ -178,7 +191,7 @@ class GoEditor {
 
   highlight(src) {
     const imports = goImports(src);
-    const yaroze = this.yarozeName(imports);
+    const pkgs = this.packages(imports);
     let out = "";
     let last = 0;
     for (const m of src.matchAll(GO_TOKEN)) {
@@ -189,20 +202,20 @@ class GoEditor {
       if (m[1]) cls = "com";
       else if (m[2]) cls = "str";
       else if (m[3]) cls = "num";
-      else if (m[4]) cls = this.identClass(src, m.index, m[0], imports, yaroze);
+      else if (m[4]) cls = this.identClass(src, m.index, m[0], imports, pkgs);
       out += cls ? `<span class="t-${cls}">${text}</span>` : text;
     }
     return out + escapeHTML(src.slice(last));
   }
 
-  identClass(src, at, word, imports, yaroze) {
+  identClass(src, at, word, imports, pkgs) {
     if (GO_KEYWORDS.has(word)) return "kw";
     const prev = src.slice(Math.max(0, at - 1), at);
     const next = src.slice(at + word.length).match(/^\s*(\S?)/)[1];
     if (prev === ".") {
       // A name qualified by the package: what the package says it is.
       const qual = src.slice(0, at - 1).match(/(\w+)$/)?.[1];
-      const entry = qual === yaroze && this.api?.byName.get(word);
+      const entry = pkgs.get(qual)?.byName.get(word);
       if (entry) return entry.kind === "func" ? "fn" : entry.kind === "type" ? "type" : "const";
       return next === "(" ? "fn" : "";
     }
@@ -213,10 +226,16 @@ class GoEditor {
     return "";
   }
 
-  // yarozeName is the name the source refers to the yaroze package by.
-  yarozeName(imports) {
-    for (const [name, path] of imports) if (path.endsWith("/yaroze")) return name;
-    return null;
+  // packages is the reference's packages the source imports, by the name
+  // it refers to each with.
+  packages(imports) {
+    const out = new Map();
+    if (!this.api) return out;
+    for (const [name, path] of imports) {
+      const pkg = this.api.packages.get(path);
+      if (pkg) out.set(name, pkg);
+    }
+    return out;
   }
 
   // markErrors shows the compiler's errors against their lines: a list of
@@ -289,7 +308,9 @@ class GoEditor {
     this.ta.setSelectionRange(from, to);
     this.inserting = true;
     try {
-      if (!document.execCommand("insertText", false, text)) {
+      // The browser's editing goes to whatever has the focus, which a
+      // hidden editor cannot take: its text is then set outright.
+      if (document.activeElement !== this.ta || !document.execCommand("insertText", false, text)) {
         this.ta.setRangeText(text, from, to, "end");
         this.onInput({});
       }
@@ -411,6 +432,110 @@ class GoEditor {
     ta.setSelectionRange(from, from + text.length);
   }
 
+  // Hovering. A name of the package, or a field or method of a variable
+  // of one of its types, shows what the reference says of it after a
+  // pause, under the word.
+
+  // column is the visual column after text, tabs widening it.
+  column(text) {
+    let col = 0;
+    for (const c of text) col = c === "\t" ? (Math.floor(col / TAB) + 1) * TAB : col + 1;
+    return col;
+  }
+
+  // wordAt is the identifier under a point on the page, or null:
+  // {word, line, start, at}, start within its line, at within the text.
+  wordAt(clientX, clientY) {
+    const m = this.metrics();
+    const r = this.hl.getBoundingClientRect();
+    const line = Math.floor((clientY - r.top - m.top) / m.line);
+    const col = Math.floor((clientX - r.left - m.left) / m.char);
+    if (line < 0 || col < 0) return null;
+    const lines = this.ta.value.split("\n");
+    const text = lines[line];
+    if (text === undefined) return null;
+    let i = 0;
+    for (let c = 0; i < text.length; i++) {
+      const w = text[i] === "\t" ? TAB - (c % TAB) : 1;
+      if (c + w > col) break;
+      c += w;
+    }
+    if (i >= text.length || !/\w/.test(text[i])) return null;
+    let start = i;
+    while (start > 0 && /\w/.test(text[start - 1])) start--;
+    let end = i;
+    while (end < text.length && /\w/.test(text[end])) end++;
+    const word = text.slice(start, end);
+    if (!/^[A-Za-z_]/.test(word)) return null;
+    let at = 0;
+    for (let k = 0; k < line; k++) at += lines[k].length + 1;
+    return { word, line, start, at: at + start };
+  }
+
+  // docFor is the reference entry for a word found, by what qualifies it.
+  docFor(hit) {
+    if (!this.api) return null;
+    const src = this.ta.value;
+    const qual = src.slice(0, hit.at).match(/(\w+)\.$/)?.[1];
+    if (!qual) return null;
+    const pkgs = this.packages(goImports(src));
+    if (!pkgs.size) return null;
+    const pkg = pkgs.get(qual);
+    if (pkg) return pkg.byName.get(hit.word) ?? null;
+    const type = this.typeOf(qual, src, pkgs);
+    if (!type) return null;
+    const field = type.fields?.find((f) => f.name === hit.word);
+    if (field) return { sig: `${field.name} ${field.type}`, doc: `A field of ${type.name}.` };
+    return type.methods?.find((f) => f.name === hit.word) ?? null;
+  }
+
+  onHover(e) {
+    if (this.popup) return;
+    const hit = this.wordAt(e.clientX, e.clientY);
+    if (!hit) {
+      this.hideHover();
+      return;
+    }
+    if (this.hovered && this.hovered.at === hit.at && this.hovered.word === hit.word) return;
+    this.hideHover();
+    const entry = this.docFor(hit);
+    if (!entry) return;
+    this.hovered = hit;
+    this.hoverTimer = setTimeout(() => this.showHover(hit, entry), 250);
+  }
+
+  showHover(hit, entry) {
+    this.hover.querySelector("code").textContent = entry.sig;
+    const p = this.hover.querySelector("p");
+    p.textContent = (entry.doc ?? "").trim();
+    p.hidden = !p.textContent;
+    this.hover.hidden = false;
+    const m = this.metrics();
+    const s = this.scroller;
+    const line = this.ta.value.split("\n")[hit.line] ?? "";
+    const x = this.gutter.offsetWidth + m.left + this.column(line.slice(0, hit.start)) * m.char - s.scrollLeft;
+    const y = m.top + hit.line * m.line - s.scrollTop;
+    const box = this.hover;
+    const width = Math.min(460, this.root.clientWidth - 16);
+    box.style.maxWidth = `${width}px`;
+    box.style.left = `${Math.max(8, Math.min(x, this.root.clientWidth - box.offsetWidth - 8))}px`;
+    const below = this.root.clientHeight - (y + m.line);
+    if (below >= box.offsetHeight + 4 || below > y) {
+      box.style.top = `${y + m.line + 2}px`;
+      box.style.bottom = "";
+    } else {
+      box.style.top = "";
+      box.style.bottom = `${this.root.clientHeight - y + 2}px`;
+    }
+  }
+
+  hideHover() {
+    clearTimeout(this.hoverTimer);
+    this.hoverTimer = 0;
+    this.hovered = null;
+    this.hover.hidden = true;
+  }
+
   // Completion.
 
   // context finds what is being completed at the caret: the members of the
@@ -426,10 +551,11 @@ class GoEditor {
     const m = line.match(/(^|[^\w.\]])([A-Za-z_]\w*)((?:\[[^\[\]]*\])*)\.(\w*)$/);
     if (!m) return null;
     const [, , root, , prefix] = m;
-    const yaroze = this.yarozeName(goImports(value));
-    if (!yaroze) return null;
-    if (root === yaroze) return { prefix, items: this.api.entries };
-    const type = this.typeOf(root, value, yaroze);
+    const pkgs = this.packages(goImports(value));
+    if (!pkgs.size) return null;
+    const pkg = pkgs.get(root);
+    if (pkg) return { prefix, items: pkg.entries };
+    const type = this.typeOf(root, value, pkgs);
     if (!type) return null;
     const items = [
       ...(type.fields ?? []).map((f) => ({ name: f.name, kind: "field", sig: `${f.name} ${f.type}`, doc: "" })),
@@ -438,21 +564,26 @@ class GoEditor {
     return items.length ? { prefix, items } : null;
   }
 
-  // typeOf guesses a variable's yaroze type from how the source declares
-  // it: with the type named, as a composite literal of it, or as what one
-  // of the package's functions returns.
-  typeOf(name, src, pkg) {
-    const n = name.replace(/[$^*+?.()|[\]{}\\]/g, "\\$&");
+  // typeOf guesses a variable's type, one of the reference's packages',
+  // from how the source declares it: with the type named, as a composite
+  // literal of it, or as what one of the package's functions returns.
+  typeOf(name, src, pkgs) {
+    const esc = (s) => s.replace(/[$^*+?.()|[\]{}\\]/g, "\\$&");
+    const n = esc(name);
+    const pkg = `(${[...pkgs.keys()].map(esc).join("|")})`;
     const list = `\\b${n}(?:\\s*,\\s*\\w+)*`;
     const named = src.match(new RegExp(`${list}\\s+(?:\\[[^\\]]*\\]|\\*)*${pkg}\\.(\\w+)`));
     const literal = src.match(new RegExp(`${list}\\s*:?=\\s*&?(?:\\[[^\\]]*\\])*${pkg}\\.(\\w+)\\s*\\{`));
     const call = src.match(new RegExp(`\\b${n}\\s*:?=\\s*${pkg}\\.(\\w+)\\s*\\(`));
-    let type = (named ?? literal)?.[1];
-    if (!type && call) {
-      const sig = this.api.byName.get(call[1])?.sig ?? "";
+    const m = named ?? literal ?? call;
+    if (!m) return null;
+    const index = pkgs.get(m[1]);
+    let type = m[2];
+    if (m === call) {
+      const sig = index.byName.get(call[2])?.sig ?? "";
       type = sig.match(/\)\s*\*?(\w+)$/)?.[1];
     }
-    const entry = type && this.api.byName.get(type);
+    const entry = type && index.byName.get(type);
     return entry?.kind === "type" ? entry : null;
   }
 

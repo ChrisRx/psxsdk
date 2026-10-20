@@ -30,7 +30,7 @@
 // patterns that have one. In attack and evade, holding circle attacks.
 package main
 
-//go:generate go run go.chrisrx.dev/psx/tools/discgen data
+//go:generate go run go.chrisrx.dev/psx/tools/discgen assets
 
 import (
 	"go.chrisrx.dev/psx/disc"

@@ -8,12 +8,12 @@
 // the lights and the tile map are the file's, so the program has nothing
 // of its own to set up and swaps scenes by loading another file. The
 // cube's model, the tiles and the badge's picture are the files under
-// pack/level/, which mkarc packs into DATA/LEVEL.ARC, one file to read
+// pack/level/, which mkarc packs into ASSETS/LEVEL.ARC, one file to read
 // off the disc, and the scene draws from the archive through
 // scene.NewArchive, unpacking each piece once. The badge's picture is
-// art/badge.png, which png2tim converts into the archive's directory from
-// the go:generate line below, as the playground's Files tab does for any
-// picture dropped on it. Each frame the program turns the middle cube by
+// assets/badge.png, which png2tim converts into the archive's directory from
+// the go:generate line below, as the playground does for any picture
+// dropped on it. Each frame the program turns the middle cube by
 // name, draws the scene, the sprite into the overlay so that it stays in
 // front, and prints the scene's name and the two fields the scene gives
 // each object, numbers of the program's own. Editing a scene and
@@ -25,15 +25,15 @@
 // Start swaps the scene.
 package main
 
-// The picture under art/ becomes a TIM in the archive's directory, each
+// The picture under assets/ becomes a TIM in the archive's directory, each
 // scene under scenes/ becomes a DAT, the directory under pack/ becomes
-// the archive, then the files under data/ are declared in
+// the archive, then the files under assets/ are declared in
 // zz_generated.disc.go.
-//go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 704,0 --clut 0,482 -o pack/level/BADGE.TIM art/badge.png
-//go:generate go run go.chrisrx.dev/psx/tools/mkscene -o data/CUBES.DAT scenes/cubes.json
-//go:generate go run go.chrisrx.dev/psx/tools/mkscene -o data/TOWER.DAT scenes/tower.json
-//go:generate go run go.chrisrx.dev/psx/tools/mkarc -o data/LEVEL.ARC pack/level
-//go:generate go run go.chrisrx.dev/psx/tools/discgen data
+//go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 704,0 --clut 0,482 -o pack/level/BADGE.TIM assets/badge.png
+//go:generate go run go.chrisrx.dev/psx/tools/mkscene -o assets/CUBES.DAT scenes/cubes.json
+//go:generate go run go.chrisrx.dev/psx/tools/mkscene -o assets/TOWER.DAT scenes/tower.json
+//go:generate go run go.chrisrx.dev/psx/tools/mkarc -o assets/LEVEL.ARC pack/level
+//go:generate go run go.chrisrx.dev/psx/tools/discgen assets
 
 import (
 	"go.chrisrx.dev/psx/arc"

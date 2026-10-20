@@ -26,9 +26,9 @@ func words(b []byte) []uint32 {
 var (
 	cubeData  [4]uint32
 	stoneData [4]uint32
-	cubeTMD   = disc.Register("DATA/CUBE.TMD", "data/CUBE.TMD").Into(cubeData[:])
-	stoneTIM  = disc.Register("DATA/STONE.TIM", "data/STONE.TIM").Into(stoneData[:])
-	emptyTMD  = disc.Register("DATA/EMPTY.TMD", "data/EMPTY.TMD")
+	cubeTMD   = disc.Register("ASSETS/CUBE.TMD", "assets/CUBE.TMD").Into(cubeData[:])
+	stoneTIM  = disc.Register("ASSETS/STONE.TIM", "assets/STONE.TIM").Into(stoneData[:])
+	emptyTMD  = disc.Register("ASSETS/EMPTY.TMD", "assets/EMPTY.TMD")
 	files     = []*disc.File{&cubeTMD, &stoneTIM, &emptyTMD}
 )
 
@@ -41,14 +41,14 @@ func sample() *format.Scene {
 			{Direction: [3]int32{1, 1, 1}, Color: [3]uint8{0xc0, 0xc0, 0xc0}},
 			{Direction: [3]int32{0, -1, 0}, Color: [3]uint8{0x40, 0x40, 0x80}},
 		},
-		Textures: []string{"DATA/STONE.TIM"},
-		Models:   []string{"DATA/CUBE.TMD"},
+		Textures: []string{"ASSETS/STONE.TIM"},
+		Models:   []string{"ASSETS/CUBE.TMD"},
 		Objects: []format.Object{
-			{Name: "cube", Model: "DATA/CUBE.TMD", Position: [3]int32{10, -20, 300}, Rotation: [3]int16{0, 512, -4}, Scale: [3]int32{4096, 2048, 4096}},
-			{Name: "second cube", Model: "DATA/CUBE.TMD", Index: 1, Position: [3]int32{-300, 28, 400}, Fields: [2]int32{7, -3}},
+			{Name: "cube", Model: "ASSETS/CUBE.TMD", Position: [3]int32{10, -20, 300}, Rotation: [3]int16{0, 512, -4}, Scale: [3]int32{4096, 2048, 4096}},
+			{Name: "second cube", Model: "ASSETS/CUBE.TMD", Index: 1, Position: [3]int32{-300, 28, 400}, Fields: [2]int32{7, -3}},
 		},
 		Sprites: []format.Sprite{
-			{Name: "badge", Texture: "DATA/STONE.TIM", Attribute: 1 << 24, X: 10, Y: -20, W: 64, H: 32, TPage: 0xa, U: 3, V: 7, CX: 16, CY: 480, R: 128, G: 100, B: 90, MX: 2, MY: 3, ScaleX: 4096, ScaleY: 2048, Rotate: 90 * 4096},
+			{Name: "badge", Texture: "ASSETS/STONE.TIM", Attribute: 1 << 24, X: 10, Y: -20, W: 64, H: 32, TPage: 0xa, U: 3, V: 7, CX: 16, CY: 480, R: 128, G: 100, B: 90, MX: 2, MY: 3, ScaleX: 4096, ScaleY: 2048, Rotate: 90 * 4096},
 		},
 	}
 }
@@ -129,7 +129,7 @@ func TestLoad(t *testing.T) {
 func TestLoadBackground(t *testing.T) {
 	sc := sample()
 	sc.Background = &format.Background{
-		Texture: "DATA/STONE.TIM", Cell: 16, Width: 3, Height: 2,
+		Texture: "ASSETS/STONE.TIM", Cell: 16, Width: 3, Height: 2,
 		Map:        []uint16{7, 7, 7, 2, format.EmptyCell, 2},
 		Scroll:     [2]int16{4, -8},
 		Brightness: [3]uint8{128, 100, 90},
@@ -180,9 +180,9 @@ func TestLoadBackground(t *testing.T) {
 
 func TestLoadMissing(t *testing.T) {
 	sc := sample()
-	sc.Models = []string{"DATA/EMPTY.TMD"}
+	sc.Models = []string{"ASSETS/EMPTY.TMD"}
 	for i := range sc.Objects {
-		sc.Objects[i].Model = "DATA/EMPTY.TMD"
+		sc.Objects[i].Model = "ASSETS/EMPTY.TMD"
 	}
 	b, err := sc.Bytes()
 	if !assert.NoError(t, err) {
@@ -190,15 +190,15 @@ func TestLoadMissing(t *testing.T) {
 	}
 	var s Scene
 	assert.Equal(t, ErrMissing, s.Load(words(b), Files(files)))
-	assert.Equal(t, "DATA/EMPTY.TMD", s.Missing)
+	assert.Equal(t, "ASSETS/EMPTY.TMD", s.Missing)
 	assert.Equal(t, false, s.Ready())
 
 	sc = sample()
-	sc.Textures = []string{"DATA/NONE.TIM"}
-	sc.Sprites[0].Texture = "DATA/NONE.TIM"
+	sc.Textures = []string{"ASSETS/NONE.TIM"}
+	sc.Sprites[0].Texture = "ASSETS/NONE.TIM"
 	b, _ = sc.Bytes()
 	assert.Equal(t, ErrMissing, s.Load(words(b), Files(files)))
-	assert.Equal(t, "DATA/NONE.TIM", s.Missing)
+	assert.Equal(t, "ASSETS/NONE.TIM", s.Missing)
 }
 
 func TestLoadFormat(t *testing.T) {
@@ -239,16 +239,16 @@ func TestArchive(t *testing.T) {
 	assert.Equal(t, 2, src.n, "both entries found")
 	assert.Equal(t, "STONE.TIM", src.names[0])
 	assert.Equal(t, "", s.Name(), "a scene not from a file has no name")
-	model := src.Lookup("DATA/CUBE.TMD")
+	model := src.Lookup("ASSETS/CUBE.TMD")
 	assert.Equal(t, 1024, len(model), "the model unpacked")
 	assert.Equal(t, uint32(0x01010101), model[16], "to its bytes")
 	assert.Equal(t, true, &model[0] == &src.Lookup("CUBE.TMD")[0], "and kept")
-	assert.Equal(t, 0, len(src.Lookup("DATA/NOWHERE.TIM")))
+	assert.Equal(t, 0, len(src.Lookup("ASSETS/NOWHERE.TIM")))
 
 	sc := sample()
-	sc.Textures = append(sc.Textures, "DATA/ELSEWHERE.TIM")
+	sc.Textures = append(sc.Textures, "ASSETS/ELSEWHERE.TIM")
 	b, err = sc.Bytes()
 	assert.NoError(t, err)
 	assert.Equal(t, ErrMissing, s.Load(words(b), src))
-	assert.Equal(t, "DATA/ELSEWHERE.TIM", s.Missing)
+	assert.Equal(t, "ASSETS/ELSEWHERE.TIM", s.Missing)
 }

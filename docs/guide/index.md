@@ -13,7 +13,7 @@ examples/check/main.go
         |    TinyGo, -target=playstation-yaroze      tinygo, or TinyGo as WebAssembly
         |      -> prog.elf, traps replaced           (mips1fix)
         |      -> MAIN.EXE, libps combined in        (eco2exe)
-        |      -> the disc, with data/... that       (mkpsxiso)
+        |      -> the disc, with assets/... that       (mkpsxiso)
         |         the program registers
         v
 check.bin + check.cue

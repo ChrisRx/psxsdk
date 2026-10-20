@@ -70,13 +70,13 @@ var (
 	vdfData [(56056 + 2047) / 2048 * 512]uint32
 	castle  [(307220 + 2047) / 2048 * 512]uint32
 
-	seqFile     = disc.Register("DATA/SOUND/SAMPLE1.SEQ", "data/SAMPLE1.SEQ").Into(seqData[:])
-	vh          = disc.Register("DATA/SOUND/STD0.VH", "data/STD0.VH").Into(vhData[:])
-	vb          = disc.Register("DATA/SOUND/STD0.VB", "data/STD0.VB").Into(vbData[:])
-	dinonewFile = disc.Register("DATA/DINONEW.TIM", "data/DINONEW.TIM").Into(vbData[:])
-	md0File     = disc.Register("DATA/MD0.TMD", "data/MD0.TMD").Into(md0Data[:])
-	vdfFile     = disc.Register("DATA/DINO.VDF", "data/DINO.VDF").Into(vdfData[:])
-	castleFile  = disc.Register("DATA/CASTLE.TIM", "data/CASTLE.TIM").Into(castle[:])
+	seqFile     = disc.Register("ASSETS/SOUND/SAMPLE1.SEQ", "assets/SAMPLE1.SEQ").Into(seqData[:])
+	vh          = disc.Register("ASSETS/SOUND/STD0.VH", "assets/STD0.VH").Into(vhData[:])
+	vb          = disc.Register("ASSETS/SOUND/STD0.VB", "assets/STD0.VB").Into(vbData[:])
+	dinonewFile = disc.Register("ASSETS/DINONEW.TIM", "assets/DINONEW.TIM").Into(vbData[:])
+	md0File     = disc.Register("ASSETS/MD0.TMD", "assets/MD0.TMD").Into(md0Data[:])
+	vdfFile     = disc.Register("ASSETS/DINO.VDF", "assets/DINO.VDF").Into(vdfData[:])
+	castleFile  = disc.Register("ASSETS/CASTLE.TIM", "assets/CASTLE.TIM").Into(castle[:])
 
 	soundFiles = []*disc.File{&seqFile, &vh, &vb}
 	dataFiles  = []*disc.File{&dinonewFile, &md0File, &vdfFile, &castleFile}

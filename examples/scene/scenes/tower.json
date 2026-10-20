@@ -12,30 +12,30 @@
     }
   ],
   "textures": [
-    "DATA/CUBE.TIM",
-    "DATA/BADGE.TIM"
+    "ASSETS/CUBE.TIM",
+    "ASSETS/BADGE.TIM"
   ],
   "models": [
-    "DATA/CUBE.TMD"
+    "ASSETS/CUBE.TMD"
   ],
   "objects": [
     {
       "name": "cube",
-      "model": "DATA/CUBE.TMD",
+      "model": "ASSETS/CUBE.TMD",
       "position": [0, 0, 0],
       "rotation": [0, 0, 0],
       "fields": [3, 0]
     },
     {
       "name": "left",
-      "model": "DATA/CUBE.TMD",
+      "model": "ASSETS/CUBE.TMD",
       "position": [0, -220, 0],
       "rotation": [0, 512, 0],
       "fields": [4, 1]
     },
     {
       "name": "right",
-      "model": "DATA/CUBE.TMD",
+      "model": "ASSETS/CUBE.TMD",
       "position": [0, 220, 0],
       "rotation": [0, 1024, 0],
       "fields": [5, 2]
@@ -44,7 +44,7 @@
   "sprites": [
     {
       "name": "badge",
-      "texture": "DATA/BADGE.TIM",
+      "texture": "ASSETS/BADGE.TIM",
       "x": 96,
       "y": 48,
       "w": 64,

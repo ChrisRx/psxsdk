@@ -12,23 +12,23 @@
     }
   ],
   "textures": [
-    "DATA/CUBE.TIM",
-    "DATA/BG.TIM",
-    "DATA/BADGE.TIM"
+    "ASSETS/CUBE.TIM",
+    "ASSETS/BG.TIM",
+    "ASSETS/BADGE.TIM"
   ],
   "models": [
-    "DATA/CUBE.TMD"
+    "ASSETS/CUBE.TMD"
   ],
   "objects": [
     {
       "name": "cube",
-      "model": "DATA/CUBE.TMD",
+      "model": "ASSETS/CUBE.TMD",
       "position": [0, 0, 0],
       "rotation": [0, 0, 0]
     },
     {
       "name": "left",
-      "model": "DATA/CUBE.TMD",
+      "model": "ASSETS/CUBE.TMD",
       "position": [-260, 64, 200],
       "rotation": [0, 512, 0],
       "scale": [2048, 2048, 2048],
@@ -36,7 +36,7 @@
     },
     {
       "name": "right",
-      "model": "DATA/CUBE.TMD",
+      "model": "ASSETS/CUBE.TMD",
       "position": [260, 64, 200],
       "rotation": [0, -512, 0],
       "scale": [2048, 2048, 2048],
@@ -46,7 +46,7 @@
   "sprites": [
     {
       "name": "badge",
-      "texture": "DATA/BADGE.TIM",
+      "texture": "ASSETS/BADGE.TIM",
       "x": -152,
       "y": 72,
       "w": 32,
@@ -62,7 +62,7 @@
     }
   ],
   "background": {
-    "texture": "DATA/BG.TIM",
+    "texture": "ASSETS/BG.TIM",
     "cell": 16,
     "width": 22,
     "height": 17,

@@ -6,11 +6,11 @@ import (
 	"go.chrisrx.dev/psx/disc"
 )
 
-// The files under data, placed on the disc under DATA.
+// The files under assets, placed on the disc under ASSETS.
 var (
-	cubesDAT = disc.Register("DATA/CUBES.DAT", "data/CUBES.DAT")
-	levelARC = disc.Register("DATA/LEVEL.ARC", "data/LEVEL.ARC")
-	towerDAT = disc.Register("DATA/TOWER.DAT", "data/TOWER.DAT")
+	cubesDAT = disc.Register("ASSETS/CUBES.DAT", "assets/CUBES.DAT")
+	levelARC = disc.Register("ASSETS/LEVEL.ARC", "assets/LEVEL.ARC")
+	towerDAT = disc.Register("ASSETS/TOWER.DAT", "assets/TOWER.DAT")
 )
 
 // files is every file above, in the order disc.LoadAll reads them.

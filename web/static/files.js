@@ -1,10 +1,12 @@
-// The program's files on the page: the Files tab (files-tab.js), a tab
-// for each Go file of the open project over the editor, with an editor
-// for each that has been opened, and the Scene tab (scene-tab.js);
-// the project menu in the top bar, where projects are opened, made,
-// renamed, downloaded as a zip, imported and deleted; and files dropped on
-// the pane, which join the project: a zip as a new project, Go files
-// beside main.go, and anything else under data/.
+// What the main panel shows: a tab for everything opened from the sidebar
+// (sidebar.js), closed with its cross. A Go file opens in an editor of its
+// own, a scene in the scene editor (scene-tab.js), a TIM, a TMD, a source
+// under assets/ or anything else in the viewer (inspect.js); video memory
+// opens over the page from the sidebar. Also here: the project menu, where
+// projects are opened, made, renamed, downloaded as a zip, imported and
+// deleted; and files dropped on the panel, which join the project: a zip
+// as a new project, Go files beside main.go, and anything else under
+// assets/, pictures, models and sounds to be converted there.
 //
 // playground.js builds and formats through files.active, files.goTexts and
 // files.markErrors, and starts everything with projects.start(startingFiles).
@@ -12,7 +14,7 @@
 
 // startingFiles is the files a new project is made of: one of the
 // examples the site lists in starters.json, the scene example unless
-// another is named, its sources and its data files.
+// another is named, with its assets.
 async function startingFiles(name = "scene") {
   const res = await fetch(versioned("starters.json"));
   if (!res.ok) throw new Error(`starters.json: ${res.status} ${res.statusText}`);
@@ -23,11 +25,12 @@ async function startingFiles(name = "scene") {
   for (const [path, url] of Object.entries(starter.files)) {
     const r = await fetch(versioned(url));
     if (!r.ok) throw new Error(`${url}: ${r.status} ${r.statusText}`);
-    // Sources under art/ and files under pack/ are bytes.
-    files.push({ path, data: path.startsWith("art/") || path.startsWith("pack/") ? new Uint8Array(await r.arrayBuffer()) : await r.text() });
+    // Files under assets/ and pack/ are bytes.
+    files.push({ path, data: path.startsWith("assets/") || path.startsWith("pack/") ? new Uint8Array(await r.arrayBuffer()) : await r.text() });
   }
   try {
-    files.push(...await exampleFiles(starter.name));
+    // The example's assets, those the starter does not carry already.
+    for (const f of await exampleFiles(starter.name)) if (!files.some((g) => g.path === f.path)) files.push(f);
   } catch { /* the program says what it could not read */ }
   return files;
 }
@@ -37,19 +40,26 @@ const files = (() => {
   const pane = $("editors");
   const code = document.querySelector(".pg-code");
   const saveStatus = $("save-status");
+  const viewPane = $("view-pane");
+  const empty = $("pg-empty");
 
   const editors = new Map(); // path to its GoEditor
+  let tabs = [];             // the paths open, in the order of their tabs
   let active = null;         // the path shown
   let api = null;            // the completion index, shared by the editors
   let onRun = () => {};
 
-  // The completion index, fetched once for every editor.
+  // The reference, fetched once for every editor: each package's names,
+  // by import path.
   (async () => {
     try {
-      const res = await fetch(versioned("yaroze.json"));
+      const res = await fetch(versioned("api.json"));
       if (!res.ok) return;
-      const entries = await res.json();
-      api = { entries, byName: new Map(entries.map((e) => [e.name, e])) };
+      const packages = new Map();
+      for (const [path, entries] of Object.entries(await res.json())) {
+        packages.set(path, { entries, byName: new Map(entries.map((e) => [e.name, e])) });
+      }
+      api = { packages };
       for (const ed of editors.values()) {
         ed.api = api;
         ed.render();
@@ -58,6 +68,13 @@ const files = (() => {
   })();
 
   function project() { return projects.current; }
+
+  // kindOf says what opens path: an editor, the scene editor or the viewer.
+  function kindOf(path) {
+    if (/^[^/]+\.go$/.test(path)) return "go";
+    if (/^scenes\/[^/]+\.json$/.test(path)) return "scene";
+    return "view";
+  }
 
   function editorFor(path) {
     let ed = editors.get(path);
@@ -85,108 +102,128 @@ const files = (() => {
     editors.delete(path);
   }
 
-  // show opens path's editor in the pane, the Scene tab for a scene or
-  // for "scenes", or the Files tab.
+  // show opens path in the panel, with a tab if it has none yet.
   function show(path) {
-    if (path.startsWith("scenes/")) {
-      if (!project()?.has(path)) return;
-      sceneTab.pick(path);
-      path = SCENE;
-    }
-    if (path === SCENE && !project()?.sceneFiles().length) return;
-    if (path !== FILES && path !== SCENE && !project()?.has(path)) return;
+    const p = project();
+    if (!p) return;
+    if (!p.has(path)) return;
+    const kind = kindOf(path);
+    if (!tabs.includes(path)) tabs.push(path);
     for (const other of editors.values()) other.pane.hidden = true;
-    if (path === SCENE) {
-      filesTab.hide();
+    sceneTab.hide();
+    inspect.hide();
+    viewPane.hidden = kind !== "view";
+    empty.hidden = true;
+    if (kind === "scene") {
+      sceneTab.pick(path);
       sceneTab.show();
-    } else if (path === FILES) {
-      sceneTab.hide();
-      filesTab.show();
-    } else {
-      sceneTab.hide();
-      filesTab.hide();
+    } else if (kind === "go") {
       editorFor(path).pane.hidden = false;
+    } else {
+      inspect.show(path);
     }
     active = path;
     render();
+    sidebar.mark(path);
   }
 
-  const SCENE = "scenes"; // the Scene tab, for whichever scene is picked
-  const FILES = "files";
+  // close takes path's tab away, showing its neighbour when it was shown.
+  function close(path) {
+    const i = tabs.indexOf(path);
+    if (i < 0) return;
+    tabs.splice(i, 1);
+    if (active !== path) {
+      render();
+      return;
+    }
+    const next = tabs[i] ?? tabs[i - 1];
+    if (next) {
+      show(next);
+      return;
+    }
+    for (const other of editors.values()) other.pane.hidden = true;
+    sceneTab.hide();
+    inspect.hide();
+    viewPane.hidden = true;
+    empty.hidden = false;
+    active = null;
+    render();
+    sidebar.mark(null);
+  }
+
+  // label is a tab's text: the file's own name, a scene's stem.
+  function label(path) {
+    if (kindOf(path) === "scene") return path.replace(/^scenes\//, "").replace(/\.json$/, "");
+    return path.replace(/^.*\//, "");
+  }
 
   function render() {
-    const p = project();
-    const paths = p ? [FILES, ...p.goFiles()] : [];
-    if (p?.sceneFiles().length) paths.push(SCENE);
-    strip.replaceChildren(...paths.map((path) => {
+    strip.replaceChildren(...tabs.map((path) => {
+      const kind = kindOf(path);
       const tab = document.createElement("button");
       tab.type = "button";
       tab.role = "tab";
-      tab.textContent = path === SCENE ? "Scene" : path === FILES ? "Files" : path;
-      if (path === SCENE) tab.title = "The scenes under scenes/, placed by hand";
-      if (path === FILES) tab.title = "Every file of the project: the program, the sources under art/ and the data on the disc";
+      tab.className = `tab-${kind}`;
+      tab.textContent = label(path);
+      tab.title = kind === "scene" ? `${path}, placed by hand` : path;
       tab.setAttribute("aria-selected", String(path === active));
       tab.tabIndex = path === active ? 0 : -1;
       tab.addEventListener("click", () => {
         show(path);
         editors.get(path)?.focus();
       });
-      if (path !== FILES && path !== SCENE) {
-        tab.addEventListener("contextmenu", (e) => {
-          e.preventDefault();
-          show(path);
-          fileMenu(path, e);
-        });
-      }
+      tab.addEventListener("auxclick", (e) => { if (e.button === 1) close(path); });
+      tab.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        show(path);
+        tabMenu(path, e);
+      });
       tab.addEventListener("keydown", (e) => {
+        if (e.key === "Delete" || e.key === "Backspace") {
+          close(path);
+          strip.querySelector('[aria-selected="true"]')?.focus();
+          return;
+        }
         if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-        const i = paths.indexOf(path) + (e.key === "ArrowLeft" ? -1 : 1);
-        const next = paths[(i + paths.length) % paths.length];
-        show(next);
+        const i = tabs.indexOf(path) + (e.key === "ArrowLeft" ? -1 : 1);
+        show(tabs[(i + tabs.length) % tabs.length]);
         strip.querySelector('[aria-selected="true"]')?.focus();
       });
-      if (path === active && path !== FILES) {
-        const more = document.createElement("button");
-        more.type = "button";
-        more.className = "file-more";
-        more.setAttribute("aria-label", `Actions for ${path}`);
-        more.title = "Rename, download or remove this file";
-        more.textContent = "⋯";
-        more.addEventListener("click", (e) => {
-          e.stopPropagation();
-          fileMenu(path, more);
-        });
-        const wrap = document.createElement("span");
-        wrap.className = "file-tab";
-        wrap.append(tab, more);
-        return wrap;
-      }
-      return tab;
+      const x = document.createElement("button");
+      x.type = "button";
+      x.className = "tab-close";
+      x.setAttribute("aria-label", `Close ${label(path)}`);
+      x.title = "Close";
+      x.textContent = "×";
+      x.tabIndex = -1;
+      x.addEventListener("click", (e) => {
+        e.stopPropagation();
+        close(path);
+      });
+      const wrap = document.createElement("span");
+      wrap.className = "file-tab";
+      wrap.append(tab, x);
+      return wrap;
     }));
+    // The strip scrolls to the tab shown when there are more than fit.
+    strip.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
 
-  // fileMenu opens the actions for path under its button, or at the
-  // pointer for a right click.
-  function fileMenu(path, at) {
-    const isMain = path === "main.go";
-    const fixed = isMain || path === SCENE;
+  // tabMenu is a tab's right-click menu: closing, and for a Go file what
+  // the sidebar's menu offers.
+  function tabMenu(path, at) {
     const items = [
-      ["Rename", isMain ? "main.go is where the program starts, and keeps its name" : fixed ? "The scene is scene.json, which mkscene's line names" : "Give the file another name", () => renameFile(path), fixed],
-      ["Download", "Save this file to this computer", () => download(path, project().get(path))],
-      ["Remove", isMain ? "main.go is where the program starts; a project always has one" : path === SCENE ? "Take the scene out of the project, with its mkscene line" : "Take the file out of the project", () => removeFile(path), isMain],
+      ["Close", "Close this tab; the file stays in the project", () => close(path)],
+      ["Close others", "Close every other tab", () => { for (const t of tabs.slice()) if (t !== path) close(t); }, tabs.length < 2],
     ];
-    popupMenu(items, at);
-  }
-
-  // newMenu offers what can be added: a Go file, a scene, files from
-  // this computer, an example's data.
-  function newMenu(at) {
-    const p = project();
-    const items = [
-      ["New Go file", "A file beside main.go, in the same package", newFile],
-      ["New scene", "A scene under scenes/, placed by hand in the Scene tab and cooked into a data file the program loads with package scene", () => { const path = sceneTab.create(); if (path) show(path); }],
-      ["Add files from this computer…", "Pictures, models and sounds go under art/ to be converted; Go files beside main.go; anything else under data/", () => $("asset-files").click()],
-    ];
+    if (kindOf(path) === "go") {
+      const isMain = path === "main.go";
+      items.push(
+        ["Rename", isMain ? "main.go is where the program starts, and keeps its name" : "Give the file another name", () => renameFile(path), isMain],
+        ["Download", "Save this file to this computer", () => download(path, project().get(path))],
+        ["Remove", isMain ? "main.go is where the program starts; a project always has one" : "Take the file out of the project", () => sidebar.remove(path), isMain],
+      );
+    }
     popupMenu(items, at);
   }
 
@@ -213,7 +250,7 @@ const files = (() => {
     document.body.append(menu);
     const r = at instanceof Event ? { left: at.clientX, bottom: at.clientY } : at.getBoundingClientRect();
     menu.style.left = `${Math.max(4, Math.min(r.left, innerWidth - menu.offsetWidth - 8))}px`;
-    menu.style.top = `${Math.min(r.bottom + 4, innerHeight - menu.offsetHeight - 8)}px`;
+    menu.style.top = `${Math.max(4, Math.min(r.bottom + 4, innerHeight - menu.offsetHeight - 8))}px`;
     menu.querySelector("button:not(:disabled)")?.focus();
     popup = menu;
     setTimeout(() => addEventListener("pointerdown", onOutside), 0);
@@ -271,14 +308,6 @@ const files = (() => {
     p.rename(path, name);
   }
 
-  function removeFile(path) {
-    if (path.startsWith("scenes/")) {
-      filesTab.removeScene(path);
-      return;
-    }
-    filesTab.remove(path);
-  }
-
   // What the project does to the files shown.
   projectEvents.addEventListener("open", ({ detail: { project: p } }) => {
     for (const path of [...editors.keys()]) dispose(path);
@@ -294,6 +323,24 @@ const files = (() => {
       }
       p.rename("scene.json", "scenes/scene.json");
     }
+    // A project from before assets/ kept its sources under art/ and its
+    // disc files under data/: they move, with the lines and the scenes
+    // that name them.
+    const old = [...p.files.keys()].filter((f) => f.startsWith("data/") || f.startsWith("art/"));
+    if (old.length) {
+      for (const f of old) p.rename(f, "assets/" + f.replace(/^[^/]+\//, ""));
+      for (const g of p.goFiles()) {
+        const text = p.text(g);
+        const next = text.replace(/\b(?:data|art)\//g, "assets/").replace(/discgen data\b/g, "discgen assets").replace(/mkdir -p data\b/g, "mkdir -p assets").replace(/--textures data\b/g, "--textures assets").replace(/"DATA\//g, '"ASSETS/');
+        if (next !== text) p.set(g, next, "generate");
+      }
+      for (const sc of p.sceneFiles()) {
+        const text = p.text(sc);
+        const next = text.replace(/"DATA\//g, '"ASSETS/');
+        if (next !== text) p.set(sc, next, "scene");
+      }
+    }
+    tabs = [];
     active = null;
     if (!p.has("main.go")) p.set("main.go", "package main\n\nfunc main() {\n}\n", "files");
     show("main.go");
@@ -308,10 +355,15 @@ const files = (() => {
         ed.ta.setAttribute("aria-label", renamed.to);
         ed.options.onChange = (text) => project()?.set(renamed.to, text, "editor");
       }
+      tabs = tabs.map((t) => (t === renamed.from ? renamed.to : t));
       if (active === renamed.from) active = renamed.to;
     }
     for (const path of [...editors.keys()]) if (!p.has(path)) dispose(path);
-    if (active !== FILES && !p.has(active)) show("main.go");
+    // Tabs of files gone from the project close; the one shown gives way
+    // to its neighbour.
+    const gone = tabs.filter((t) => !p.has(t));
+    for (const t of gone) if (t !== active) tabs.splice(tabs.indexOf(t), 1);
+    if (active && !p.has(active)) close(active);
     else render();
   });
   projectEvents.addEventListener("change", ({ detail: { project: p, path, source } }) => {
@@ -337,8 +389,6 @@ const files = (() => {
     savedTimer = setTimeout(() => { saveStatus.textContent = ""; }, 1500);
   });
 
-  $("file-add").addEventListener("click", (e) => newMenu(e.currentTarget));
-
   // download saves bytes to this computer under name.
   function download(name, bytes, type = "application/octet-stream") {
     const url = URL.createObjectURL(bytes instanceof Blob ? bytes : new Blob([bytes], { type }));
@@ -349,30 +399,33 @@ const files = (() => {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  // Files dropped on the pane join the project, rather than being opened
+  // Files dropped on the panel join the project, rather than being opened
   // by the browser in place of the page.
   const carriesFiles = (e) => [...(e.dataTransfer?.types ?? [])].includes("Files");
-  code.addEventListener("dragover", (e) => {
-    if (!carriesFiles(e)) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "copy";
-    code.classList.add("dropping");
-  });
-  code.addEventListener("dragleave", (e) => {
-    if (!code.contains(e.relatedTarget)) code.classList.remove("dropping");
-  });
-  code.addEventListener("drop", (e) => {
-    if (!carriesFiles(e)) return;
-    e.preventDefault();
-    code.classList.remove("dropping");
-    takeIn(e.dataTransfer.files);
-  });
+  for (const target of [code, document.querySelector(".pg-bar")]) {
+    target.addEventListener("dragover", (e) => {
+      if (!carriesFiles(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+      target.classList.add("dropping");
+    });
+    target.addEventListener("dragleave", (e) => {
+      if (!target.contains(e.relatedTarget)) target.classList.remove("dropping");
+    });
+    target.addEventListener("drop", (e) => {
+      if (!carriesFiles(e)) return;
+      e.preventDefault();
+      target.classList.remove("dropping");
+      takeIn(e.dataTransfer.files);
+    });
+  }
 
   // takeIn adds files from this computer: a zip becomes a project of its
-  // own and is opened, Go files go beside main.go, pictures, models and
-  // sounds under art/ to be converted, and the rest under data/. Files
-  // already in the project are replaced once that is confirmed.
-  async function takeIn(fileList) {
+  // own and is opened, Go files go beside main.go, and the rest under
+  // assets/, or under the archive's directory given as into, except
+  // pictures, models and sounds, which go under assets/ to be converted.
+  // Files already in the project are replaced once that is confirmed.
+  async function takeIn(fileList, into = "assets") {
     const p = project();
     const added = [];
     for (const file of fileList) {
@@ -383,27 +436,28 @@ const files = (() => {
         await importZip(name, bytes);
         continue;
       }
-      const path = name.endsWith(".go") ? name : convert.isSource(name) ? "art/" + name : "data/" + name;
+      const path = name.endsWith(".go") ? name : convert.isSource(name) ? "assets/" + name : `${into}/${name}`;
       added.push({ path, data: bytes });
     }
     if (!added.length) return;
     const replaced = added.filter((f) => p.has(f.path)).map((f) => f.path);
     if (replaced.length && !confirm(`Replace ${replaced.join(", ")}?`)) return;
     p.setAll(added, "files");
-    const go = added.find((f) => f.path.endsWith(".go"));
-    if (go) show(go.path);
-    else {
-      show(FILES);
-      filesTab.select(added[0].path);
-    }
-    const art = added.filter((f) => f.path.startsWith("art/")).map((f) => f.path);
+    show((added.find((f) => f.path.endsWith(".go")) ?? added[0]).path);
+    const art = added.filter((f) => convert.isSource(f.path)).map((f) => f.path);
     if (art.length) convert.added(art);
+    // Files put straight into an archive are packed, with its line added
+    // when it is new.
+    if (into.startsWith("pack/") && added.some((f) => f.path.startsWith(into + "/"))) {
+      convert.ensureLine("mkarc", ["-o", convert.archiveOf(into.slice(5)), into], into);
+      convert.packChanged(into.slice(5));
+    }
   }
 
   async function importZip(name, bytes) {
     try {
       const entries = projectFiles(await zip.read(bytes));
-      if (!entries.length) throw new Error("it holds no Go files and no data/ directory");
+      if (!entries.length) throw new Error("it holds no Go files and no assets/ directory");
       const p = await projects.create(await projects.uniqueName(name.replace(/\.zip$/i, "")), entries);
       await projects.open(p);
     } catch (e) {
@@ -467,7 +521,9 @@ const files = (() => {
     try {
       const p = await projects.create(name.trim() || "Untitled", await startingFiles(starter));
       await projects.open(p);
-      if (starter === "scene") show(SCENE);
+      // A project made from the scene example opens on its scene.
+      const scene = starter === "scene" && p.sceneFiles()[0];
+      if (scene) show(scene);
     } catch (e) {
       alert(`Could not make the project: ${e.message}`);
     }
@@ -543,10 +599,13 @@ const files = (() => {
   });
 
   return {
-    // active is the editor shown and its path.
+    // active is what is shown and its path, with its editor for a Go file.
     active() { return active ? { path: active, editor: editors.get(active) } : null; },
+    tabs() { return tabs.slice(); },
     popupMenu,
-    newMenu,
+    newFile,
+    renameFile,
+    close,
     // open shows path, at a line and column if given.
     open(path, line, col) {
       show(path);

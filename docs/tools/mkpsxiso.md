@@ -12,14 +12,14 @@ $ mkpsxiso -o game.bin --boot MAIN.EXE --volume-id MYGAME ./disc
 created "game.bin": 789 blocks (150 of run-out), "game.cue"
 ```
 
-The tree is placed on the disc as it appears on disk. Names are folded to the restricted uppercase set ISO 9660 allows and given the `;1` version suffix that PlayStation programs use when opening files, so `data/sound/sample1.seq` becomes `\DATA\SOUND\SAMPLE1.SEQ;1`. `--boot` writes a `SYSTEM.CNF` naming the executable, unless the tree already has one. `-v` lists what was placed where:
+The tree is placed on the disc as it appears on disk. Names are folded to the restricted uppercase set ISO 9660 allows and given the `;1` version suffix that PlayStation programs use when opening files, so `assets/sound/sample1.seq` becomes `\ASSETS\SOUND\SAMPLE1.SEQ;1`. `--boot` writes a `SYSTEM.CNF` naming the executable, unless the tree already has one. `-v` lists what was placed where:
 
 ```
   \MAIN.EXE;1                                1251328 bytes  LBA 23
   \MUSIC.XA;1                                   9344 bytes  LBA 72  raw sectors
   \SYSTEM.CNF;1                                   53 bytes  LBA 634
-  \DATA                                        <dir>        LBA 21
-  \DATA\SOUND\SAMPLE1.SEQ;1                     5000 bytes  LBA 636
+  \ASSETS                                        <dir>        LBA 21
+  \ASSETS\SOUND\SAMPLE1.SEQ;1                     5000 bytes  LBA 636
 ```
 
 The image ends with two seconds of empty sectors. A drive reads ahead of the sector it was asked for, and the console reads a file by asking for whole sectors, so a file that ends at the end of the track is one the console cannot finish reading: the request runs into the lead-out and fails, which looks like a file that is present and unreadable. Pressed discs carry a run-out for the same reason. `--padding` sets how many sectors, and `0` leaves none, which is fine for an image only ever read by an emulator:
@@ -40,7 +40,7 @@ A program can declare the files it reads itself, with the [`disc`](disc) package
 ```go
 import "go.chrisrx.dev/psx/disc"
 
-var stone = disc.Register("DATA/STONE.TIM", "data/STONE.TIM")
+var stone = disc.Register("ASSETS/STONE.TIM", "assets/STONE.TIM")
 ```
 
 `Register` is called with two constants in a package-level declaration: the path the file is to have on the disc, and the file on the host that goes there. TinyGo evaluates the call when it compiles the program, so each registration becomes a record of constant data in the executable. When `--boot` names an executable in the tree, `mkpsxiso` finds the records in it, places each file from the directory `--src` names, and once the image is laid out writes the file's first sector and its length back into the record before the executable goes onto the disc. `File.Read` then reads the file from that sector, through `CdControl` and `CdRead`, with no search of the directory, and a file that is missing or misnamed on the host fails the build rather than the program.
@@ -49,9 +49,9 @@ var stone = disc.Register("DATA/STONE.TIM", "data/STONE.TIM")
 $ mkpsxiso -v -o game.bin --boot MAIN.EXE --file MAIN.EXE=prog.exe --src ./examples/dungeon
   \MAIN.EXE;1                                1251328 bytes  LBA 23
   \SYSTEM.CNF;1                                   53 bytes  LBA 634
-  \DATA                                        <dir>        LBA 21
-  \DATA\STONE.TIM;1                            33296 bytes  LBA 635
-  \DATA\STONE.TIM;1                            registered by \MAIN.EXE;1 from data/STONE.TIM
+  \ASSETS                                        <dir>        LBA 21
+  \ASSETS\STONE.TIM;1                            33296 bytes  LBA 635
+  \ASSETS\STONE.TIM;1                            registered by \MAIN.EXE;1 from assets/STONE.TIM
 ```
 
 A registered path that the directory already holds is an error rather than a choice between the two, as is one path registered from two different host files. An executable not built onto a disc this way, or run from the serial loader, sees a zero sector and length, which `Placed` reports, and `Read` falls back to `CdReadFile` by name.

@@ -8,7 +8,7 @@ import (
 )
 
 func TestRoundTrip(t *testing.T) {
-	b, err := os.ReadFile("../../examples/square/data/CUBE.TMD")
+	b, err := os.ReadFile("../../examples/square/assets/CUBE.TMD")
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -25,7 +25,7 @@ func TestRoundTrip(t *testing.T) {
 func TestPolygon(t *testing.T) {
 	// The square example's cube is six flat textured quads, lit, which
 	// Polygon should lay out as the cube's file has them.
-	b, err := os.ReadFile("../../examples/square/data/CUBE.TMD")
+	b, err := os.ReadFile("../../examples/square/assets/CUBE.TMD")
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}

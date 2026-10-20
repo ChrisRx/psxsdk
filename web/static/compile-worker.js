@@ -3,7 +3,7 @@
 // each project it is sent with pipeline.js.
 //
 // The page sends {type: "build", id, files}, the project's files as
-// {path, data}, its Go files at the root and its data files under data/, or
+// {path, data}, its Go files at the root and its data files under assets/, or
 // {type: "load", id} to fetch the compiler ahead of the first build,
 // answered by {id, ok} or {id, ok: false, error}. While loading or
 // building, the worker sends {id, event: "log", text} for each line of
@@ -16,9 +16,9 @@
 // gofmt's complaints, which name the files as they were sent.
 //
 // {type: "convert", id, files} runs the project's go:generate lines other
-// than discgen's, the converters that make data/ from art/, which needs
+// than discgen's, the converters that make assets/ from assets/, which needs
 // only their modules, and is answered by {id, ok, files}, the files under
-// data/ and art/ they made or changed, with the tools' output sent as log
+// assets/ and assets/ they made or changed, with the tools' output sent as log
 // events meanwhile.
 import { Dir, FileSystem, WASI } from "./wasi.js";
 import { Pipeline, readTar } from "./pipeline.js";

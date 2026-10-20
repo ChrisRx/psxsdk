@@ -94,11 +94,11 @@ var (
 	batData   [(864 + 2047) / 2048 * 512]uint32
 	brickData [(4116 + 2047) / 2048 * 512]uint32
 
-	vh        = disc.Register("DATA/SOUND/STD0.VH", "data/STD0.VH").Into(vhData[:])
-	vb        = disc.Register("DATA/SOUND/STD0.VB", "data/STD0.VB").Into(vbData[:])
-	seqFile   = disc.Register("DATA/SOUND/GOGO.SEQ", "data/GOGO.SEQ").Into(seqData[:])
-	batFile   = disc.Register("DATA/BREAK3.TIM", "data/BREAK3.TIM").Into(batData[:])
-	brickFile = disc.Register("DATA/ODEN3.TIM", "data/ODEN3.TIM").Into(brickData[:])
+	vh        = disc.Register("ASSETS/SOUND/STD0.VH", "assets/STD0.VH").Into(vhData[:])
+	vb        = disc.Register("ASSETS/SOUND/STD0.VB", "assets/STD0.VB").Into(vbData[:])
+	seqFile   = disc.Register("ASSETS/SOUND/GOGO.SEQ", "assets/GOGO.SEQ").Into(seqData[:])
+	batFile   = disc.Register("ASSETS/BREAK3.TIM", "assets/BREAK3.TIM").Into(batData[:])
+	brickFile = disc.Register("ASSETS/ODEN3.TIM", "assets/ODEN3.TIM").Into(brickData[:])
 	files     = []*disc.File{&vh, &vb, &seqFile, &batFile, &brickFile}
 
 	batTIM   = yaroze.TIM(batData[:])

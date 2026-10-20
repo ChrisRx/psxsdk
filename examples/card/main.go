@@ -41,8 +41,8 @@
 package main
 
 //go:generate go run ./gen gen/icon.png
-//go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 960,0 --clut 0,481 -o data/ICON.TIM gen/icon.png
-//go:generate go run go.chrisrx.dev/psx/tools/discgen data
+//go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 960,0 --clut 0,481 -o assets/ICON.TIM gen/icon.png
+//go:generate go run go.chrisrx.dev/psx/tools/discgen assets
 
 import (
 	"unsafe"

@@ -76,14 +76,14 @@ var (
 	sphereData [(8248 + 2047) / 2048 * 512]uint32
 	dongleData [(131092 + 2047) / 2048 * 512]uint32
 
-	squareFile = disc.Register("DATA/TEN.TMD", "data/TEN.TMD").Into(squareData[:])
-	shipFile   = disc.Register("DATA/THESHIP.TMD", "data/THESHIP.TMD").Into(shipData[:])
-	waveFile   = disc.Register("DATA/WAVE09.TIM", "data/WAVE09.TIM").Into(waveData[:])
-	fireFile   = disc.Register("DATA/FIRE7.TIM", "data/FIRE7.TIM").Into(fireData[:])
-	tileFile   = disc.Register("DATA/TILE2.TIM", "data/TILE2.TIM").Into(tileData[:])
-	tile2File  = disc.Register("DATA/TILE3.TIM", "data/TILE3.TIM").Into(tile2Data[:])
-	sphereFile = disc.Register("DATA/16BIT.TMD", "data/16BIT.TMD").Into(sphereData[:])
-	dongleFile = disc.Register("DATA/DONGLE.TIM", "data/DONGLE.TIM").Into(dongleData[:])
+	squareFile = disc.Register("ASSETS/TEN.TMD", "assets/TEN.TMD").Into(squareData[:])
+	shipFile   = disc.Register("ASSETS/THESHIP.TMD", "assets/THESHIP.TMD").Into(shipData[:])
+	waveFile   = disc.Register("ASSETS/WAVE09.TIM", "assets/WAVE09.TIM").Into(waveData[:])
+	fireFile   = disc.Register("ASSETS/FIRE7.TIM", "assets/FIRE7.TIM").Into(fireData[:])
+	tileFile   = disc.Register("ASSETS/TILE2.TIM", "assets/TILE2.TIM").Into(tileData[:])
+	tile2File  = disc.Register("ASSETS/TILE3.TIM", "assets/TILE3.TIM").Into(tile2Data[:])
+	sphereFile = disc.Register("ASSETS/16BIT.TMD", "assets/16BIT.TMD").Into(sphereData[:])
+	dongleFile = disc.Register("ASSETS/DONGLE.TIM", "assets/DONGLE.TIM").Into(dongleData[:])
 	files      = []*disc.File{&squareFile, &shipFile, &waveFile, &fireFile, &tileFile, &tile2File, &sphereFile, &dongleFile}
 
 	squareModel = yaroze.TMD(squareData[:])

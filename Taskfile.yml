@@ -116,7 +116,7 @@ tasks:
 
   # Builds the site into .build/site: the documentation from docs/ and the
   # examples' package comments, rendered by web/site, and under play/ the
-  # playground and the player from web/static, the yaroze.json the
+  # playground and the player from web/static, the api.json the
   # playground's completion reads and the starters it begins a project
   # from, also written by web/site, the OpenBIOS image the examples boot
   # with from emu/openbios, every example's disc and the tutorial's, and
@@ -149,7 +149,7 @@ tasks:
       - 'docs/**/*'
       - 'examples/*/main.go'
       - 'examples/*/scenes/*.json'
-      - 'examples/*/art/**/*'
+      - 'examples/*/assets/**/*'
       - 'examples/*/pack/**/*'
       - 'web/site/**/*'
       - 'web/static/**/*'
@@ -157,13 +157,13 @@ tasks:
     generates:
       - .build/site/index.html
       - .build/site/play/index.html
-      - .build/site/play/yaroze.json
+      - .build/site/play/api.json
       - .build/site/play/starters.json
     cmds:
       - go run ./web/site -out .build/site
 
   # The player's files beside the page: the BIOS, each example's disc and
-  # its data files as well, which the playground offers to start a
+  # its assets as well, which the playground offers to start a
   # program from, and examples.json listing them.
   site:play:
     vars:
@@ -177,8 +177,8 @@ tasks:
       - 'emu/openbios/*'
       - '.build/*/*.cue'
       - '.build/*/*.bin'
-      - 'examples/*/data/**/*'
-      - 'docs/tutorial/*/data/**/*'
+      - 'examples/*/assets/**/*'
+      - 'docs/tutorial/*/assets/**/*'
     generates:
       - '{{.PLAY}}/examples.json'
       - '{{.PLAY}}/openbios.bin'
@@ -190,17 +190,17 @@ tasks:
           mkdir -p {{.PLAY}}/examples/{{.ITEM}}
           cp .build/{{.ITEM}}/{{.ITEM}}.cue .build/{{.ITEM}}/{{.ITEM}}.bin {{.PLAY}}/examples/{{.ITEM}}/
           src=examples/{{.ITEM}}; [ -d "$src" ] || src=docs/tutorial/{{.ITEM}}
-          rm -rf {{.PLAY}}/examples/{{.ITEM}}/data
-          if [ -d "$src/data" ]; then cp -R "$src/data" {{.PLAY}}/examples/{{.ITEM}}/; fi
+          rm -rf {{.PLAY}}/examples/{{.ITEM}}/data {{.PLAY}}/examples/{{.ITEM}}/assets
+          if [ -d "$src/assets" ]; then cp -R "$src/assets" {{.PLAY}}/examples/{{.ITEM}}/; fi
       - |
         {
           printf '['
           sep=''
           for name in {{.EXAMPLES | splitLines | join " "}}; do
             src=examples/$name; [ -d "$src" ] || src=docs/tutorial/$name
-            data=
-            if [ -d "$src/data" ]; then data=$(cd "$src" && find data -type f | LC_ALL=C sort | sed 's/.*/"&"/' | paste -sd, - | sed 's/,/, /g'); fi
-            printf '%s\n  {"name": "%s", "cue": "examples/%s/%s.cue", "data": [%s]}' "$sep" "$name" "$name" "$name" "$data"
+            assets=
+            if [ -d "$src/assets" ]; then assets=$(cd "$src" && find assets -type f | LC_ALL=C sort | sed 's/.*/"&"/' | paste -sd, - | sed 's/,/, /g'); fi
+            printf '%s\n  {"name": "%s", "cue": "examples/%s/%s.cue", "assets": [%s]}' "$sep" "$name" "$name" "$name" "$assets"
             sep=','
           done
           printf '\n]\n'
@@ -329,8 +329,7 @@ tasks:
     sources:
       - '**/*.go'
       - 'docs/tutorial/hello/**/*'
-      - 'examples/*/data/**/*'
-      - 'examples/*/art/**/*'
+      - 'examples/*/assets/**/*'
       - 'examples/*/pack/**/*'
       - .build/compiler/tinygo.wasm
       - .build/compiler/tinygo-full.wasm
@@ -387,7 +386,7 @@ tasks:
     vars:
       DATA: internal/compressbench/data
     cmds:
-      - go run ./internal/compressbench/gen {{.DATA}} examples/dino/data/CASTLE.TIM examples/dogtale/data/DOG.DAT examples/dino/data/MD0.TMD
+      - go run ./internal/compressbench/gen {{.DATA}} examples/dino/assets/CASTLE.TIM examples/dogtale/assets/DOG.DAT examples/dino/assets/MD0.TMD
       - cd internal/compressbench && go run go.chrisrx.dev/psx/tools/discgen data
       - task: disc
         vars: { NAME: compressbench, DIR: internal/compressbench }

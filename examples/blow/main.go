@@ -65,7 +65,7 @@ var (
 	shuttleData [(47988 + 2047) / 2048 * 512]uint32
 	copyData    [copyWords]uint32
 
-	shuttleFile = disc.Register("DATA/SHUTTLE1.TMD", "data/SHUTTLE1.TMD").Into(shuttleData[:])
+	shuttleFile = disc.Register("ASSETS/SHUTTLE1.TMD", "assets/SHUTTLE1.TMD").Into(shuttleData[:])
 	files       = []*disc.File{&shuttleFile}
 
 	shuttle = yaroze.TMD(shuttleData[:])

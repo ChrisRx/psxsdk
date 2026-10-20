@@ -3,11 +3,13 @@
 // go run:
 //
 //	main.go           the program, and any other .go files beside it
-//	data/             the files the program registers with package disc,
-//	                  which the build puts on the disc
-//	art/              the pictures, models and sounds the data files are
-//	                  made from, by the converters the program's
-//	                  go:generate lines name (convert.js)
+//	assets/           the files the program registers with package disc,
+//	                  which the build puts on the disc, beside the
+//	                  pictures, models and sounds they are made from by
+//	                  the converters the program's go:generate lines name
+//	                  (convert.js); discgen leaves those sources off
+//	scenes/           the scene editor's files, cooked into assets/
+//	pack/NAME/        the files mkarc packs into assets/NAME.ARC
 //
 // Other files at the root, such as the scene editor's own, are kept but
 // go on no disc. Projects are kept in this browser, in IndexedDB, one
@@ -15,7 +17,7 @@
 // typed is saved a moment after it changes. A project goes out and comes
 // in as a zip of that layout.
 //
-// files.js and assets.js show a project; playground.js builds it.
+// files.js and sidebar.js show a project; playground.js builds it.
 "use strict";
 
 // projectEvents tells the page what changed:
@@ -66,9 +68,10 @@ class Project {
     return [...this.files.keys()].filter((p) => /^[^/]+\.go$/.test(p)).sort((a, b) => (a === "main.go" ? -1 : b === "main.go" ? 1 : a.localeCompare(b)));
   }
 
-  // dataFiles is what goes on the disc.
+  // dataFiles is what goes on the disc as it is: the files under assets/
+  // other than the sources.
   dataFiles() {
-    return [...this.files.keys()].filter((p) => p.startsWith("data/")).sort();
+    return [...this.files.keys()].filter((p) => p.startsWith("assets/") && !isSourceFile(p)).sort();
   }
 
   // sceneFiles is the scenes, under scenes/, each cooked to a data file.
@@ -76,14 +79,14 @@ class Project {
     return [...this.files.keys()].filter((p) => /^scenes\/[^/]+\.json$/.test(p)).sort();
   }
 
-  // onDisc is every file that reaches the disc, under data/ as it is or
+  // onDisc is every file that reaches the disc, under assets/ as it is or
   // under pack/NAME/ inside an archive: what the program can draw from.
   onDisc() {
     return [...this.dataFiles(), ...this.packFiles()];
   }
 
   // packFiles is the files packed into archives, under pack/NAME/, each
-  // directory one archive data/NAME.ARC that mkarc's line makes.
+  // directory one archive assets/NAME.ARC that mkarc's line makes.
   packFiles() {
     return [...this.files.keys()].filter((p) => /^pack\/[^/]+\/[^/]+$/.test(p)).sort();
   }
@@ -91,9 +94,10 @@ class Project {
     return [...new Set(this.packFiles().map((p) => p.split("/")[1]))].sort();
   }
 
-  // artFiles is the sources the data files are made from, under art/.
+  // artFiles is the sources the data files are made from, under assets/
+  // beside them.
   artFiles() {
-    return [...this.files.keys()].filter((p) => p.startsWith("art/")).sort();
+    return [...this.files.keys()].filter((p) => p.startsWith("assets/") && isSourceFile(p)).sort();
   }
 
   // set puts data, bytes or text, at path, and says who did it.
@@ -481,10 +485,18 @@ function formatSize(n) {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
+// isSourceFile is whether a path is one of the sources the converters read,
+// by its extension, which discgen leaves off the disc.
+const SOURCE_FILE = /\.(png|bmp|gif|jpe?g|obj|mtl|rsd|ply|mat|wav|aiff?|def|midi?)$/i;
+function isSourceFile(path) {
+  return SOURCE_FILE.test(path);
+}
+
 // projectFiles keeps, of a list of {path, data} from outside, the files a
 // project holds: Go and other files at the root, and everything under
-// data/, art/, scenes/ and pack/NAME/, with one folder wrapping them all
-// taken off, as a zip of a directory has.
+// assets/, scenes/ and pack/NAME/, with one folder wrapping them all taken
+// off, as a zip of a directory has; data/ and art/, which assets/ was
+// before, are taken in to be moved on opening.
 function projectFiles(files) {
   const clean = files
     .map(({ path, data }) => ({ path: path.replace(/\\/g, "/").replace(/^(\.\/)+/, "").replace(/^\/+/, ""), data }))
@@ -495,7 +507,7 @@ function projectFiles(files) {
   for (const { path, data } of clean) {
     const p = wrapped ? path.slice(path.indexOf("/") + 1) : path;
     const parts = p.split("/");
-    if (parts.length === 1 || ((parts[0] === "data" || parts[0] === "art" || parts[0] === "scenes") && parts.length === 2) || (parts[0] === "pack" && parts.length === 3)) out.push({ path: p, data });
+    if (parts.length === 1 || ((parts[0] === "assets" || parts[0] === "data" || parts[0] === "art" || parts[0] === "scenes") && parts.length === 2) || (parts[0] === "pack" && parts.length === 3)) out.push({ path: p, data });
   }
   return out;
 }

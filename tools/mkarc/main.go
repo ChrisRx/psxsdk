@@ -43,7 +43,7 @@ whatever their directories.
 		SilenceUsage: true,
 	}
 	f := cmd.Flags()
-	f.StringVarP(&opts.Output, "output", "o", "", "where to write the archive (default: the first directory's name, in capitals, with .ARC, under data/)")
+	f.StringVarP(&opts.Output, "output", "o", "", "where to write the archive (default: the first directory's name, in capitals, with .ARC, under assets/)")
 	f.BoolVarP(&opts.List, "list", "l", false, "list an archive's entries")
 	f.StringArrayVarP(&opts.Store, "store", "s", nil, "an entry name to store as it is, whatever it would pack to; may repeat")
 	if err := cmd.Execute(); err != nil {
@@ -109,7 +109,7 @@ func run(cmd *cobra.Command, args []string) error {
 		if info, err := os.Stat(args[0]); err == nil && !info.IsDir() {
 			stem = strings.TrimSuffix(stem, filepath.Ext(stem))
 		}
-		out = filepath.Join("data", strings.TrimSuffix(farc.Name(stem+".x"), ".X")+".ARC")
+		out = filepath.Join("assets", strings.TrimSuffix(farc.Name(stem+".x"), ".X")+".ARC")
 	}
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return err

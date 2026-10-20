@@ -124,9 +124,9 @@ const sceneTab = (() => {
 
   // The project's TIMs and TMDs, by the paths the disc knows them by.
   // discPath is the name a scene gives a file: its disc path, which for a
-  // file packed in an archive is the name the archive looks up, DATA/ and
+  // file packed in an archive is the name the archive looks up, ASSETS/ and
   // the file's name.
-  const discPath = (path) => (path.startsWith("pack/") ? "DATA/" + path.replace(/^.*\//, "") : path).toUpperCase();
+  const discPath = (path) => (path.startsWith("pack/") ? "ASSETS/" + path.replace(/^.*\//, "") : path).toUpperCase();
   function dataFiles(re) {
     return (project()?.onDisc() ?? []).filter((p) => re.test(p));
   }
@@ -432,7 +432,7 @@ const sceneTab = (() => {
       if (!obj) {
         // No model to draw: a box of its own colour marks the place.
         missing++;
-        problems.set(i, tmd ? `${o.model.replace(/^DATA\//, "")} has no object ${o.index}` : `${o.model.replace(/^DATA\//, "")} is not in data/`);
+        problems.set(i, tmd ? `${o.model.replace(/^ASSETS\//, "")} has no object ${o.index}` : `${o.model.replace(/^ASSETS\//, "")} is not in assets/`);
         drawBox(cam, o.position, 48, i + 1, [255, 64, 255]);
         return;
       }
@@ -637,7 +637,7 @@ const sceneTab = (() => {
       brush = { w: 1, h: 1, cells: [0] };
       changed(true);
       renderTiles();
-    }, { options: [["", "no tile map"], ...tims.map((p) => [p, p.replace(/^DATA\//, "")])], title: "The TIM whose 16 by 16 cells the map is made of; GsSortFixBg16 draws it behind everything" }));
+    }, { options: [["", "no tile map"], ...tims.map((p) => [p, p.replace(/^ASSETS\//, "")])], title: "The TIM whose 16 by 16 cells the map is made of; GsSortFixBg16 draws it behind everything" }));
     if (!bg) {
       palette.hidden = mapCanvas.hidden = true;
       tileTools.hidden = true;
@@ -696,7 +696,7 @@ const sceneTab = (() => {
     // Doubled while it stays short; a tall picture of cells at its own size.
     palette.style.width = `${palette.width * (palette.height <= 128 ? 2 : 1)}px`;
     const stamp = brush.cells.length === 1 ? `Cell ${brush.cells[0]}` : `A stamp of ${brush.w} by ${brush.h} cells`;
-    tilesInfo.textContent = `${cells.count} cells from ${bg.texture.replace(/^DATA\//, "")}, ${cells.across} across. ${stamp} is picked; drag across several to pick a stamp. The pen (B) lays it where you click or drag, with Shift a line from the last cell laid; the fill (F) floods cells like the one clicked; the rectangle (R) fills what you drag over; the eraser (E) empties cells. Alt picks the cell under the pointer. The box is the window the screen shows.`;
+    tilesInfo.textContent = `${cells.count} cells from ${bg.texture.replace(/^ASSETS\//, "")}, ${cells.across} across. ${stamp} is picked; drag across several to pick a stamp. The pen (B) lays it where you click or drag, with Shift a line from the last cell laid; the fill (F) floods cells like the one clicked; the rectangle (R) fills what you drag over; the eraser (E) empties cells. Alt picks the cell under the pointer. The box is the window the screen shows.`;
   }
   function renderMap() {
     const bg = doc?.background;
@@ -1644,7 +1644,7 @@ const sceneTab = (() => {
     head(`Objects (${doc.objects.length})`);
     doc.objects.forEach((o, i) => {
       if (!matches(o.name || `object ${i}`)) return;
-      row(o.name || `object ${i}`, o.model.replace(/^DATA\//, ""), { kind: "object", index: i, cls: o.hidden ? "hidden-row" : "" });
+      row(o.name || `object ${i}`, o.model.replace(/^ASSETS\//, ""), { kind: "object", index: i, cls: o.hidden ? "hidden-row" : "" });
       const li = items.at(-1);
       if (problems.has(i)) {
         const warn = document.createElement("span");
@@ -1668,7 +1668,7 @@ const sceneTab = (() => {
       li.append(eye);
     });
     head(`Sprites (${doc.sprites.length})`);
-    doc.sprites.forEach((sp, i) => { if (matches(sp.name || `sprite ${i}`)) row(sp.name || `sprite ${i}`, sp.texture.replace(/^DATA\//, ""), { kind: "sprite", index: i }); });
+    doc.sprites.forEach((sp, i) => { if (matches(sp.name || `sprite ${i}`)) row(sp.name || `sprite ${i}`, sp.texture.replace(/^ASSETS\//, ""), { kind: "sprite", index: i }); });
     outline.replaceChildren(...items);
   }
   $("scene-search").addEventListener("input", (e) => {
@@ -1691,10 +1691,10 @@ const sceneTab = (() => {
   // The toolbar.
   function fillLists() {
     const tmds = dataFiles(/\.tmd$/i).map(discPath);
-    addModel.replaceChildren(new Option("Add model…", ""), ...tmds.map((p) => new Option(p.replace(/^DATA\//, ""), p)));
+    addModel.replaceChildren(new Option("Add model…", ""), ...tmds.map((p) => new Option(p.replace(/^ASSETS\//, ""), p)));
     addModel.disabled = !tmds.length;
     const tims = dataFiles(/\.tim$/i).map(discPath);
-    addSprite.replaceChildren(new Option("Add sprite…", ""), ...tims.map((p) => new Option(p.replace(/^DATA\//, ""), p)));
+    addSprite.replaceChildren(new Option("Add sprite…", ""), ...tims.map((p) => new Option(p.replace(/^ASSETS\//, ""), p)));
     addSprite.disabled = !tims.length;
   }
   function uniqueName(base, list) {
@@ -1706,7 +1706,7 @@ const sceneTab = (() => {
     const model = addModel.value;
     addModel.value = "";
     if (!model || !doc) return;
-    const base = model.replace(/^DATA\//, "").replace(/\.TMD$/, "").toLowerCase().slice(0, 12);
+    const base = model.replace(/^ASSETS\//, "").replace(/\.TMD$/, "").toLowerCase().slice(0, 12);
     doc.objects.push({ name: uniqueName(base, doc.objects), model, index: 0, position: [0, 0, 0], rotation: [0, 0, 0], scale: [0, 0, 0] });
     select({ kind: "object", index: doc.objects.length - 1 });
     changed(true);
@@ -1718,7 +1718,7 @@ const sceneTab = (() => {
     const tim = timFor(texture);
     if (!tim) return;
     const [u, v] = preview.uv(tim);
-    const base = texture.replace(/^DATA\//, "").replace(/\.TIM$/, "").toLowerCase().slice(0, 12);
+    const base = texture.replace(/^ASSETS\//, "").replace(/\.TIM$/, "").toLowerCase().slice(0, 12);
     doc.sprites.push({
       name: uniqueName(base, doc.sprites), texture, attribute: 0,
       x: -Math.min(tim.width, 256) / 2, y: -Math.min(tim.height, 256) / 2, w: Math.min(tim.width, 256), h: Math.min(tim.height, 256),
@@ -1838,7 +1838,7 @@ const sceneTab = (() => {
       inspector.append(field("Name", o.name, (v) => { o.name = v.slice(0, 15); changed(); }, { type: "text", title: "Up to 15 characters; the program finds the object by it with world.Object(name)" }));
       const tmds = dataFiles(/\.tmd$/i).map(discPath);
       if (!tmds.includes(o.model)) tmds.push(o.model);
-      inspector.append(field("Model", o.model, (v) => { o.model = v; changed(); }, { options: tmds.map((p) => [p, p.replace(/^DATA\//, "")]) }));
+      inspector.append(field("Model", o.model, (v) => { o.model = v; changed(); }, { options: tmds.map((p) => [p, p.replace(/^ASSETS\//, "")]) }));
       const tmd = tmdFor(o.model);
       if (tmd && tmd.objects.length > 1) inspector.append(field("Object", o.index, (v) => { o.index = Math.max(0, Math.min(tmd.objects.length - 1, Math.round(v))); changed(); }, { title: `Which of the TMD's ${tmd.objects.length} objects` }));
       const pos = [];
@@ -1870,7 +1870,7 @@ const sceneTab = (() => {
         changed();
         inspectorFor = null;
         renderInspector();
-      }, { options: tims.map((p) => [p, p.replace(/^DATA\//, "")]) }));
+      }, { options: tims.map((p) => [p, p.replace(/^ASSETS\//, "")]) }));
       const xy = ["x", "y"].map((k) => {
         const f = field(k.toUpperCase(), sp[k], (v) => { sp[k] = Math.round(v); changed(); }, { title: "Pixels from the middle of the screen" });
         f.querySelector("input").dataset.live = k;
@@ -1975,7 +1975,6 @@ const sceneTab = (() => {
 
   // Showing and hiding.
   function renderAll() {
-    renderPicker();
     inspectorFor = null;
     cameraForm.replaceChildren();
     fillLists();
@@ -2044,19 +2043,6 @@ const sceneTab = (() => {
       renderAll();
     }
   }
-  const picker = $("scene-pick");
-  function renderPicker() {
-    const paths = project()?.sceneFiles() ?? [];
-    picker.replaceChildren(...paths.map((path) => {
-      const o = document.createElement("option");
-      o.value = path;
-      o.textContent = stemOf(path);
-      o.selected = path === current;
-      return o;
-    }));
-  }
-  picker.addEventListener("change", () => pick(picker.value));
-
   projectEvents.addEventListener("open", () => {
     selected = null;
     current = null;
@@ -2070,7 +2056,7 @@ const sceneTab = (() => {
     if (path === current && source !== "scene" && source !== "scene-history") {
       read();
       renderAll();
-    } else if (path.startsWith("data/") || path.startsWith("pack/")) {
+    } else if (path.startsWith("assets/") || path.startsWith("pack/")) {
       fillLists();
       render();
       renderOutline(); // the badges follow what the picture found
@@ -2095,7 +2081,6 @@ const sceneTab = (() => {
     }
     fillLists();
     render();
-    renderPicker();
   });
 
   return { show, hide, create, pick, current: () => scenePath(), shown: () => shown, undo, redo, remove };

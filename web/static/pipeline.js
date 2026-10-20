@@ -6,7 +6,7 @@
 // It is the same pipeline as the Taskfile's disc task, after go generate,
 // which here runs the lines naming this repo's converters and discgen:
 //
-//	png2tim ..., obj2tmd ..., discgen data   (the //go:generate lines, in
+//	png2tim ..., obj2tmd ..., discgen assets   (the //go:generate lines, in
 //	                                          order, in any of the Go files)
 //	tinygo build -target=playstation-yaroze -o prog.elf ./prog
 //	mips1fix prog.elf
@@ -59,7 +59,7 @@ export function readTar(fs, bytes, prefix) {
 // The tools a //go:generate line may name that the page has as WebAssembly:
 // discgen, whose output, the declarations of the program's data files, the
 // program needs beside it, and the converters that make those files from
-// the sources under art/.
+// the sources under assets/.
 export const GENERATORS = new Set(["discgen", "png2tim", "obj2tmd", "wav2vag", "mkvab", "smf2seq", "mkscene", "mkarc"]);
 
 // generateLines returns the //go:generate lines of a Go source, in order,
@@ -120,7 +120,7 @@ export class Pipeline {
 	}
 
 	// stage puts a project's files, {path, data}, under /work/prog in a new
-	// file system, with data/ made, and returns it.
+	// file system, with assets/ made, and returns it.
 	stage(project) {
 		const fs = new FileSystem();
 		fs.mkdir("/work/prog/data");
@@ -133,7 +133,7 @@ export class Pipeline {
 	// rest are noted and skipped. It returns whether every one succeeded.
 	async generate(project, fs, log) {
 		for (const { tool, args, line } of projectGenerateLines(project)) {
-			if (tool === "mkdir") continue; // data/ is made already
+			if (tool === "mkdir") continue; // assets/ is made already
 			if (!GENERATORS.has(tool)) {
 				log(`skipped: ${line} (not a tool the page runs)\n`);
 				continue;
@@ -151,11 +151,11 @@ export class Pipeline {
 	}
 
 	// build compiles a project, a list of {path, data} with the program's Go
-	// files at the root, its data files under data/ and its sources under
-	// art/, and returns {ok, files, elf}, where files holds prog.cue and
+	// files at the root, its data files under assets/ and its sources under
+	// assets/, and returns {ok, files, elf}, where files holds prog.cue and
 	// prog.bin when ok, and elf is the executable, for its symbols. log is
 	// called with each line of output as it comes. The data files, such as
-	// data/CUBE.TIM, are what the program registers with package disc and
+	// assets/CUBE.TIM, are what the program registers with package disc and
 	// mkpsxiso puts on the disc.
 	async build(project, log) {
 		const fs = this.stage(project);
@@ -208,7 +208,7 @@ export class Pipeline {
 	}
 
 	// convert runs the project's generate lines other than discgen's, and
-	// returns {ok, files}: the files under data/ and art/ that the tools
+	// returns {ok, files}: the files under assets/ and assets/ that the tools
 	// made or changed, as {path, data}, for the page to keep.
 	async convert(project, log) {
 		const fs = this.stage(project);

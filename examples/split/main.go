@@ -39,7 +39,7 @@
 // the halves one above the other and side by side.
 package main
 
-//go:generate go run go.chrisrx.dev/psx/tools/discgen data
+//go:generate go run go.chrisrx.dev/psx/tools/discgen assets
 
 import (
 	"go.chrisrx.dev/psx/disc"

@@ -50,7 +50,7 @@ type File struct {
 // path, and returns the File the program reads it through.
 //
 // path is written with forward slashes, from the root of the disc, as in
-// "DATA/WALL0.TMD". mkpsxiso folds it to the uppercase ISO 9660 form and
+// "ASSETS/WALL0.TMD". mkpsxiso folds it to the uppercase ISO 9660 form and
 // adds the ";1" version suffix, as it does for every file it places. src is
 // relative to the directory mkpsxiso is told the program's files live in,
 // which is normally the package directory.
@@ -58,7 +58,7 @@ type File struct {
 // Both arguments must be constants, and the call must initialize a
 // package-level variable, directly or as an element of a composite literal:
 //
-//	var stone = disc.Register("DATA/STONE.TIM", "assets/stone.tim")
+//	var stone = disc.Register("ASSETS/STONE.TIM", "assets/stone.tim")
 //
 // TinyGo evaluates such a call at compile time and the File becomes constant
 // data in the executable, which is where mkpsxiso finds it. A call made at
@@ -102,7 +102,7 @@ func (f *File) TrackNumber() int32 { return int32(f.Sector()) }
 // a package-level array, since the registration is constant data:
 //
 //	var modelData [2048]uint32
-//	var model = disc.Register("DATA/CUBE.TMD", "data/CUBE.TMD").Into(modelData[:])
+//	var model = disc.Register("ASSETS/CUBE.TMD", "assets/CUBE.TMD").Into(modelData[:])
 func (f File) Into(buf []uint32) File {
 	f.dst = buf
 	return f
@@ -132,8 +132,8 @@ func (f *File) Sector() uint32 { return volatile.LoadUint32(&f.sector) }
 func (f *File) Size() uint32 { return volatile.LoadUint32(&f.size) }
 
 // Path writes the file's name into buf in the form the library's
-// CdSearchFile and CdReadFile take, "\DATA\WALL0.TMD;1" for a file
-// registered as "DATA/WALL0.TMD", NUL terminated, and returns it for passing
+// CdSearchFile and CdReadFile take, "\ASSETS\WALL0.TMD;1" for a file
+// registered as "ASSETS/WALL0.TMD", NUL terminated, and returns it for passing
 // to them. buf has to stay allocated while the library may read it.
 func (f *File) Path(buf []byte) *byte {
 	cdPath(buf, f.Name)

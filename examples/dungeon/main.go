@@ -60,14 +60,14 @@ var (
 	shipData  [(2044 + 2047) / 2048 * 512]uint32
 	stoneData [(2112 + 2047) / 2048 * 512]uint32
 
-	wall0File = disc.Register("DATA/WALL0.TMD", "data/WALL0.TMD").Into(wall0Data[:])
-	wall1File = disc.Register("DATA/WALL1.TMD", "data/WALL1.TMD").Into(wall1Data[:])
-	wall2File = disc.Register("DATA/WALL2.TMD", "data/WALL2.TMD").Into(wall2Data[:])
-	wall3File = disc.Register("DATA/WALL3.TMD", "data/WALL3.TMD").Into(wall3Data[:])
-	tenFile   = disc.Register("DATA/TEN.TMD", "data/TEN.TMD").Into(tenData[:])
-	yukaFile  = disc.Register("DATA/YUKA.TMD", "data/YUKA.TMD").Into(yukaData[:])
-	shipFile  = disc.Register("DATA/THESHIP.TMD", "data/THESHIP.TMD").Into(shipData[:])
-	stoneFile = disc.Register("DATA/STONE.TIM", "data/STONE.TIM").Into(stoneData[:])
+	wall0File = disc.Register("ASSETS/WALL0.TMD", "assets/WALL0.TMD").Into(wall0Data[:])
+	wall1File = disc.Register("ASSETS/WALL1.TMD", "assets/WALL1.TMD").Into(wall1Data[:])
+	wall2File = disc.Register("ASSETS/WALL2.TMD", "assets/WALL2.TMD").Into(wall2Data[:])
+	wall3File = disc.Register("ASSETS/WALL3.TMD", "assets/WALL3.TMD").Into(wall3Data[:])
+	tenFile   = disc.Register("ASSETS/TEN.TMD", "assets/TEN.TMD").Into(tenData[:])
+	yukaFile  = disc.Register("ASSETS/YUKA.TMD", "assets/YUKA.TMD").Into(yukaData[:])
+	shipFile  = disc.Register("ASSETS/THESHIP.TMD", "assets/THESHIP.TMD").Into(shipData[:])
+	stoneFile = disc.Register("ASSETS/STONE.TIM", "assets/STONE.TIM").Into(stoneData[:])
 	files     = []*disc.File{&wall0File, &wall1File, &wall2File, &wall3File, &tenFile, &yukaFile, &shipFile, &stoneFile}
 
 	shipTMD  = yaroze.TMD(shipData[:])

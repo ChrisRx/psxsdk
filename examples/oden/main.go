@@ -45,8 +45,8 @@ var (
 	modelData [(23316 + 2047) / 2048 * 512]uint32
 	texData   [(16404 + 2047) / 2048 * 512]uint32
 
-	modelFile = disc.Register("DATA/ODEN.TMD", "data/ODEN.TMD").Into(modelData[:])
-	texFile   = disc.Register("DATA/ODEN.TIM", "data/ODEN.TIM").Into(texData[:])
+	modelFile = disc.Register("ASSETS/ODEN.TMD", "assets/ODEN.TMD").Into(modelData[:])
+	texFile   = disc.Register("ASSETS/ODEN.TIM", "assets/ODEN.TIM").Into(texData[:])
 	files     = []*disc.File{&modelFile, &texFile}
 
 	model   = yaroze.TMD(modelData[:])

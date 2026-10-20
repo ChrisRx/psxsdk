@@ -1,10 +1,10 @@
 // The converters in the page: a picture, a model or a sound dropped on the
-// playground goes under art/, a //go:generate line naming the converter
+// playground goes under assets/, a //go:generate line naming the converter
 // that makes its data file goes into main.go, as the guide's pipeline has
 // them, and the converter runs in the compiler's worker, putting the file
-// under data/. The line is the record: its flags are the options shown for
-// the source, and the build runs the same lines, so a downloaded project
-// remakes its data with go generate.
+// beside it under assets/. The line is the record: its flags are the
+// options shown for the source, and the build runs the same lines, so a
+// downloaded project remakes its data with go generate.
 "use strict";
 
 const convert = (() => {
@@ -30,7 +30,7 @@ const convert = (() => {
 
   const ext = (path) => path.replace(/^.*\./, "").toLowerCase();
   const toolFor = (path) => TOOLS[ext(path)] ?? null;
-  const isSource = (path) => toolFor(path) !== null || COMPANION.test(path);
+  const isSource = (path) => toolFor(path) !== null || COMPANION.test(path) || isSourceFile(path);
 
   function project() { return projects.current; }
 
@@ -40,7 +40,7 @@ const convert = (() => {
     const base = path.replace(/^.*\//, "").replace(/\.[^.]*$/, "");
     let stem = base.toUpperCase().replace(/[^A-Z0-9_]/g, "_").slice(0, 8);
     if (!stem) stem = "FILE";
-    return `data/${stem}.${OUTPUT[tool]}`;
+    return `assets/${stem}.${OUTPUT[tool]}`;
   }
 
   // The generate lines across the project's Go files, main.go first.
@@ -145,7 +145,7 @@ const convert = (() => {
     } else {
       const pkg = rows.findIndex((r) => /^package\s+main\b/.test(r));
       at = pkg + 1;
-      rows.splice(at, 0, "", "// The data files are made from the sources under art/ by go generate.", text);
+      rows.splice(at, 0, "", "// The files on the disc are made from the sources beside them under assets/ by go generate.", text);
     }
     p.set("main.go", rows.join("\n"), "generate");
   }
@@ -182,7 +182,7 @@ const convert = (() => {
         return ["--at", at, "--clut", clut, "-o", out, source];
       }
       case "obj2tmd":
-        return ["--scale", "100", "--textures", "data", "-o", out, source];
+        return ["--scale", "100", "--textures", "assets", "-o", out, source];
       default:
         return ["-o", out, source];
     }
@@ -338,7 +338,7 @@ const convert = (() => {
   }
 
   // Archives: the files under pack/NAME/ are packed by one mkarc line into
-  // data/NAME.ARC. A data file moves in and out; a file a converter makes
+  // assets/NAME.ARC. A data file moves in and out; a file a converter makes
   // moves by its line's -o.
   const packDir = (name) => `pack/${name}`;
   const archiveOf = (name) => outputFor(packDir(name), "mkarc");
@@ -378,12 +378,12 @@ const convert = (() => {
     run();
     return "";
   }
-  // takeOut moves a packed file back under data/, and when the archive is
+  // takeOut moves a packed file back under assets/, and when the archive is
   // then empty takes its line and its file out too.
   function takeOut(path) {
     const p = project();
     const name = path.split("/")[1];
-    const dest = `data/${path.replace(/^.*\//, "")}`;
+    const dest = `assets/${path.replace(/^.*\//, "")}`;
     if (p.has(dest)) return `There is already a ${dest}.`;
     retarget(path, dest);
     p.rename(path, dest);

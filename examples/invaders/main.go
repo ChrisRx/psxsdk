@@ -95,12 +95,12 @@ var (
 	shipData    [(2592 + 2047) / 2048 * 512]uint32
 	shotData    [(576 + 2047) / 2048 * 512]uint32
 
-	vh          = disc.Register("DATA/SOUND/STD0.VH", "data/STD0.VH").Into(vhData[:])
-	vb          = disc.Register("DATA/SOUND/STD0.VB", "data/STD0.VB").Into(vbData[:])
-	seqFile     = disc.Register("DATA/SOUND/GOGO.SEQ", "data/GOGO.SEQ").Into(seqData[:])
-	invaderFile = disc.Register("DATA/INVADER1.TIM", "data/INVADER1.TIM").Into(invaderData[:])
-	shipFile    = disc.Register("DATA/SHIP1.TIM", "data/SHIP1.TIM").Into(shipData[:])
-	shotFile    = disc.Register("DATA/FIRE04.TIM", "data/FIRE04.TIM").Into(shotData[:])
+	vh          = disc.Register("ASSETS/SOUND/STD0.VH", "assets/STD0.VH").Into(vhData[:])
+	vb          = disc.Register("ASSETS/SOUND/STD0.VB", "assets/STD0.VB").Into(vbData[:])
+	seqFile     = disc.Register("ASSETS/SOUND/GOGO.SEQ", "assets/GOGO.SEQ").Into(seqData[:])
+	invaderFile = disc.Register("ASSETS/INVADER1.TIM", "assets/INVADER1.TIM").Into(invaderData[:])
+	shipFile    = disc.Register("ASSETS/SHIP1.TIM", "assets/SHIP1.TIM").Into(shipData[:])
+	shotFile    = disc.Register("ASSETS/FIRE04.TIM", "assets/FIRE04.TIM").Into(shotData[:])
 	files       = []*disc.File{&vh, &vb, &seqFile, &invaderFile, &shipFile, &shotFile}
 
 	invaderTIM = yaroze.TIM(invaderData[:])

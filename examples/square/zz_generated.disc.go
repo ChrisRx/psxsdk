@@ -6,13 +6,13 @@ import (
 	"go.chrisrx.dev/psx/disc"
 )
 
-// The files under data, placed on the disc under DATA.
+// The files under assets, placed on the disc under ASSETS.
 var (
-	cubeTIM    = disc.Register("DATA/CUBE.TIM", "data/CUBE.TIM")
-	cubeTMD    = disc.Register("DATA/CUBE.TMD", "data/CUBE.TMD")
-	sample1SEQ = disc.Register("DATA/SAMPLE1.SEQ", "data/SAMPLE1.SEQ")
-	std0VB     = disc.Register("DATA/STD0.VB", "data/STD0.VB")
-	std0VH     = disc.Register("DATA/STD0.VH", "data/STD0.VH")
+	cubeTIM    = disc.Register("ASSETS/CUBE.TIM", "assets/CUBE.TIM")
+	cubeTMD    = disc.Register("ASSETS/CUBE.TMD", "assets/CUBE.TMD")
+	sample1SEQ = disc.Register("ASSETS/SAMPLE1.SEQ", "assets/SAMPLE1.SEQ")
+	std0VB     = disc.Register("ASSETS/STD0.VB", "assets/STD0.VB")
+	std0VH     = disc.Register("ASSETS/STD0.VH", "assets/STD0.VH")
 )
 
 // files is every file above, in the order disc.LoadAll reads them.

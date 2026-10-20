@@ -19,20 +19,20 @@ A program's pictures, sounds, music and models are files on its disc in the cons
 
 ## A pipeline that remakes itself
 
-The converters run from `go:generate` lines in the program's `main.go`, so that `go generate` makes every file under `data/` from the sources under `art/`, and then declares them for the disc with [`discgen`](../tools/discgen.md), last:
+The converters run from `go:generate` lines in the program's `main.go`, so that `go generate` makes the files under `assets/` from the sources beside them, and then declares them for the disc with [`discgen`](../tools/discgen.md), last, which leaves the sources off the disc: pictures, models, sounds and scores by their extension, and whatever a line reads:
 
 ```go
-//go:generate mkdir -p data
-//go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 640,0 --clut 0,481 -o data/SHIP.TIM art/ship.png
-//go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 704,0 --clut 0,483 -o data/STONE.TIM art/stone.png
-//go:generate go run go.chrisrx.dev/psx/tools/obj2tmd --scale 64 -o data/CUBE.TMD art/cube.obj
-//go:generate go run go.chrisrx.dev/psx/tools/wav2vag art/tone.wav art/blip.wav
-//go:generate go run go.chrisrx.dev/psx/tools/mkvab -f art/sounds.def -o data/SOUNDS.VAB --split art/tone.VAG art/blip.VAG
-//go:generate go run go.chrisrx.dev/psx/tools/smf2seq -o data/TUNE.SEQ art/tune.mid
-//go:generate go run go.chrisrx.dev/psx/tools/discgen data
+//go:generate mkdir -p assets
+//go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 640,0 --clut 0,481 -o assets/SHIP.TIM assets/ship.png
+//go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 704,0 --clut 0,483 -o assets/STONE.TIM assets/stone.png
+//go:generate go run go.chrisrx.dev/psx/tools/obj2tmd --scale 64 -o assets/CUBE.TMD assets/cube.obj
+//go:generate go run go.chrisrx.dev/psx/tools/wav2vag assets/tone.wav assets/blip.wav
+//go:generate go run go.chrisrx.dev/psx/tools/mkvab -f assets/sounds.def -o assets/SOUNDS.VAB --split assets/tone.VAG assets/blip.VAG
+//go:generate go run go.chrisrx.dev/psx/tools/smf2seq -o assets/TUNE.SEQ assets/tune.mid
+//go:generate go run go.chrisrx.dev/psx/tools/discgen assets
 ```
 
-The examples commit what is under `data/` as well, so that a build needs no generating.
+The examples commit the generated files under `assets/` as well, beside their sources, so that a build needs no generating.
 
 ## Video memory
 

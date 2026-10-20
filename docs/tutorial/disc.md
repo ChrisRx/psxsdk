@@ -10,17 +10,17 @@ Everything bigger than the program's own code comes off the CD: models, pictures
 
 Save these in a `data` directory beside `main.go`:
 
-- [CUBE.TMD](../../examples/square/data/CUBE.TMD), the cube. A TMD is the model format Sony's tools wrote: a list of vertices and normals, and a list of polygons that index them, each with its color or its texture coordinates. This one is 128 units along each edge, with six textured faces, and is written by [a short script](../../examples/square/mkcube.py), which is the whole of the format for a model this simple.
-- [CUBE.TIM](../../examples/square/data/CUBE.TIM), its texture, from Sony's own Net Yaroze tutorials. A TIM is a picture in one of the GPU's formats, with the place in video memory it is to be loaded to and its palette if it has one; this one is 64 by 64 in 16 colors.
-- [STD0.VH](../../examples/square/data/STD0.VH) and [STD0.VB](../../examples/square/data/STD0.VB), a sound bank from the Net Yaroze SDK's samples: the header, which says what instruments it holds, and the waveforms themselves.
-- [SAMPLE1.SEQ](../../examples/square/data/SAMPLE1.SEQ), the SDK's sample tune, a sequence of notes to play on the bank, much like a MIDI file.
+- [CUBE.TMD](../../examples/square/assets/CUBE.TMD), the cube. A TMD is the model format Sony's tools wrote: a list of vertices and normals, and a list of polygons that index them, each with its color or its texture coordinates. This one is 128 units along each edge, with six textured faces, and is written by [a short script](../../examples/square/mkcube.py), which is the whole of the format for a model this simple.
+- [CUBE.TIM](../../examples/square/assets/CUBE.TIM), its texture, from Sony's own Net Yaroze tutorials. A TIM is a picture in one of the GPU's formats, with the place in video memory it is to be loaded to and its palette if it has one; this one is 64 by 64 in 16 colors.
+- [STD0.VH](../../examples/square/assets/STD0.VH) and [STD0.VB](../../examples/square/assets/STD0.VB), a sound bank from the Net Yaroze SDK's samples: the header, which says what instruments it holds, and the waveforms themselves.
+- [SAMPLE1.SEQ](../../examples/square/assets/SAMPLE1.SEQ), the SDK's sample tune, a sequence of notes to play on the bank, much like a MIDI file.
 
 ## Declaring them
 
 A program names each file it reads with `disc.Register`, giving the path it has on the disc and the file on the host that goes there. Writing those by hand is easy to get wrong, so `discgen` writes them from what is in the directory. One line near the top of `main.go` runs it:
 
 ```go
-//go:generate go run go.chrisrx.dev/psx/tools/discgen data
+//go:generate go run go.chrisrx.dev/psx/tools/discgen assets
 ```
 
 and `go generate` then writes `zz_generated.disc.go`:

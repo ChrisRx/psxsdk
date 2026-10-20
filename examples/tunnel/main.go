@@ -68,16 +68,16 @@ var (
 	vhData       [(5152 + 2047) / 2048 * 512]uint32
 	vbData       [(440544 + 2047) / 2048 * 512]uint32
 
-	squareFile   = disc.Register("DATA/TEN.TMD", "data/TEN.TMD").Into(squareData[:])
-	shipFile     = disc.Register("DATA/THESHIP.TMD", "data/THESHIP.TMD").Into(shipData[:])
-	mainFile     = disc.Register("DATA/WAVE09.TIM", "data/WAVE09.TIM").Into(mainData[:])
-	fireFile     = disc.Register("DATA/FIRE7.TIM", "data/FIRE7.TIM").Into(fireData[:])
-	multipleFile = disc.Register("DATA/ENEMY.TMD", "data/ENEMY.TMD").Into(multipleData[:])
-	multiTIMFile = disc.Register("DATA/MULTI3.TIM", "data/MULTI3.TIM").Into(multiTIMData[:])
-	mascotsFile  = disc.Register("DATA/MASCOTS2.TIM", "data/MASCOTS2.TIM").Into(mascotsData[:])
-	asciiFile    = disc.Register("DATA/ASCII2.TIM", "data/ASCII2.TIM").Into(asciiData[:])
-	vh           = disc.Register("DATA/LEWIS.VH", "data/LEWIS.VH").Into(vhData[:])
-	vb           = disc.Register("DATA/LEWIS.VB", "data/LEWIS.VB").Into(vbData[:])
+	squareFile   = disc.Register("ASSETS/TEN.TMD", "assets/TEN.TMD").Into(squareData[:])
+	shipFile     = disc.Register("ASSETS/THESHIP.TMD", "assets/THESHIP.TMD").Into(shipData[:])
+	mainFile     = disc.Register("ASSETS/WAVE09.TIM", "assets/WAVE09.TIM").Into(mainData[:])
+	fireFile     = disc.Register("ASSETS/FIRE7.TIM", "assets/FIRE7.TIM").Into(fireData[:])
+	multipleFile = disc.Register("ASSETS/ENEMY.TMD", "assets/ENEMY.TMD").Into(multipleData[:])
+	multiTIMFile = disc.Register("ASSETS/MULTI3.TIM", "assets/MULTI3.TIM").Into(multiTIMData[:])
+	mascotsFile  = disc.Register("ASSETS/MASCOTS2.TIM", "assets/MASCOTS2.TIM").Into(mascotsData[:])
+	asciiFile    = disc.Register("ASSETS/ASCII2.TIM", "assets/ASCII2.TIM").Into(asciiData[:])
+	vh           = disc.Register("ASSETS/LEWIS.VH", "assets/LEWIS.VH").Into(vhData[:])
+	vb           = disc.Register("ASSETS/LEWIS.VB", "assets/LEWIS.VB").Into(vbData[:])
 	files        = []*disc.File{&squareFile, &shipFile, &mainFile, &fireFile, &multipleFile, &multiTIMFile, &mascotsFile, &asciiFile, &vh, &vb}
 
 	squareModel   = yaroze.TMD(squareData[:])

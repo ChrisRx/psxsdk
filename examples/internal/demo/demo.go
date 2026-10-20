@@ -25,7 +25,7 @@ const readTimeout = 300
 // the program's own memory:
 //
 //	var wall0Data [(112 + 2047) / 2048 * 512]uint32
-//	var wall0 = disc.Register("DATA/WALL0.TMD", "data/WALL0.TMD").Into(wall0Data[:])
+//	var wall0 = disc.Register("ASSETS/WALL0.TMD", "assets/WALL0.TMD").Into(wall0Data[:])
 func Load(files []*disc.File, progress func(name string)) string {
 	for _, f := range files {
 		if progress != nil {

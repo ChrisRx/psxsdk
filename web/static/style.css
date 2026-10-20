@@ -413,9 +413,10 @@ body.has-full { overflow: hidden; }
 #player-page { padding: 8px; overflow: hidden; }
 html:has(#player-page) { overflow: hidden; }
 
-/* The playground (index.html): the editor on the left, the emulator on the
-   right with the compiler's and the emulator's output under it, filling the
-   window, with the divider between the two sides dragged to share it. */
+/* The playground (index.html): the sidebar on the left, the main panel
+   beside it, the emulator on the right with the compiler's and the
+   emulator's output under it, filling the window, with the divider before
+   the emulator dragged to share the width. */
 body.playground {
   display: flex;
   flex-direction: column;
@@ -425,6 +426,7 @@ body.playground {
   overflow: hidden;
 }
 body.resizing { cursor: col-resize; user-select: none; -webkit-user-select: none; }
+body.resizing-rows { cursor: row-resize; user-select: none; -webkit-user-select: none; }
 
 .pg-top {
   display: flex;
@@ -437,14 +439,32 @@ body.resizing { cursor: col-resize; user-select: none; -webkit-user-select: none
 .pg-top h1 { margin-right: 14px; font-size: 1.625rem; }
 .pg-hint { margin-left: 6px; font-size: 0.875rem; }
 .pg-hint kbd { min-width: 0; font-size: 0.75rem; }
-.pg-links { display: flex; align-items: center; gap: 18px; margin-left: auto; }
-#theme { min-width: 4.5em; }
-#theme[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+/* The links to the rest of the site, the GitHub mark and the theme
+   switch, drawn as one row of quiet buttons. */
+.pg-links { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.pg-links a {
+  padding: 5px 10px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-weight: 500;
+  text-decoration: none;
+}
+.pg-links a:hover, .pg-links a:focus-visible { background: var(--surface-2); color: var(--ink); }
+.pg-links .pg-icon { display: inline-grid; place-items: center; width: 36px; height: 36px; min-height: 0; padding: 0; }
+.pg-links a.pg-icon { color: var(--ink); }
+.pg-links .pg-icon svg { width: 20px; height: 20px; }
+#theme { margin-left: 4px; border: 0; background: none; color: var(--muted); }
+#theme:hover:not(:disabled), #theme:focus-visible { background: var(--surface-2); color: var(--ink); }
+#theme svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#theme .moon { display: none; }
+#theme[aria-pressed="true"] .moon { display: block; }
+#theme[aria-pressed="true"] .sun { display: none; }
 button.primary { border-color: var(--accent); background: var(--accent); color: var(--bg); }
 button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 86%, var(--ink)); }
 
 .pg {
   --side: min(520px, 42vw);
+  --bar: 272px;
   max-width: none;
   margin: 0;
   gap: 0;
@@ -452,34 +472,40 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 7px var(--side);
+  grid-template-columns: var(--bar) minmax(0, 1fr) 7px var(--side);
 }
 
 .pg-code { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--code-bg); }
 .pg-code.dropping { outline: 2px dashed var(--accent); outline-offset: -4px; }
 
-/* The program's Go files, a tab each, over the editors, one for each
-   file opened, laid over one another with the open one shown. */
+/* The tabs over the main panel, one for everything opened from the
+   sidebar, each closed with its cross; the panes are laid over one another
+   with the open one shown. */
 .tabs.pg-files { flex: none; background: var(--surface); }
-.pg-files .status { font-size: 0.8125rem; }
-.file-tab { display: inline-flex; align-items: center; align-self: stretch; }
-.file-tab [role="tab"] { padding-right: 4px; }
-.file-more {
+.pg-files [role="tablist"] { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.pg-files [role="tablist"]::-webkit-scrollbar { display: none; }
+.pg-files .status { flex: none; font-size: 0.8125rem; }
+.file-tab { display: inline-flex; flex: 0 1 auto; align-items: center; align-self: stretch; min-width: 84px; }
+.file-tab [role="tab"] { min-width: 0; max-width: 180px; padding-right: 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tab-close {
   align-self: center;
   min-height: 0;
-  margin-right: 4px;
-  padding: 0 5px 3px;
+  margin-right: 6px;
+  padding: 0 4px 2px;
   border: 0;
   border-radius: 4px;
   background: none;
-  color: var(--muted);
+  color: transparent;
   font-size: 1rem;
   line-height: 1;
 }
-.file-more:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.file-tab:hover .tab-close, .file-tab:focus-within .tab-close, .file-tab [aria-selected="true"] + .tab-close { color: var(--muted); }
+.tab-close:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
 .pg-editors { position: relative; flex: 1; min-height: 0; }
 .pg-editors .editor { position: absolute; inset: 0; }
 .pg-editors .editor[hidden] { display: none; }
+.pg-empty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 16px; text-align: center; }
+.pg-empty[hidden] { display: none; }
 
 /* A small menu of actions, under the button that opened it. */
 .pg-popup {
@@ -567,39 +593,90 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
 .pg-menu-actions button { min-height: 0; padding: 4px 10px; font-size: 0.875rem; }
 .pg-menu-actions .danger { margin-left: auto; color: var(--error); }
 
-/* The Files tab: the tree of the project's files on the left, the one
-   picked shown on the right. */
-.files { position: absolute; inset: 0; display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); background: var(--surface); }
-.files[hidden] { display: none; }
-.files-tree { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); }
-.files-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
-.files-bar select { min-width: 0; max-width: 100%; padding: 2px 4px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface); color: var(--ink); font: inherit; font-size: 0.8125rem; }
-#file-tree { flex: 1; min-height: 0; margin: 0; padding: 4px 0; overflow: auto; list-style: none; font-size: 0.875rem; }
-.files-group { padding: 10px 12px 2px; color: var(--muted); font-size: 0.75rem; }
-.files-row { display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 12px; cursor: default; }
-.files-row.nested { padding-left: 28px; }
+/* The sidebar: the scenes above, the files below, with the divider between
+   them dragged to share the height. */
+.pg-bar { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--line); background: var(--surface); }
+.pg-bar.dropping { outline: 2px dashed var(--accent); outline-offset: -4px; }
+.side-sect { display: flex; flex-direction: column; min-height: 0; }
+#side-scenes { flex: none; height: var(--scenes, 28%); }
+#side-files { flex: 1; }
+.side-head { display: flex; flex: none; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.side-head h2 { display: flex; flex: 1; align-items: center; gap: 7px; margin: 0; color: var(--muted); font: 600 0.75rem/1.4 Barlow, system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; }
+.side-head svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.side-add { display: grid; place-items: center; width: 28px; height: 28px; min-height: 0; padding: 0; }
+.side-add svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.side-list { flex: 1; min-height: 0; margin: 0; padding: 4px 0; overflow: auto; list-style: none; font-size: 0.875rem; }
+.side-split { flex: none; height: 7px; border-top: 3px solid var(--surface); border-bottom: 3px solid var(--surface); background: var(--line); cursor: row-resize; touch-action: none; }
+.side-split:hover, .side-split:focus-visible, .resizing-rows .side-split { background: var(--accent); outline: none; }
+.side-foot { display: flex; flex: none; flex-direction: column; align-items: flex-start; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--line); }
+/* The rows of both lists, laid out as a code editor's explorer lays its
+   tree: a guide line for each level, a chevron on a folder, the icon of
+   the file's kind, its name, and what is known of it at the right. */
+.files-group { padding: 8px 12px 2px; color: var(--muted); font-size: 0.75rem; }
+.files-row { display: flex; align-items: center; height: 24px; padding: 0 10px 0 6px; font-size: 0.8125rem; cursor: default; user-select: none; -webkit-user-select: none; }
 .files-row:hover { background: var(--surface-2); }
 .files-row[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .files-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.files-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.8125rem; }
-.files-row.kind-go .files-name, .files-row.kind-scene .files-name, .files-row.kind-vram .files-name { font-family: inherit; font-size: inherit; }
-.files-meta { flex: none; margin-left: auto; font-size: 0.75rem; white-space: nowrap; }
-.files-row .file-more { margin: -4px 0; }
-.files-status { margin: 0; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 0.8125rem; overflow-wrap: anywhere; }
-.files-view { min-width: 0; padding: 10px 14px 16px; overflow: auto; }
-.files-view .pg-preview-head { font-size: 0.9375rem; }
-#preview-vram { display: block; width: min(100%, 512px); margin-top: 12px; border: 1px solid var(--line); background: var(--screen); image-rendering: pixelated; touch-action: none; }
-#preview-vram[hidden] { display: none; }
+.files-row.drop-target { background: color-mix(in srgb, var(--accent) 22%, transparent); outline: 1px solid var(--accent); outline-offset: -1px; }
+.tree-guide { flex: none; align-self: stretch; width: 16px; background: linear-gradient(var(--line), var(--line)) 7px 0 / 1px 100% no-repeat; }
+.tree-arrow { display: grid; flex: none; place-items: center; width: 16px; height: 16px; color: var(--muted); }
+.tree-arrow svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.12s; }
+.files-row[aria-expanded="true"] .tree-arrow svg { transform: rotate(90deg); }
+.tree-arrow.none { visibility: hidden; }
+.tree-icon { display: grid; flex: none; place-items: center; width: 16px; height: 16px; margin: 0 6px 0 2px; }
+.tree-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+.icon-folder, .icon-open, .icon-data, .icon-json { color: var(--muted); }
+.icon-go { color: var(--t-type); }
+.icon-image { color: var(--t-pkg); }
+.icon-texture { color: var(--t-str); }
+.icon-model { color: var(--t-fn); }
+.icon-sound { color: var(--t-num); }
+.icon-music, .icon-archive { color: var(--t-const); }
+.icon-scene { color: var(--t-kw); }
+.files-name { flex: 0 0 auto; max-width: calc(100% - 64px); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.files-row.folder .files-name { font-weight: 500; }
+.files-meta { flex: 1 1 0; min-width: 0; margin-left: auto; padding-left: 8px; overflow: hidden; font-size: 0.6875rem; text-align: right; white-space: nowrap; text-overflow: ellipsis; }
+#scene-list .files-row { padding-left: 14px; }
+@media (prefers-reduced-motion: reduce) { .tree-arrow svg { transition: none; } }
+.files-status { margin: 0; font-size: 0.8125rem; overflow-wrap: anywhere; }
 
-@media (max-width: 899px) {
-  .files { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
-  .files-tree { max-height: 45%; border-right: 0; border-bottom: 1px solid var(--line); }
+/* Video memory: the map drawn small under the files, opening large over
+   the page. */
+#side-vram { flex: none; }
+.vram-thumb { display: block; width: 100%; min-height: 0; margin: 0; padding: 8px 12px 10px; border: 0; border-radius: 0; background: none; }
+.vram-thumb:hover:not(:disabled) { background: var(--surface-2); }
+.vram-thumb canvas { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 4px; image-rendering: pixelated; }
+.vram-thumb:hover canvas, .vram-thumb:focus-visible canvas { border-color: var(--accent); }
+.vram-dialog {
+  width: min(1072px, calc(100vw - 32px));
+  max-width: none;
+  padding: 14px 20px 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.35);
 }
+.vram-dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
+.vram-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.vram-head h2 { flex: 1; margin: 0; font: 600 1.125rem/1.3 Barlow, system-ui, sans-serif; }
+.vram-head button { display: grid; place-items: center; width: 36px; height: 36px; min-height: 0; padding: 0; border: 0; background: none; color: var(--muted); }
+.vram-head button:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.vram-head svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+#vram-canvas { display: block; width: 100%; height: auto; border: 1px solid var(--line); background: var(--screen); image-rendering: pixelated; touch-action: none; }
+/* Two lines are kept for the text, so the dialog holds still as it changes. */
+.vram-dialog p { min-height: 2.8em; margin: 10px 0 0; font-size: 0.875rem; line-height: 1.4; }
+
+/* The viewer: a file with something to show, or video memory. */
+.view { position: absolute; inset: 0; padding: 10px 14px 16px; overflow: auto; background: var(--surface); }
+.view[hidden] { display: none; }
+.view .pg-preview-head { font-size: 0.9375rem; }
+.view p { margin: 8px 0 0; font-size: 0.875rem; }
 
 /* The preview of a file, or of video memory. */
 .pg-preview-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; font-weight: 600; }
 .pg-preview-head select { padding: 2px 4px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface); color: var(--ink); font: inherit; font-weight: 400; }
-.pg-preview-head select[hidden] { display: none; }
+.pg-preview-head select[hidden], .pg-preview-head button[hidden] { display: none; }
 #preview-canvas {
   height: auto;
   display: block;
@@ -611,8 +688,6 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
 }
 #preview-canvas.tim { background: repeating-conic-gradient(var(--surface-2) 0 25%, var(--surface) 0 50%) 0 0 / 16px 16px; }
 #preview-canvas.tmd { width: min(100%, 320px); cursor: grab; }
-#preview-canvas.vram { width: min(100%, 512px); }
-.files-view p { margin: 8px 0 0; font-size: 0.875rem; }
 
 /* A source's options: the flags of its go:generate line. */
 .pg-options { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 8px; }
@@ -654,7 +729,6 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
 .scene-view { min-width: 0; }
 .scene-view.live #scene-canvas { border-color: var(--triangle); box-shadow: 0 0 0 2px color-mix(in srgb, var(--triangle) 35%, transparent); }
 .scene-side { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
-#scene-pick { padding: 4px 8px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--code-bg); color: var(--ink); font: inherit; font-size: 0.8125rem; font-weight: 600; }
 #scene-search { padding: 4px 8px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--code-bg); color: var(--ink); font: inherit; font-size: 0.8125rem; }
 .scene-modes { display: inline-flex; gap: 2px; }
 .scene-modes button[aria-pressed="true"], #scene-snap[aria-pressed="true"], #scene-console[aria-pressed="true"], .scene-presets button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
@@ -908,9 +982,24 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
 .k-type { background: var(--t-type); }
 .k-const, .k-var { background: var(--t-const); }
 .k-field { background: var(--t-pkg); }
+/* The reference for the word under the pointer, after a pause. */
+.ed-hover {
+  position: absolute;
+  z-index: 5;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  pointer-events: none;
+}
+.ed-hover[hidden] { display: none; }
+.ed-hover p { max-height: 200px; overflow: hidden; }
+.ed-hover p[hidden] { display: none; }
 .ed-doc { max-height: 160px; overflow-y: auto; padding: 8px 10px; border-top: 1px solid var(--line); }
-.ed-doc code { display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
-.ed-doc p {
+.ed-doc code, .ed-hover code { display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ed-doc p, .ed-hover p {
   margin: 6px 0 0;
   font: 400 0.875rem/1.4 Barlow, system-ui, sans-serif;
   color: var(--muted);
@@ -924,18 +1013,18 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   .pg-top h1 { width: 100%; font-size: 1.5rem; }
   .pg-hint { display: none; }
   .pg-links { margin-left: 0; width: 100%; }
+  .pg-links a:first-child { margin-left: -10px; }
   .pg { display: flex; flex-direction: column; gap: 12px; padding: 12px 16px 24px; }
   .pg-split { display: none; }
   .pg-side { display: contents; }
   .pg-side .stage { order: -2; }
   .pg-side .bar { order: -1; }
+  .pg-bar { flex-direction: row; max-height: 32vh; border: 1px solid var(--line); border-radius: 6px; }
+  .side-sect, #side-scenes, #side-vram { flex: 1; height: auto; }
+  #side-scenes, #side-files { border-right: 1px solid var(--line); }
+  .side-split { display: none; }
   .pg-code { height: 65vh; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
   .pg-out { flex: none; height: 340px; }
   .tabs { flex-wrap: wrap; }
   .tabs .status { order: 3; flex-basis: 100%; margin: 0 0 6px 10px; }
 }
-
-/* The file strip's + and the Files tab's row for a scene not yet made. */
-.file-add { min-width: 28px; padding-inline: 0; font-size: 1rem; line-height: 1; }
-.files-row.kind-newscene .files-name { color: var(--muted); font-family: inherit; font-size: inherit; font-style: italic; }
-.files-row.kind-newscene:hover .files-name { color: var(--ink); text-decoration: underline; }

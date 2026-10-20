@@ -13,10 +13,10 @@
 // The directions move the box. Start pauses the music and starts it again.
 package main
 
-// The files under data/ are declared, ready to load, in
+// The files under assets/ are declared, ready to load, in
 // zz_generated.disc.go, by discgen: cubeTIM, cubeTMD, sample1SEQ, std0VB and
 // std0VH, and files, every one of them.
-//go:generate go run go.chrisrx.dev/psx/tools/discgen data
+//go:generate go run go.chrisrx.dev/psx/tools/discgen assets
 
 import (
 	"go.chrisrx.dev/psx/disc"

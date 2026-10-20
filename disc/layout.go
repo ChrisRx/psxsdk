@@ -16,7 +16,7 @@
 // first time, as many whole sectors as mkpsxiso recorded the file has, and
 // Data is that memory:
 //
-//	var model = disc.Register("DATA/CUBE.TMD", "data/CUBE.TMD")
+//	var model = disc.Register("ASSETS/CUBE.TMD", "assets/CUBE.TMD")
 //
 //	if !model.Load() || !disc.Wait(300) { ... }
 //	cube := yaroze.TMD(model.Data())
@@ -27,7 +27,7 @@
 // times, or keep out of the heap.
 //
 //	var modelData [2048]uint32
-//	var model = disc.Register("DATA/CUBE.TMD", "data/CUBE.TMD").Into(modelData[:])
+//	var model = disc.Register("ASSETS/CUBE.TMD", "assets/CUBE.TMD").Into(modelData[:])
 //
 // The runtime half of the package is Register, the File it returns, and the
 // reads. It builds on a host too, where the yaroze package's functions are

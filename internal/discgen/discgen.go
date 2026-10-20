@@ -1,18 +1,21 @@
 // Package discgen writes the Go declarations for a program's data files:
 // for each file under a directory, the disc.File that registers it with
 // mkpsxiso, and a slice of every File for disc.LoadAll, which reads each
-// into memory it allocates.
+// into memory it allocates. The sources the converters read, which lie in
+// the same directory, are left off the disc: a picture, model, sound or
+// score by its extension, and any file a go:generate line of the package
+// reads.
 //
 // It is the discgen command, and nyc's generate command, meant for
 // go:generate in the program's package:
 //
-//	//go:generate go run go.chrisrx.dev/psx/tools/discgen data
+//	//go:generate go run go.chrisrx.dev/psx/tools/discgen assets
 //
-// which for data/CUBE.TMD and data/CUBE.TIM writes zz_generated.disc.go
+// which for assets/CUBE.TMD and assets/CUBE.TIM writes zz_generated.disc.go
 // with
 //
-//	cubeTIM = disc.Register("DATA/CUBE.TIM", "data/CUBE.TIM")
-//	cubeTMD = disc.Register("DATA/CUBE.TMD", "data/CUBE.TMD")
+//	cubeTIM = disc.Register("ASSETS/CUBE.TIM", "assets/CUBE.TIM")
+//	cubeTMD = disc.Register("ASSETS/CUBE.TMD", "assets/CUBE.TMD")
 //
 // With --into it declares the memory too, as Into takes it: for each file
 // a package-level array, sized to the whole sectors the drive delivers,
@@ -20,7 +23,7 @@
 // the array for an image or a model:
 //
 //	cubeTMDData [512]uint32 // 344 bytes
-//	cubeTMDFile = disc.Register("DATA/CUBE.TMD", "data/CUBE.TMD").Into(cubeTMDData[:])
+//	cubeTMDFile = disc.Register("ASSETS/CUBE.TMD", "assets/CUBE.TMD").Into(cubeTMDData[:])
 //	cubeTMD     = yaroze.TMD(cubeTMDData[:])
 //
 // Each name is the file's path under the directory, its words run together
@@ -52,6 +55,15 @@ const sectorWords = 2048 / 4
 var views = map[string]string{
 	"TIM": "TIM",
 	"TMD": "TMD",
+}
+
+// sourceExts are the files the converters read, by extension, which are
+// not for the disc.
+var sourceExts = map[string]bool{
+	"png": true, "bmp": true, "gif": true, "jpg": true, "jpeg": true,
+	"obj": true, "mtl": true, "rsd": true, "ply": true, "mat": true,
+	"wav": true, "aif": true, "aiff": true, "def": true,
+	"mid": true, "midi": true,
 }
 
 // An entry is one data file: its path under the directory, with forward
@@ -172,8 +184,46 @@ func ident(rel string) (name, ext string) {
 	return name, ext
 }
 
-// scan lists the files under dir, skipping hidden ones, in lexical order.
-func scan(dir string) ([]entry, error) {
+// sources lists the files under dir that the go:generate lines of the Go
+// files in pkgDir read: every argument that is a path under dir, other
+// than the one after -o or --output. The lines are written as go generate
+// runs them, from the package's directory.
+func sources(pkgDir, dir string) (map[string]bool, error) {
+	names, err := filepath.Glob(filepath.Join(pkgDir, "*.go"))
+	if err != nil {
+		return nil, err
+	}
+	dir = path.Clean(filepath.ToSlash(dir))
+	out := map[string]bool{}
+	for _, name := range names {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			return nil, err
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			rest, ok := strings.CutPrefix(line, "//go:generate")
+			if !ok {
+				continue
+			}
+			words := strings.Fields(rest)
+			for i := 0; i < len(words); i++ {
+				if words[i] == "-o" || words[i] == "--output" {
+					i++
+					continue
+				}
+				w := path.Clean(filepath.ToSlash(words[i]))
+				if strings.HasPrefix(w, dir+"/") {
+					out[strings.TrimPrefix(w, dir+"/")] = true
+				}
+			}
+		}
+	}
+	return out, nil
+}
+
+// scan lists the files under dir, skipping hidden ones and the sources,
+// in lexical order.
+func scan(dir string, srcs map[string]bool) ([]entry, error) {
 	var files []entry
 	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -196,7 +246,11 @@ func scan(dir string) ([]entry, error) {
 		if err != nil {
 			return err
 		}
-		files = append(files, entry{rel: filepath.ToSlash(rel), size: info.Size()})
+		rel = filepath.ToSlash(rel)
+		if srcs[rel] || sourceExts[strings.ToLower(strings.TrimPrefix(path.Ext(rel), "."))] {
+			return nil
+		}
+		files = append(files, entry{rel: rel, size: info.Size()})
 		return nil
 	})
 	return files, err
@@ -211,7 +265,9 @@ func Command(use string) *cobra.Command {
 		Short: "write the declarations that put a program's data files on its disc",
 		Long: use + ` writes Go declarations for every file under dir: the disc.File
 registering it for mkpsxiso, and a slice of every File for disc.LoadAll, which
-reads each into memory it allocates. With --into it declares that memory as
+reads each into memory it allocates. The sources the converters read are left
+out: pictures, models, sounds and scores by their extension, and any file a
+go:generate line of the package reads. With --into it declares that memory as
 well: an array per file, sized to whole 2048-byte sectors, given to the File
 with Into, and a yaroze.TIM or yaroze.TMD over the array for an image or a
 model. Run it from the program's package directory, as go:generate does.`,
@@ -222,7 +278,11 @@ model. Run it from the program's package directory, as go:generate does.`,
 			if opts.Root == "" {
 				opts.Root = strings.ToUpper(path.Base(opts.Dir))
 			}
-			files, err := scan(args[0])
+			srcs, err := sources(".", args[0])
+			if err != nil {
+				return err
+			}
+			files, err := scan(args[0], srcs)
 			if err != nil {
 				return err
 			}

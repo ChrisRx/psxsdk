@@ -27,7 +27,7 @@
 // The directions scroll the map.
 package main
 
-//go:generate go run go.chrisrx.dev/psx/tools/discgen data
+//go:generate go run go.chrisrx.dev/psx/tools/discgen assets
 
 import (
 	"go.chrisrx.dev/psx/disc"

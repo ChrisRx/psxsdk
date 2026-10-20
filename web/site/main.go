@@ -92,7 +92,7 @@ var opts = struct {
 	Examples: "examples",
 	Static:   "web/static",
 	Starters: "square,scene",
-	API:      "yaroze",
+	API:      "yaroze,scene,disc,arc",
 	Out:      ".build/site",
 	Repo:     "https://github.com/ChrisRx/psxsdk",
 	Name:     "psxsdk",
@@ -103,7 +103,7 @@ func main() {
 	flag.StringVar(&opts.Examples, "examples", opts.Examples, "directory of example programs, one page each")
 	flag.StringVar(&opts.Static, "static", opts.Static, "the playground and the player, copied under play/")
 	flag.StringVar(&opts.Starters, "starters", opts.Starters, "the examples the playground starts a project from, copied under play/starters")
-	flag.StringVar(&opts.API, "api", opts.API, "package whose exported names the playground completes, written to play/yaroze.json")
+	flag.StringVar(&opts.API, "api", opts.API, "packages whose exported names the playground completes and explains, written to play/api.json")
 	flag.StringVar(&opts.Out, "out", opts.Out, "directory to write the site into")
 	flag.StringVar(&opts.Repo, "repo", opts.Repo, "repository that paths in links refer to")
 	flag.StringVar(&opts.Name, "name", opts.Name, "the site's name")
@@ -122,7 +122,7 @@ func main() {
 		}
 	}
 	if opts.Static != "" && opts.API != "" {
-		if err := writeAPI(opts.API, filepath.Join(opts.Out, "play", "yaroze.json")); err != nil {
+		if err := writeAPI(strings.Split(opts.API, ","), filepath.Join(opts.Out, "play", "api.json")); err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -856,7 +856,7 @@ type Starter struct {
 }
 
 // writeStarters copies each named example's main.go, its scenes under
-// scenes/, the sources under its art/ directory and the files under its
+// scenes/, the sources under its assets/ directory and the files under its
 // pack/ directories, under play/starters, and writes play/starters.json
 // listing them.
 func writeStarters(examples string, names []string, play string) error {
@@ -868,7 +868,7 @@ func writeStarters(examples string, names []string, play string) error {
 	for _, name := range names {
 		st := Starter{Name: name, Files: map[string]string{}}
 		files := []struct{ src, dst string }{{"main.go", name + ".go.txt"}}
-		for _, dir := range []string{"scenes", "art"} {
+		for _, dir := range []string{"scenes", "assets"} {
 			entries, err := os.ReadDir(filepath.Join(examples, name, dir))
 			if err != nil {
 				continue

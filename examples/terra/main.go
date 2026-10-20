@@ -81,13 +81,13 @@ var (
 	gogoBuf [(17341 + 2047) / 2048 * 512]uint32
 	musiBuf [(39616 + 2047) / 2048 * 512]uint32
 
-	data1ARC     = disc.Register("DATA/DATA1.ARC", "data/DATA1.ARC").Into(arc1Buf[:])
-	data2ARC     = disc.Register("DATA/DATA2.ARC", "data/DATA2.ARC").Into(arcBuf[:arc2Words])
-	data3ARC     = disc.Register("DATA/DATA3.ARC", "data/DATA3.ARC").Into(arcBuf[arc2Words : arc2Words+arc3Words])
-	soundStd0VH  = disc.Register("DATA/SOUND/STD0.VH", "data/SOUND/STD0.VH").Into(vhBuf[:])
-	soundStd0VB  = disc.Register("DATA/SOUND/STD0.VB", "data/SOUND/STD0.VB").Into(arcBuf[:])
-	soundGogoSEQ = disc.Register("DATA/SOUND/GOGO.SEQ", "data/SOUND/GOGO.SEQ").Into(gogoBuf[:])
-	soundMusiSEQ = disc.Register("DATA/SOUND/MUSI.SEQ", "data/SOUND/MUSI.SEQ").Into(musiBuf[:])
+	data1ARC     = disc.Register("ASSETS/DATA1.ARC", "assets/DATA1.ARC").Into(arc1Buf[:])
+	data2ARC     = disc.Register("ASSETS/DATA2.ARC", "assets/DATA2.ARC").Into(arcBuf[:arc2Words])
+	data3ARC     = disc.Register("ASSETS/DATA3.ARC", "assets/DATA3.ARC").Into(arcBuf[arc2Words : arc2Words+arc3Words])
+	soundStd0VH  = disc.Register("ASSETS/SOUND/STD0.VH", "assets/SOUND/STD0.VH").Into(vhBuf[:])
+	soundStd0VB  = disc.Register("ASSETS/SOUND/STD0.VB", "assets/SOUND/STD0.VB").Into(arcBuf[:])
+	soundGogoSEQ = disc.Register("ASSETS/SOUND/GOGO.SEQ", "assets/SOUND/GOGO.SEQ").Into(gogoBuf[:])
+	soundMusiSEQ = disc.Register("ASSETS/SOUND/MUSI.SEQ", "assets/SOUND/MUSI.SEQ").Into(musiBuf[:])
 
 	// files is what is read at the start; the bank's body comes after.
 	files = []*disc.File{&data1ARC, &data2ARC, &data3ARC, &soundStd0VH, &soundGogoSEQ, &soundMusiSEQ}

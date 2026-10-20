@@ -45,46 +45,68 @@
     <button id="format" type="button" title="Format the program with gofmt (Ctrl+Shift+F)">Format</button>
     <span id="live-pill" class="live-pill" hidden title="This project is running: changes to its scene show on the console at once">Live</span>
     <span class="pg-hint muted"><kbd>Ctrl</kbd> <kbd>Enter</kbd> runs, <kbd>Ctrl</kbd> <kbd>Space</kbd> completes</span>
-    <div class="pg-links">
+    <nav class="pg-links" aria-label="Site">
       <a href="../examples/">Examples</a>
       <a href="../docs/">Docs</a>
-      <a href="https://github.com/ChrisRx/psxsdk">GitHub</a>
-      <button id="theme" class="small-button" type="button" aria-pressed="true" title="Switch between the black Net Yaroze and the grey PlayStation">Dark</button>
-    </div>
+      <a class="pg-icon" href="https://github.com/ChrisRx/psxsdk" aria-label="GitHub" title="The source on GitHub">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+      </a>
+      <button id="theme" class="pg-icon" type="button" aria-pressed="true" aria-label="Theme" title="Switch to the grey PlayStation">
+        <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.93 4.93l1.77 1.77M17.3 17.3l1.77 1.77M4.93 19.07l1.77-1.77M17.3 6.7l1.77-1.77"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg>
+      </button>
+    </nav>
   </header>
 
   <main id="pg" class="pg">
+    <aside class="pg-bar" aria-label="Project">
+      <section id="side-scenes" class="side-sect" aria-labelledby="scenes-head">
+        <div class="side-head">
+          <h2 id="scenes-head"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg>Scenes</h2>
+          <button id="scene-add" class="side-add" type="button" title="A new scene under scenes/, placed by hand and cooked into a data file the program loads with package scene" aria-label="New scene"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></button>
+        </div>
+        <ul id="scene-list" class="side-list" role="listbox" aria-label="The project's scenes"></ul>
+      </section>
+      <div id="side-split" class="side-split" role="separator" aria-orientation="horizontal" aria-label="Resize the scenes list" tabindex="0"></div>
+      <section id="side-files" class="side-sect" aria-labelledby="files-head">
+        <div class="side-head">
+          <h2 id="files-head"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2h9A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5v-11z"/></svg>Files</h2>
+          <button id="file-add" class="side-add" type="button" title="Add a Go file, files from this computer, or an example's data" aria-label="Add to the project"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></button>
+          <input id="asset-files" type="file" multiple hidden>
+        </div>
+        <ul id="file-tree" class="side-list" role="tree" aria-label="The project's files"></ul>
+        <div class="side-foot">
+          <p id="asset-status" class="muted files-status" aria-live="polite"></p>
+        </div>
+      </section>
+      <section id="side-vram" class="side-sect" aria-labelledby="vram-head">
+        <div class="side-head">
+          <h2 id="vram-head"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 12h18M12 5v14"/></svg>Video memory</h2>
+        </div>
+        <button id="vram-open" class="vram-thumb" type="button" title="Every TIM in the project, where its header puts it; open the map to move one">
+          <canvas id="vram-thumb" width="1024" height="512" aria-hidden="true"></canvas>
+        </button>
+      </section>
+    </aside>
+
     <section class="pg-code" aria-label="Program">
       <div class="tabs pg-files">
-        <div id="file-tabs" role="tablist" aria-label="Go files"></div>
-        <button id="file-add" class="small-button file-add" type="button" title="Add a Go file, a scene, or files from this computer" aria-label="Add to the project">+</button>
+        <div id="file-tabs" role="tablist" aria-label="Open files"></div>
         <span id="save-status" class="status" aria-live="polite"></span>
       </div>
       <div id="editors" class="pg-editors">
-        <div id="files-pane" class="files" hidden>
-          <div class="files-tree">
-            <div class="files-bar">
-              <button id="add-assets" class="small-button" type="button" title="Add a Go file, a scene, or files from this computer: pictures, models and sounds under art/, to be converted, and anything else under data/">New…</button>
-              <input id="asset-files" type="file" multiple hidden>
-              <select id="example-data" aria-label="Add an example's data files" disabled>
-                <option value="">Add an example's data…</option>
-              </select>
-            </div>
-            <ul id="file-tree" role="tree" aria-label="The project's files"></ul>
-            <p id="asset-status" class="muted files-status" aria-live="polite">Pictures, models and sounds dropped on the page go under art/ to be converted; anything else under data/.</p>
+        <p id="pg-empty" class="pg-empty muted" hidden>Open a scene or a file from the left.</p>
+        <div id="view-pane" class="view" hidden>
+          <div class="pg-preview-head">
+            <span id="preview-title"></span>
+            <select id="preview-object" aria-label="Which object of the model" hidden></select>
+            <select id="preview-row" aria-label="Which palette" hidden></select>
+            <button id="preview-in-vram" class="small-button" type="button" hidden title="The map of video memory, with this picture marked">Show in video memory</button>
           </div>
-          <div class="files-view">
-            <div class="pg-preview-head">
-              <span id="preview-title"></span>
-              <select id="preview-object" aria-label="Which object of the model" hidden></select>
-              <select id="preview-row" aria-label="Which palette" hidden></select>
-            </div>
-            <canvas id="preview-canvas" width="1" height="1"></canvas>
-            <form id="source-options" class="pg-options" hidden></form>
-            <p id="preview-info" class="muted"></p>
-            <table id="preview-table" class="preview-table" hidden><thead><tr><th>Entry</th><th>Size</th><th>Held</th><th></th></tr></thead><tbody></tbody></table>
-            <canvas id="preview-vram" class="vram" width="1024" height="512" aria-label="Video memory, with this picture marked; drag a block to move it" hidden></canvas>
-          </div>
+          <canvas id="preview-canvas" width="1" height="1"></canvas>
+          <form id="source-options" class="pg-options" hidden></form>
+          <p id="preview-info" class="muted"></p>
+          <table id="preview-table" class="preview-table" hidden><thead><tr><th>Entry</th><th>Size</th><th>Held</th><th></th></tr></thead><tbody></tbody></table>
         </div>
         <div id="scene-pane" class="scene" hidden>
           <div class="scene-bar">
@@ -108,7 +130,6 @@
           </div>
           <div class="scene-main">
             <div class="scene-side">
-              <select id="scene-pick" aria-label="Which scene" title="The scene being placed; the program loads whichever it likes, and the + menu adds one"></select>
               <input id="scene-search" type="search" placeholder="Find" aria-label="Find in the scene">
               <ul id="scene-outline" class="scene-outline" role="listbox" aria-label="What the scene holds"></ul>
             </div>
@@ -203,6 +224,15 @@
     </section>
   </main>
 
+  <dialog id="vram-dialog" class="vram-dialog" aria-labelledby="vram-title">
+    <div class="vram-head">
+      <h2 id="vram-title">Video memory</h2>
+      <button id="vram-close" type="button" aria-label="Close" title="Close (Escape)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12m0-12L6 18"/></svg></button>
+    </div>
+    <canvas id="vram-canvas" width="1024" height="512" aria-label="Video memory, with every TIM where its header puts it; drag a block to move it"></canvas>
+    <p id="vram-info" class="muted"></p>
+  </dialog>
+
   <script src="app.js"></script>
   <script src="editor.js"></script>
   <script src="project.js"></script>
@@ -210,7 +240,7 @@
   <script src="inspect.js"></script>
   <script src="convert.js"></script>
   <script src="scene-tab.js"></script>
-  <script src="files-tab.js"></script>
+  <script src="sidebar.js"></script>
   <script src="files.js"></script>
   <script src="playground.js"></script>
 </body>

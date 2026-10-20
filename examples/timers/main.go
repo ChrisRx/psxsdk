@@ -33,8 +33,8 @@
 package main
 
 //go:generate go run ./gen gen/ball.png
-//go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 640,0 --clut 0,481 -o data/BALL.TIM gen/ball.png
-//go:generate go run go.chrisrx.dev/psx/tools/discgen data
+//go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 640,0 --clut 0,481 -o assets/BALL.TIM gen/ball.png
+//go:generate go run go.chrisrx.dev/psx/tools/discgen assets
 
 import (
 	"go.chrisrx.dev/psx/disc"

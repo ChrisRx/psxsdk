@@ -10,6 +10,7 @@ import (
 	"go/printer"
 	"go/token"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -32,29 +33,19 @@ type APIField struct {
 	Type string `json:"type"`
 }
 
-// writeAPI writes the exported names of the package in dir, as built for
-// the Net Yaroze, to out as JSON, for the playground's completion.
-func writeAPI(dir, out string) error {
-	ctx := build.Default
-	ctx.BuildTags = []string{"yaroze"}
-	bp, err := ctx.ImportDir(dir, 0)
-	if err != nil {
-		return err
-	}
-	fset := token.NewFileSet()
-	var files []*ast.File
-	for _, name := range bp.GoFiles {
-		f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.ParseComments)
+// writeAPI writes the exported names of the packages in dirs, as built for
+// the Net Yaroze, to out as JSON, keyed by import path, for the
+// playground's completion and its hover.
+func writeAPI(dirs []string, out string) error {
+	api := map[string][]APIEntry{}
+	for _, dir := range dirs {
+		path, entries, err := packageAPI(dir)
 		if err != nil {
 			return err
 		}
-		files = append(files, f)
+		api[path] = entries
 	}
-	pkg, err := doc.NewFromFiles(fset, files, bp.ImportPath)
-	if err != nil {
-		return err
-	}
-	data, err := json.Marshal(apiEntries(fset, pkg))
+	data, err := json.Marshal(api)
 	if err != nil {
 		return err
 	}
@@ -62,6 +53,58 @@ func writeAPI(dir, out string) error {
 		return err
 	}
 	return os.WriteFile(out, data, 0o644)
+}
+
+// packageAPI reads the package in dir and returns its import path and its
+// exported names.
+func packageAPI(dir string) (string, []APIEntry, error) {
+	ctx := build.Default
+	ctx.BuildTags = []string{"yaroze"}
+	bp, err := ctx.ImportDir(dir, 0)
+	if err != nil {
+		return "", nil, err
+	}
+	fset := token.NewFileSet()
+	var files []*ast.File
+	for _, name := range bp.GoFiles {
+		f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.ParseComments)
+		if err != nil {
+			return "", nil, err
+		}
+		files = append(files, f)
+	}
+	path := importPath(dir, bp.ImportPath)
+	pkg, err := doc.NewFromFiles(fset, files, path)
+	if err != nil {
+		return "", nil, err
+	}
+	return path, apiEntries(fset, pkg), nil
+}
+
+// importPath is the import path of the package in dir by the go.mod above
+// it, which go/build does not read, or fallback when there is none.
+func importPath(dir, fallback string) string {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return fallback
+	}
+	for root := abs; ; root = filepath.Dir(root) {
+		data, err := os.ReadFile(filepath.Join(root, "go.mod"))
+		if err == nil {
+			for _, line := range strings.Split(string(data), "\n") {
+				if mod, ok := strings.CutPrefix(strings.TrimSpace(line), "module "); ok {
+					rel, err := filepath.Rel(root, abs)
+					if err != nil {
+						return fallback
+					}
+					return path.Join(strings.TrimSpace(mod), filepath.ToSlash(rel))
+				}
+			}
+		}
+		if filepath.Dir(root) == root {
+			return fallback
+		}
+	}
 }
 
 // apiEntries lists a package's exported names in the order go/doc sorts

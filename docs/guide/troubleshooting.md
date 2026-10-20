@@ -9,7 +9,7 @@ Most of what goes wrong in a PlayStation program goes wrong in one of a few ways
 ## Nothing on the screen
 
 - **The program stopped before its frame loop.** Run it in `psxemu`, which prints what it writes: a Go panic says what it was there, and a file that could not be read is whatever `disc.LoadAll` returned.
-- **A file is not on the disc.** [`discgen`](../tools/discgen.md) declares the files that were under `data/` when it last ran. Run `go generate` again after adding one, and `dumpsxiso` lists what the disc holds.
+- **A file is not on the disc.** [`discgen`](../tools/discgen.md) declares the files that were under `assets/` when it last ran. Run `go generate` again after adding one, and `dumpsxiso` lists what the disc holds.
 - **The frame loop never draws.** Everything has to be sorted into the table `Frames` gives, inside the loop.
 
 ## A sprite is missing

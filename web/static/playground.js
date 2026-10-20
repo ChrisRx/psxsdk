@@ -1,5 +1,5 @@
 // The playground: a project (project.js), its Go files in the editor and
-// its data files beside them (files.js, files-tab.js), built by the compiler
+// its data files beside them (files.js, sidebar.js), built by the compiler
 // running in compile-worker.js, and booted like an example by app.js, with
 // the compiler's output and the emulator's beside the picture.
 //
@@ -278,9 +278,9 @@ document.querySelector(".screen").addEventListener("pointerdown", (e) => {
 });
 
 // Ctrl+Enter runs, and Ctrl+Shift+F formats, from anywhere on the page,
-// not only the editor. Ctrl+Z and Ctrl+Y go to the Scene tab's history
+// not only the editor. Ctrl+Z and Ctrl+Y go to the scene editor's history
 // while it shows and the keys are not in a text field, and Ctrl+Z puts
-// back what the Files tab removed.
+// back what the sidebar removed.
 addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey) || e.defaultPrevented) return;
   if (e.key === "Enter") {
@@ -293,15 +293,15 @@ addEventListener("keydown", (e) => {
     if (sceneTab.shown()) {
       e.preventDefault();
       if (e.key === "y" || e.key === "Y" || e.shiftKey) sceneTab.redo(); else sceneTab.undo();
-    } else if (filesTab.shown() && filesTab.canUndo() && (e.key === "z" || e.key === "Z")) {
+    } else if (sidebar.canUndo() && (e.key === "z" || e.key === "Z")) {
       e.preventDefault();
-      filesTab.undoRemove();
+      sidebar.undoRemove();
     }
   }
 });
 
 // The live pill by Run: lit while the program running is this project's,
-// whose scene then follows the Scene tab without a rebuild.
+// whose scene then follows the scene editor without a rebuild.
 const livePill = $("live-pill");
 function updateLivePill() {
   const mine = state.current?.id && state.current.id === projects.current?.id;
@@ -326,7 +326,7 @@ const themeButton = $("theme");
 function showTheme() {
   const dark = document.documentElement.dataset.theme !== "light";
   themeButton.setAttribute("aria-pressed", String(dark));
-  themeButton.textContent = dark ? "Dark" : "Light";
+  themeButton.title = dark ? "Switch to the grey PlayStation" : "Switch to the black Net Yaroze";
   for (const meta of document.querySelectorAll('meta[name="theme-color"]')) meta.content = dark ? "#1b1b1e" : "#e3e2dd";
 }
 themeButton.addEventListener("click", () => {
@@ -344,7 +344,7 @@ const split = $("split");
 const SIDE = "playground-side";
 
 function setSide(px) {
-  const max = pg.clientWidth - 320;
+  const max = pg.clientWidth - (pg.querySelector(".pg-bar")?.offsetWidth ?? 0) - 320;
   const width = Math.round(Math.max(300, Math.min(px, max)));
   pg.style.setProperty("--side", `${width}px`);
   return width;

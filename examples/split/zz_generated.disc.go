@@ -6,11 +6,11 @@ import (
 	"go.chrisrx.dev/psx/disc"
 )
 
-// The files under data, placed on the disc under DATA.
+// The files under assets, placed on the disc under ASSETS.
 var (
-	cubeTMD    = disc.Register("DATA/CUBE.TMD", "data/CUBE.TMD")
-	cubetexTMD = disc.Register("DATA/CUBETEX.TMD", "data/CUBETEX.TMD")
-	stone02TIM = disc.Register("DATA/STONE02.TIM", "data/STONE02.TIM")
+	cubeTMD    = disc.Register("ASSETS/CUBE.TMD", "assets/CUBE.TMD")
+	cubetexTMD = disc.Register("ASSETS/CUBETEX.TMD", "assets/CUBETEX.TMD")
+	stone02TIM = disc.Register("ASSETS/STONE02.TIM", "assets/STONE02.TIM")
 )
 
 // files is every file above, in the order disc.LoadAll reads them.

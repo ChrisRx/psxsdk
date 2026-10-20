@@ -8,17 +8,19 @@ weight: 14
 It is meant for `go:generate`, in the program's package:
 
 ```go
-//go:generate go run go.chrisrx.dev/psx/tools/discgen data
+//go:generate go run go.chrisrx.dev/psx/tools/discgen assets
 ```
 
 The [playground](/play/) runs it too, before each build, for a program with that line, over the data files beside it, so a program there names its files without declaring them; the square example, which the playground starts from, does.
 
-For `data/CUBE.TIM` and `data/CUBE.TMD` that writes `zz_generated.disc.go`:
+The sources the converters read lie in the same directory and are left off the disc: pictures, models, sounds and scores by their extension, and any file a `go:generate` line of the package reads.
+
+For `assets/CUBE.TIM` and `assets/CUBE.TMD` that writes `zz_generated.disc.go`:
 
 ```go
 var (
-	cubeTIM = disc.Register("DATA/CUBE.TIM", "data/CUBE.TIM")
-	cubeTMD = disc.Register("DATA/CUBE.TMD", "data/CUBE.TMD")
+	cubeTIM = disc.Register("ASSETS/CUBE.TIM", "assets/CUBE.TIM")
+	cubeTMD = disc.Register("ASSETS/CUBE.TMD", "assets/CUBE.TMD")
 )
 
 var files = []*disc.File{
@@ -41,7 +43,7 @@ With `--into` it declares the memory as well, for a program that wants to see it
 ```go
 var (
 	cubeTMDData [512]uint32 // 344 bytes
-	cubeTMDFile = disc.Register("DATA/CUBE.TMD", "data/CUBE.TMD").Into(cubeTMDData[:])
+	cubeTMDFile = disc.Register("ASSETS/CUBE.TMD", "assets/CUBE.TMD").Into(cubeTMDData[:])
 	cubeTMD     = yaroze.TMD(cubeTMDData[:])
 )
 ```

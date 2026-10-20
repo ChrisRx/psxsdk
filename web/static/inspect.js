@@ -1,21 +1,26 @@
-// The preview beside the Files tab's tree: one TIM through its palette,
-// with the map of video memory under it showing where it sits; one TMD
-// turning as the console would draw it; a source under art/ with its
-// converter's options; or the whole map of video memory with every TIM in
-// the project where its header puts it. A block on the map is dragged
-// into place. preview.js reads and draws; this is the panel.
+// The viewer in the main panel: one TIM through its palette, with a
+// button to its place on the map of video memory; one TMD turning as the
+// console would draw it; a source under assets/ with its converter's options;
+// an archive's table, or what else is known of a file. Video memory, with
+// every TIM in the project where its header puts it, is drawn small in the
+// sidebar and large in a dialog, where a block is dragged into place.
+// preview.js reads and draws; this is the panel.
 "use strict";
 
 const inspect = (() => {
   const canvas = $("preview-canvas");
   const ctx = canvas.getContext("2d");
-  const vramCanvas = $("preview-vram");
+  const inVRAM = $("preview-in-vram");
+  const dialog = $("vram-dialog");
+  const vramCanvas = $("vram-canvas");
+  const vramInfo = $("vram-info");
+  const thumb = $("vram-thumb");
   const title = $("preview-title");
   const info = $("preview-info");
   const objectSelect = $("preview-object");
   const rowSelect = $("preview-row");
 
-  let shown = null; // {kind: "tim" | "tmd" | "vram", path}
+  let shown = null; // {kind: "tim" | "tmd" | "source", path}
   let frame = 0;    // the animation frame requested, while a model turns
   const angle = { ry: 0.6, rx: 0.35 };
   let turning = true;
@@ -61,21 +66,21 @@ const inspect = (() => {
 
   function hex(n) { return "0x" + n.toString(16); }
 
-  // show opens the preview of a file, or of video memory for "vram", or
-  // the options of a source under art/.
+  // show opens the preview of a file, or the options of a source under
+  // assets/.
   function show(path) {
-    const kind = path === "vram" ? "vram" : isTIM(path) ? "tim" : isTMD(path) ? "tmd" : path.startsWith("art/") ? "source" : null;
+    const kind = isTIM(path) ? "tim" : isTMD(path) ? "tmd" : isSourceFile(path) ? "source" : null;
     if (!kind) {
       // A file with nothing to draw: what it is and how big.
       hide();
       const data = project()?.get(path);
       if (!data) return;
       title.textContent = path;
-      canvas.hidden = vramCanvas.hidden = form.hidden = true;
+      canvas.hidden = form.hidden = inVRAM.hidden = true;
       objectSelect.hidden = rowSelect.hidden = true;
       const ext = path.replace(/^.*\./, "").toUpperCase();
       const what = { SEQ: "a score for the sound library, played through a bank", VH: "the header of a sound bank, loaded with its VB", VB: "the samples of a sound bank, loaded with its VH", VAB: "a sound bank, header and samples together", VAG: "one sound, for a bank", DAT: "a data file the program reads as it likes", GO: "Go source", JSON: "JSON", ARC: "an archive, read with package arc" }[ext];
-      info.textContent = `${formatSize(data.length)}${what ? `: ${what}` : ""}.${path.startsWith("data/") ? " On the disc as it is." : ""}`;
+      info.textContent = `${formatSize(data.length)}${what ? `: ${what}` : ""}.${path.startsWith("assets/") ? " On the disc as it is." : ""}`;
       table.hidden = ext !== "ARC";
       if (ext === "ARC") renderArchive(data);
       return;
@@ -87,7 +92,7 @@ const inspect = (() => {
     canvas.className = kind;
     form.hidden = kind !== "source";
     canvas.hidden = false;
-    vramCanvas.hidden = kind !== "tim";
+    inVRAM.hidden = kind !== "tim";
     selectedPath = kind === "tim" ? path : null;
     render();
   }
@@ -102,8 +107,7 @@ const inspect = (() => {
     if (!shown) return;
     if (shown.kind === "tim") renderTIM();
     else if (shown.kind === "tmd") renderTMD();
-    else if (shown.kind === "source") renderSource();
-    else renderVRAM();
+    else renderSource();
   }
 
   // An archive: its table, each entry with how it is held.
@@ -191,7 +195,6 @@ const inspect = (() => {
       `texture page ${hex(preview.tpage(tim))}${tim.clut ? `, palette ${hex(preview.cba(tim))}` : ""}, U ${u} V ${v}`,
     ];
     info.textContent = parts.join(". ") + ".";
-    renderVRAM(vramCanvas);
   }
 
   // A TMD: drawn at 320 by 240, turning, textured from the project's TIMs.
@@ -219,7 +222,7 @@ const inspect = (() => {
     const drawn = preview.renderModel(img, o, v, angle.ry, angle.rx);
     ctx.putImageData(img, 0, 0);
     const textured = preview.polygons(o).filter((p) => p.texture).length;
-    info.textContent = `${s.objects} object${s.objects === 1 ? "" : "s"}, ${s.verts} vertices, ${s.polys} polygons${s.lines ? `, ${s.lines} lines` : ""}${textured ? `; ${textured} textured, from the TIMs in data/` : ""}. ${drawn} facing the camera. Drag to turn it.`;
+    info.textContent = `${s.objects} object${s.objects === 1 ? "" : "s"}, ${s.verts} vertices, ${s.polys} polygons${s.lines ? `, ${s.lines} lines` : ""}${textured ? `; ${textured} textured, from the TIMs in assets/` : ""}. ${drawn} facing the camera. Drag to turn it.`;
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(turn);
   }
@@ -227,7 +230,7 @@ const inspect = (() => {
   let last = 0;
   function turn(now) {
     frame = 0;
-    if (!shown || shown.kind !== "tmd" || !filesTab.shown() || document.hidden) return;
+    if (!shown || shown.kind !== "tmd" || document.hidden) return;
     if (turning && now - last > 40) {
       last = now;
       angle.ry += 0.02;
@@ -258,25 +261,18 @@ const inspect = (() => {
       };
       canvas.addEventListener("pointermove", move);
       canvas.addEventListener("pointerup", up);
-      return;
     }
-    if (shown?.kind === "vram") dragVRAM(e, canvas);
   });
-  vramCanvas.addEventListener("pointerdown", (e) => dragVRAM(e, vramCanvas));
+  // The TIM shown stays marked on the map.
+  inVRAM.addEventListener("click", showVRAM);
 
   // Video memory: 1024 by 512 units, each a pixel here, with the display
   // buffers a 320 by 240 program uses marked, and every block of every TIM
   // drawn where it is. A block is dragged to move it, which rewrites the
   // TIM's header.
   let placed = []; // the blocks drawn, in drawing order
-  function renderVRAM(target = canvas) {
+  function renderVRAM(target) {
     const ctx = target.getContext("2d");
-    if (target === canvas) {
-      title.textContent = "Video memory";
-      canvas.width = 1024;
-      canvas.height = 512;
-      canvas.style.width = "";
-    }
     const v = vram();
     placed = v.placed;
     ctx.fillStyle = "#101012";
@@ -319,14 +315,29 @@ const inspect = (() => {
       ctx.strokeStyle = over ? "#f26670" : selected ? "#8fa8ff" : kind === "clut" ? "#c2a6ff" : "#9ad48c";
       ctx.strokeRect(block.x + 0.5, block.y + 0.5, Math.max(1, block.w - 1), Math.max(1, block.h - 1));
     }
-    if (target !== canvas) return;
-    if (!placed.length) info.textContent = "No TIM in data/ yet. Add one and it is drawn here where its header puts it; drag it to move it.";
-    else if (!hovered) info.textContent = `${tims().length} TIM${tims().length === 1 ? "" : "s"}. Green is a picture, purple its palette, red one over a display buffer. Drag a block to move it; a model textured from it then needs its texture page and palette changed to match.`;
+    if (target !== vramCanvas) return;
+    if (!placed.length) vramInfo.textContent = "No TIM in assets/ yet. Add one and it is drawn here where its header puts it; drag it to move it.";
+    else if (!hovered) vramInfo.textContent = `${tims().length} TIM${tims().length === 1 ? "" : "s"}. Green is a picture, purple its palette, red one over a display buffer. Drag a block to move it; a model textured from it then needs its texture page and palette changed to match.`;
   }
   let selectedPath = null;
   let hovered = null;
 
-  function blockAt(e, target = canvas) {
+  // renderMap draws the map small in the sidebar, and large in the dialog
+  // while that is open.
+  function renderMap() {
+    renderVRAM(thumb);
+    if (dialog.open) renderVRAM(vramCanvas);
+  }
+  // showVRAM opens the dialog over the page.
+  function showVRAM() {
+    if (!dialog.open) dialog.showModal();
+    hovered = null;
+    renderVRAM(vramCanvas);
+  }
+  $("vram-open").addEventListener("click", showVRAM);
+  $("vram-close").addEventListener("click", () => dialog.close());
+
+  function blockAt(e, target = vramCanvas) {
     const r = target.getBoundingClientRect();
     const x = (e.clientX - r.left) * target.width / r.width;
     const y = (e.clientY - r.top) * target.height / r.height;
@@ -337,27 +348,25 @@ const inspect = (() => {
     return { entry: null, x, y };
   }
 
-  for (const target of [canvas, vramCanvas]) {
-    target.addEventListener("pointermove", (e) => {
-      if (dragging || (target === canvas && shown?.kind !== "vram")) return;
-      const { entry, x, y } = blockAt(e, target);
-      hovered = entry;
-      target.style.cursor = entry ? "grab" : "";
-      if (target !== canvas) return;
-      if (entry) {
-        const b = entry.block;
-        info.textContent = `${entry.path}: ${entry.kind === "clut" ? "palette" : "picture"}, ${b.w} by ${b.h} units at ${b.x}, ${b.y}.`;
-      } else {
-        info.textContent = `${Math.floor(x)}, ${Math.floor(y)}`;
-      }
-    });
-    target.addEventListener("pointerleave", () => {
-      if (!dragging && (target !== canvas || shown?.kind === "vram")) {
-        hovered = null;
-        renderVRAM(target);
-      }
-    });
-  }
+  vramCanvas.addEventListener("pointermove", (e) => {
+    if (dragging) return;
+    const { entry, x, y } = blockAt(e);
+    hovered = entry;
+    vramCanvas.style.cursor = entry ? "grab" : "";
+    if (entry) {
+      const b = entry.block;
+      vramInfo.textContent = `${entry.path}: ${entry.kind === "clut" ? "palette" : "picture"}, ${b.w} by ${b.h} units at ${b.x}, ${b.y}.`;
+    } else {
+      vramInfo.textContent = `${Math.floor(x)}, ${Math.floor(y)}`;
+    }
+  });
+  vramCanvas.addEventListener("pointerleave", () => {
+    if (!dragging) {
+      hovered = null;
+      renderVRAM(vramCanvas);
+    }
+  });
+  vramCanvas.addEventListener("pointerdown", (e) => dragVRAM(e, vramCanvas));
 
   let dragging = null;
   function dragVRAM(e, target) {
@@ -366,7 +375,7 @@ const inspect = (() => {
     target.setPointerCapture(e.pointerId);
     const b = entry.block;
     dragging = { entry, ox: b.x, oy: b.y, sx: x, sy: y };
-    if (target === canvas) selectedPath = entry.path;
+    selectedPath = entry.path;
     target.style.cursor = "grabbing";
     const move = (ev) => {
       const r = target.getBoundingClientRect();
@@ -379,7 +388,7 @@ const inspect = (() => {
       b.x = Math.max(0, Math.min(1024 - b.w, nx));
       b.y = Math.max(0, Math.min(512 - b.h, ny));
       renderVRAM(target);
-      info.textContent = `${entry.path}: ${entry.kind === "clut" ? "palette" : "picture"} to ${b.x}, ${b.y}.`;
+      vramInfo.textContent = `${entry.path}: ${entry.kind === "clut" ? "palette" : "picture"} to ${b.x}, ${b.y}.`;
     };
     const up = () => {
       target.removeEventListener("pointermove", move);
@@ -393,6 +402,7 @@ const inspect = (() => {
         const bytes = preview.moveTIM(project().get(entry.path), b, b.x, b.y);
         project().set(entry.path, bytes, "vram");
       }
+      renderMap();
       render();
     };
     target.addEventListener("pointermove", move);
@@ -403,23 +413,28 @@ const inspect = (() => {
   rowSelect.addEventListener("change", render);
   document.addEventListener("visibilitychange", () => { if (!document.hidden && shown?.kind === "tmd" && !frame) frame = requestAnimationFrame(turn); });
 
-  projectEvents.addEventListener("open", hide);
+  projectEvents.addEventListener("open", () => {
+    hide();
+    renderMap();
+  });
   projectEvents.addEventListener("files", () => {
+    renderMap();
     if (!shown) return;
-    if (shown.kind !== "vram" && !project()?.has(shown.path)) hide();
+    if (!project()?.has(shown.path)) hide();
     else render();
   });
   projectEvents.addEventListener("change", ({ detail: { path, source } }) => {
+    const onDisc = path.startsWith("assets/") || path.startsWith("pack/");
+    if (onDisc && isTIM(path) && source !== "vram") renderMap();
     if (!shown) return;
     if (shown.kind === "source") {
-      // The options come from the Go file's lines; the picture from art/.
+      // The options come from the Go file's lines; the picture from assets/.
       if (path === shown.path || (path.endsWith(".go") && source !== "editor")) render();
       return;
     }
-    if (!path.startsWith("data/")) return;
+    if (!onDisc) return;
     if (shown.kind === "tim" && path === shown.path) render();
     else if (shown.kind === "tmd" && (path === shown.path || isTIM(path))) render();
-    else if (shown.kind === "vram" && isTIM(path) && source !== "vram") render();
   });
 
   // Typing a line by hand in the editor changes the options too, once the
@@ -431,10 +446,5 @@ const inspect = (() => {
     typed = setTimeout(render, 800);
   });
 
-  // resume restarts a model's turning once the tab shows again.
-  function resume() {
-    if (shown?.kind === "tmd" && !frame) frame = requestAnimationFrame(turn);
-  }
-
-  return { show, hide, resume, shown: () => shown, isTIM, isTMD };
+  return { show, hide, showVRAM, shown: () => shown, isTIM, isTMD };
 })();
