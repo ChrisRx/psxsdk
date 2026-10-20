@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	"io/fs"
 	"os"
 	"time"
 
@@ -19,10 +18,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"go.chrisrx.dev/psx/binutils"
 	"go.chrisrx.dev/psx/emu"
 	"go.chrisrx.dev/psx/emu/openbios"
 	"go.chrisrx.dev/psx/format/psx"
+	"go.chrisrx.dev/psx/internal/flags"
 )
 
 // frameBudget bounds the instructions a tick runs looking for a vertical
@@ -41,15 +40,15 @@ const sampleRate = 44100
 
 // Options say what to run and how.
 type Options struct {
-	Disc  string   // the cue sheet of a disc to put in the drive, or empty for none
-	BIOS  string   // a BIOS image to boot instead of the OpenBIOS built in
-	EXE   string   // a PSX-EXE to load when the BIOS reaches its shell
-	Card  string   // a memory card image for slot 1
-	Scale int      // the window's initial size, as a multiple of 320x240
-	Mute  bool     // leave the sound off
-	Fast  bool     // run as fast as the host allows, showing nothing, until the first picture
-	Loads []string // file@addr: files to copy into RAM, with EXE
-	Title string   // the window's title, psxplay and what it runs if empty
+	Disc  string      // the cue sheet of a disc to put in the drive, or empty for none
+	BIOS  string      // a BIOS image to boot instead of the OpenBIOS built in
+	EXE   string      // a PSX-EXE to load when the BIOS reaches its shell
+	Card  string      // a memory card image for slot 1
+	Scale int         // the window's initial size, as a multiple of 320x240
+	Mute  bool        // leave the sound off
+	Fast  bool        // run as fast as the host allows, showing nothing, until the first picture
+	Loads flags.Loads // files to copy into RAM, with EXE
+	Title string      // the window's title, psxplay and what it runs if empty
 }
 
 // Keys is the help on the keyboard and the gamepad, for a command's long
@@ -70,7 +69,7 @@ func (o *Options) AddFlags(fs *pflag.FlagSet, exe bool) {
 	fs.StringVar(&o.BIOS, "bios", "", "BIOS image to boot instead of the OpenBIOS built in")
 	if exe {
 		fs.StringVar(&o.EXE, "exe", "", "PSX-EXE to load when the BIOS reaches its shell, as psxe -x does")
-		fs.StringArrayVar(&o.Loads, "load", nil, "file@addr: copy a file into RAM at a hexadecimal address, with --exe, as siocons' local dload did")
+		fs.Var(&o.Loads, "load", "file@addr: copy a file into RAM at a hexadecimal address, with --exe, as siocons' local dload did")
 	}
 	fs.StringVar(&o.Card, "card", "", "memory card image for slot 1, made blank if it does not exist, and written back on exit")
 	fs.IntVar(&o.Scale, "scale", 2, "the window's initial size, as a multiple of 320x240")
@@ -132,14 +131,7 @@ func Run(opts Options) error {
 
 	var card *emu.MemoryCard
 	if opts.Card != "" {
-		data, err := os.ReadFile(opts.Card)
-		if errors.Is(err, fs.ErrNotExist) {
-			data, err = nil, nil
-		}
-		if err != nil {
-			return err
-		}
-		if card, err = emu.NewMemoryCard(data); err != nil {
+		if card, err = emu.OpenMemoryCard(opts.Card); err != nil {
 			return err
 		}
 		m.InsertCard(1, card)
@@ -153,11 +145,7 @@ func Run(opts Options) error {
 		if err := m.SideloadEXE(exe, bootBudget); err != nil {
 			return err
 		}
-		for _, spec := range opts.Loads {
-			l, err := binutils.ParseLoad(spec)
-			if err != nil {
-				return err
-			}
+		for _, l := range opts.Loads {
 			if err := m.LoadRAM(l.Addr, l.Data); err != nil {
 				return err
 			}

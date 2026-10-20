@@ -92,7 +92,7 @@ var opts = struct {
 	Examples: "examples",
 	Static:   "web/static",
 	Starters: "square,scene",
-	API:      "yaroze,scene,disc,arc",
+	API:      "yaroze,scene,disc,archive",
 	Out:      ".build/site",
 	Repo:     "https://github.com/ChrisRx/psxsdk",
 	Name:     "psxsdk",

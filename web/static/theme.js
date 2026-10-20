@@ -1,8 +1,9 @@
-// The theme switch in the header: light, the grey PlayStation, or dark, the
-// black Net Yaroze. The page follows the system's color scheme until the
-// visitor chooses, and the choice is kept under the playground's key, so
-// that the site and the playground share it. The page's head sets
-// data-theme from it before the first paint.
+// The theme switch in the header of the documentation and the playground:
+// light, the grey PlayStation, or dark, the black Net Yaroze. The choice is
+// kept under one key, so that the two share it, and each page's head sets
+// data-theme from it before the first paint. Until the visitor chooses, the
+// documentation follows the system's color scheme and the playground's head
+// makes it dark.
 "use strict";
 
 (() => {

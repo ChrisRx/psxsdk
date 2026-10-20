@@ -68,6 +68,19 @@ type Symbol struct {
 // functions, and the labels the Net Yaroze library's entry points are
 // declared as.
 func SymbolsFromELF(data []byte) ([]Symbol, error) {
+	return ELFSymbols(data, func(s elf.Symbol) bool {
+		typ := elf.ST_TYPE(s.Info)
+		if s.Value < 0x80000000 || (typ != elf.STT_FUNC && typ != elf.STT_NOTYPE) {
+			return false
+		}
+		// Leave out the local labels within functions.
+		return typ != elf.STT_NOTYPE || elf.ST_BIND(s.Info) != elf.STB_LOCAL
+	})
+}
+
+// ELFSymbols reads the named symbols of an ELF executable that keep
+// accepts, or all of them if keep is nil.
+func ELFSymbols(data []byte, keep func(elf.Symbol) bool) ([]Symbol, error) {
 	f, err := elf.NewFile(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -79,12 +92,8 @@ func SymbolsFromELF(data []byte) ([]Symbol, error) {
 	}
 	var out []Symbol
 	for _, s := range syms {
-		typ := elf.ST_TYPE(s.Info)
-		if s.Name == "" || s.Value < 0x80000000 || (typ != elf.STT_FUNC && typ != elf.STT_NOTYPE) {
+		if s.Name == "" || (keep != nil && !keep(s)) {
 			continue
-		}
-		if typ == elf.STT_NOTYPE && elf.ST_BIND(s.Info) == elf.STB_LOCAL {
-			continue // local labels within functions
 		}
 		out = append(out, Symbol{Name: s.Name, Addr: uint32(s.Value), Size: uint32(s.Size)})
 	}

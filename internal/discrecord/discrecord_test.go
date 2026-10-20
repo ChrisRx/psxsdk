@@ -1,6 +1,4 @@
-//go:build !yaroze
-
-package disc
+package discrecord
 
 import (
 	"encoding/binary"
@@ -46,7 +44,7 @@ func (im *image) into(name, src string, addr, n uint32) int {
 	nameAddr, srcAddr := im.str(name), im.str(src)
 	im.align()
 	off := len(im.data)
-	im.word(magic)
+	im.word(Magic)
 	im.word(nameAddr)
 	im.word(uint32(len(name)))
 	im.word(srcAddr)
@@ -66,7 +64,7 @@ func TestFind(t *testing.T) {
 
 	// The magic word followed by pointers that lead nowhere, as an
 	// instruction stream or the resident library might hold.
-	im.word(magic)
+	im.word(Magic)
 	im.word(0x12345678)
 	im.word(14)
 	im.word(0)
@@ -74,7 +72,7 @@ func TestFind(t *testing.T) {
 
 	// A name pointing at bytes that are not text.
 	bad := im.base + uint32(len(im.data))
-	im.word(magic)
+	im.word(Magic)
 	im.word(bad)
 	im.word(8)
 	im.word(bad)
@@ -86,7 +84,7 @@ func TestFind(t *testing.T) {
 	stone := im.into("DATA/STONE.TIM", "assets/stone.tim", 0x80150000, 2048)
 
 	// A record cut off by the end of the image is not one.
-	im.word(magic)
+	im.word(Magic)
 	im.word(im.base)
 	im.word(4)
 
@@ -108,10 +106,10 @@ func TestPatch(t *testing.T) {
 	recs := Find(im.data, im.base)
 	recs[0].Patch(im.data, 23, 4096)
 
-	assert.Equal(t, uint32(23), binary.LittleEndian.Uint32(im.data[off+offSector:]))
-	assert.Equal(t, uint32(4096), binary.LittleEndian.Uint32(im.data[off+offSize:]))
+	assert.Equal(t, uint32(23), binary.LittleEndian.Uint32(im.data[off+OffSector:]))
+	assert.Equal(t, uint32(4096), binary.LittleEndian.Uint32(im.data[off+OffSize:]))
 	// Only those two words changed.
-	assert.Equal(t, before[:off+offSector], im.data[:off+offSector])
+	assert.Equal(t, before[:off+OffSector], im.data[:off+OffSector])
 
 	// A patched record is still found, so an executable taken back off a
 	// disc can be placed on another.

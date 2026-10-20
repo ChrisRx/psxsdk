@@ -1,10 +1,3 @@
-// Package tests runs the example programs in the emulator.
-//
-// The programs are built with TinyGo onto disc images first, each into a
-// directory of its own under the one PSX_DISCS names, as task disc does
-// under .build. The tests are given that and a BIOS by environment variable;
-// without them they are skipped. task test:emu builds the discs and runs
-// them.
 package tests
 
 import (
@@ -18,21 +11,6 @@ import (
 	"go.chrisrx.dev/psx/emu"
 	"go.chrisrx.dev/psx/emu/emutest"
 )
-
-// disc returns the cue sheet of the named example's disc, or skips the
-// test if there is none.
-func disc(t *testing.T, name string) string {
-	t.Helper()
-	dir := os.Getenv("PSX_DISCS")
-	if dir == "" {
-		t.Skip("PSX_DISCS is not set")
-	}
-	path := filepath.Join(dir, name, name+".cue")
-	if _, err := os.Stat(path); err != nil {
-		t.Skipf("no disc for %s: %v", name, err)
-	}
-	return path
-}
 
 // TestCheckQuitReturnsToBIOS boots the check example and quits it with
 // Select, which returns from main. The program should come back to the BIOS

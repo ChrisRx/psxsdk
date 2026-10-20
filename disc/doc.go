@@ -32,25 +32,5 @@
 // The runtime half of the package is Register, the File it returns, and the
 // reads. It builds on a host too, where the yaroze package's functions are
 // stubs, so that a program using it type-checks there. The host half, which
-// builds under the ordinary Go toolchain, is what mkpsxiso uses to find and
-// patch the records.
+// finds and patches the records, is mkpsxiso's, in internal/discrecord.
 package disc
-
-// magic begins every record. Read as a little-endian word it is the bytes
-// "PSXD", which is how it looks in a hex dump of the executable.
-const magic = 0x44585350
-
-// The record is a File as TinyGo lays it out on a 32-bit target: the magic
-// word, the disc path and the host path each as a pointer and a length, the
-// sector and the length that mkpsxiso fills in, and the destination as a
-// slice, a pointer, a length and a capacity, all zero when there is none.
-// disc_yaroze.go asserts that the type matches.
-const (
-	recordSize = 40
-	offName    = 4
-	offSrc     = 12
-	offSector  = 20
-	offSize    = 24
-	offDst     = 28
-	offDstLen  = 32
-)

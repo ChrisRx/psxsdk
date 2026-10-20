@@ -65,7 +65,7 @@ const sidebar = (() => {
       // A packed file: the archive's declaration and how to reach it.
       const name = path.split("/")[1];
       const archive = convert.archiveOf(name);
-      return declaration(archive) + `// a, err := arc.Open(${varName(archive)}.Data())\n// e, ok := a.Lookup("${base(path).toUpperCase()}")\n// words, err := e.Load() // or e.Unpack(buf[:]), or e.Data() for a stored entry\n`;
+      return declaration(archive) + `// a, err := archive.Open(${varName(archive)}.Data())\n// e, ok := a.Lookup("${base(path).toUpperCase()}")\n// words, err := e.Load() // or e.Unpack(buf[:]), or e.Data() for a stored entry\n`;
     }
     return `var ${varName(path)} = disc.Register("${path.toUpperCase()}", "${path}")\n`;
   }
@@ -515,7 +515,7 @@ const sidebar = (() => {
       for (const name of [...new Set([...p.packs(), ...pending])].sort()) {
         items.push([`Pack into ${name}`, `Move the file under pack/${name}/, packed with the others there into ${convert.archiveOf(name)}`, () => dropped({ kind: "pack", path: `pack/${name}` }, r.path)]);
       }
-      items.push(["Pack into a new archive…", "Move the file under pack/NAME/, packed into assets/NAME.ARC by an mkarc line, which the program reads with package arc", () => dropped({ kind: "folder", path: "pack" }, r.path)]);
+      items.push(["Pack into a new archive…", "Move the file under pack/NAME/, packed into assets/NAME.ARC by an mkarc line, which the program reads with package archive", () => dropped({ kind: "folder", path: "pack" }, r.path)]);
     }
     items.push(["Download", "Save this file to this computer", () => files.download(r.path.replace(/^.*\//, ""), p.get(r.path))]);
     if (r.kind === "go") {

@@ -1,4 +1,4 @@
-package arc
+package archive
 
 import "unsafe"
 

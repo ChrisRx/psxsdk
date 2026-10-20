@@ -1,3 +1,6 @@
+// Command eco2exe makes a PSX-EXE of a Net Yaroze program, ECOFF or ELF,
+// with the startup stub and the Net Yaroze library combined in, so that it
+// boots without the Net Yaroze boot disc.
 package main
 
 import (
@@ -7,13 +10,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.chrisrx.dev/psx/binutils"
-	"go.chrisrx.dev/psx/yaroze"
+	"go.chrisrx.dev/psx/internal/flags"
+	"go.chrisrx.dev/psx/link"
 )
 
 var opts struct {
 	Patch bool
-	Loads []string
+	Loads flags.Loads
 }
 
 func NewEco2ExeCommand() *cobra.Command {
@@ -34,19 +37,11 @@ ran, so that a program written for the serial loader runs from a disc:
   eco2exe --load data1.arc@80090000 --load data2.arc@80098000 game.exe MAIN.EXE`,
 		Args: cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
-			input, err := binutils.LoadImage(args[0])
+			input, err := link.LoadImage(args[0])
 			if err != nil {
 				log.Fatal(err)
 			}
-			var loads []binutils.Load
-			for _, spec := range opts.Loads {
-				l, err := binutils.ParseLoad(spec)
-				if err != nil {
-					log.Fatal(err)
-				}
-				loads = append(loads, l)
-			}
-			exe, err := yaroze.Executable(input, opts.Patch, loads...)
+			exe, err := link.Executable(input, opts.Patch, opts.Loads...)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -58,7 +53,7 @@ ran, so that a program written for the serial loader runs from a disc:
 	}
 
 	cmd.PersistentFlags().BoolVarP(&opts.Patch, "patch", "p", true, "patch Net Yaroze executable")
-	cmd.PersistentFlags().StringArrayVar(&opts.Loads, "load", nil, "file@addr: put a file into the image at a hexadecimal address, as siocons' local dload did")
+	cmd.PersistentFlags().Var(&opts.Loads, "load", "file@addr: put a file into the image at a hexadecimal address, as siocons' local dload did")
 	return cmd
 }
 

@@ -76,12 +76,13 @@ tasks:
       - '{{.DIR}}/**/*'
       - 'yaroze/**/*.go'
       - 'disc/**/*.go'
+      - 'archive/**/*.go'
       - 'scene/**/*.go'
       - 'format/**/*.go'
       - 'examples/internal/**/*.go'
       - 'internal/**/*'
       - 'cmd/nyc/**/*.go'
-      - 'binutils/**/*.go'
+      - 'link/**/*'
       - 'tools/**/*.go'
       - go.mod
       - go.sum
@@ -212,7 +213,6 @@ tasks:
       - 'emu/**/*.go'
       - 'web/*.go'
       - 'format/**/*.go'
-      - 'binutils/**/*.go'
       - 'internal/**/*.go'
       - go.mod
       - go.sum
@@ -298,7 +298,8 @@ tasks:
       - 'format/**/*.go'
       - 'internal/**/*.go'
       - 'disc/**/*.go'
-      - 'binutils/**/*.go'
+      - 'archive/**/*.go'
+      - 'link/**/*'
       - go.mod
       - go.sum
     generates:
@@ -411,8 +412,6 @@ tasks:
     cmds:
       - mkdir -p tmp
       - defer: rm -rf tmp
-      - go run ./cmd/nyc build --opt=z -o tmp/prog.elf ./examples/check
+      - go run ./cmd/nyc disc --opt=z --elf tmp/prog.elf -o tmp/check.bin ./examples/check
       - mipsel-none-elf-size tmp/prog.elf
-      - go tool eco2exe tmp/prog.elf tmp/prog.exe
-      - go tool mkpsxiso -o tmp/check.bin --volume-id check.exe --boot MAIN.EXE --file MAIN.EXE=tmp/prog.exe --src examples/check
       - psxe -a -b emu/openbios/openbios.bin -L5 tmp/check.cue

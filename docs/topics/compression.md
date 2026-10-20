@@ -4,7 +4,7 @@ weight: 8
 description: Why the archives pack with deflate and nothing else: what the games of the time did and why, how the examples' data compresses under each scheme, and how fast each decoder runs on the console.
 ---
 
-The PlayStation's games packed their data, and most packed it with their own schemes, often several in one game. This page is the reasoning and the measurements behind the toolchain's choice of one: the archives [`mkarc`](../tools/mkarc.md) writes and package `arc` reads pack with deflate, the format of zip and gzip, and store what deflate cannot shrink. The benchmark that produced the numbers is `internal/compressbench`, run by `task bench:compress`, so that the question can be asked again when something changes.
+The PlayStation's games packed their data, and most packed it with their own schemes, often several in one game. This page is the reasoning and the measurements behind the toolchain's choice of one: the archives [`mkarc`](../tools/mkarc.md) writes and package `archive` reads pack with deflate, the format of zip and gzip, and store what deflate cannot shrink. The benchmark that produced the numbers is `internal/compressbench`, run by `task bench:compress`, so that the question can be asked again when something changes.
 
 ## What the games did, and why
 

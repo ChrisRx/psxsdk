@@ -2,8 +2,8 @@ package scene
 
 import (
 	"encoding/binary"
-	"go.chrisrx.dev/psx/arc"
-	farc "go.chrisrx.dev/psx/format/arc"
+	"go.chrisrx.dev/psx/archive"
+	farchive "go.chrisrx.dev/psx/format/archive"
 	"testing"
 
 	"go.chrisrx.dev/x/assert"
@@ -225,12 +225,12 @@ func TestArchive(t *testing.T) {
 	for i := range cube {
 		cube[i] = byte(i / 64)
 	}
-	packed, err := farc.Pack([]farc.Entry{
+	packed, err := farchive.Pack([]farchive.Entry{
 		{Name: "STONE.TIM", Data: stone, Store: true},
 		{Name: "CUBE.TMD", Data: cube},
 	})
 	assert.NoError(t, err)
-	a, err := arc.Open(words(packed))
+	a, err := archive.Open(words(packed))
 	assert.NoError(t, err)
 	src := NewArchive(a)
 

@@ -1,6 +1,7 @@
 package iso9660
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 	"strings"
@@ -84,7 +85,7 @@ func NewReader(br BlockReader) (*Reader, error) {
 		Preparer:    trimField(pvd[446:574]),
 		Application: trimField(pvd[574:702]),
 		Created:     parseDecDateTime(pvd[813:830]),
-		Blocks:      getLE32(pvd[80:]),
+		Blocks:      binary.LittleEndian.Uint32(pvd[80:]),
 		XA:          string(pvd[xaSignatureOffset:xaSignatureOffset+8]) == "CD-XA001",
 	}
 
@@ -262,8 +263,8 @@ func parseDirRecord(b []byte) *parsedRecord {
 	}
 	r := &parsedRecord{
 		id:    string(b[33 : 33+idLen]),
-		lba:   getLE32(b[2:]),
-		size:  getLE32(b[10:]),
+		lba:   binary.LittleEndian.Uint32(b[2:]),
+		size:  binary.LittleEndian.Uint32(b[10:]),
 		isDir: b[25]&fileFlagDirectory != 0,
 		mod:   parseDirDateTime(b[18:25]),
 	}
@@ -284,10 +285,6 @@ func parseDirRecord(b []byte) *parsedRecord {
 // trimField reads one of the descriptor's space padded text fields.
 func trimField(b []byte) string {
 	return strings.TrimRight(string(b), " \x00")
-}
-
-func getLE32(b []byte) uint32 {
-	return uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24
 }
 
 // parseDirDateTime reads the compact 7-byte form in a directory record. An

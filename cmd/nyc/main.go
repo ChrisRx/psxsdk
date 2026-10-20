@@ -8,8 +8,8 @@
 // A build is the steps that are tools of their own here, run in-process:
 // TinyGo compiles the package for the playstation-yaroze target, the trap
 // instructions LLVM leaves in that an R3000A cannot run are replaced with
-// nops (binutils.MIPS1Traps), the ELF becomes a PSX-EXE with the Net
-// Yaroze library combined in (yaroze.Executable), and for a disc mkpsxiso
+// nops (link.MIPS1Traps), the ELF becomes a PSX-EXE with the Net
+// Yaroze library combined in (link.Executable), and for a disc mkpsxiso
 // writes the image with the files the program registers with package disc.
 // Only the first step is outside nyc.
 //

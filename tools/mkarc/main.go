@@ -1,5 +1,5 @@
 // Command mkarc packs files into one archive for the disc, which a
-// program reads with package arc.
+// program reads with package archive.
 package main
 
 import (
@@ -12,8 +12,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.chrisrx.dev/psx/arc"
-	farc "go.chrisrx.dev/psx/format/arc"
+	"go.chrisrx.dev/psx/archive"
+	farchive "go.chrisrx.dev/psx/format/archive"
 )
 
 var opts struct {
@@ -28,7 +28,7 @@ func main() {
 		Short: "pack files into one archive for the disc",
 		Long: `mkarc packs the files named, and every file in each directory named,
 into one archive, which a program registers with package disc as one file
-and reads with package arc, unpacking the entries it wants into memory of
+and reads with package archive, unpacking the entries it wants into memory of
 its own. Each entry is packed with deflate, unless that would save less
 than a tenth of it, as it does a sound bank or a movie, when it is stored
 as it is and the program can use it where it lies.
@@ -90,16 +90,16 @@ func run(cmd *cobra.Command, args []string) error {
 	for _, s := range opts.Store {
 		store[strings.ToUpper(s)] = true
 	}
-	var entries []farc.Entry
+	var entries []farchive.Entry
 	for _, p := range paths {
 		data, err := os.ReadFile(p)
 		if err != nil {
 			return err
 		}
-		name := farc.Name(p)
-		entries = append(entries, farc.Entry{Name: name, Data: data, Store: store[name]})
+		name := farchive.Name(p)
+		entries = append(entries, farchive.Entry{Name: name, Data: data, Store: store[name]})
 	}
-	b, err := farc.Pack(entries)
+	b, err := farchive.Pack(entries)
 	if err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func run(cmd *cobra.Command, args []string) error {
 		if info, err := os.Stat(args[0]); err == nil && !info.IsDir() {
 			stem = strings.TrimSuffix(stem, filepath.Ext(stem))
 		}
-		out = filepath.Join("assets", strings.TrimSuffix(farc.Name(stem+".x"), ".X")+".ARC")
+		out = filepath.Join("assets", strings.TrimSuffix(farchive.Name(stem+".x"), ".X")+".ARC")
 	}
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return err
@@ -117,12 +117,12 @@ func run(cmd *cobra.Command, args []string) error {
 	if err := os.WriteFile(out, b, 0o644); err != nil {
 		return err
 	}
-	a, err := arc.OpenBytes(b)
+	a, err := archive.OpenBytes(b)
 	if err != nil {
 		return err
 	}
 	raw := 0
-	largest := arc.Entry{}
+	largest := archive.Entry{}
 	for i := 0; i < a.Len(); i++ {
 		e := a.At(i)
 		raw += e.Size
@@ -140,7 +140,7 @@ func list(p string) error {
 	if err != nil {
 		return err
 	}
-	a, err := arc.OpenBytes(b)
+	a, err := archive.OpenBytes(b)
 	if err != nil {
 		return fmt.Errorf("%s: %w", p, err)
 	}
@@ -153,11 +153,11 @@ func list(p string) error {
 	return nil
 }
 
-func printEntries(a arc.Archive) {
+func printEntries(a archive.Archive) {
 	for i := 0; i < a.Len(); i++ {
 		e := a.At(i)
 		how := "stored"
-		if e.Method == arc.Deflate {
+		if e.Method == archive.Deflate {
 			how = fmt.Sprintf("deflate, %d%%", pct(len(e.Packed()), e.Size))
 		}
 		fmt.Printf("  %-14s %8d bytes, %s\n", e.Name, e.Size, how)

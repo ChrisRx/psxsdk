@@ -79,7 +79,7 @@ const inspect = (() => {
       canvas.hidden = form.hidden = inVRAM.hidden = true;
       objectSelect.hidden = rowSelect.hidden = true;
       const ext = path.replace(/^.*\./, "").toUpperCase();
-      const what = { SEQ: "a score for the sound library, played through a bank", VH: "the header of a sound bank, loaded with its VB", VB: "the samples of a sound bank, loaded with its VH", VAB: "a sound bank, header and samples together", VAG: "one sound, for a bank", DAT: "a data file the program reads as it likes", GO: "Go source", JSON: "JSON", ARC: "an archive, read with package arc" }[ext];
+      const what = { SEQ: "a score for the sound library, played through a bank", VH: "the header of a sound bank, loaded with its VB", VB: "the samples of a sound bank, loaded with its VH", VAB: "a sound bank, header and samples together", VAG: "one sound, for a bank", DAT: "a data file the program reads as it likes", GO: "Go source", JSON: "JSON", ARC: "an archive, read with package archive" }[ext];
       info.textContent = `${formatSize(data.length)}${what ? `: ${what}` : ""}.${path.startsWith("assets/") ? " On the disc as it is." : ""}`;
       table.hidden = ext !== "ARC";
       if (ext === "ARC") renderArchive(data);

@@ -9,6 +9,7 @@ package disc
 import (
 	"unsafe"
 
+	"go.chrisrx.dev/psx/internal/discrecord"
 	"go.chrisrx.dev/psx/internal/volatile"
 	"go.chrisrx.dev/psx/yaroze"
 )
@@ -18,7 +19,7 @@ import (
 //
 // Its layout is the record mkpsxiso looks for in the executable, so the
 // fields, their order and their types are part of the contract with the host
-// half of the package. layout.go spells the record out, and disc_yaroze.go
+// half of the package. discrecord spells the record out, and disc_yaroze.go
 // fails the build if the two drift apart.
 type File struct {
 	magic uint32
@@ -65,7 +66,7 @@ type File struct {
 // run time instead produces a File that mkpsxiso never sees, so the file is
 // not on the disc and Placed reports false.
 func Register(path, src string) File {
-	return File{magic: magic, Name: path, src: src}
+	return File{magic: discrecord.Magic, Name: path, src: src}
 }
 
 // TrackName is the disc path Track registers an audio track under, which
@@ -85,7 +86,7 @@ const TrackName = "#CDDA"
 // Like Register, the call must initialize a package-level variable with a
 // constant. Tracks are numbered in the order the program declares them.
 func Track(src string) File {
-	return File{magic: magic, Name: TrackName, src: src}
+	return File{magic: discrecord.Magic, Name: TrackName, src: src}
 }
 
 // TrackNumber is the number of the audio track Track registered, 2 for the

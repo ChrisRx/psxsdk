@@ -24,13 +24,13 @@ order: nyc
 | [rsdlink](rsdlink.md) | Link Sony's RSD models into a TMD, byte for byte as Sony's rsdlink did |
 | [obj2tmd](obj2tmd.md) | Convert a Wavefront OBJ model into a TMD |
 | [mkscene](mkscene.md) | Cook a scene, as the playground's scene editor writes it, into the file package scene draws |
-| [mkarc](mkarc.md) | Pack files into one archive for the disc, with deflate, which package arc unpacks piece by piece |
+| [mkarc](mkarc.md) | Pack files into one archive for the disc, with deflate, which package archive unpacks piece by piece |
 | [hdr2go](hdr2go.md) | Generate layout-checked Go bindings from a C header |
 | [psxemu](psxemu.md) | Run the emulator headless, with traces, VRAM dumps and screenshots, or drive a program with scripted presses, watched and poked memory, and a profile |
 | [psxplay](psxplay.md) | Run the emulator in a window, booting the built-in OpenBIOS, with the keyboard or a gamepad as the pad |
 | [psxtrace](psxtrace.md) | Print and diff instruction traces, compare VRAM dumps |
 | [sioload](sioload.md) | Upload an executable to a Net Yaroze over the serial cable |
-| [objdump](objdump.md) | Display ECOFF object files, with disassembly |
+| [ecoffdump](ecoffdump.md) | Display ECOFF object files, with disassembly |
 | [ecoff2asm](ecoff2asm.md) | Convert ECOFF objects to GNU as source, for relinking the Net Yaroze library as ELF |
 | [ecoffcmp](ecoff2asm.md) | Check ecoff2asm output against the original objects |
-| gteprog | Write a GTE exercise program as a PSX-EXE, for comparing emulators |
+| [gteprog](gteprog.md) | Write a GTE exercise program as a PSX-EXE, for comparing emulators |

@@ -27,8 +27,7 @@ package scene
 import (
 	"errors"
 
-	"go.chrisrx.dev/psx/arc"
-
+	"go.chrisrx.dev/psx/archive"
 	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/internal/volatile"
 	"go.chrisrx.dev/psx/yaroze"
@@ -474,14 +473,14 @@ func (f Files) nameOf(data []uint32) string {
 // first time it is asked for and kept for the times after, so that a
 // reload or a second scene over the same archive unpacks nothing twice.
 type Archive struct {
-	a     arc.Archive
+	a     archive.Archive
 	n     int
 	names [MaxTextures + MaxModels]string
 	words [MaxTextures + MaxModels][]uint32
 }
 
 // NewArchive makes an opened archive a Source.
-func NewArchive(a arc.Archive) *Archive { return &Archive{a: a} }
+func NewArchive(a archive.Archive) *Archive { return &Archive{a: a} }
 
 func (ar *Archive) Lookup(path string) []uint32 {
 	name := path

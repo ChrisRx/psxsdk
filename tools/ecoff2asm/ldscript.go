@@ -1,4 +1,4 @@
-package binutils
+package main
 
 import (
 	"cmp"

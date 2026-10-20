@@ -1,6 +1,10 @@
 package iso9660
 
-import "go.chrisrx.dev/psx/format/cdrom"
+import (
+	"encoding/binary"
+
+	"go.chrisrx.dev/psx/format/cdrom"
+)
 
 // CD-XA extends ISO 9660 in two places: a signature in the primary volume
 // descriptor announcing that the extension is in use, and a 14-byte block in
@@ -63,9 +67,9 @@ const (
 // console as a single stream, and it is the per-sector subheaders that sort
 // its channels out, not this field.
 func writeXA(b []byte, attr uint16) {
-	putBE16(b[0:], 0) // owner group
-	putBE16(b[2:], 0) // owner user
-	putBE16(b[4:], attr)
+	binary.BigEndian.PutUint16(b[0:], 0) // owner group
+	binary.BigEndian.PutUint16(b[2:], 0) // owner user
+	binary.BigEndian.PutUint16(b[4:], attr)
 	copy(b[6:], "XA")
 	b[8] = 0       // file number
 	clear(b[9:14]) // reserved

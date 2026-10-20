@@ -1,6 +1,6 @@
-// Package arc writes the archives package arc reads: one file holding
-// many, each stored as it is or packed with deflate, for mkarc and the
-// playground.
+// Package archive writes the archives the runtime package archive reads:
+// one file holding many, each stored as it is or packed with deflate, for
+// mkarc and the playground.
 //
 // The file is little-endian words. A header of four: the ID, "ARC" and a
 // 1; the number of entries; the size of the whole file; and a zero. Then
@@ -18,7 +18,7 @@
 // a double speed drive reads, so nothing loads slower packed. A file that
 // deflate shrinks by less than a tenth, as a sound bank or a movie is, is
 // stored.
-package arc
+package archive
 
 import (
 	"bytes"
@@ -29,16 +29,16 @@ import (
 	"path"
 	"strings"
 
-	"go.chrisrx.dev/psx/arc"
+	"go.chrisrx.dev/psx/archive"
 	"go.chrisrx.dev/psx/format/iso9660"
 )
 
 // The reader's constants, for a writer's convenience.
 const (
-	ID         = arc.ID
-	HeaderSize = arc.HeaderSize
-	EntrySize  = arc.EntrySize
-	NameSize   = arc.NameSize
+	ID         = archive.ID
+	HeaderSize = archive.HeaderSize
+	EntrySize  = archive.EntrySize
+	NameSize   = archive.NameSize
 )
 
 // StoreUnder is the saving, as a fraction, below which a file is stored
@@ -59,23 +59,7 @@ type Entry struct {
 // disc would have it, in capitals, letters, digits and underscores, the
 // stem cut to eight and the extension to three.
 func Name(p string) string {
-	b := path.Base(strings.ReplaceAll(p, "\\", "/"))
-	ext := ""
-	if i := strings.LastIndex(b, "."); i > 0 {
-		b, ext = b[:i], b[i+1:]
-	}
-	stem := iso9660.NormalizeName(b)
-	if len(stem) > 8 {
-		stem = stem[:8]
-	}
-	if ext == "" {
-		return stem
-	}
-	ext = iso9660.NormalizeName(ext)
-	if len(ext) > 3 {
-		ext = ext[:3]
-	}
-	return stem + "." + ext
+	return iso9660.ShortName(path.Base(strings.ReplaceAll(p, "\\", "/")))
 }
 
 // Pack writes an archive of the entries, in their order, each packed
@@ -104,7 +88,7 @@ func Pack(entries []Entry) ([]byte, error) {
 	table := make([]byte, EntrySize*len(entries))
 	out.Write(table)
 	for i, e := range entries {
-		method := arc.Stored
+		method := archive.Stored
 		held := e.Data
 		if !e.Store && len(e.Data) > 0 {
 			var b bytes.Buffer
@@ -115,7 +99,7 @@ func Pack(entries []Entry) ([]byte, error) {
 			w.Write(e.Data)
 			w.Close()
 			if float64(len(e.Data)-b.Len()) >= StoreUnder*float64(len(e.Data)) {
-				method = arc.Deflate
+				method = archive.Deflate
 				held = b.Bytes()
 			}
 		}
@@ -133,8 +117,8 @@ func Pack(entries []Entry) ([]byte, error) {
 	b := out.Bytes()
 	copy(b[HeaderSize:], table)
 	binary.LittleEndian.PutUint32(b[8:], uint32(len(b)))
-	if _, err := arc.OpenBytes(b); err != nil {
-		return nil, errors.New("arc: the archive written does not read back")
+	if _, err := archive.OpenBytes(b); err != nil {
+		return nil, errors.New("archive: the archive written does not read back")
 	}
 	return b, nil
 }

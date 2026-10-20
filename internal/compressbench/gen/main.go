@@ -14,7 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"go.chrisrx.dev/psx/arc"
+	"go.chrisrx.dev/psx/archive"
 	"go.chrisrx.dev/psx/internal/compressbench/lz4"
 )
 
@@ -44,7 +44,7 @@ func main() {
 				panic(fmt.Sprintf("%s: %s does not unpack (%d of %d)", src, name, n, len(raw)))
 			}
 		}
-		check("deflate", dfl, arc.Inflate)
+		check("deflate", dfl, archive.Inflate)
 		check("lz4", block, lz4.Decode)
 		write := func(ext string, packed []byte) {
 			var hdr [8]byte

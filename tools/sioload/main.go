@@ -1,3 +1,5 @@
+// Command sioload uploads an ECOFF executable to a Net Yaroze over the
+// serial cable, as siocons did, and with --exec runs it.
 package main
 
 import (
@@ -8,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 	"go.bug.st/serial"
 	"go.chrisrx.dev/psx/format/ecoff"
-	"go.chrisrx.dev/psx/yaroze"
 )
 
 type sioLoadOpts struct {
@@ -43,7 +44,7 @@ func NewSIOLoadCommand() *cobra.Command {
 				}
 				o.DeviceName = ports[0]
 			}
-			c, err := yaroze.OpenPort(&yaroze.PortConfig{
+			c, err := OpenPort(&PortConfig{
 				BaudRate:   o.BaudRate,
 				DeviceName: o.DeviceName,
 				Output:     w,

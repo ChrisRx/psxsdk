@@ -18,6 +18,7 @@ import (
 	"go.chrisrx.dev/psx/format/iso9660"
 	"go.chrisrx.dev/psx/format/psx"
 	"go.chrisrx.dev/psx/format/psxdisc"
+	"go.chrisrx.dev/psx/internal/discrecord"
 	"go.chrisrx.dev/psx/internal/flags"
 )
 
@@ -525,12 +526,12 @@ type program struct {
 // disc.Track, the host file it is recorded from, and its records.
 type registeredTrack struct {
 	src     string
-	records []disc.Record
+	records []discrecord.Record
 }
 
 // A registered file is one the program asked for, and where it went.
 type registered struct {
-	disc.Record
+	discrecord.Record
 	entry *iso9660.Entry
 }
 
@@ -563,7 +564,7 @@ func loadProgram(root *iso9660.Dir, name, src string) (*program, error) {
 	// files it is a mistake, since only one can be at the path.
 	placed := map[string]registered{}
 	tracks := map[string]int{}
-	for _, r := range disc.Find(p.image, exe.TextAddr) {
+	for _, r := range discrecord.Find(p.image, exe.TextAddr) {
 		if r.Name == disc.TrackName {
 			// An audio track: recorded after the data, in the order
 			// declared, once for each host file.
@@ -606,7 +607,7 @@ func loadProgram(root *iso9660.Dir, name, src string) (*program, error) {
 // which the build is the place to find out, rather than the read that
 // overruns the buffer. A buffer has to hold whole sectors, since that is
 // what the drive delivers.
-func fits(r disc.Record, e *iso9660.Entry) error {
+func fits(r discrecord.Record, e *iso9660.Entry) error {
 	if r.Fits(e.Size) {
 		return nil
 	}

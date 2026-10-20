@@ -35,7 +35,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.chrisrx.dev/psx/binutils"
+	"go.chrisrx.dev/psx/link"
 )
 
 var opts struct {
@@ -50,7 +50,7 @@ func patch(path string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	traps, err := binutils.MIPS1Traps(data)
+	traps, err := link.MIPS1Traps(data)
 	if err != nil {
 		return 0, fmt.Errorf("%s: %v", path, err)
 	}
@@ -60,7 +60,7 @@ func patch(path string) (int, error) {
 		}
 	}
 	if len(traps) > 0 && !opts.DryRun {
-		binutils.RemoveTraps(data, traps)
+		link.RemoveTraps(data, traps)
 		if err := os.WriteFile(path, data, 0o644); err != nil {
 			return len(traps), err
 		}

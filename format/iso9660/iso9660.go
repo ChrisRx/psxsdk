@@ -9,6 +9,7 @@
 package iso9660
 
 import (
+	"encoding/binary"
 	"fmt"
 	"strings"
 	"time"
@@ -47,30 +48,14 @@ const (
 // putBoth16 writes a 16-bit value in both byte orders, as ISO 9660 requires
 // for most numeric fields.
 func putBoth16(b []byte, v uint16) {
-	b[0], b[1] = byte(v), byte(v>>8)
-	b[2], b[3] = byte(v>>8), byte(v)
+	binary.LittleEndian.PutUint16(b, v)
+	binary.BigEndian.PutUint16(b[2:], v)
 }
 
 // putBoth32 writes a 32-bit value in both byte orders.
 func putBoth32(b []byte, v uint32) {
-	b[0], b[1], b[2], b[3] = byte(v), byte(v>>8), byte(v>>16), byte(v>>24)
-	b[4], b[5], b[6], b[7] = byte(v>>24), byte(v>>16), byte(v>>8), byte(v)
-}
-
-func putLE32(b []byte, v uint32) {
-	b[0], b[1], b[2], b[3] = byte(v), byte(v>>8), byte(v>>16), byte(v>>24)
-}
-
-func putBE32(b []byte, v uint32) {
-	b[0], b[1], b[2], b[3] = byte(v>>24), byte(v>>16), byte(v>>8), byte(v)
-}
-
-func putLE16(b []byte, v uint16) {
-	b[0], b[1] = byte(v), byte(v>>8)
-}
-
-func putBE16(b []byte, v uint16) {
-	b[0], b[1] = byte(v>>8), byte(v)
+	binary.LittleEndian.PutUint32(b, v)
+	binary.BigEndian.PutUint32(b[4:], v)
 }
 
 // padString writes s into a fixed width field, space padded, as ISO 9660
@@ -140,6 +125,28 @@ func NormalizeName(name string) string {
 		}
 	}
 	return b.String()
+}
+
+// ShortName is the 8.3 name a file gets on the disc: in capitals, letters,
+// digits and underscores, its stem cut to eight characters and its
+// extension to three.
+func ShortName(name string) string {
+	ext := ""
+	if i := strings.LastIndex(name, "."); i > 0 {
+		name, ext = name[:i], name[i+1:]
+	}
+	stem := NormalizeName(name)
+	if len(stem) > 8 {
+		stem = stem[:8]
+	}
+	if ext == "" {
+		return stem
+	}
+	ext = NormalizeName(ext)
+	if len(ext) > 3 {
+		ext = ext[:3]
+	}
+	return stem + "." + ext
 }
 
 // MaxVolumeIDLen is the width of the volume identifier field.

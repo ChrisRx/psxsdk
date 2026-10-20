@@ -193,14 +193,7 @@ func (p *Program) EXE() *psx.File {
 	if pad := len(data) % 2048; pad != 0 {
 		data = append(data, make([]byte, 2048-pad)...)
 	}
-	return &psx.File{
-		FileHeader: psx.FileHeader{
-			Magic:     psx.ExecutableSignature,
-			PC0:       p.Entry,
-			TextAddr:  CodeAddr,
-			TextSize:  uint32(len(data)),
-			StackAddr: 0x801ffff0,
-		},
-		Sections: []*psx.Section{{Name: "text", Addr: CodeAddr, Data: data}},
-	}
+	exe := psx.New(CodeAddr, p.Entry, data)
+	exe.StackAddr = 0x801ffff0
+	return exe
 }

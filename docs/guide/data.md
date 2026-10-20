@@ -15,7 +15,7 @@ A program's pictures, sounds, music and models are files on its disc in the cons
 | A bank of sounds | VAGs and a definition | [`mkvab`](../tools/mkvab.md) | `yaroze.OpenBank(vh, vb)` |
 | Music | MIDI | [`smf2seq`](../tools/smf2seq.md) | `bank.Sequence(seq)`, `Play` |
 | A scene of models, lights and sprites | scenes/NAME.json, from the playground's editor | [`mkscene`](../tools/mkscene.md) | `scene.Scene`, `Load`, `Draw` |
-| Many files packed as one | the files under pack/NAME/ | [`mkarc`](../tools/mkarc.md) | `arc.Open`, `Lookup`, `Unpack` |
+| Many files packed as one | the files under pack/NAME/ | [`mkarc`](../tools/mkarc.md) | `archive.Open`, `Lookup`, `Unpack` |
 
 ## A pipeline that remakes itself
 

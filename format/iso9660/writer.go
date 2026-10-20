@@ -1,6 +1,7 @@
 package iso9660
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 	"time"
@@ -342,10 +343,10 @@ func (w *Writer) writePVD(b []byte) {
 	putBoth16(b[124:], 1) // volume sequence number
 	putBoth16(b[128:], LogicalBlockSize)
 	putBoth32(b[132:], w.pathTableLen)
-	putLE32(b[140:], w.lPathTableLBA)
-	putLE32(b[144:], 0) // no optional L path table
-	putBE32(b[148:], w.mPathTableLBA)
-	putBE32(b[152:], 0) // no optional M path table
+	binary.LittleEndian.PutUint32(b[140:], w.lPathTableLBA)
+	binary.LittleEndian.PutUint32(b[144:], 0) // no optional L path table
+	binary.BigEndian.PutUint32(b[148:], w.mPathTableLBA)
+	binary.BigEndian.PutUint32(b[152:], 0) // no optional M path table
 
 	// The root directory record is stored inline rather than referenced, in
 	// a fixed 34-byte field. There is no room for a system use area, so the
@@ -396,11 +397,11 @@ func (w *Writer) pathTable(bigEndian bool) []byte {
 			parent = d.parent.number
 		}
 		if bigEndian {
-			putBE32(rec[2:], d.LBA)
-			putBE16(rec[6:], parent)
+			binary.BigEndian.PutUint32(rec[2:], d.LBA)
+			binary.BigEndian.PutUint16(rec[6:], parent)
 		} else {
-			putLE32(rec[2:], d.LBA)
-			putLE16(rec[6:], parent)
+			binary.LittleEndian.PutUint32(rec[2:], d.LBA)
+			binary.LittleEndian.PutUint16(rec[6:], parent)
 		}
 		copy(rec[8:], id)
 		if len(rec)%2 != 0 {

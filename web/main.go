@@ -59,7 +59,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"debug/elf"
 	"encoding/binary"
@@ -379,20 +378,15 @@ var globals map[string]uint32
 
 // globalsFromELF reads the addresses of an executable's variables.
 func globalsFromELF(data []byte) (map[string]uint32, error) {
-	f, err := elf.NewFile(bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	syms, err := f.Symbols()
+	syms, err := emu.ELFSymbols(data, func(s elf.Symbol) bool {
+		return elf.ST_TYPE(s.Info) == elf.STT_OBJECT
+	})
 	if err != nil {
 		return nil, err
 	}
 	out := make(map[string]uint32, len(syms))
 	for _, s := range syms {
-		if s.Name != "" && elf.ST_TYPE(s.Info) == elf.STT_OBJECT {
-			out[s.Name] = uint32(s.Value)
-		}
+		out[s.Name] = s.Addr
 	}
 	return out, nil
 }

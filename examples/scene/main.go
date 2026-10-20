@@ -36,7 +36,7 @@ package main
 //go:generate go run go.chrisrx.dev/psx/tools/discgen assets
 
 import (
-	"go.chrisrx.dev/psx/arc"
+	"go.chrisrx.dev/psx/archive"
 	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/scene"
 	"go.chrisrx.dev/psx/yaroze"
@@ -79,7 +79,7 @@ func main() {
 				yaroze.Print("could not read ")
 				yaroze.Print(loader.Failed().Name)
 			case done:
-				a, err := arc.Open(levelARC.Data())
+				a, err := archive.Open(levelARC.Data())
 				if err != nil {
 					yaroze.Print(err.Error())
 					continue

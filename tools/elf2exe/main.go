@@ -18,9 +18,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.chrisrx.dev/psx/binutils"
 	"go.chrisrx.dev/psx/format/psx"
 	"go.chrisrx.dev/psx/internal/flags"
+	"go.chrisrx.dev/psx/link"
 )
 
 var opts struct {
@@ -43,30 +43,15 @@ instead.`,
 		Args:         cobra.ExactArgs(2),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			image, err := binutils.LoadImage(args[0])
+			image, err := link.LoadImage(args[0])
 			if err != nil {
 				return err
 			}
 
-			exe := &psx.File{
-				FileHeader: psx.FileHeader{
-					Magic:     psx.ExecutableSignature,
-					PC0:       image.Entry,
-					GP0:       uint32(opts.GP0),
-					TextAddr:  image.Addr,
-					TextSize:  image.Size(),
-					StackAddr: uint32(opts.StackAddr),
-					StackSize: opts.StackSize,
-				},
-				Sections: []*psx.Section{
-					{
-						Name: "text",
-						Addr: image.Addr,
-						Data: image.Data,
-					},
-				},
-			}
-
+			exe := psx.New(image.Addr, image.Entry, image.Data)
+			exe.GP0 = uint32(opts.GP0)
+			exe.StackAddr = uint32(opts.StackAddr)
+			exe.StackSize = opts.StackSize
 			// The loader reads whole sectors, so the image is padded to a
 			// multiple of one.
 			psx.AlignTextData(exe, 2048)

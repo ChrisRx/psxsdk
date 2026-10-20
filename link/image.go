@@ -1,4 +1,10 @@
-package binutils
+// Package link makes a PSX-EXE of a program TinyGo or the Net Yaroze SDK
+// linked: it reads the flat image out of the ELF or ECOFF executable,
+// replaces the MIPS II traps an R3000A cannot run, and for a Net Yaroze
+// program adds the startup stub and combines the resident library in, so
+// that the result boots without the Net Yaroze boot disc. nyc, eco2exe,
+// elf2exe and mips1fix are built on it.
+package link
 
 import (
 	"debug/elf"

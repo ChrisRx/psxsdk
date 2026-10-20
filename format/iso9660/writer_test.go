@@ -77,6 +77,21 @@ func TestFileIdentifier(t *testing.T) {
 	}
 }
 
+func TestShortName(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"cube.tmd", "CUBE.TMD"},
+		{"stone_wall.tim", "STONE_WA.TIM"},
+		{"music.midi", "MUSIC.MID"},
+		{"read me", "READ_ME"},
+		{".hidden", "_HIDDEN"},
+	}
+	for _, tt := range tests {
+		if got := ShortName(tt.in); got != tt.want {
+			t.Errorf("ShortName(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
 func TestPVD(t *testing.T) {
 	root := &Dir{}
 	root.Entries = append(root.Entries, entry("main.exe", "hello"))

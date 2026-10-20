@@ -8,7 +8,7 @@ import (
 	"go.chrisrx.dev/x/assert"
 )
 
-// TestCompressionBench times package arc's inflate and the benchmark's
+// TestCompressionBench times package archive's inflate and the benchmark's
 // LZ4 decoder on the console over internal/compressbench's files, and
 // prints the speed of each: the measurements docs/topics/compression.md
 // rests on. It runs when task bench:compress has built the disc.

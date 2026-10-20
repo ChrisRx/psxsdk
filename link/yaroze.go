@@ -1,16 +1,40 @@
-//go:build !yaroze
-
-package yaroze
+package link
 
 import (
+	"bytes"
+	"compress/gzip"
+	_ "embed"
 	"encoding/binary"
+	"sync"
 
-	"go.chrisrx.dev/psx/binutils"
 	"go.chrisrx.dev/psx/format/psx"
 )
 
+// libpsGz is the Net Yaroze library as the boot disc leaves it resident in
+// RAM, a PSX-EXE, gzipped.
+//
+//go:embed libps.exe.gz
+var libpsGz []byte
+
+// Libps returns the Net Yaroze library as a PSX-EXE, read the first time it
+// is asked for.
+var Libps = sync.OnceValues(func() (*psx.File, error) {
+	r, err := gzip.NewReader(bytes.NewReader(libpsGz))
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	return psx.ParseFile(r)
+})
+
+// Combine lays the program f over the Net Yaroze library, so that it runs
+// without the boot disc.
 func Combine(f *psx.File) (*psx.File, error) {
-	return binutils.Combine(Libps, f)
+	libps, err := Libps()
+	if err != nil {
+		return nil, err
+	}
+	return psx.Combine(libps, f)
 }
 
 // Executable makes a PSX-EXE of a Net Yaroze program's image, as the
@@ -18,17 +42,9 @@ func Combine(f *psx.File) (*psx.File, error) {
 // resident library first (PatchExecutable), then the library combined in
 // (Combine), so that the result runs without the Net Yaroze boot disc, and
 // each of loads put into the image at its address.
-func Executable(img *binutils.Image, patch bool, loads ...binutils.Load) (*psx.File, error) {
-	exe := &psx.File{
-		FileHeader: psx.FileHeader{
-			Magic:     psx.ExecutableSignature,
-			PC0:       img.Entry,
-			TextAddr:  img.Addr,
-			TextSize:  img.Size(),
-			StackAddr: 0x801fff00,
-		},
-		Sections: []*psx.Section{{Name: "text", Addr: img.Addr, Data: img.Data}},
-	}
+func Executable(img *Image, patch bool, loads ...Load) (*psx.File, error) {
+	exe := psx.New(img.Addr, img.Entry, img.Data)
+	exe.StackAddr = 0x801fff00
 	if patch {
 		if err := PatchExecutable(exe); err != nil {
 			return nil, err
@@ -40,7 +56,7 @@ func Executable(img *binutils.Image, patch bool, loads ...binutils.Load) (*psx.F
 		return nil, err
 	}
 	for _, l := range loads {
-		if err := binutils.Embed(exe, l.Addr, l.Data); err != nil {
+		if err := psx.Embed(exe, l.Addr, l.Data); err != nil {
 			return nil, err
 		}
 	}

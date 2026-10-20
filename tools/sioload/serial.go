@@ -1,6 +1,4 @@
-//go:build !yaroze && !wasip1 && !js
-
-package yaroze
+package main
 
 import (
 	"bytes"
@@ -17,8 +15,8 @@ import (
 )
 
 const (
-	ECOFF_PSX_SP uint64 = 0x801fff00
-	Prompt              = ">>"
+	stackAddr uint64 = 0x801fff00
+	prompt           = ">>"
 )
 
 type PortConfig struct {
@@ -98,7 +96,7 @@ func (p *Port) SendCommand(command string) error {
 	if err != nil {
 		return err
 	}
-	return p.ReadUntil(Prompt)
+	return p.ReadUntil(prompt)
 }
 
 func (p *Port) ReadByte() (byte, error) {
@@ -182,7 +180,7 @@ func (p *Port) Load(f *ecoff.File) error {
 	if err := p.SendCommand(fmt.Sprintf("sr gp %x", f.GpValue)); err != nil {
 		return err
 	}
-	if err := p.SendCommand(fmt.Sprintf("sr sp %x", ECOFF_PSX_SP)); err != nil {
+	if err := p.SendCommand(fmt.Sprintf("sr sp %x", stackAddr)); err != nil {
 		return err
 	}
 	for _, s := range f.Sections {

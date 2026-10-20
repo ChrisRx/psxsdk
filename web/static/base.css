@@ -1,0 +1,40 @@
+/* What the playground, the player and the documentation share: Barlow,
+   served from fonts/ under the OFL, the colour tokens, and the theme
+   switch. The pages are drawn after the hardware the programs were written
+   for: the grey PlayStation in light mode, the black Net Yaroze in dark. */
+
+@font-face { font-family: Barlow; font-weight: 400; font-display: swap; src: url(fonts/barlow-400.woff2) format("woff2"); }
+@font-face { font-family: Barlow; font-weight: 500; font-display: swap; src: url(fonts/barlow-500.woff2) format("woff2"); }
+@font-face { font-family: Barlow; font-weight: 600; font-display: swap; src: url(fonts/barlow-600.woff2) format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 600; font-display: swap; src: url(fonts/barlow-condensed-600.woff2) format("woff2"); }
+
+:root {
+  --bg: light-dark(#e3e2dd, #1b1b1e);
+  --surface: light-dark(#f1f0ec, #252528);
+  --surface-2: light-dark(#e8e7e2, #2c2c30);
+  --ink: light-dark(#1b1b1d, #ebebe8);
+  --muted: light-dark(#65656a, #9b9ba1);
+  --line: light-dark(#cac9c3, #37373c);
+  --line-strong: light-dark(#a8a7a1, #4b4b51);
+  --accent: light-dark(#3b63c9, #8fa8ff);
+
+  /* Each token has its light and its dark value; which one shows follows
+     the color-scheme, the system's unless the page sets data-theme. The
+     playground sets it, dark unless the visitor chose light; the
+     documentation and the player framed in it follow the system until the
+     visitor chooses with the switch, which theme.js keeps on data-theme. */
+  color-scheme: light dark;
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+:root[data-theme="light"] { color-scheme: light; }
+
+* { box-sizing: border-box; }
+
+a { color: var(--accent); text-underline-offset: 2px; }
+.muted { color: var(--muted); }
+
+/* The theme switch: a sun in light mode, a moon in dark. */
+#theme svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#theme .moon { display: none; }
+#theme[aria-pressed="true"] .sun { display: none; }
+#theme[aria-pressed="true"] .moon { display: block; }

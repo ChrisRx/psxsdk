@@ -217,10 +217,7 @@ func (c *converter) texture(m *material) (*tim.TIM, error) {
 		tries := []string{stem + ".TIM", stem + ".tim"}
 		if opts.Textures != "" {
 			base := filepath.Base(stem)
-			disc := iso9660.NormalizeName(base)
-			if len(disc) > 8 {
-				disc = disc[:8]
-			}
+			disc := strings.TrimSuffix(iso9660.ShortName(base+".TIM"), ".TIM")
 			for _, name := range []string{base, disc} {
 				in := filepath.Join(opts.Textures, name)
 				tries = append(tries, in+".TIM", in+".tim")

@@ -14,6 +14,7 @@ import (
 	"go.chrisrx.dev/psx/format/iso9660"
 	"go.chrisrx.dev/psx/format/psx"
 	"go.chrisrx.dev/psx/format/psxdisc"
+	"go.chrisrx.dev/psx/internal/discrecord"
 )
 
 const textAddr = 0x80010000
@@ -138,7 +139,7 @@ func TestRegisteredFiles(t *testing.T) {
 
 	// The executable on the disc carries the patched records.
 	image := readAll(t, r.Root.Find("MAIN.EXE"))[psx.HeaderSize:]
-	recs := disc.Find(image, textAddr)
+	recs := discrecord.Find(image, textAddr)
 	assert.Equal(t, 3, len(recs))
 	for i, want := range []*iso9660.Entry{wall, stone, wall} {
 		sector := binary.LittleEndian.Uint32(image[recs[i].Offset+20:])
@@ -271,7 +272,7 @@ func TestRegisteredTracks(t *testing.T) {
 	if i < 0 {
 		t.Fatal("the executable is not on the disc")
 	}
-	recs := disc.Find(user[i+psx.HeaderSize:], textAddr)
+	recs := discrecord.Find(user[i+psx.HeaderSize:], textAddr)
 	got := map[string][2]uint32{}
 	for _, r := range recs {
 		off := i + psx.HeaderSize + r.Offset

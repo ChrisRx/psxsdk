@@ -1,3 +1,7 @@
+// Command ecoff2asm converts ECOFF objects, or every object in an ar
+// archive, into GNU as source a current mipsel-none-elf toolchain
+// assembles, and with --ld-script writes the absolute symbols as PROVIDE
+// definitions: how the Net Yaroze library was relinked as ELF.
 package main
 
 import (
@@ -10,7 +14,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.chrisrx.dev/psx/binutils"
 	"go.chrisrx.dev/psx/format/ecoff"
 )
 
@@ -58,7 +61,7 @@ addresses in its relocation tables rather than in the instruction stream.`,
 
 			for _, o := range kept {
 				var buf bytes.Buffer
-				err := binutils.WriteAsm(&buf, o.file, binutils.AsmOptions{
+				err := WriteAsm(&buf, o.file, AsmOptions{
 					Source:   fmt.Sprintf("%s(%s)", filepath.Base(args[0]), o.name),
 					Annotate: opts.Annotate,
 				})
@@ -115,12 +118,12 @@ func runLdScript(objects []namedFile) error {
 	var buf bytes.Buffer
 	var total int
 	for _, o := range objects {
-		syms := binutils.AbsoluteSymbols(o.file)
+		syms := AbsoluteSymbols(o.file)
 		if len(syms) == 0 {
 			continue
 		}
 		fmt.Fprintf(&buf, "  /* %d symbols from %s */\n", len(syms), o.name)
-		if err := binutils.WriteSymbolDefinitions(&buf, syms); err != nil {
+		if err := WriteSymbolDefinitions(&buf, syms); err != nil {
 			return err
 		}
 		total += len(syms)

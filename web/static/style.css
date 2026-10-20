@@ -1,23 +1,9 @@
-/* The page is drawn after the hardware the programs were written for: the
-   grey PlayStation in light mode, the black Net Yaroze in dark mode, with
-   the four symbol colors kept for the buttons that carry them. The code
-   editor's tokens carry their own pair, light and dark, in the same way.
-   Barlow is served from fonts/, under the OFL. */
-
-@font-face { font-family: Barlow; font-weight: 400; font-display: swap; src: url(fonts/barlow-400.woff2) format("woff2"); }
-@font-face { font-family: Barlow; font-weight: 500; font-display: swap; src: url(fonts/barlow-500.woff2) format("woff2"); }
-@font-face { font-family: Barlow; font-weight: 600; font-display: swap; src: url(fonts/barlow-600.woff2) format("woff2"); }
-@font-face { font-family: "Barlow Condensed"; font-weight: 600; font-display: swap; src: url(fonts/barlow-condensed-600.woff2) format("woff2"); }
+/* The playground and the player, drawn after base.css, which they share
+   with the documentation: the four symbol colors are kept for the buttons
+   that carry them, and the code editor's tokens carry their own pair,
+   light and dark, as base.css's do. */
 
 :root {
-  --bg: light-dark(#e3e2dd, #1b1b1e);
-  --surface: light-dark(#f1f0ec, #252528);
-  --surface-2: light-dark(#e8e7e2, #2c2c30);
-  --ink: light-dark(#1b1b1d, #ebebe8);
-  --muted: light-dark(#65656a, #9b9ba1);
-  --line: light-dark(#cac9c3, #37373c);
-  --line-strong: light-dark(#a8a7a1, #4b4b51);
-  --accent: light-dark(#3b63c9, #8fa8ff);
   --screen: #000;
 
   /* The playground's editor. */
@@ -46,18 +32,7 @@
   --circle: light-dark(#dd4650, #f26670);
   --cross: light-dark(#4b74d8, #80a0f5);
   --square: light-dark(#cf5fa5, #e789c6);
-
-  /* Each token has its light and its dark value; which one shows follows
-     the color-scheme, the system's unless the page sets data-theme. The
-     playground sets it, dark unless the visitor chose light; the player,
-     framed in the documentation's pages, follows the system as they do
-     until the visitor chooses with the switch in either. */
-  color-scheme: light dark;
 }
-:root[data-theme="dark"] { color-scheme: dark; }
-:root[data-theme="light"] { color-scheme: light; }
-
-* { box-sizing: border-box; }
 
 body {
   margin: 0;
@@ -67,9 +42,6 @@ body {
   font: 400 16px/1.5 Barlow, system-ui, -apple-system, "Segoe UI", sans-serif;
   -webkit-text-size-adjust: 100%;
 }
-
-a { color: var(--accent); text-underline-offset: 2px; }
-.muted { color: var(--muted); }
 
 h1 {
   margin: 0;
@@ -456,10 +428,6 @@ body.resizing-rows { cursor: row-resize; user-select: none; -webkit-user-select:
 .pg-links .pg-icon svg { width: 20px; height: 20px; }
 #theme { margin-left: 4px; border: 0; background: none; color: var(--muted); }
 #theme:hover:not(:disabled), #theme:focus-visible { background: var(--surface-2); color: var(--ink); }
-#theme svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-#theme .moon { display: none; }
-#theme[aria-pressed="true"] .moon { display: block; }
-#theme[aria-pressed="true"] .sun { display: none; }
 button.primary { border-color: var(--accent); background: var(--accent); color: var(--bg); }
 button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 86%, var(--ink)); }
 

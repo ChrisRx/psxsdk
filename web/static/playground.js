@@ -319,24 +319,6 @@ function updateLivePill() {
 }
 projectEvents.addEventListener("open", updateLivePill);
 
-// The theme: dark, the Net Yaroze, unless light, the grey PlayStation, was
-// chosen; index.html sets it before the first paint from the same key.
-const THEME = "playground-theme";
-const themeButton = $("theme");
-function showTheme() {
-  const dark = document.documentElement.dataset.theme !== "light";
-  themeButton.setAttribute("aria-pressed", String(dark));
-  themeButton.title = dark ? "Switch to the grey PlayStation" : "Switch to the black Net Yaroze";
-  for (const meta of document.querySelectorAll('meta[name="theme-color"]')) meta.content = dark ? "#1b1b1e" : "#e3e2dd";
-}
-themeButton.addEventListener("click", () => {
-  const theme = document.documentElement.dataset.theme === "light" ? "dark" : "light";
-  document.documentElement.dataset.theme = theme;
-  try { localStorage.setItem(THEME, theme); } catch { /* not kept */ }
-  showTheme();
-});
-showTheme();
-
 // The divider between the editor and the emulator: dragged, or moved with
 // the arrow keys, it sets how wide the emulator's side is.
 const pg = $("pg");

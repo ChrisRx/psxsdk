@@ -1,6 +1,11 @@
 package emu
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+)
 
 // MemoryCardSize is the size of a memory card: 1024 sectors of 128 bytes.
 const MemoryCardSize = 128 << 10
@@ -38,6 +43,19 @@ func NewMemoryCard(data []byte) (*MemoryCard, error) {
 		copy(c.data[:], data)
 	}
 	return c, nil
+}
+
+// OpenMemoryCard returns a card holding the image in the file at path, or a
+// blank card if there is no such file.
+func OpenMemoryCard(path string) (*MemoryCard, error) {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		data, err = nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return NewMemoryCard(data)
 }
 
 // Data returns what the card holds, as a program last wrote it. It is the

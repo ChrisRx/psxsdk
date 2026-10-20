@@ -1,11 +1,11 @@
-// Package arc reads archives: one file on the disc holding many, each
+// Package archive reads archives: one file on the disc holding many, each
 // stored as it is or packed with deflate, which the program unpacks into
 // memory of its own as it needs them. A program registers the archive
 // with package disc, loads it whole, and opens it:
 //
 //	var level = disc.Register("ASSETS/LEVEL.ARC", "assets/LEVEL.ARC")
 //
-//	a, err := arc.Open(level.Data())
+//	a, err := archive.Open(level.Data())
 //	e, ok := a.Lookup("CUBE.TMD")
 //	words, err := e.Unpack(buf[:])
 //
@@ -16,13 +16,13 @@
 // pattern, three archives resident and pieces unpacked as the game needed
 // them.
 //
-// The format is mkarc's, described in package format/arc, which writes
+// The format is mkarc's, described in package format/archive, which writes
 // it. The deflate here decodes at about a third to a whole megabyte a
 // second on the console, at or above what a double speed drive reads, so
 // a packed file costs no more time to load than the raw one and takes a
 // third to a half of the space. docs/topics/compression.md has the
 // measurements the choice was made on.
-package arc
+package archive
 
 import (
 	"errors"
@@ -51,10 +51,10 @@ const (
 )
 
 var (
-	ErrFormat  = errors.New("arc: not an archive")
-	ErrCorrupt = errors.New("arc: the entry's packed bytes do not unpack")
-	ErrSpace   = errors.New("arc: the destination is too small for the entry")
-	ErrMethod  = errors.New("arc: the entry is packed in a way this program cannot read")
+	ErrFormat  = errors.New("archive: not an archive")
+	ErrCorrupt = errors.New("archive: the entry's packed bytes do not unpack")
+	ErrSpace   = errors.New("archive: the destination is too small for the entry")
+	ErrMethod  = errors.New("archive: the entry is packed in a way this program cannot read")
 )
 
 // An Archive is an archive opened in memory.

@@ -1,6 +1,4 @@
-//go:build !yaroze
-
-package yaroze
+package link
 
 import (
 	"crypto/md5"
@@ -59,17 +57,7 @@ func TestPatchExecutablePreservesReturnAddress(t *testing.T) {
 		callerRA = 0xbfc06ff0
 		callerSP = 0x801ff000
 	)
-	exe := &psx.File{
-		FileHeader: psx.FileHeader{
-			Magic:    psx.ExecutableSignature,
-			PC0:      entry,
-			TextAddr: addr,
-			TextSize: size,
-		},
-		Sections: []*psx.Section{
-			{Name: "text", Addr: addr, Data: make([]byte, size)},
-		},
-	}
+	exe := psx.New(addr, entry, make([]byte, size))
 
 	if !assert.NoError(t, PatchExecutable(exe)) {
 		t.FailNow()

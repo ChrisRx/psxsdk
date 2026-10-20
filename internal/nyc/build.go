@@ -12,10 +12,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.chrisrx.dev/psx/binutils"
+	"go.chrisrx.dev/psx/internal/flags"
 	"go.chrisrx.dev/psx/internal/mkpsxiso"
 	"go.chrisrx.dev/psx/internal/toolchain"
-	"go.chrisrx.dev/psx/yaroze"
+	"go.chrisrx.dev/psx/link"
 )
 
 // buildFlags are the flags of every command that compiles a program.
@@ -23,7 +23,7 @@ type buildFlags struct {
 	compiler string
 	opt      string
 	tags     []string
-	loads    []string
+	loads    flags.Loads
 	verbose  bool
 }
 
@@ -32,7 +32,7 @@ func (f *buildFlags) register(cmd *cobra.Command) {
 	compilerFlag(fl, &f.compiler, "tinygo, wasm or auto (NYC_COMPILER): the tinygo command if there is one, else TinyGo compiled to WebAssembly")
 	fl.StringVar(&f.opt, "opt", "", "TinyGo's optimization level: 0, 1, 2, s or z; 2 if not given, for speed, since a frame has a budget, unless the WebAssembly compiler's cache holds only another")
 	fl.StringSliceVar(&f.tags, "tags", nil, "extra build tags")
-	fl.StringArrayVar(&f.loads, "load", nil, "file@addr: put a file into the executable at a hexadecimal address, as siocons' local dload did; may be repeated")
+	fl.Var(&f.loads, "load", "file@addr: put a file into the executable at a hexadecimal address, as siocons' local dload did; may be repeated")
 	fl.BoolVarP(&f.verbose, "verbose", "v", false, "say which compiler runs, and how long each step takes")
 }
 
@@ -56,14 +56,6 @@ func pkgName(pkg string) (string, error) {
 // build compiles pkg and writes the PSX-EXE to exe and, if elf is not empty,
 // the ELF, with its traps removed, to elf. Either may be empty.
 func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
-	var loads []binutils.Load
-	for _, spec := range f.loads {
-		l, err := binutils.ParseLoad(spec)
-		if err != nil {
-			return err
-		}
-		loads = append(loads, l)
-	}
 	start := time.Now()
 	c, err := toolchain.Find(f.compiler)
 	if err != nil {
@@ -93,22 +85,22 @@ func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
 	if err != nil {
 		return err
 	}
-	traps, err := binutils.MIPS1Traps(data)
+	traps, err := link.MIPS1Traps(data)
 	if err != nil {
 		return err
 	}
-	binutils.RemoveTraps(data, traps)
+	link.RemoveTraps(data, traps)
 	if elf != "" {
 		if err := os.WriteFile(elf, data, 0o666); err != nil {
 			return err
 		}
 	}
 	if exe != "" {
-		img, err := binutils.ReadImage(bytes.NewReader(data))
+		img, err := link.ReadImage(bytes.NewReader(data))
 		if err != nil {
 			return err
 		}
-		x, err := yaroze.Executable(img, true, loads...)
+		x, err := link.Executable(img, true, f.loads...)
 		if err != nil {
 			return err
 		}

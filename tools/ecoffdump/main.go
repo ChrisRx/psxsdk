@@ -1,3 +1,6 @@
+// Command ecoffdump displays the headers, sections and symbols of an ECOFF
+// object, and with -d its disassembly: objdump for the Net Yaroze SDK's
+// objects, which current binutils no longer reads.
 package main
 
 import (
@@ -13,9 +16,9 @@ var opts struct {
 	Disassemble bool
 }
 
-func NewObjdumpCommand() *cobra.Command {
+func NewEcoffdumpCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:  "objdump [flags] <file>",
+		Use:  "ecoffdump [flags] <file>",
 		Args: cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			f, err := ecoff.Open(args[0])
@@ -66,7 +69,7 @@ func NewObjdumpCommand() *cobra.Command {
 }
 
 func main() {
-	if err := NewObjdumpCommand().Execute(); err != nil {
+	if err := NewEcoffdumpCommand().Execute(); err != nil {
 		log.Fatal(err)
 	}
 }

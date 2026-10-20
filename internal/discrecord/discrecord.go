@@ -1,12 +1,31 @@
-//go:build !yaroze
-
-package disc
-
-// The host half of the package: finding the records Register left in an
-// executable, and filling them in.
+// Package discrecord finds the records package disc's Register leaves in
+// an executable, and fills them in: the host half of package disc, which
+// mkpsxiso uses. The layout of a record is here too, which disc's File
+// is checked against when it builds for the console.
+package discrecord
 
 import (
 	"encoding/binary"
+)
+
+// Magic begins every record. Read as a little-endian word it is the bytes
+// "PSXD", which is how it looks in a hex dump of the executable.
+const Magic = 0x44585350
+
+// Size and the offsets lay out a record, a disc.File as TinyGo lays it out
+// on a 32-bit target: the magic word, the disc path and the host path each
+// as a pointer and a length, the sector and the length that mkpsxiso fills
+// in, and the destination as a slice, a pointer, a length and a capacity,
+// all zero when there is none. disc_yaroze.go in package disc asserts that
+// the type matches.
+const (
+	Size      = 40
+	OffName   = 4
+	OffSrc    = 12
+	OffSector = 20
+	OffSize   = 24
+	OffDst    = 28
+	OffDstLen = 32
 )
 
 // A Record is one registration found in a program's image: what Register
@@ -51,25 +70,25 @@ const sectorSize = 2048
 // returned in the order they appear.
 func Find(image []byte, base uint32) []Record {
 	var out []Record
-	for off := 0; off+recordSize <= len(image); off += 4 {
-		if binary.LittleEndian.Uint32(image[off:]) != magic {
+	for off := 0; off+Size <= len(image); off += 4 {
+		if binary.LittleEndian.Uint32(image[off:]) != Magic {
 			continue
 		}
-		name, ok := str(image, base, image[off+offName:], maxName)
+		name, ok := str(image, base, image[off+OffName:], maxName)
 		if !ok {
 			continue
 		}
-		src, ok := str(image, base, image[off+offSrc:], maxSrc)
+		src, ok := str(image, base, image[off+OffSrc:], maxSrc)
 		if !ok {
 			continue
 		}
 		r := Record{Name: name, Src: src, Offset: off}
-		r.Buffer = binary.LittleEndian.Uint32(image[off+offDst:])
+		r.Buffer = binary.LittleEndian.Uint32(image[off+OffDst:])
 		if r.Buffer != 0 {
-			r.BufferSize = 4 * binary.LittleEndian.Uint32(image[off+offDstLen:])
+			r.BufferSize = 4 * binary.LittleEndian.Uint32(image[off+OffDstLen:])
 		}
 		out = append(out, r)
-		off += recordSize - 4
+		off += Size - 4
 	}
 	return out
 }
@@ -106,6 +125,6 @@ func str(image []byte, base uint32, b []byte, limit int) (string, bool) {
 // Patch writes into image, the one r was found in, the sector the file was
 // placed at and its length, where the program's File reads them.
 func (r Record) Patch(image []byte, sector, size uint32) {
-	binary.LittleEndian.PutUint32(image[r.Offset+offSector:], sector)
-	binary.LittleEndian.PutUint32(image[r.Offset+offSize:], size)
+	binary.LittleEndian.PutUint32(image[r.Offset+OffSector:], sector)
+	binary.LittleEndian.PutUint32(image[r.Offset+OffSize:], size)
 }

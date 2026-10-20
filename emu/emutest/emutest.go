@@ -21,7 +21,6 @@ package emutest
 
 import (
 	"bytes"
-	"debug/elf"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -139,20 +138,17 @@ func Boot(tb testing.TB, opts ...Option) *Machine {
 }
 
 func readSymbols(path string) (map[string]uint32, error) {
-	f, err := elf.Open(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
-	syms, err := f.Symbols()
+	syms, err := emu.ELFSymbols(data, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	m := make(map[string]uint32, len(syms))
 	for _, s := range syms {
-		if s.Name != "" {
-			m[s.Name] = uint32(s.Value)
-		}
+		m[s.Name] = s.Addr
 	}
 	return m, nil
 }

@@ -1,14 +1,14 @@
 ---
-title: objdump
+title: ecoffdump
 weight: 12
 ---
 
-`objdump` displays information from ECOFF object files. It is similar in functionality to the objdump included in [GNU Binutils](https://www.gnu.org/software/binutils/) (although not intended to be exactly the same).
+`ecoffdump` displays information from ECOFF object files. It is similar in functionality to the objdump included in [GNU Binutils](https://www.gnu.org/software/binutils/) (although not intended to be exactly the same).
 
 This was built while reverse engineering the Net Yaroze development static library, as the first step towards converting it from the aging ECOFF format to ELF (see [ecoff2asm](ecoff2asm.md)):
 
 ```bash
-$ objdump puts.o
+$ ecoffdump puts.o
 MIPSEL-BE ECOFF executable - start=0x00000000 size=96 sections=2
 
 Sections:

@@ -1,11 +1,7 @@
-// Package binutils provides an interface for manipulating object files used by
-// the Sony Playstation 1.
-package binutils
+package psx
 
 import (
 	"fmt"
-
-	"go.chrisrx.dev/psx/format/psx"
 )
 
 const (
@@ -23,27 +19,30 @@ func (m *memory) write(start uint32, data []byte) int {
 	return copy(m[start&mask:], data)
 }
 
-func Combine(a, b *psx.File) (*psx.File, error) {
+// New makes an executable of a flat image: text loaded at addr and entered
+// at entry, in a single section. The stack and the rest of the header are
+// left for the caller.
+func New(addr, entry uint32, text []byte) *File {
+	return &File{
+		FileHeader: FileHeader{
+			Magic:    ExecutableSignature,
+			PC0:      entry,
+			TextAddr: addr,
+			TextSize: uint32(len(text)),
+		},
+		Sections: []*Section{{Name: "text", Addr: addr, Data: text}},
+	}
+}
+
+// Combine lays b's text over a's in one image, from a's text address to the
+// end of b's, entered at b's entry point: how a Net Yaroze program is joined
+// with the resident library below it.
+func Combine(a, b *File) (*File, error) {
 	m := &memory{}
 	m.write(a.TextAddr, a.Section("text").Data)
 	m.write(b.TextAddr, b.Section("text").Data)
-	data := m.read(a.TextAddr, b.TextAddr+b.TextSize)
-	output := &psx.File{
-		FileHeader: psx.FileHeader{
-			Magic:     psx.ExecutableSignature,
-			PC0:       b.PC0,
-			TextAddr:  a.TextAddr,
-			TextSize:  uint32(len(data)),
-			StackAddr: 0x801fff00,
-		},
-		Sections: []*psx.Section{
-			&psx.Section{
-				Name: "text",
-				Addr: a.TextAddr,
-				Data: data,
-			},
-		},
-	}
+	output := New(a.TextAddr, b.PC0, m.read(a.TextAddr, b.TextAddr+b.TextSize))
+	output.StackAddr = 0x801fff00
 	output.SetMarker("COMBINE version 1.00")
 	return output, nil
 }
@@ -53,7 +52,7 @@ func Combine(a, b *psx.File) (*psx.File, error) {
 // command: a program that expects its data at a fixed address can then be
 // run from a disc, or in an emulator, without a loader to put it there. The
 // text section grows to cover data outside it, with zeros between.
-func Embed(f *psx.File, addr uint32, data []byte) error {
+func Embed(f *File, addr uint32, data []byte) error {
 	text := f.Section("text")
 	if text == nil {
 		return fmt.Errorf("executable has no text")

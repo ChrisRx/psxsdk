@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"go.chrisrx.dev/x/assert"
@@ -14,20 +13,6 @@ import (
 	"go.chrisrx.dev/psx/emu/emutest"
 	"go.chrisrx.dev/psx/format/scene"
 )
-
-// bootExample boots the BIOS with an example's disc in the drive and runs
-// until the BIOS starts the program.
-func bootExample(t *testing.T, name string) *emutest.Machine {
-	t.Helper()
-	cue := disc(t, name)
-	m := emutest.Boot(t,
-		emutest.BIOS(emutest.BIOSFromEnv(t)),
-		emutest.Disc(cue),
-		emutest.Symbols(filepath.Join(filepath.Dir(cue), "prog.elf")),
-	)
-	m.RunUntilTTY("Execute !", 30*emutest.Second)
-	return m
-}
 
 // The examples' screenshots: each once the program's own frame counter
 // reaches a count, which puts the test at the same point in the program's

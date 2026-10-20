@@ -1,4 +1,4 @@
-package binutils
+package link
 
 import (
 	"debug/elf"

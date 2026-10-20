@@ -9,7 +9,7 @@
 //     command needed at all.
 //
 // Either writes the ELF TinyGo links. What follows is the same for both:
-// binutils.MIPS1Traps and RemoveTraps, then yaroze.Executable.
+// link.MIPS1Traps and RemoveTraps, then link.Executable.
 package toolchain
 
 import (

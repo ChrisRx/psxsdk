@@ -3,11 +3,9 @@ package main
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"image/png"
 	"io"
-	"io/fs"
 	"log"
 	"os"
 	"runtime/pprof"
@@ -15,10 +13,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.chrisrx.dev/psx/binutils"
 	"go.chrisrx.dev/psx/emu"
 	"go.chrisrx.dev/psx/format/psx"
 	"go.chrisrx.dev/psx/format/psxtrace"
+	"go.chrisrx.dev/psx/internal/flags"
 )
 
 var opts struct {
@@ -32,7 +30,7 @@ var opts struct {
 	VRAM       string
 	PNG        string
 	Card       string
-	Loads      []string
+	Loads      flags.Loads
 
 	// Driving a program: see drive.go.
 	Untils        []string
@@ -85,7 +83,7 @@ compared frame by frame.
 	f.StringVar(&opts.VRAM, "vram", "", "at the end, write VRAM here, as psxe does with PSXE_TRACE_VRAM")
 	f.StringVar(&opts.PNG, "png", "", "at the end, write what the display shows here")
 	f.StringVar(&opts.Card, "card", "", "memory card image for slot 1, made blank if it does not exist, and written back at the end")
-	f.StringArrayVar(&opts.Loads, "load", nil, "file@addr: copy a file into RAM at a hexadecimal address, with --exe, as siocons' local dload did")
+	f.Var(&opts.Loads, "load", "file@addr: copy a file into RAM at a hexadecimal address, with --exe, as siocons' local dload did")
 	f.StringArrayVar(&opts.Untils, "until", nil, "addr:value, hexadecimal: run until the word at addr equals value, before the script; repeatable")
 	f.IntVar(&opts.UntilBudget, "until-budget", 6000, "frames each --until may take")
 	f.StringVar(&opts.Script, "script", "", "buttons to hold, frame by frame: steps like x:60 or u+r:30 or 300, separated by semicolons")
@@ -147,14 +145,7 @@ func run(cmd *cobra.Command, args []string) error {
 
 	var card *emu.MemoryCard
 	if opts.Card != "" {
-		data, err := os.ReadFile(opts.Card)
-		if errors.Is(err, fs.ErrNotExist) {
-			data, err = nil, nil
-		}
-		if err != nil {
-			return err
-		}
-		if card, err = emu.NewMemoryCard(data); err != nil {
+		if card, err = emu.OpenMemoryCard(opts.Card); err != nil {
 			return err
 		}
 		m.InsertCard(1, card)
@@ -169,14 +160,6 @@ func run(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
-	var loads []binutils.Load
-	for _, spec := range opts.Loads {
-		l, err := binutils.ParseLoad(spec)
-		if err != nil {
-			return err
-		}
-		loads = append(loads, l)
-	}
 	// run runs n instructions, one at a time while the executable is still
 	// to be loaded, and then as many at once as it can. It returns how many
 	// it ran, counting one a device could not emulate.
@@ -187,7 +170,7 @@ func run(cmd *cobra.Command, args []string) error {
 				if err := m.LoadEXE(exe); err != nil {
 					return ran, err
 				}
-				for _, l := range loads {
+				for _, l := range opts.Loads {
 					if err := m.LoadRAM(l.Addr, l.Data); err != nil {
 						return ran, err
 					}

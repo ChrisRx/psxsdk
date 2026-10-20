@@ -1,7 +1,7 @@
 // The compression benchmark: the program behind the measurements in
 // docs/topics/compression.md, which chose deflate for the archives. It
 // unpacks each packed file off its disc into memory a few times over,
-// with package arc's inflate and with an LZ4 decoder kept for the
+// with package archive's inflate and with an LZ4 decoder kept for the
 // comparison, counting rounds and bytes in globals that the emulator
 // test, tests/compressbench_test.go, reads beside the cycle count.
 //
@@ -14,7 +14,7 @@ package main
 import (
 	"unsafe"
 
-	"go.chrisrx.dev/psx/arc"
+	"go.chrisrx.dev/psx/archive"
 	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/internal/compressbench/lz4"
 	"go.chrisrx.dev/psx/internal/volatile"
@@ -68,7 +68,7 @@ func main() {
 			for r := 0; r < rounds; r++ {
 				var got int
 				if i&1 == 0 {
-					got = arc.Inflate(dst[:raw], src)
+					got = archive.Inflate(dst[:raw], src)
 				} else {
 					got = lz4.Decode(dst[:raw], src)
 				}
