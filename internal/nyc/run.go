@@ -1,4 +1,4 @@
-package main
+package nyc
 
 import (
 	"fmt"
@@ -78,6 +78,6 @@ func envCommand() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&compiler, "compiler", os.Getenv("NYC_COMPILER"), "tinygo, wasm or auto")
+	compilerFlag(cmd.Flags(), &compiler, "tinygo, wasm or auto")
 	return cmd
 }

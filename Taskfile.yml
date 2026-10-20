@@ -60,7 +60,7 @@ tasks:
   # build optimizes for speed, OPT=2, since a game's frame has a budget;
   # OPT=z is TinyGo's own default, for size. COMPILER=wasm builds with
   # TinyGo compiled to WebAssembly instead of the tinygo command, from
-  # NYC_WASM or a nyc built by task nyc.
+  # NYC_WASM.
   #
   # It is skipped when neither the program nor the packages a program may
   # use nor nyc has changed since it last ran.
@@ -85,7 +85,6 @@ tasks:
       - 'tools/**/*.go'
       - go.mod
       - go.sum
-      - exclude: 'internal/toolchain/wasm/**'
     generates:
       - '.build/{{.NAME}}/{{.NAME}}.cue'
       - '.build/{{.NAME}}/{{.NAME}}.bin'
@@ -355,14 +354,14 @@ tasks:
       - mkdir -p .build/site/play
       - tar --format=ustar -C .build -cf - sysroot | gzip -9 > .build/site/play/sysroot.tar.gz
 
-  # Builds nyc onto .build/nyc with TinyGo compiled to WebAssembly built
-  # in, so that it compiles programs with nothing else installed: the
+  # Builds nycw onto .build/nycw, nyc with TinyGo compiled to WebAssembly
+  # built in, so that it compiles programs with nothing else installed: the
   # compiler from the compiler task, and a sysroot of its own, a copy of
   # the one the playground:sysroot task leaves in .build/sysroot with the
   # cache filled at -opt=2 as well, the level nyc builds at by default,
   # which the playground's leaves out to stay small. Both are written
-  # under internal/toolchain/wasm, which git ignores, for the nyc_embed
-  # build tag to embed.
+  # under cmd/nycw/wasm, which is committed so that go run of nycw works
+  # from the module.
   nyc:
     vars:
       SYSROOT: .build/nyc-sysroot
@@ -372,11 +371,11 @@ tasks:
       - rm -rf {{.SYSROOT}}
       - cp -R .build/sysroot {{.SYSROOT}}
       - OPTS=2 web/compiler/mkcache.sh .build/compiler/tinygo-full.wasm .build/compiler/tinygo.wasm {{.SYSROOT}} $(cd {{.SYSROOT}} && ls -d mod/go.chrisrx.dev/psx/examples/*/ mod/go.chrisrx.dev/psx/docs/tutorial/hello/ | grep -v /internal/)
-      - mkdir -p internal/toolchain/wasm
-      - gzip -9 -c .build/compiler/tinygo.wasm > internal/toolchain/wasm/tinygo.wasm.gz
+      - mkdir -p cmd/nycw/wasm
+      - gzip -9 -n -c .build/compiler/tinygo.wasm > cmd/nycw/wasm/tinygo.wasm.gz
       # The archive's directory is sysroot, as the playground's is.
-      - tar --format=ustar -C .build --transform 's,^nyc-sysroot,sysroot,' -cf - nyc-sysroot | gzip -9 > internal/toolchain/wasm/sysroot.tar.gz
-      - go build -tags nyc_embed -trimpath -ldflags=-s -o .build/nyc ./cmd/nyc
+      - tar --format=ustar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --mode=go-w -C .build --transform 's,^nyc-sysroot,sysroot,' -cf - nyc-sysroot | gzip -9 -n > cmd/nycw/wasm/sysroot.tar.gz
+      - go build -trimpath -ldflags=-s -o .build/nycw ./cmd/nycw
 
   # The compression benchmark behind docs/topics/compression.md: packs
   # three of the examples' files with deflate and LZ4, builds the program

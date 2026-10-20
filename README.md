@@ -41,6 +41,7 @@ The tutorial's [first chapter](https://chrisrx.github.io/psxsdk/tutorial/setting
 | --- | --- |
 | [`yaroze`](yaroze) | TinyGo bindings for the resident Net Yaroze library, generated from the SDK's header, with stubs for every other build, and the host-side `libps` image |
 | [`cmd/nyc`](cmd/nyc) | The build command: a Go program to a PSX-EXE or a disc image in one step, with the tinygo command or TinyGo compiled to WebAssembly |
+| [`cmd/nycw`](cmd/nycw) | `nyc` with TinyGo compiled to WebAssembly built in, so `go run go.chrisrx.dev/psx/cmd/nycw@latest` builds with nothing else installed |
 | [`disc`](disc) | Registering the files a program reads off the disc, which the build reads out of the executable |
 | [`examples`](examples) | The ported demos, one directory each, with the data they load |
 | [`tools`](tools) | `eco2exe`, `mkpsxiso`, `dumpsxiso`, `psxemu`, `psxplay`, the data converters `png2tim`, `wav2vag`, `mkvab`, `smf2seq`, `rsdlink` and `obj2tmd`, and the rest; the [tools section](https://chrisrx.github.io/psxsdk/tools/) describes each |

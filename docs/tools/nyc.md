@@ -23,7 +23,15 @@ go get -tool go.chrisrx.dev/psx/cmd/nyc
 go tool nyc disc
 ```
 
-or on its own with `go install go.chrisrx.dev/psx/cmd/nyc@latest`. In this repository, `task nyc` builds one with the WebAssembly compiler built in, onto `.build/nyc`.
+or on its own with `go install go.chrisrx.dev/psx/cmd/nyc@latest`.
+
+`nycw` is `nyc` with the WebAssembly compiler built in, so it builds programs with nothing but Go installed, and `go run` alone is enough:
+
+```bash
+go run go.chrisrx.dev/psx/cmd/nycw@latest disc ./mygame
+```
+
+Its commands and flags are `nyc`'s, less `--compiler`: it builds only with the WebAssembly compiler, even when there is a tinygo command, and always its own copy of it, ignoring `NYC_WASM`. The compiler and its sysroot are committed under `cmd/nycw/wasm`, which `task nyc` refreshes, building `.build/nycw` as well.
 
 ## The commands
 
@@ -40,7 +48,7 @@ Every command that compiles takes `--opt`, TinyGo's optimization level, 2 by def
 `nyc` compiles with one of two TinyGos, chosen with `--compiler` or `NYC_COMPILER`:
 
 - **`tinygo`** is the tinygo command, `NYC_TINYGO` or the one on the `PATH`. A TinyGo without the PlayStation targets gets them anyway. The targets and the runtime for them are all the TinyGo fork adds, so `nyc` carries those files and lays them over the installed TinyGo's root, as a tree of links made once in its cache directory, and runs TinyGo with that as its root. The TinyGo has to be the version the fork is of, since the runtime files are written against its internals.
-- **`wasm`** is TinyGo compiled to WebAssembly, the compiler the [playground](/play/) runs in the browser, run in-process by [wazero](https://wazero.io/), so it needs no tinygo command, no go command and no C toolchain. It has no clang, so the target's C and assembly come compiled in its sysroot's cache, and it builds only at the optimization levels the cache holds. It reads the program and the modules it uses from the host's file system, read only. It is built into a `nyc` made by `task nyc`, with a sysroot of its own that holds levels z and 2. Otherwise `NYC_WASM` names a directory holding `tinygo.wasm` and `sysroot.tar.gz`, as the site's `play/` directory does, and the two files can be downloaded from there. The playground's sysroot holds only z, which keeps it small for the browser, so a build with it is at `-opt=z` unless `--opt` asks for a level it cannot build at, which is an error.
+- **`wasm`** is TinyGo compiled to WebAssembly, the compiler the [playground](/play/) runs in the browser, run in-process by [wazero](https://wazero.io/), so it needs no tinygo command, no go command and no C toolchain. It has no clang, so the target's C and assembly come compiled in its sysroot's cache, and it builds only at the optimization levels the cache holds. It reads the program and the modules it uses from the host's file system, read only. It is built into `nycw`, with a sysroot of its own that holds levels z and 2. Otherwise `NYC_WASM` names a directory holding `tinygo.wasm` and `sysroot.tar.gz`, as the site's `play/` directory does, and the two files can be downloaded from there. The playground's sysroot holds only z, which keeps it small for the browser, so a build with it is at `-opt=z` unless `--opt` asks for a level it cannot build at, which is an error.
 - **`auto`**, the default, is `tinygo` when there is a tinygo command and `wasm` otherwise.
 
 Both write the same executable, byte for byte. What they cost differs:

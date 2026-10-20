@@ -33,11 +33,11 @@ import (
 // the host's file system, read only.
 //
 // The compiler and the sysroot are those of the site's play/ directory,
-// tinygo.wasm and sysroot.tar.gz, from NYC_WASM when it names such a
-// directory, or else built into nyc with the nyc_embed build tag (task
-// nyc). Either is unpacked once into the user's cache directory, and
-// wazero's compilation of the module, which takes a while, is kept there
-// too.
+// tinygo.wasm and sysroot.tar.gz: the ones given to Embed, as cmd/nycw
+// does, or else those of NYC_WASM when it names such a directory. NYC_WASM
+// is ignored when there are embedded ones. Either is unpacked once into
+// the user's cache directory, and wazero's compilation of the module,
+// which takes a while, is kept there too.
 type Wasm struct {
 	dir     string // the unpacked compiler: tinygo.wasm and sysroot
 	sysroot string
@@ -69,7 +69,16 @@ const (
 	guestCache   = "/.nyc/cache"
 )
 
-// NewWasm finds the WebAssembly compiler, from NYC_WASM or built in, and
+// The compiler and sysroot given to Embed.
+var embeddedWasm, embeddedSysroot []byte
+
+// Embed builds in the WebAssembly compiler, tinygo.wasm gzipped, and its
+// sysroot.tar.gz, for NewWasm to use in place of any NYC_WASM.
+func Embed(compiler, sysroot []byte) {
+	embeddedWasm, embeddedSysroot = compiler, sysroot
+}
+
+// NewWasm finds the WebAssembly compiler, built in or from NYC_WASM, and
 // unpacks it if it has not been.
 func NewWasm() (*Wasm, error) {
 	cache, err := cacheDir()
@@ -79,7 +88,14 @@ func NewWasm() (*Wasm, error) {
 	var key string
 	var module func() ([]byte, error)
 	var sysroot func() ([]byte, error)
-	if dir := os.Getenv("NYC_WASM"); dir != "" {
+	if len(embeddedWasm) > 0 {
+		h := sha256.New()
+		h.Write(embeddedWasm)
+		h.Write(embeddedSysroot)
+		key = hex.EncodeToString(h.Sum(nil))[:16]
+		module = func() ([]byte, error) { return gunzip(embeddedWasm) }
+		sysroot = func() ([]byte, error) { return embeddedSysroot, nil }
+	} else if dir := os.Getenv("NYC_WASM"); dir != "" {
 		wasmPath := filepath.Join(dir, "tinygo.wasm")
 		sysPath := filepath.Join(dir, "sysroot.tar.gz")
 		h := sha256.New()
@@ -94,15 +110,8 @@ func NewWasm() (*Wasm, error) {
 		key = hex.EncodeToString(h.Sum(nil))[:16]
 		module = func() ([]byte, error) { return os.ReadFile(wasmPath) }
 		sysroot = func() ([]byte, error) { return os.ReadFile(sysPath) }
-	} else if len(embeddedWasm) > 0 {
-		h := sha256.New()
-		h.Write(embeddedWasm)
-		h.Write(embeddedSysroot)
-		key = hex.EncodeToString(h.Sum(nil))[:16]
-		module = func() ([]byte, error) { return gunzip(embeddedWasm) }
-		sysroot = func() ([]byte, error) { return embeddedSysroot, nil }
 	} else {
-		return nil, errors.New("this nyc has no WebAssembly compiler built in (task nyc builds one that does); set NYC_WASM to a directory holding tinygo.wasm and sysroot.tar.gz, as the site's play/ does")
+		return nil, errors.New("this nyc has no WebAssembly compiler built in (nycw has one); set NYC_WASM to a directory holding tinygo.wasm and sysroot.tar.gz, as the site's play/ does")
 	}
 
 	w := &Wasm{dir: filepath.Join(cache, "wasm-"+key)}

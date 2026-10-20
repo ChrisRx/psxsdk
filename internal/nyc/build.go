@@ -1,4 +1,4 @@
-package main
+package nyc
 
 import (
 	"bytes"
@@ -29,7 +29,7 @@ type buildFlags struct {
 
 func (f *buildFlags) register(cmd *cobra.Command) {
 	fl := cmd.Flags()
-	fl.StringVar(&f.compiler, "compiler", os.Getenv("NYC_COMPILER"), "tinygo, wasm or auto (NYC_COMPILER): the tinygo command if there is one, else TinyGo compiled to WebAssembly")
+	compilerFlag(fl, &f.compiler, "tinygo, wasm or auto (NYC_COMPILER): the tinygo command if there is one, else TinyGo compiled to WebAssembly")
 	fl.StringVar(&f.opt, "opt", "", "TinyGo's optimization level: 0, 1, 2, s or z; 2 if not given, for speed, since a frame has a budget, unless the WebAssembly compiler's cache holds only another")
 	fl.StringSliceVar(&f.tags, "tags", nil, "extra build tags")
 	fl.StringArrayVar(&f.loads, "load", nil, "file@addr: put a file into the executable at a hexadecimal address, as siocons' local dload did; may be repeated")
