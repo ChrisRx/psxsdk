@@ -224,10 +224,14 @@ func TestWrite(t *testing.T) {
 	assert.Equal(t, true, strings.Contains(string(index), `<li><a href="../examples/zebra/"><b>zebra</b><span>A zebra, first.</span></a></li>`), string(index))
 
 	css, _ := os.ReadFile(filepath.Join(out, "assets/chroma.css"))
-	assert.Equal(t, true, strings.HasPrefix(string(css), "@media (prefers-color-scheme: light) {"))
-	assert.Equal(t, true, strings.Contains(string(css), "@media (prefers-color-scheme: dark) {"))
+	// Each scheme's rules apply when the visitor chose it, or else when
+	// the system's is it.
+	assert.Equal(t, true, strings.HasPrefix(string(css), `:root[data-theme="light"] {`))
+	assert.Equal(t, true, strings.Contains(string(css), `:root[data-theme="dark"] {`))
+	assert.Equal(t, true, strings.Contains(string(css), "@media (prefers-color-scheme: light) {\n:root:not([data-theme=\"dark\"]) {"))
+	assert.Equal(t, true, strings.Contains(string(css), "@media (prefers-color-scheme: dark) {\n:root:not([data-theme=\"light\"]) {"))
 	// No rule applies in both schemes.
-	assert.Equal(t, 0, strings.Count(strings.SplitN(string(css), "@media", 2)[0], ".chroma"))
+	assert.Equal(t, 0, strings.Count(strings.SplitN(string(css), ":root", 2)[0], ".chroma"))
 }
 
 func TestFrontMatter(t *testing.T) {

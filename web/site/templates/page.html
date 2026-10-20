@@ -15,6 +15,14 @@
   <link rel="icon" href="{{$root}}play/favicon.png" type="image/png">
   <link rel="stylesheet" href="{{$root}}assets/site.css">
   <link rel="stylesheet" href="{{$root}}assets/chroma.css">
+  <script>
+    // The theme the visitor chose, here or in the playground, set before
+    // the first paint so that nothing flashes; none follows the system.
+    try {
+      const theme = localStorage.getItem("playground-theme");
+      if (theme) document.documentElement.dataset.theme = theme;
+    } catch { /* the system's */ }
+  </script>
 </head>
 <body>
   <header class="top">
@@ -29,7 +37,15 @@
       <input id="search" type="search" placeholder="Search" aria-label="Search the site" autocomplete="off">
       <ul id="results" class="results" hidden></ul>
     </div>
-    <a class="repo" href="{{$site.Repo}}">GitHub</a>
+    <div class="top-icons">
+      <a class="top-icon" href="{{$site.Repo}}" aria-label="GitHub" title="The source on GitHub">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+      </a>
+      <button id="theme" class="top-icon" type="button" aria-pressed="false" aria-label="Theme" title="Switch to the black Net Yaroze">
+        <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.93 4.93l1.77 1.77M17.3 17.3l1.77 1.77M4.93 19.07l1.77-1.77M17.3 6.7l1.77-1.77"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg>
+      </button>
+    </div>
   </header>
 
   {{- $described := and $page.Section $page.Section.Described}}
@@ -132,6 +148,7 @@
   <footer>
     <p><a href="{{$site.Repo}}">{{$site.Name}}</a> is MIT licensed. The examples run on <a href="https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios">OpenBIOS</a>.</p>
   </footer>
+  <script src="{{$root}}assets/theme.js" defer></script>
   <script src="{{$root}}assets/search.js" defer></script>
   <script src="{{$root}}assets/player.js" defer></script>
 </body>

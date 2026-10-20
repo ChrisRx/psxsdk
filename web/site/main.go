@@ -974,17 +974,21 @@ func (s *Site) write(out, static string) error {
 	// has an entry for, so a rule from the light style left in force under
 	// the dark one would paint whatever the dark style leaves alone in a
 	// color meant for a light background, and it would vanish.
+	// A scheme is the one the visitor chose with the header's switch,
+	// data-theme, or else the system's. The rules are nested in the
+	// selector for each, which is CSS nesting.
 	if err := copyFS(files, "assets", filepath.Join(out, "assets")); err != nil {
 		return err
 	}
 	var css bytes.Buffer
 	formatter := chromahtml.New(chromahtml.WithClasses(true))
-	for _, scheme := range []struct{ name, style string }{{"light", "github"}, {"dark", "github-dark"}} {
-		fmt.Fprintf(&css, "@media (prefers-color-scheme: %s) {\n", scheme.name)
-		if err := formatter.WriteCSS(&css, styles.Get(scheme.style)); err != nil {
+	for _, scheme := range []struct{ name, other, style string }{{"light", "dark", "github"}, {"dark", "light", "github-dark"}} {
+		var rules bytes.Buffer
+		if err := formatter.WriteCSS(&rules, styles.Get(scheme.style)); err != nil {
 			return err
 		}
-		css.WriteString("}\n")
+		fmt.Fprintf(&css, ":root[data-theme=%q] {\n%s}\n", scheme.name, rules.Bytes())
+		fmt.Fprintf(&css, "@media (prefers-color-scheme: %s) {\n:root:not([data-theme=%q]) {\n%s}\n}\n", scheme.name, scheme.other, rules.Bytes())
 	}
 	if err := os.WriteFile(filepath.Join(out, "assets", "chroma.css"), css.Bytes(), 0o644); err != nil {
 		return err

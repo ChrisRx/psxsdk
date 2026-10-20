@@ -8,30 +8,23 @@
 @font-face { font-family: "Barlow Condensed"; font-weight: 600; font-display: swap; src: url(../play/fonts/barlow-condensed-600.woff2) format("woff2"); }
 
 :root {
-  --bg: #e3e2dd;
-  --surface: #f1f0ec;
-  --surface-2: #e8e7e2;
-  --ink: #1b1b1d;
-  --muted: #65656a;
-  --line: #cac9c3;
-  --line-strong: #a8a7a1;
-  --accent: #3b63c9;
+  --bg: light-dark(#e3e2dd, #1b1b1e);
+  --surface: light-dark(#f1f0ec, #252528);
+  --surface-2: light-dark(#e8e7e2, #2c2c30);
+  --ink: light-dark(#1b1b1d, #ebebe8);
+  --muted: light-dark(#65656a, #9b9ba1);
+  --line: light-dark(#cac9c3, #37373c);
+  --line-strong: light-dark(#a8a7a1, #4b4b51);
+  --accent: light-dark(#3b63c9, #8fa8ff);
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* Each token has its light and its dark value; which one shows follows
+     the color-scheme, the system's unless the visitor chose one with the
+     switch in the header, which theme.js keeps on data-theme. */
   color-scheme: light dark;
 }
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1b1b1e;
-    --surface: #252528;
-    --surface-2: #2c2c30;
-    --ink: #ebebe8;
-    --muted: #9b9ba1;
-    --line: #37373c;
-    --line-strong: #4b4b51;
-    --accent: #8fa8ff;
-  }
-}
+:root[data-theme="dark"] { color-scheme: dark; }
+:root[data-theme="light"] { color-scheme: light; }
 
 * { box-sizing: border-box; }
 
@@ -79,7 +72,27 @@ a { color: var(--accent); text-underline-offset: 2px; }
 }
 .sections a:hover { background: var(--surface-2); }
 .sections a[aria-current] { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
-.repo { margin-left: auto; font-weight: 500; text-decoration: none; }
+/* The GitHub mark and the theme switch, as the playground draws them. */
+.top-icons { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.top-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.top-icon:hover, .top-icon:focus-visible { background: var(--surface-2); color: var(--ink); }
+a.top-icon { color: var(--ink); }
+.top-icon svg { width: 20px; height: 20px; }
+#theme svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#theme .moon { display: none; }
+#theme[aria-pressed="true"] .sun { display: none; }
+#theme[aria-pressed="true"] .moon { display: block; }
 
 .search { position: relative; }
 .search input {
@@ -355,11 +368,15 @@ footer {
 }
 
 @media (max-width: 760px) {
-  .top { gap: 8px 12px; padding: 10px 16px; }
-  .brand { font-size: 1.3rem; }
-  .search input { width: 120px; }
-  .search input:focus { width: 180px; }
-  .repo { display: none; }
+  /* Two rows: the name, the search box and the icons, then the
+     sections. */
+  html { scroll-padding-top: 116px; }
+  .top { flex-wrap: wrap; gap: 8px 12px; padding: 10px 16px; }
+  .brand { font-size: 1.3rem; margin-right: 0; }
+  .search { flex: 1; min-width: 0; }
+  .search input { width: 100%; }
+  .top-icons { gap: 0; margin-left: -4px; }
+  .sections { order: 1; width: 100%; margin: 0 -10px; }
   .layout, .layout.front { display: block; padding: 20px 16px 40px; }
   .side { margin-bottom: 24px; }
   .side nav { position: static; }

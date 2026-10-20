@@ -50,7 +50,8 @@
   /* Each token has its light and its dark value; which one shows follows
      the color-scheme, the system's unless the page sets data-theme. The
      playground sets it, dark unless the visitor chose light; the player,
-     framed in the documentation's pages, follows the system as they do. */
+     framed in the documentation's pages, follows the system as they do
+     until the visitor chooses with the switch in either. */
   color-scheme: light dark;
 }
 :root[data-theme="dark"] { color-scheme: dark; }
