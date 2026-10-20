@@ -327,10 +327,10 @@ const files = (() => {
 
   // Saving, as it happens.
   let savedTimer = 0;
-  projectEvents.addEventListener("saved", ({ detail: { kept } }) => {
+  projectEvents.addEventListener("saved", ({ detail: { kept, why } }) => {
     clearTimeout(savedTimer);
     if (!kept) {
-      saveStatus.textContent = "Not kept: this browser keeps no files, so the project lasts as long as the page.";
+      saveStatus.textContent = `Not kept: ${why || "this browser keeps no files, so the project lasts as long as the page"}.`;
       return;
     }
     saveStatus.textContent = "Saved";

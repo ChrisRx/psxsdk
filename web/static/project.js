@@ -161,9 +161,25 @@ const projects = (() => {
   const CURRENT = "playground-project";
   const DRAFT = "playground-source"; // version 1's draft of main.go
 
+  // How long to wait for the store to open before going on without it. A
+  // tab left open from before an update holds the store at the old
+  // version, which blocks the open; and a tab the browser has frozen never
+  // even answers that it is in the way, so the open would wait for ever,
+  // and the page with it. Going on without the store shows the page, with
+  // the project kept only as long as the page, and says why.
+  const OPEN_MS = 3000;
+  const BLOCKED = "another tab has the playground open from before this version; close it and reload to keep projects";
+
   let db = null;
   function openDB() {
     db ??= new Promise((resolve) => {
+      let done = false;
+      const settle = (d, why) => {
+        if (done) return;
+        done = true;
+        self.why = why ?? "";
+        resolve(d);
+      };
       try {
         const req = indexedDB.open(DB, 2);
         req.onupgradeneeded = () => {
@@ -172,11 +188,20 @@ const projects = (() => {
           if (!d.objectStoreNames.contains("projects")) d.createObjectStore("projects", { keyPath: "id" });
           if (!d.objectStoreNames.contains("contents")) d.createObjectStore("contents", { keyPath: "id" });
         };
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => resolve(null);
-        req.onblocked = () => resolve(null);
+        req.onsuccess = () => {
+          const d = req.result;
+          // Give way to a newer version opened in another tab, rather than
+          // being the tab in the way.
+          d.onversionchange = () => { d.close(); db = null; };
+          // Opened after all, once the tab in the way went: kept from now on.
+          if (done) db = Promise.resolve(d);
+          settle(d);
+        };
+        req.onerror = () => settle(null);
+        req.onblocked = () => settle(null, BLOCKED);
+        setTimeout(() => settle(null, BLOCKED), OPEN_MS);
       } catch {
-        resolve(null);
+        settle(null);
       }
     });
     return db;
@@ -203,8 +228,10 @@ const projects = (() => {
     // current is the open project.
     current: null,
     // kept says whether the browser keeps projects; false in some private
-    // windows, where they last as long as the page.
+    // windows, where they last as long as the page, and why says why not,
+    // where there is more to say.
     kept: true,
+    why: "",
 
     // list returns every project's meta, the most recently changed first.
     async list() {
@@ -230,7 +257,7 @@ const projects = (() => {
         return contents.put({ id: project.id, files: project.list() });
       });
       self.kept = kept !== null;
-      emit("saved", { project, kept: self.kept });
+      emit("saved", { project, kept: self.kept, why: self.why });
       return self.kept;
     },
 
