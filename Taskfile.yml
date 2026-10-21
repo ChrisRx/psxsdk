@@ -235,6 +235,25 @@ tasks:
     cmds:
       - web/compiler/build.sh .build/compiler
 
+  # Publishes the compiler in .build/compiler as the release CI downloads
+  # (web/compiler/release.sh), named by the recipe's key, so that pushing a
+  # change to the recipe does not have CI spend hours building it again.
+  # The build has to be of the recipe as it is now, which build.sh records
+  # in .build/compiler/key. The release's tag is made at TARGET, main
+  # unless told otherwise. Needs gh, logged in.
+  compiler:release:
+    cmds:
+      - task: compiler:check
+      - |
+        want=$(web/compiler/key.sh)
+        have=$(cat .build/compiler/key 2>/dev/null || echo none)
+        if [ "$have" != "$want" ]; then
+          echo "The compiler in .build/compiler is of recipe $have, not $want; build it again with:" >&2
+          echo "  task compiler" >&2
+          exit 1
+        fi
+      - web/compiler/release.sh .build/compiler
+
   # Says how to get the compiler when .build/compiler has none: task
   # compiler builds it, or another checkout's build can be linked in.
   compiler:check:

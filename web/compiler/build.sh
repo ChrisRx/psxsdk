@@ -139,3 +139,6 @@ dev "cd '$TREE' \
 # The debug information is stripped afterwards rather than with -no-debug,
 # which sends wasm-opt's asyncify pass into a much longer and hungrier run.
 ls -la "$OUT/tinygo-full.wasm" "$OUT/tinygo.wasm"
+# The key of the recipe this build is of, for task compiler:release to
+# check before it publishes the build under the recipe's current key.
+"$HERE/key.sh" > "$OUT/key"
