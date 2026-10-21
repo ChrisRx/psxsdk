@@ -59,7 +59,7 @@ git clone https://github.com/ChrisRx/psxsdk
 cd psxsdk
 go test ./...          # or: task test, which vets too
 nix develop            # or: direnv allow, for TinyGo, go-task, mednafen and a patched psxe
-task discs             # every example onto .build/NAME/NAME.cue
+task build:discs       # every example onto .build/NAME/NAME.cue
 task test:emu          # boot each disc in the emulator and compare screenshots
 task serve             # build the site and the playground, and serve them on localhost:8000
 ```

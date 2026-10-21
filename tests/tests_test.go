@@ -1,13 +1,14 @@
 // Package tests runs the example programs in the emulator.
 //
 // The programs are built with TinyGo onto disc images first, each into a
-// directory of its own under the one PSX_DISCS names, as task disc does
-// under .build. The tests are given that and a BIOS by environment variable;
-// without them they are skipped. task test:emu builds the discs and runs
-// them.
+// directory of its own under .build, as task build:disc does, or under the
+// directory PSX_DISCS names. They boot OpenBIOS, or the BIOS PSX_BIOS names.
+// A test whose disc has not been built is skipped. task test:emu builds the
+// discs and runs them.
 package tests
 
 import (
+	"cmp"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,11 +20,7 @@ import (
 // test if there is none.
 func disc(t *testing.T, name string) string {
 	t.Helper()
-	dir := os.Getenv("PSX_DISCS")
-	if dir == "" {
-		t.Skip("PSX_DISCS is not set")
-	}
-	path := filepath.Join(dir, name, name+".cue")
+	path := filepath.Join(cmp.Or(os.Getenv("PSX_DISCS"), "../.build"), name, name+".cue")
 	if _, err := os.Stat(path); err != nil {
 		t.Skipf("no disc for %s: %v", name, err)
 	}

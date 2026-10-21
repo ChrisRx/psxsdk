@@ -42,7 +42,7 @@ Building the examples also needs a compiler, which `nyc` finds for itself: a tin
 
 ```bash
 nix develop            # or: direnv allow
-task discs             # every example onto .build/NAME/NAME.cue
+task build:discs       # every example onto .build/NAME/NAME.cue
 task test:emu          # boot each disc in the emulator and compare screenshots
 task serve             # build the site and the playground, and serve them on localhost:8000
 ```

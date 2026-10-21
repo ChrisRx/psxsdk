@@ -2,6 +2,7 @@ package emu
 
 import (
 	"bytes"
+	"cmp"
 	"os"
 	"slices"
 	"testing"
@@ -156,15 +157,11 @@ func TestRunTakesTimerInterrupt(t *testing.T) {
 	assert.Equal(t, stepped.CPU.PC, run.CPU.PC, "PC")
 }
 
-// TestBootKernel boots a real BIOS until the kernel reports it is set up.
-// The BIOS is Sony's and cannot be committed, so it is read from the file
-// PSX_BIOS names, and the test is skipped without one.
+// TestBootKernel boots a real BIOS until the kernel reports it is set up:
+// the one PSX_BIOS names, such as Sony's, which cannot be committed, or
+// OpenBIOS without one.
 func TestBootKernel(t *testing.T) {
-	path := os.Getenv("PSX_BIOS")
-	if path == "" {
-		t.Skip("PSX_BIOS is not set")
-	}
-	bios, err := os.ReadFile(path)
+	bios, err := os.ReadFile(cmp.Or(os.Getenv("PSX_BIOS"), "openbios/openbios.bin"))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}

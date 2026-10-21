@@ -24,13 +24,16 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/mewmew/mips"
+	"go.chrisrx.dev/x/assert"
 
 	"go.chrisrx.dev/psx/emu"
 	"go.chrisrx.dev/psx/emu/cpu"
+	"go.chrisrx.dev/psx/emu/openbios"
 )
 
 // Cycles is a span of emulated time, in CPU cycles.
@@ -88,14 +91,22 @@ func Disc(path string) Option { return func(c *config) { c.disc = path } }
 // exceptions without failing the test, for a test of how they are handled.
 func AllowFaults() Option { return func(c *config) { c.allowFaults = true } }
 
-// BIOSFromEnv returns the BIOS image named by PSX_BIOS, and skips the test
-// if there is none. Sony's BIOS cannot be distributed with the tests, so a
-// test that needs one has to be given it.
+// BIOSFromEnv returns the path of the BIOS image named by PSX_BIOS, or,
+// without one, of a copy of the OpenBIOS image in emu/openbios written to
+// the test's temporary directory. Sony's BIOS cannot be distributed with the
+// tests, so a test that needs it has to be given it.
 func BIOSFromEnv(tb testing.TB) string {
 	tb.Helper()
-	path := os.Getenv("PSX_BIOS")
-	if path == "" {
-		tb.Skip("PSX_BIOS is not set")
+	if path := os.Getenv("PSX_BIOS"); path != "" {
+		path, err := filepath.Abs(path)
+		if !assert.NoError(tb, err) {
+			tb.FailNow()
+		}
+		return path
+	}
+	path := filepath.Join(tb.TempDir(), "openbios.bin")
+	if !assert.NoError(tb, os.WriteFile(path, openbios.Image, 0o644)) {
+		tb.FailNow()
 	}
 	return path
 }

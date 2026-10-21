@@ -19,38 +19,21 @@ tasks:
   # does not have, and runs only with Sony's BIOS in PSX_SONY_BIOS.
   test:emu:
     cmds:
-      - task: discs
-      - task: disc:tutorial
-      - PSX_BIOS="${PSX_BIOS:-$PWD/emu/openbios/openbios.bin}" PSX_DISCS="$PWD/.build" go test -v ./tests/...
-
-  # Builds whatever has changed of the site and the playground, and serves
-  # the site on localhost:8000. The playground needs the compiler from
-  # task compiler, which takes most of an hour and is not built here; see
-  # compiler:check.
-  serve:
-    desc: Build what has changed and serve the site on localhost:8000
-    cmds:
-      - task: site
-      - task: playground
-      - go run ./web/serve -dir .build/site
-
-  # Builds the check example onto .build/check/check.cue.
-  disc:check:
-    cmds:
-      - task: disc
-        vars: { NAME: check }
+      - task: build:discs
+      - task: build:disc:tutorial
+      - go test -v ./tests/...
 
   # Builds every example's disc, each onto .build/NAME/NAME.cue: every
   # directory under examples with a main.go, since examples/internal holds
   # what they share and is not one.
-  discs:
+  build:discs:
+    deps:
+      - for: { var: EXAMPLES }
+        task: build:disc
+        vars: { NAME: '{{.ITEM}}' }
     vars:
       EXAMPLES:
         sh: for f in examples/*/main.go; do basename "$(dirname "$f")"; done
-    cmds:
-      - for: { var: EXAMPLES }
-        task: disc
-        vars: { NAME: '{{.ITEM}}' }
 
   # Builds the program in DIR, examples/NAME unless told otherwise, onto
   # .build/NAME/NAME.cue with nyc, with the files it registers, which nyc
@@ -64,7 +47,7 @@ tasks:
   #
   # It is skipped when neither the program nor the packages a program may
   # use nor nyc has changed since it last ran.
-  disc:
+  build:disc:
     label: 'disc:{{.NAME}}'
     requires:
       vars: [NAME]
@@ -98,9 +81,9 @@ tasks:
   # Builds the tutorial's first program onto .build/hello/hello.cue, so
   # that it runs on its page like the examples and in the emulator tests.
   # The rest of the tutorial writes the square example.
-  disc:tutorial:
+  build:disc:tutorial:
     cmds:
-      - task: disc
+      - task: build:disc
         vars: { NAME: hello, DIR: docs/tutorial/hello }
 
   # Builds the program in DIR, examples/NAME unless told otherwise, onto a
@@ -113,6 +96,17 @@ tasks:
       DIR: '{{.DIR | default (printf "examples/%s" .NAME)}}'
     cmds:
       - go run ./cmd/nyc run {{.CLI_ARGS}} ./{{.DIR}}
+
+  # Builds whatever has changed of the site and the playground, and serves
+  # the site on localhost:8000. The playground needs the compiler from
+  # task compiler, which takes most of an hour and is not built here; see
+  # compiler:check.
+  serve:
+    desc: Build what has changed and serve the site on localhost:8000
+    cmds:
+      - task: site
+      - task: playground
+      - go run ./web/serve -dir .build/site
 
   # Builds the site into .build/site: the documentation from docs/ and the
   # examples' package comments, rendered by web/site, and under play/ the
@@ -130,8 +124,8 @@ tasks:
   site:
     desc: Build what has changed of the site into .build/site
     cmds:
-      - task: discs
-      - task: disc:tutorial
+      - task: build:discs
+      - task: build:disc:tutorial
       - task: site:docs
       - task: site:play
       - task: site:emu
@@ -388,9 +382,9 @@ tasks:
     cmds:
       - go run ./internal/compressbench/gen {{.DATA}} examples/dino/assets/CASTLE.TIM examples/dogtale/assets/DOG.DAT examples/dino/assets/MD0.TMD
       - cd internal/compressbench && go run go.chrisrx.dev/psx/tools/discgen data
-      - task: disc
+      - task: build:disc
         vars: { NAME: compressbench, DIR: internal/compressbench }
-      - PSX_BIOS=$PWD/emu/openbios/openbios.bin PSX_DISCS=$PWD/.build go test ./tests -run TestCompressionBench -v | grep -E 'KB/s|ok|FAIL'
+      - go test ./tests -run TestCompressionBench -v | grep -E 'KB/s|ok|FAIL'
 
   # Copies the files the TinyGo fork adds, the PlayStation targets and
   # their runtime, from its last commit in TINYGO_SRC into
@@ -407,11 +401,3 @@ tasks:
           mkdir -p "{{.DST}}/$(dirname "$f")"
           git -C "$src" show "HEAD:$f" > "{{.DST}}/$f"
         done
-
-  examples:check:
-    cmds:
-      - mkdir -p tmp
-      - defer: rm -rf tmp
-      - go run ./cmd/nyc disc --opt=z --elf tmp/prog.elf -o tmp/check.bin ./examples/check
-      - mipsel-none-elf-size tmp/prog.elf
-      - psxe -a -b emu/openbios/openbios.bin -L5 tmp/check.cue
