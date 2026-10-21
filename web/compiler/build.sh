@@ -128,16 +128,28 @@ echo "==> targets"
 cross "$HERE/target/gen.sh && FULL=1 $HERE/target/gen.sh"
 
 echo "==> tinygo-full.wasm and tinygo.wasm"
+# No scheduler: the compiler runs its jobs one after another (the patch
+# makes the builder do so, with no goroutine anywhere a build can reach),
+# which takes asyncify's instrumentation out of every function, a third of
+# the module, and the 32MB stack and whole-stack unwind each goroutine
+# cost. Without asyncify, recover needs the explicit panic unwinding. The
+# debug information is stripped afterwards rather than with -no-debug,
+# which was once much slower through wasm-opt and is kept apart.
+# C's memory is wasi-libc's allocator over pieces of TinyGo's heap (the
+# custommalloc tag, tinygo_morecore in the runtime and sbrk in the glue),
+# which is a good deal quicker than TinyGo's allocator for the millions of
+# small allocations LLVM makes, and keeps C's memory out of the collector's
+# way as before.
+FLAGS='-scheduler=none -panic-unwind=explicit'
+TAGS='byollvm llvm22 custommalloc'
 dev "cd '$TREE' \
   && go build -tags llvm22 -ldflags '-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=$CLANG_LIB/lib/clang/22' -o build/tinygo . \
   && go build -tags llvm22 -ldflags '-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=$CLANG_LIB/lib/clang/22' -o build/tinygo-sysroot ./cmd/tinygo-sysroot \
   && export PATH=\"\$PWD/build:$CLANG_BIN:\$PATH\" \
   && export CGO_CFLAGS='-I$OUT/llvm-build/include -I$SRC/llvm/include' \
-  && tinygo build -target='$OUT/tinygo-wasm-full.json' -tags 'byollvm llvm22' -o '$OUT/tinygo-full.wasm' ./cmd/tinygo-wasm \
-  && tinygo build -target='$OUT/tinygo-wasm.json' -tags 'byollvm llvm22' -o '$OUT/tinygo-debug.wasm' ./cmd/tinygo-wasm \
+  && tinygo build -target='$OUT/tinygo-wasm-full.json' -tags '$TAGS' $FLAGS -o '$OUT/tinygo-full.wasm' ./cmd/tinygo-wasm \
+  && tinygo build -target='$OUT/tinygo-wasm.json' -tags '$TAGS' $FLAGS -o '$OUT/tinygo-debug.wasm' ./cmd/tinygo-wasm \
   && wasm-opt --strip-debug --strip-producers '$OUT/tinygo-debug.wasm' -o '$OUT/tinygo.wasm'"
-# The debug information is stripped afterwards rather than with -no-debug,
-# which sends wasm-opt's asyncify pass into a much longer and hungrier run.
 ls -la "$OUT/tinygo-full.wasm" "$OUT/tinygo.wasm"
 # The key of the recipe this build is of, for task compiler:release to
 # check before it publishes the build under the recipe's current key.

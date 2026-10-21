@@ -154,6 +154,51 @@ function warm() {
     const reply = await request("load", {}, appendLog);
     if (!building) buildStatus.textContent = reply.ok ? "Ready." : `Could not load the compiler: ${reply.error}`;
     if (!reply.ok) warming = null;
+    else prebuild();
+  })();
+}
+
+// A build made ahead of Run, once the compiler has loaded: the project as
+// it stands, formatted as Run would format it. It brings the compiler up
+// to speed, since the browser compiles its code as it first runs and the
+// first build is the slowest, and when the program is the same by the time
+// Run is pressed, it is the build Run uses.
+let prebuilt = null; // {projectId, sig, hot, result, took} of the last one
+let prebuilding = null; // a promise while one is being made
+const encoder = new TextEncoder();
+
+// signature hashes a project's files, so that a build can be told to be
+// of the files as they are.
+function signature(list) {
+  let h = 0x811c9dc5;
+  const mix = (b) => { h = Math.imul(h ^ b, 0x01000193) >>> 0; };
+  for (const { path, data } of [...list].sort((a, b) => (a.path < b.path ? -1 : 1))) {
+    for (let i = 0; i < path.length; i++) mix(path.charCodeAt(i));
+    mix(0);
+    for (let i = 0; i < data.length; i++) mix(data[i]);
+    mix(0);
+  }
+  return h;
+}
+
+function prebuild() {
+  if (building || prebuilding || !projects.current) return;
+  const project = projects.current;
+  prebuilding = (async () => {
+    try {
+      const reply = await request("format", { files: files.goTexts() }, () => {});
+      if (!reply.ok) return;
+      const formatted = new Map(reply.files.map((f) => [f.path, encoder.encode(f.text)]));
+      const list = project.list().map((f) => (formatted.has(f.path) ? { path: f.path, data: formatted.get(f.path) } : f));
+      const hot = hotBox.checked;
+      const t0 = performance.now();
+      const result = await request("build", { files: list, hot }, () => {});
+      if (result.ok) prebuilt = { projectId: project.id, sig: signature(list), hot, result, took: performance.now() - t0 };
+    } catch {
+      // Nothing is lost: Run builds for itself.
+    } finally {
+      prebuilding = null;
+    }
   })();
 }
 
@@ -307,11 +352,19 @@ async function buildAndRun() {
   }
   buildStatus.textContent = "Building…";
   const t0 = performance.now();
+  // A build made ahead of this one, of these very files, is this one.
+  if (prebuilding) await prebuilding;
+  const list = project.list();
+  const ahead = prebuilt && prebuilt.projectId === project.id && prebuilt.hot === hotBox.checked && prebuilt.sig === signature(list) ? prebuilt : null;
+  prebuilt = null;
+  let result = ahead?.result;
   let log = "";
-  const result = await request("build", { files: project.list(), hot: hotBox.checked }, (text) => {
-    log += text;
-    appendLog(text);
-  });
+  if (!ahead) {
+    result = await request("build", { files: list, hot: hotBox.checked }, (text) => {
+      log += text;
+      appendLog(text);
+    });
+  }
   building = false;
   $("run").disabled = false;
   if (!result.ok) {
@@ -322,7 +375,7 @@ async function buildAndRun() {
     return;
   }
   files.markErrors([]);
-  buildStatus.textContent = `Built in ${((performance.now() - t0) / 1000).toFixed(1)}s`;
+  buildStatus.textContent = ahead ? `Built ahead of time, in ${(ahead.took / 1000).toFixed(1)}s` : `Built in ${((performance.now() - t0) / 1000).toFixed(1)}s`;
   state.current = { name: project.name, id: project.id };
   state.disc = { cue: "prog.cue", files: result.files, elf: result.elf };
   state.hot = hotBox.checked ? { projectId: project.id, base: result.elf } : null;

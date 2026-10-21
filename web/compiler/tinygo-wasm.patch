@@ -1,5 +1,5 @@
 diff --git a/builder/build.go b/builder/build.go
-index d41062c5..9d684c02 100644
+index d41062c..ef12501 100644
 --- a/builder/build.go
 +++ b/builder/build.go
 @@ -29,7 +29,6 @@ import (
@@ -10,7 +10,126 @@ index d41062c5..9d684c02 100644
  	"github.com/tinygo-org/tinygo/compileopts"
  	"github.com/tinygo-org/tinygo/compiler"
  	"github.com/tinygo-org/tinygo/compiler/llvmutil"
-@@ -1732,19 +1731,6 @@ func patchRP2040BootCRC(executable string) error {
+@@ -241,12 +240,15 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
+ 	defer machine.Dispose()
+ 
+ 	// Load entire program AST into memory.
++	stage("start", timingStart)
++	tLoad := time.Now()
+ 	lprogram, err := loader.Load(config, pkgName, types.Config{
+ 		Sizes: compiler.Sizes(machine),
+ 	})
+ 	if err != nil {
+ 		return BuildResult{}, err
+ 	}
++	stage("loader.Load", tLoad)
+ 	result := BuildResult{
+ 		ModuleRoot: lprogram.MainPkg().Module.Dir,
+ 		MainDir:    lprogram.MainPkg().Dir,
+@@ -256,10 +258,12 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
+ 		// If there is no module root, just the regular root.
+ 		result.ModuleRoot = lprogram.MainPkg().Root
+ 	}
++	tParse := time.Now()
+ 	err = lprogram.Parse()
+ 	if err != nil {
+ 		return result, err
+ 	}
++	stage("lprogram.Parse (parse+typecheck)", tParse)
+ 
+ 	// Embed module build information so runtime/debug.ReadBuildInfo() works,
+ 	// mirroring what the standard `go build` toolchain does. We fill
+@@ -304,8 +308,14 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
+ 
+ 	// Create the *ssa.Program. This does not yet build the entire SSA of the
+ 	// program so it's pretty fast and doesn't need to be parallelized.
++	tSSA := time.Now()
+ 	program := lprogram.LoadSSA()
+-	buildProgram := sync.OnceFunc(program.Build)
++	stage("LoadSSA", tSSA)
++	buildProgram := sync.OnceFunc(func() {
++		t := time.Now()
++		buildSSAProgram(program)
++		stage("ssa program.Build", t)
++	})
+ 
+ 	// Add jobs to compile each package.
+ 	// Packages that have a cache hit will not be compiled again.
+@@ -600,8 +610,11 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
+ 			// anything, it only links the bitcode files together.
+ 			ctx := llvm.NewContext()
+ 			mod = ctx.NewModule("main")
+-			for _, pkgJob := range packageJobs {
+-				pkgMod, err := ctx.ParseBitcodeFile(pkgJob.result)
++			tLink := time.Now()
++			defer func() { stage("parse+link bitcode", tLink) }()
++			// linkPackage links a package's bitcode into mod.
++			linkPackage := func(path string) error {
++				pkgMod, err := ctx.ParseBitcodeFile(path)
+ 				if err != nil {
+ 					return fmt.Errorf("failed to load bitcode file: %w", err)
+ 				}
+@@ -626,6 +639,51 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
+ 				if err != nil {
+ 					return fmt.Errorf("failed to link module: %w", err)
+ 				}
++				return nil
++			}
++			// The packages the main package imports, linked together once
++			// and kept in the cache under the names of their bitcode files,
++			// which name their contents: a build changes main alone nearly
++			// always, and parsing one module is quicker than parsing and
++			// linking thirty, each link walking the module so far.
++			deps := packageJobs[:len(packageJobs)-1]
++			depsHash := sha512.New512_224()
++			for _, pkgJob := range deps {
++				depsHash.Write([]byte(pkgJob.result + "\n"))
++			}
++			prelinked := filepath.Join(cacheDir, "prelink-"+hex.EncodeToString(depsHash.Sum(nil))+".bc")
++			if _, err := os.Stat(prelinked); err == nil {
++				mod.Dispose()
++				mod, err = ctx.ParseBitcodeFile(prelinked)
++				if err != nil {
++					return fmt.Errorf("failed to load bitcode file: %w", err)
++				}
++				stage("parse prelinked deps", tLink)
++			} else {
++				for _, pkgJob := range deps {
++					if err := linkPackage(pkgJob.result); err != nil {
++						return err
++					}
++				}
++				stage("link deps", tLink)
++				t := time.Now()
++				f, err := os.CreateTemp(cacheDir, "prelink-")
++				if err != nil {
++					return err
++				}
++				if err := llvm.WriteBitcodeToFile(mod, f); err != nil {
++					f.Close()
++					os.Remove(f.Name())
++					return fmt.Errorf("failed to write the prelinked bitcode: %w", err)
++				}
++				f.Close()
++				if err := os.Rename(f.Name(), prelinked); err != nil {
++					return err
++				}
++				stage("write prelinked deps", t)
++			}
++			if err := linkPackage(packageJobs[len(packageJobs)-1].result); err != nil {
++				return err
+ 			}
+ 
+ 			// Insert values from -ldflags="-X ..." into the IR.
+@@ -694,6 +752,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
+ 
+ 			// Run all optimization passes, which are much more effective now
+ 			// that the optimizer can see the whole program at once.
++			stage("parse+link bitcode (done)", tLink)
+ 			err := optimizeProgram(mod, config)
+ 			if err != nil {
+ 				return err
+@@ -1732,19 +1791,6 @@ func patchRP2040BootCRC(executable string) error {
  	return replaceElfSection(executable, ".boot2", bytes)
  }
  
@@ -31,7 +150,7 @@ index d41062c5..9d684c02 100644
  	if b {
  		return 1
 diff --git a/builder/buildid.go b/builder/buildid.go
-index e5edd05e..8e12ea11 100644
+index e5edd05..8e12ea1 100644
 --- a/builder/buildid.go
 +++ b/builder/buildid.go
 @@ -1,3 +1,5 @@
@@ -42,7 +161,7 @@ index e5edd05e..8e12ea11 100644
  import (
 diff --git a/builder/buildid_wasm.go b/builder/buildid_wasm.go
 new file mode 100644
-index 00000000..91ef747b
+index 0000000..91ef747
 --- /dev/null
 +++ b/builder/buildid_wasm.go
 @@ -0,0 +1,20 @@
@@ -66,8 +185,44 @@ index 00000000..91ef747b
 +	}
 +	return []byte("tinygo-wasm " + goenv.Version()), nil
 +}
+diff --git a/builder/buildssa_exec.go b/builder/buildssa_exec.go
+new file mode 100644
+index 0000000..9089e1b
+--- /dev/null
++++ b/builder/buildssa_exec.go
+@@ -0,0 +1,10 @@
++//go:build !wasm
++
++package builder
++
++import "golang.org/x/tools/go/ssa"
++
++// buildSSAProgram builds the SSA of every package, in parallel.
++func buildSSAProgram(program *ssa.Program) {
++	program.Build()
++}
+diff --git a/builder/buildssa_wasm.go b/builder/buildssa_wasm.go
+new file mode 100644
+index 0000000..aae796b
+--- /dev/null
++++ b/builder/buildssa_wasm.go
+@@ -0,0 +1,14 @@
++//go:build wasm
++
++package builder
++
++import "golang.org/x/tools/go/ssa"
++
++// buildSSAProgram builds the SSA of every package one after another: the
++// WebAssembly build of the compiler has no scheduler to run the goroutines
++// Program.Build would start.
++func buildSSAProgram(program *ssa.Program) {
++	for _, pkg := range program.AllPackages() {
++		pkg.Build()
++	}
++}
 diff --git a/builder/config.go b/builder/config.go
-index 8aa23633..703570d5 100644
+index 8aa2363..703570d 100644
 --- a/builder/config.go
 +++ b/builder/config.go
 @@ -3,7 +3,6 @@ package builder
@@ -95,9 +250,41 @@ index 8aa23633..703570d5 100644
  
  	config := &compileopts.Config{
  		Options:        options,
+diff --git a/builder/jobs.go b/builder/jobs.go
+index b4959fe..bd4ae16 100644
+--- a/builder/jobs.go
++++ b/builder/jobs.go
+@@ -94,7 +94,8 @@ func runJobs(job *compileJob, sema chan struct{}) error {
+ 	}
+ 
+ 	// Create a channel to accept notifications of completion.
+-	doneChan := make(chan *compileJob)
++	// Buffered so that a job run on this goroutine can report itself.
++	doneChan := make(chan *compileJob, len(jobs))
+ 
+ 	// Send each job in the jobs slice to a worker, taking care of job dependencies.
+ 	numRunningJobs := 0
+@@ -110,7 +111,7 @@ func runJobs(job *compileJob, sema chan struct{}) error {
+ 				if jobRunnerDebug {
+ 					fmt.Println("## start:   ", job.description)
+ 				}
+-				go runJob(job, doneChan)
++				startJob(job, doneChan)
+ 				numRunningJobs++
+ 				continue
+ 
+@@ -215,5 +216,8 @@ func runJob(job *compileJob, doneChan chan *compileJob) {
+ 		}
+ 	}
+ 	job.duration = time.Since(start)
++	if job.run != nil {
++		stage("job: "+job.description, start)
++	}
+ 	doneChan <- job
+ }
 diff --git a/builder/lock.go b/builder/lock.go
 new file mode 100644
-index 00000000..e39986d4
+index 0000000..e39986d
 --- /dev/null
 +++ b/builder/lock.go
 @@ -0,0 +1,18 @@
@@ -121,7 +308,7 @@ index 00000000..e39986d4
 +}
 diff --git a/builder/lock_wasm.go b/builder/lock_wasm.go
 new file mode 100644
-index 00000000..2ce69b09
+index 0000000..2ce69b0
 --- /dev/null
 +++ b/builder/lock_wasm.go
 @@ -0,0 +1,9 @@
@@ -134,9 +321,65 @@ index 00000000..2ce69b09
 +func lock(path string) func() {
 +	return func() {}
 +}
+diff --git a/builder/startjob_exec.go b/builder/startjob_exec.go
+new file mode 100644
+index 0000000..0bd80f5
+--- /dev/null
++++ b/builder/startjob_exec.go
+@@ -0,0 +1,8 @@
++//go:build !wasm
++
++package builder
++
++// startJob runs a job on its own goroutine.
++func startJob(job *compileJob, doneChan chan *compileJob) {
++	go runJob(job, doneChan)
++}
+diff --git a/builder/startjob_wasm.go b/builder/startjob_wasm.go
+new file mode 100644
+index 0000000..f7f5bed
+--- /dev/null
++++ b/builder/startjob_wasm.go
+@@ -0,0 +1,9 @@
++//go:build wasm
++
++package builder
++
++// startJob runs a job right away: the WebAssembly build of the compiler
++// runs one job at a time and has no scheduler to run goroutines.
++func startJob(job *compileJob, doneChan chan *compileJob) {
++	runJob(job, doneChan)
++}
+diff --git a/builder/timing.go b/builder/timing.go
+new file mode 100644
+index 0000000..7c32bed
+--- /dev/null
++++ b/builder/timing.go
+@@ -0,0 +1,21 @@
++package builder
++
++import (
++	"fmt"
++	"os"
++	"time"
++)
++
++// timingOn reports stage timings on stderr when TINYGO_TIMING is set.
++var timingOn = os.Getenv("TINYGO_TIMING") != ""
++
++var timingStart = time.Now()
++
++// stage prints how long the stage named took, and the time since the
++// build started.
++func stage(name string, start time.Time) {
++	if !timingOn {
++		return
++	}
++	fmt.Fprintf(os.Stderr, "timing: %-40s %7.0f ms  (at %5.0f ms)\n", name, float64(time.Since(start).Microseconds())/1000, float64(time.Since(timingStart).Microseconds())/1000)
++}
 diff --git a/builder/toolchain_exec.go b/builder/toolchain_exec.go
 new file mode 100644
-index 00000000..3eacbc6d
+index 0000000..3eacbc6
 --- /dev/null
 +++ b/builder/toolchain_exec.go
 @@ -0,0 +1,25 @@
@@ -167,7 +410,7 @@ index 00000000..3eacbc6d
 +}
 diff --git a/builder/toolchain_wasm.go b/builder/toolchain_wasm.go
 new file mode 100644
-index 00000000..f8d88482
+index 0000000..f8d8848
 --- /dev/null
 +++ b/builder/toolchain_wasm.go
 @@ -0,0 +1,11 @@
@@ -183,7 +426,7 @@ index 00000000..f8d88482
 +	return nil
 +}
 diff --git a/builder/tools-builtin.go b/builder/tools-builtin.go
-index 61f16dfe..99543d4f 100644
+index 61f16df..99543d4 100644
 --- a/builder/tools-builtin.go
 +++ b/builder/tools-builtin.go
 @@ -35,7 +35,7 @@ func RunTool(tool string, args ...string) error {
@@ -196,7 +439,7 @@ index 61f16dfe..99543d4f 100644
  	case "clang":
  		ok = C.tinygo_clang_driver(C.int(len(args)), (**C.char)(buf))
 diff --git a/builder/tools.go b/builder/tools.go
-index 79577e23..ff1b7e18 100644
+index 79577e2..ff1b7e1 100644
 --- a/builder/tools.go
 +++ b/builder/tools.go
 @@ -1,93 +1,14 @@
@@ -295,7 +538,7 @@ index 79577e23..ff1b7e18 100644
  // more user-friendly version (and one that's more in a Go style).
 diff --git a/builder/tools_exec.go b/builder/tools_exec.go
 new file mode 100644
-index 00000000..109fc271
+index 0000000..109fc27
 --- /dev/null
 +++ b/builder/tools_exec.go
 @@ -0,0 +1,87 @@
@@ -388,7 +631,7 @@ index 00000000..109fc271
 +}
 diff --git a/builder/tools_wasm.go b/builder/tools_wasm.go
 new file mode 100644
-index 00000000..d3624d3c
+index 0000000..d3624d3
 --- /dev/null
 +++ b/builder/tools_wasm.go
 @@ -0,0 +1,40 @@
@@ -433,7 +676,7 @@ index 00000000..d3624d3c
 +	return nil
 +}
 diff --git a/cgo/cgo.go b/cgo/cgo.go
-index 01ca089b..8f9d6fa5 100644
+index 01ca089..8f9d6fa 100644
 --- a/cgo/cgo.go
 +++ b/cgo/cgo.go
 @@ -1,3 +1,5 @@
@@ -476,7 +719,7 @@ index 01ca089b..8f9d6fa5 100644
  			if found, ok := names[node.Sel.Name]; ok {
  				name = f.getASTDeclName(node.Sel.Name, found, false)
 diff --git a/cgo/const.go b/cgo/const.go
-index 9e7b06b4..9d5e910a 100644
+index 9e7b06b..9d5e910 100644
 --- a/cgo/const.go
 +++ b/cgo/const.go
 @@ -1,3 +1,5 @@
@@ -486,7 +729,7 @@ index 9e7b06b4..9d5e910a 100644
  
  // This file implements a parser of a subset of the C language, just enough to
 diff --git a/cgo/libclang.go b/cgo/libclang.go
-index 5a434ce8..49a99296 100644
+index 5a434ce..49a9929 100644
 --- a/cgo/libclang.go
 +++ b/cgo/libclang.go
 @@ -1,3 +1,5 @@
@@ -496,7 +739,7 @@ index 5a434ce8..49a99296 100644
  
  // This file parses a fragment of C with libclang and stores the result for AST
 diff --git a/cgo/libclang_stubs.c b/cgo/libclang_stubs.c
-index e8098fac..cc2fd8bb 100644
+index e8098fa..cc2fd8b 100644
 --- a/cgo/libclang_stubs.c
 +++ b/cgo/libclang_stubs.c
 @@ -1,3 +1,5 @@
@@ -507,7 +750,7 @@ index e8098fac..cc2fd8bb 100644
  // are slightly different from the ones defined in libclang.go, but they
 diff --git a/cgo/process_wasm.go b/cgo/process_wasm.go
 new file mode 100644
-index 00000000..90be0ce8
+index 0000000..90be0ce
 --- /dev/null
 +++ b/cgo/process_wasm.go
 @@ -0,0 +1,22 @@
@@ -534,7 +777,7 @@ index 00000000..90be0ce8
 +	return nil, nil, nil, nil, nil, []error{scanner.Error{Pos: pos, Msg: "cgo is not supported by this build of the compiler"}}
 +}
 diff --git a/cgo/security.go b/cgo/security.go
-index 081081f1..b1a49189 100644
+index 081081f..b1a4918 100644
 --- a/cgo/security.go
 +++ b/cgo/security.go
 @@ -1,3 +1,5 @@
@@ -544,7 +787,7 @@ index 081081f1..b1a49189 100644
  // Use of this source code is governed by a BSD-style
  // license that can be found in the LICENSE file.
 diff --git a/cgo/sync.go b/cgo/sync.go
-index 9d3398be..9d3a64e7 100644
+index 9d3398b..9d3a64e 100644
 --- a/cgo/sync.go
 +++ b/cgo/sync.go
 @@ -1,3 +1,5 @@
@@ -555,7 +798,7 @@ index 9d3398be..9d3a64e7 100644
  import (
 diff --git a/cmd/tinygo-sysroot/main.go b/cmd/tinygo-sysroot/main.go
 new file mode 100644
-index 00000000..8aed4152
+index 0000000..8aed415
 --- /dev/null
 +++ b/cmd/tinygo-sysroot/main.go
 @@ -0,0 +1,315 @@
@@ -876,10 +1119,10 @@ index 00000000..8aed4152
 +}
 diff --git a/cmd/tinygo-wasm/main.go b/cmd/tinygo-wasm/main.go
 new file mode 100644
-index 00000000..36acb8e6
+index 0000000..4c3011b
 --- /dev/null
 +++ b/cmd/tinygo-wasm/main.go
-@@ -0,0 +1,93 @@
+@@ -0,0 +1,104 @@
 +// Command tinygo-wasm is the TinyGo compiler as a WebAssembly program: the
 +// build command alone, for compiling a program in a browser.
 +//
@@ -896,6 +1139,7 @@ index 00000000..36acb8e6
 +	"flag"
 +	"fmt"
 +	"os"
++	"runtime"
 +	"strings"
 +	"time"
 +
@@ -910,6 +1154,7 @@ index 00000000..36acb8e6
 +	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
 +	tags := flag.String("tags", "", "a space-separated list of extra build tags")
 +	work := flag.Bool("work", false, "print the name of the temporary build directory and do not delete it")
++	debug := flag.Bool("debug", false, "keep DWARF debug information, which nothing in the playground reads")
 +	printCommands := flag.Bool("x", false, "print commands")
 +	printIR := flag.Bool("printir", false, "print LLVM IR")
 +	verifyIR := flag.Bool("verifyir", false, "run extra verification steps on LLVM IR")
@@ -938,6 +1183,10 @@ index 00000000..36acb8e6
 +		// There is no git to ask, and the program is not in a repository.
 +		BuildVCS: "false",
 +	}
++	// DWARF is left out unless asked for: nothing in the playground reads
++	// it, and the IR is a good deal smaller and quicker to handle without.
++	options.Debug = *debug
++	options.SkipDWARF = !*debug
 +	if *printCommands {
 +		options.PrintCommands = func(cmd string, args ...string) {
 +			fmt.Fprintln(os.Stderr, cmd, strings.Join(args, " "))
@@ -962,6 +1211,11 @@ index 00000000..36acb8e6
 +	}
 +
 +	result, err := builder.Build(flag.Arg(0), *output, tmpdir, config)
++	if os.Getenv("TINYGO_TIMING") != "" {
++		var m runtime.MemStats
++		runtime.ReadMemStats(&m)
++		fmt.Fprintf(os.Stderr, "memstats: NumGC %d, Sys %d MB, HeapSys %d MB, HeapInuse %d MB, TotalAlloc %d MB, Mallocs %d\n", m.NumGC, m.Sys>>20, m.HeapSys>>20, m.HeapInuse>>20, m.TotalAlloc>>20, m.Mallocs)
++	}
 +	if err != nil {
 +		fmt.Fprintln(os.Stderr, "error:", err)
 +		os.Exit(1)
@@ -974,7 +1228,7 @@ index 00000000..36acb8e6
 +	}
 +}
 diff --git a/goenv/goenv.go b/goenv/goenv.go
-index cecb5a85..9962679e 100644
+index cecb5a8..9962679 100644
 --- a/goenv/goenv.go
 +++ b/goenv/goenv.go
 @@ -4,7 +4,6 @@ package goenv
@@ -1031,7 +1285,7 @@ index cecb5a85..9962679e 100644
  func Get(name string) string {
 diff --git a/goenv/goenv_exec.go b/goenv/goenv_exec.go
 new file mode 100644
-index 00000000..c2da0c8d
+index 0000000..c2da0c8
 --- /dev/null
 +++ b/goenv/goenv_exec.go
 @@ -0,0 +1,47 @@
@@ -1084,7 +1338,7 @@ index 00000000..c2da0c8d
 +}
 diff --git a/goenv/goenv_wasm.go b/goenv/goenv_wasm.go
 new file mode 100644
-index 00000000..7e074f1c
+index 0000000..7e074f1
 --- /dev/null
 +++ b/goenv/goenv_wasm.go
 @@ -0,0 +1,28 @@
@@ -1117,7 +1371,7 @@ index 00000000..7e074f1c
 +	return goEnvVarsErr
 +}
 diff --git a/loader/goroot.go b/loader/goroot.go
-index 0aab0a0e..42abe52a 100644
+index 0aab0a0..1a8d121 100644
 --- a/loader/goroot.go
 +++ b/loader/goroot.go
 @@ -32,9 +32,10 @@ import (
@@ -1143,9 +1397,17 @@ index 0aab0a0e..42abe52a 100644
  		"internal/":                   true,
  		"internal/abi/":               false,
  		"internal/binary/":            false,
+@@ -255,6 +258,7 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
+ 		"net/":                        true,
+ 		"net/http/":                   false,
+ 		"os/":                         true,
++		"os/exec/":                    false,
+ 		"reflect/":                    false,
+ 		"runtime/":                    false,
+ 		"sync/":                       true,
 diff --git a/loader/goroot_exec.go b/loader/goroot_exec.go
 new file mode 100644
-index 00000000..e611f0a1
+index 0000000..e611f0a
 --- /dev/null
 +++ b/loader/goroot_exec.go
 @@ -0,0 +1,11 @@
@@ -1162,7 +1424,7 @@ index 00000000..e611f0a1
 +}
 diff --git a/loader/goroot_wasm.go b/loader/goroot_wasm.go
 new file mode 100644
-index 00000000..4c7664cd
+index 0000000..4c7664c
 --- /dev/null
 +++ b/loader/goroot_wasm.go
 @@ -0,0 +1,28 @@
@@ -1196,7 +1458,7 @@ index 00000000..4c7664cd
 +}
 diff --git a/loader/list_exec.go b/loader/list_exec.go
 new file mode 100644
-index 00000000..3aa8e1c5
+index 0000000..3aa8e1c
 --- /dev/null
 +++ b/loader/list_exec.go
 @@ -0,0 +1,38 @@
@@ -1240,7 +1502,7 @@ index 00000000..3aa8e1c5
 +}
 diff --git a/loader/list_wasm.go b/loader/list_wasm.go
 new file mode 100644
-index 00000000..c6df1696
+index 0000000..c6df169
 --- /dev/null
 +++ b/loader/list_wasm.go
 @@ -0,0 +1,499 @@
@@ -1744,7 +2006,7 @@ index 00000000..c6df1696
 +	return keys
 +}
 diff --git a/loader/loader.go b/loader/loader.go
-index feec2f23..13ce8698 100644
+index feec2f2..13ce869 100644
 --- a/loader/loader.go
 +++ b/loader/loader.go
 @@ -14,7 +14,6 @@ import (
@@ -1787,7 +2049,7 @@ index feec2f23..13ce8698 100644
  		pkg := &Package{
 diff --git a/src/hash/maphash/maphash.go b/src/hash/maphash/maphash.go
 new file mode 100644
-index 00000000..a0d9a071
+index 0000000..a0d9a07
 --- /dev/null
 +++ b/src/hash/maphash/maphash.go
 @@ -0,0 +1,242 @@
@@ -2033,8 +2295,361 @@ index 00000000..a0d9a071
 +
 +func (ComparableHasher[T]) Hash(h *Hash, v T) { WriteComparable(h, v) }
 +func (ComparableHasher[T]) Equal(x, y T) bool { return x == y }
+diff --git a/src/internal/poll/fd_wasip1.go b/src/internal/poll/fd_wasip1.go
+index bfb0d4d..734c39c 100644
+--- a/src/internal/poll/fd_wasip1.go
++++ b/src/internal/poll/fd_wasip1.go
+@@ -21,7 +21,6 @@ package poll
+ 
+ import (
+ 	"errors"
+-	"internal/task"
+ 	"syscall"
+ 	"time"
+ 	"unsafe"
+@@ -513,37 +512,3 @@ const (
+ 	wasiErrnoAgain uint32 = 6
+ 	wasiErrnoIntr  uint32 = 27
+ )
+-
+-// wait parks the current goroutine until the FD becomes ready in the
+-// given direction. No deadline; mirrors the helper of the same name in
+-// package syscall (intentionally duplicated rather than linknamed
+-// across the package boundary — see project memory on shim avoidance).
+-func wait(fd int, mode uint8) {
+-	pd := runtime_netpoll_addwait(uint32(fd), mode)
+-	task.Pause()
+-	runtime_netpoll_done(pd)
+-}
+-
+-// parkUntil parks the current goroutine on (fd, mode) with a deadline.
+-// Returns nil if the FD became ready or the timer fired (caller's loop
+-// re-checks the deadline at top); ErrDeadlineExceeded if the deadline
+-// was already in the past.
+-//
+-// Race handling: the deadline timer's callback and pollIO's event walk
+-// can both target the same pollDesc. The pd.fired flag guards against
+-// double-pushing the task to the run queue; whichever arrives second
+-// is a no-op.
+-func (fd *FD) parkUntil(mode uint8, deadline time.Time) error {
+-	d := time.Until(deadline)
+-	if d <= 0 {
+-		return ErrDeadlineExceeded
+-	}
+-	pd := runtime_netpoll_addwait(uint32(fd.Sysfd), mode)
+-	timer := time.AfterFunc(d, func() {
+-		runtime_netpoll_wake(pd)
+-	})
+-	task.Pause()
+-	timer.Stop()
+-	runtime_netpoll_done(pd)
+-	return nil
+-}
+diff --git a/src/internal/poll/park_wasip1.go b/src/internal/poll/park_wasip1.go
+new file mode 100644
+index 0000000..f1df555
+--- /dev/null
++++ b/src/internal/poll/park_wasip1.go
+@@ -0,0 +1,42 @@
++//go:build wasip1 && !scheduler.none
++
++package poll
++
++import (
++	"internal/task"
++	"time"
++)
++
++// parkUntil parks the current goroutine on (fd, mode) with a deadline.
++// Returns nil if the FD became ready or the timer fired (caller's loop
++// re-checks the deadline at top); ErrDeadlineExceeded if the deadline
++// has already passed.
++//
++// Race handling: the deadline timer's callback and pollIO's event walk
++// can both target the same pollDesc. The pd.fired flag guards against
++// double-pushing the task to the run queue; whichever arrives second
++// is a no-op.
++func (fd *FD) parkUntil(mode uint8, deadline time.Time) error {
++	d := time.Until(deadline)
++	if d <= 0 {
++		return ErrDeadlineExceeded
++	}
++	pd := runtime_netpoll_addwait(uint32(fd.Sysfd), mode)
++	timer := time.AfterFunc(d, func() {
++		runtime_netpoll_wake(pd)
++	})
++	task.Pause()
++	timer.Stop()
++	runtime_netpoll_done(pd)
++	return nil
++}
++
++// wait parks the current goroutine until the FD becomes ready in the
++// given direction. No deadline; mirrors the helper of the same name in
++// package syscall (intentionally duplicated rather than linknamed
++// across the package boundary — see project memory on shim avoidance).
++func wait(fd int, mode uint8) {
++	pd := runtime_netpoll_addwait(uint32(fd), mode)
++	task.Pause()
++	runtime_netpoll_done(pd)
++}
+diff --git a/src/internal/poll/park_wasip1_nosched.go b/src/internal/poll/park_wasip1_nosched.go
+new file mode 100644
+index 0000000..0c83864
+--- /dev/null
++++ b/src/internal/poll/park_wasip1_nosched.go
+@@ -0,0 +1,15 @@
++//go:build wasip1 && scheduler.none
++
++package poll
++
++import "time"
++
++// parkUntil cannot wait for the file: without a scheduler there is no
++// goroutine to park, and nothing that would wake it. The caller gets the
++// deadline error and tries again as it sees fit.
++func (fd *FD) parkUntil(mode uint8, deadline time.Time) error {
++	return ErrDeadlineExceeded
++}
++
++// wait cannot park either: the caller tries again.
++func wait(fd int, mode uint8) {}
+diff --git a/src/os/exec/exec.go b/src/os/exec/exec.go
+index afb4457..b2f8aef 100644
+--- a/src/os/exec/exec.go
++++ b/src/os/exec/exec.go
+@@ -1,6 +1,52 @@
++// Package exec is the shape of upstream's os/exec with nothing behind it:
++// a program TinyGo compiles has no processes to start. Commands are made
++// as upstream makes them and fail when run, so that code written against
++// upstream, go/build's search for the go command among it, compiles and
++// takes its error path. Upstream's Start would also start goroutines,
++// which a build without a scheduler cannot have anywhere it can reach.
+ package exec
+ 
+-import "os"
++import (
++	"errors"
++	"io"
++	"os"
++	"strings"
++)
++
++// ErrNotFound is the error resulting if a path search failed to find an
++// executable file.
++var ErrNotFound = errors.New("executable file not found in $PATH")
++
++// ErrDot indicates that a path lookup resolved to an executable in the
++// current directory due to ‘.’ being in the path.
++var ErrDot = errors.New("cannot run executable found relative to current directory")
++
++// ErrWaitDelay is returned by Cmd.Wait if the process exits with a
++// successful status code but its output pipes are not closed before the
++// command's WaitDelay expires.
++var ErrWaitDelay = errors.New("exec: WaitDelay expired before I/O complete")
++
++var errNoProcesses = errors.New("exec: this program cannot start processes")
++
++// Error is returned by LookPath when it fails to classify a file as an
++// executable.
++type Error struct {
++	// Name is the file name for which the error occurred.
++	Name string
++	// Err is the underlying error.
++	Err error
++}
++
++func (e *Error) Error() string {
++	return "exec: " + strconv(e.Name) + ": " + e.Err.Error()
++}
++
++func (e *Error) Unwrap() error { return e.Err }
++
++// strconv quotes a name as strconv.Quote would, near enough for an error.
++func strconv(s string) string {
++	return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
++}
+ 
+ // An ExitError reports an unsuccessful exit by a command.
+ type ExitError struct {
+@@ -9,16 +55,92 @@ type ExitError struct {
+ 	// Stderr holds a subset of the standard error output from the
+ 	// Cmd.Output method if standard error was not otherwise being
+ 	// collected.
+-	//
+-	// If the error output is long, Stderr may contain only a prefix
+-	// and suffix of the output, with the middle replaced with
+-	// text about the number of omitted bytes.
+-	//
+-	// Stderr is provided for debugging, for inclusion in error messages.
+-	// Users with other needs should redirect Cmd.Stderr as needed.
+ 	Stderr []byte
+ }
+ 
+ func (e *ExitError) Error() string {
+ 	return e.ProcessState.String()
+ }
++
++// Cmd represents an external command being prepared or run. It has the
++// fields of upstream's that callers set.
++type Cmd struct {
++	Path         string
++	Args         []string
++	Env          []string
++	Dir          string
++	Stdin        io.Reader
++	Stdout       io.Writer
++	Stderr       io.Writer
++	ExtraFiles   []*os.File
++	Process      *os.Process
++	ProcessState *os.ProcessState
++	Err          error
++	Cancel       func() error
++	WaitDelay    int64
++}
++
++// Command returns the Cmd struct to execute the named program with the
++// given arguments.
++func Command(name string, arg ...string) *Cmd {
++	cmd := &Cmd{
++		Path: name,
++		Args: append([]string{name}, arg...),
++	}
++	if !strings.Contains(name, "/") {
++		cmd.Err = &Error{name, ErrNotFound}
++	}
++	return cmd
++}
++
++// String returns a human-readable description of c.
++func (c *Cmd) String() string {
++	if c.Err != nil {
++		return strings.Join(c.Args, " ")
++	}
++	return c.Path + " " + strings.Join(c.Args[1:], " ")
++}
++
++// Environ returns a copy of the environment in which the command would be
++// run as it is currently configured.
++func (c *Cmd) Environ() []string {
++	if c.Env != nil {
++		return append([]string(nil), c.Env...)
++	}
++	return os.Environ()
++}
++
++// Run starts the specified command and waits for it to complete, which here
++// means failing: there are no processes.
++func (c *Cmd) Run() error {
++	return c.Start()
++}
++
++// Start starts the specified command, which here means failing.
++func (c *Cmd) Start() error {
++	if c.Err != nil {
++		return c.Err
++	}
++	return errNoProcesses
++}
++
++// Wait waits for the command to exit; no command was ever started.
++func (c *Cmd) Wait() error {
++	return errors.New("exec: not started")
++}
++
++// Output runs the command and returns its standard output.
++func (c *Cmd) Output() ([]byte, error) {
++	return nil, c.Run()
++}
++
++// CombinedOutput runs the command and returns its combined standard output
++// and standard error.
++func (c *Cmd) CombinedOutput() ([]byte, error) {
++	return nil, c.Run()
++}
++
++// LookPath searches for an executable named file; nothing is ever found.
++func LookPath(file string) (string, error) {
++	return "", &Error{file, ErrNotFound}
++}
+diff --git a/src/runtime/arch_tinygowasm.go b/src/runtime/arch_tinygowasm.go
+index cfb8dfe..d59eae2 100644
+--- a/src/runtime/arch_tinygowasm.go
++++ b/src/runtime/arch_tinygowasm.go
+@@ -59,7 +59,7 @@ func wasm_memory_grow(index int32, delta int32) int32
+ var (
+ 	// heapStart is the current memory offset which starts the heap. The heap
+ 	// extends from this offset until heapEnd (exclusive).
+-	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
++	heapStart = heapStartAddr()
+ 
+ 	// heapEnd is the current memory length in bytes.
+ 	heapEnd = uintptr(wasm_memory_size(wasmMemoryIndex) * wasmPageSize)
+diff --git a/src/runtime/arch_tinygowasm_heap.go b/src/runtime/arch_tinygowasm_heap.go
+new file mode 100644
+index 0000000..4f5a65a
+--- /dev/null
++++ b/src/runtime/arch_tinygowasm_heap.go
+@@ -0,0 +1,10 @@
++//go:build tinygo.wasm && !custommalloc
++
++package runtime
++
++import "unsafe"
++
++// heapStartAddr is where the heap begins: right after the globals.
++func heapStartAddr() uintptr {
++	return uintptr(unsafe.Pointer(&heapStartSymbol))
++}
+diff --git a/src/runtime/arch_tinygowasm_heap_custom.go b/src/runtime/arch_tinygowasm_heap_custom.go
+new file mode 100644
+index 0000000..2d4c309
+--- /dev/null
++++ b/src/runtime/arch_tinygowasm_heap_custom.go
+@@ -0,0 +1,16 @@
++//go:build tinygo.wasm && custommalloc
++
++package runtime
++
++import "unsafe"
++
++//go:extern __heap_end
++var initialMemoryEnd [0]byte
++
++// heapStartAddr is where the heap begins: at the end of the memory the
++// module starts with. The C library's allocator takes what lies between
++// the globals and there for itself before it asks for more (see
++// tinygo_morecore), so this heap, which grows the memory, starts past it.
++func heapStartAddr() uintptr {
++	return uintptr(unsafe.Pointer(&initialMemoryEnd))
++}
+diff --git a/src/runtime/arch_tinygowasm_morecore.go b/src/runtime/arch_tinygowasm_morecore.go
+new file mode 100644
+index 0000000..b3ff517
+--- /dev/null
++++ b/src/runtime/arch_tinygowasm_morecore.go
+@@ -0,0 +1,19 @@
++//go:build tinygo.wasm && custommalloc
++
++package runtime
++
++import "unsafe"
++
++// tinygo_morecore gives the C library's allocator a piece of this heap:
++// a manual allocation, which the collector neither scans nor frees, that
++// the allocator carves up for C and never returns. The library's sbrk
++// calls it instead of growing the module's memory, which this heap takes
++// to be its own.
++//
++//export tinygo_morecore
++func tinygo_morecore(size uintptr) unsafe.Pointer {
++	if size == 0 {
++		return nil
++	}
++	return allocManual(size)
++}
 diff --git a/src/runtime/runtime.go b/src/runtime/runtime.go
-index 85684dd0..558ec31d 100644
+index 85684dd..558ec31 100644
 --- a/src/runtime/runtime.go
 +++ b/src/runtime/runtime.go
 @@ -183,3 +183,9 @@ func getAuxv() []uintptr {
@@ -2047,3 +2662,42 @@ index 85684dd0..558ec31d 100644
 +func GOTOOLDIR() string {
 +	return goroot + "/pkg/tool/" + GOOS + "_" + GOARCH
 +}
+diff --git a/src/runtime/runtime_wasmentry.go b/src/runtime/runtime_wasmentry.go
+index 91a979a..c3ef149 100644
+--- a/src/runtime/runtime_wasmentry.go
++++ b/src/runtime/runtime_wasmentry.go
+@@ -6,15 +6,11 @@ package runtime
+ // //go:wasmexport: runtime.wasmExport* function calls are inserted by the
+ // compiler for //go:wasmexport support.
+ 
+-import (
+-	"unsafe"
+-)
+-
+ // This is the _start entry point, when using -buildmode=default.
+ func wasmEntryCommand() {
+ 	// These need to be initialized early so that the heap can be initialized.
+ 	initializeCalled = true
+-	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
++	heapStart = heapStartAddr()
+ 	heapEnd = uintptr(wasm_memory_size(0) * wasmPageSize)
+ 	run()
+ 	if mainExited {
+@@ -31,7 +27,7 @@ func wasmEntryReactor() {
+ 	initializeCalled = true
+ 
+ 	// Initialize the heap.
+-	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
++	heapStart = heapStartAddr()
+ 	heapEnd = uintptr(wasm_memory_size(0) * wasmPageSize)
+ 	initHeap()
+ 	initRand()
+@@ -55,7 +51,7 @@ func wasmEntryReactor() {
+ func wasmEntryLegacy() {
+ 	// These need to be initialized early so that the heap can be initialized.
+ 	initializeCalled = true
+-	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
++	heapStart = heapStartAddr()
+ 	heapEnd = uintptr(wasm_memory_size(0) * wasmPageSize)
+ 	run()
+ }

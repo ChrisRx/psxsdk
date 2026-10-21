@@ -56,12 +56,12 @@ Both write the same executable, byte for byte. What they cost differs:
 
 | Disc of | `tinygo` | `wasm` |
 | --- | --- | --- |
-| hello | 0.3s | 2.9s |
-| square | 0.4s | 4.1s |
-| dino | 0.5s | 4.4s |
-| tunnel | 0.9s | 8.1s |
-| terra | 1.7s | 15.0s |
+| hello | 0.3s | 1.4s |
+| square | 0.4s | 1.6s |
+| dino | 0.5s | 1.8s |
+| tunnel | 0.9s | 2.3s |
+| terra | 1.7s | 3.4s |
 
-Those are on a 24-thread x86-64 desktop. Each `wasm` build includes about a second of loading the compiled module from the cache. The first build anywhere also unpacks the compiler and has wazero compile its 75MB module, which takes about 11 seconds over every core and is kept, about 520MB of it, in the cache directory. A `wasm` build of square peaks at about 1.4GB of memory, where `tinygo` takes about 130MB.
+Those are on a 24-thread x86-64 desktop. Each `wasm` build includes about half a second of loading the compiled module from the cache. The first build anywhere also unpacks the compiler and has wazero compile its 44MB module, which takes about 3 seconds over every core and is kept, about 270MB of it, in the cache directory. A `wasm` build of square peaks at about 660MB of memory, where `tinygo` takes about 130MB.
 
 `NYC_CACHE` moves the cache directory, which is `nyc` under the user's cache directory otherwise.

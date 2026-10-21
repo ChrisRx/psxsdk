@@ -106,37 +106,31 @@ int pthread_setspecific(pthread_key_t key, const void *value) {
 	return 0;
 }
 
-// Aligned allocation. TinyGo's allocator, which malloc is, hands out
-// 16-byte aligned blocks and refuses to free a pointer into the middle of
-// one, so alignments up to 16 are plain allocations and anything larger is
-// refused outright rather than freed wrongly later. Nothing in LLVM asks
-// for more; this is here so the allocator in wasi-libc, which malloc would
-// otherwise come from as well, stays out of the link.
-#include <stdlib.h>
-#include <stdio.h>
-void *aligned_alloc(size_t align, size_t size) {
-	if (align > 16) {
-		fprintf(stderr, "aligned_alloc: alignment %zu is not supported\n", align);
-		abort();
+// wasi-libc's allocator serves C with memory it asks sbrk for. That memory
+// comes from TinyGo's heap, as manual allocations the collector neither
+// scans nor frees, rather than from growing the module's memory, which
+// TinyGo's heap takes to be its own. The pieces are not contiguous, and
+// the allocator assumes sbrk's are until a call fails: it then sizes a
+// request in full and asks sbrk(0) where the piece ended, rather than
+// taking a short piece and extending it with another, which it would
+// take to follow the first (dlmalloc's sys_alloc). So the first request
+// is refused, and sbrk(0) tells where the last piece ended.
+#include <stdint.h>
+extern void *tinygo_morecore(size_t size);
+static char *tinygo_brk;
+static int tinygo_brk_refused;
+void *sbrk(intptr_t increment) {
+	if (increment == 0) return tinygo_brk;
+	if (increment < 0) return (void *)-1;
+	if (!tinygo_brk_refused) {
+		tinygo_brk_refused = 1;
+		return (void *)-1;
 	}
-	return malloc(size);
+	char *p = tinygo_morecore((size_t)increment);
+	if (p == NULL) return (void *)-1;
+	tinygo_brk = p + increment;
+	return p;
 }
-int posix_memalign(void **res, size_t align, size_t size) {
-	if (align > 16) {
-		fprintf(stderr, "posix_memalign: alignment %zu is not supported\n", align);
-		abort();
-	}
-	*res = malloc(size);
-	return *res ? 0 : ENOMEM;
-}
-
-// musl's internal names for the allocator, which wasi-libc's atexit and
-// locale code call. They go to TinyGo's allocator like the public ones,
-// so that wasi-libc's own allocator is never linked in beside it.
-void *__libc_malloc(size_t n) { return malloc(n); }
-void *__libc_calloc(size_t m, size_t n) { return calloc(m, n); }
-void *__libc_realloc(void *p, size_t n) { return realloc(p, n); }
-void __libc_free(void *p) { free(p); }
 
 // Thread-local destructors: with one thread, the thread's exit is the
 // program's, so they are ordinary exit handlers.
