@@ -17,7 +17,7 @@ import (
 // names, linked at at, or at the start of the program's region when at is
 // zero, and writes the patch's ELF, with its traps removed, to out.
 func (f *buildFlags) patch(ctx context.Context, pkg, base string, at uint32, out string) error {
-	c, err := toolchain.Find(f.compiler)
+	c, err := f.find()
 	if err != nil {
 		return err
 	}

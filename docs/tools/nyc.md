@@ -62,6 +62,6 @@ Both write the same executable, byte for byte. What they cost differs:
 | tunnel | 0.9s | 2.3s |
 | terra | 1.7s | 3.4s |
 
-Those are on a 24-thread x86-64 desktop. Each `wasm` build includes about half a second of loading the compiled module from the cache. The first build anywhere also unpacks the compiler and has wazero compile its 44MB module, which takes about 3 seconds over every core and is kept, about 270MB of it, in the cache directory. A `wasm` build of square peaks at about 660MB of memory, where `tinygo` takes about 130MB.
+Those are on a 24-thread x86-64 desktop. Each `wasm` build includes about half a second of loading the compiled module from the cache, once per command: `run --hot` keeps the module loaded, and with it the standard library parsed and type-checked, so its patches take a fraction of a second. The first build anywhere also unpacks the compiler and has wazero compile its 44MB module, which takes about 3 seconds over every core and is kept, about 270MB of it, in the cache directory. A `wasm` build of square peaks at about 660MB of memory, where `tinygo` takes about 130MB.
 
 `NYC_CACHE` moves the cache directory, which is `nyc` under the user's cache directory otherwise.

@@ -15,7 +15,7 @@
 //
 // It runs in a browser worker or in Node, so it takes the module loader and
 // the fetched bytes from its caller rather than fetching itself.
-import { Dir, File, FileSystem, WASI } from "./wasi.js";
+import { Dir, ExitError, File, FileSystem, WASI } from "./wasi.js";
 
 // readTar adds the files of a tar archive (ustar or GNU, uncompressed) to
 // fs under prefix.
@@ -117,6 +117,30 @@ export class Pipeline {
 		this.env = env;
 		this.loadModule = loadModule;
 		this.cache = sysroot.children.get("cache") ?? new Dir();
+		// The file system every build runs in: the sysroot and the cache
+		// stay, /work is the project's and is put there for each build.
+		this.fs = new FileSystem();
+		this.fs.root.children.set("sysroot", this.sysroot);
+		this.fs.mkdir("/tmp/cache");
+		this.fs.lookup([], "/tmp/cache").node.children.set("tinygo", this.cache);
+		this.compiler = modules.tinygo ? new Compiler(modules.tinygo, this.fs, this.environment()) : null;
+	}
+
+	// environment is what the compiler runs with.
+	environment() {
+		return {
+			GOROOT: "/sysroot/" + this.env.GOROOT,
+			GOVERSION: this.env.GOVERSION,
+			GOTOOLTAGS: this.env.GOTOOLTAGS,
+			TINYGOROOT: "/sysroot/" + this.env.TINYGOROOT,
+			GOMODCACHE: "/sysroot/" + this.env.GOMODCACHE,
+			HOME: "/tmp",
+			XDG_CACHE_HOME: "/tmp/cache",
+			TMPDIR: "/tmp",
+			PWD: "/work",
+			// The cache is keyed by the compiler the host filled it with.
+			TINYGO_BUILD_ID: this.env.buildID ?? "",
+		};
 	}
 
 	// stage puts a project's files, {path, data}, under /work/prog in a new
@@ -205,29 +229,13 @@ export class Pipeline {
 	// a go.mod naming the modules, and returns the file system and the
 	// environment the compiler runs in.
 	workspace(project) {
-		const fs = this.stage(project);
-		fs.root.children.set("sysroot", this.sysroot);
-		fs.mkdir("/tmp");
-		fs.mkdir("/tmp/cache");
-		fs.lookup([], "/tmp/cache").node.children.set("tinygo", this.cache);
+		const fs = this.fs;
+		const staged = this.stage(project);
+		fs.root.children.set("work", staged.root.children.get("work"));
 		const replaces = this.env.modules.map((m) => `replace ${m.path} => /sysroot/${m.dir}`).join("\n");
 		const requires = this.env.modules.map((m) => `require ${m.path} v0.0.0`).join("\n");
 		fs.put("/work/go.mod", new TextEncoder().encode(`module play\n\ngo ${this.env.GOVERSION.replace(/^go/, "").split(".").slice(0, 2).join(".")}\n\n${requires}\n\n${replaces}\n`));
-
-		const env = {
-			GOROOT: "/sysroot/" + this.env.GOROOT,
-			GOVERSION: this.env.GOVERSION,
-			GOTOOLTAGS: this.env.GOTOOLTAGS,
-			TINYGOROOT: "/sysroot/" + this.env.TINYGOROOT,
-			GOMODCACHE: "/sysroot/" + this.env.GOMODCACHE,
-			HOME: "/tmp",
-			XDG_CACHE_HOME: "/tmp/cache",
-			TMPDIR: "/tmp",
-			PWD: "/work",
-			// The cache is keyed by the compiler the host filled it with.
-			TINYGO_BUILD_ID: this.env.buildID ?? "",
-		};
-		return { fs, env };
+		return { fs, env: this.environment() };
 	}
 
 	// steps runs each of steps, [name, args], in turn, logging how long each
@@ -235,7 +243,7 @@ export class Pipeline {
 	async steps(steps, env, fs, log) {
 		for (const [name, args] of steps) {
 			const started = performance.now();
-			const code = await this.run(name, args, env, fs, log);
+			const code = name === "tinygo" && this.compiler ? await this.compiler.build(args.slice(1), log) : await this.run(name, args, env, fs, log);
 			const took = ((performance.now() - started) / 1000).toFixed(1);
 			if (code !== 0) {
 				log(`${name} failed with exit code ${code} after ${took}s\n`);
@@ -283,6 +291,48 @@ export class Pipeline {
 		const wasi = new WASI({ args, env, fs, stdout: log, stderr: log });
 		const instance = await WebAssembly.instantiate(module, wasi.imports);
 		return wasi.start(instance);
+	}
+}
+
+// A Compiler is the compiler's module loaded once and asked to build as
+// often as needed, rather than started afresh for each build: between
+// builds it keeps the standard library parsed and type-checked, which is
+// most of a build's time outside LLVM, and the browser keeps the code it
+// has compiled of it. The module is a reactor: the host writes the
+// arguments where tinygo_args says and calls tinygo_build.
+class Compiler {
+	constructor(module, fs, env) {
+		this.module = module;
+		this.fs = fs;
+		this.env = env;
+		this.wasi = null;
+	}
+
+	async ready() {
+		if (this.wasi) return;
+		const wasi = new WASI({ args: ["tinygo"], env: this.env, fs: this.fs, stdout: () => {}, stderr: () => {} });
+		const instance = await WebAssembly.instantiate(this.module, wasi.imports);
+		wasi.initialize(instance);
+		this.wasi = wasi;
+		this.argsAt = wasi.call("tinygo_args");
+	}
+
+	// build runs one build with the arguments given, after the command's
+	// name, and returns its exit status. A build that crashes the module
+	// loses it; the next build loads it again.
+	async build(args, log) {
+		await this.ready();
+		this.wasi.setStreams(log, log);
+		const bytes = new TextEncoder().encode(args.join("\0"));
+		this.wasi.bytes().set(bytes, this.argsAt);
+		try {
+			return this.wasi.call("tinygo_build", bytes.length);
+		} catch (e) {
+			this.wasi = null;
+			if (e instanceof ExitError) return e.code || 1;
+			log(`the compiler failed: ${e.message}\n`);
+			return 1;
+		}
 	}
 }
 

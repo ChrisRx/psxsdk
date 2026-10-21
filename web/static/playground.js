@@ -198,8 +198,36 @@ function prebuild() {
       // Nothing is lost: Run builds for itself.
     } finally {
       prebuilding = null;
+      if (prebuildAgain) {
+        prebuildAgain = false;
+        schedulePrebuild();
+      }
     }
   })();
+}
+
+// Builds ahead of Run follow the editing: a little after the last change
+// to the project, while the page is in view, the project is built again,
+// so that Run finds a build of the program as it is. A change during a
+// build has another follow it.
+let prebuildTimer = null;
+let prebuildAgain = false;
+function schedulePrebuild() {
+  if (prebuildTimer) clearTimeout(prebuildTimer);
+  prebuildTimer = setTimeout(() => {
+    prebuildTimer = null;
+    if (document.visibilityState !== "visible" || !warming || building) return;
+    if (prebuilding) {
+      prebuildAgain = true;
+      return;
+    }
+    prebuild();
+  }, 700);
+}
+for (const type of ["change", "files"]) {
+  projectEvents.addEventListener(type, ({ detail: { project: p } }) => {
+    if (p === projects.current) schedulePrebuild();
+  });
 }
 
 // The compiler names a place in the program as FILE.go:LINE:COL.

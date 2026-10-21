@@ -26,6 +26,22 @@ type buildFlags struct {
 	loads    flags.Loads
 	verbose  bool
 	hot      bool
+
+	// c is the compiler found, kept for every build of the command: the
+	// WebAssembly one stays loaded between builds.
+	c toolchain.Compiler
+}
+
+// find returns the compiler the flags name, found once.
+func (f *buildFlags) find() (toolchain.Compiler, error) {
+	if f.c == nil {
+		c, err := toolchain.Find(f.compiler)
+		if err != nil {
+			return nil, err
+		}
+		f.c = c
+	}
+	return f.c, nil
 }
 
 func (f *buildFlags) register(cmd *cobra.Command) {
@@ -59,7 +75,7 @@ func pkgName(pkg string) (string, error) {
 // the ELF, with its traps removed, to elf. Either may be empty.
 func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
 	start := time.Now()
-	c, err := toolchain.Find(f.compiler)
+	c, err := f.find()
 	if err != nil {
 		return err
 	}

@@ -1119,10 +1119,10 @@ index 0000000..8aed415
 +}
 diff --git a/cmd/tinygo-wasm/main.go b/cmd/tinygo-wasm/main.go
 new file mode 100644
-index 0000000..4c3011b
+index 0000000..e579439
 --- /dev/null
 +++ b/cmd/tinygo-wasm/main.go
-@@ -0,0 +1,104 @@
+@@ -0,0 +1,141 @@
 +// Command tinygo-wasm is the TinyGo compiler as a WebAssembly program: the
 +// build command alone, for compiling a program in a browser.
 +//
@@ -1133,6 +1133,13 @@ index 0000000..4c3011b
 +// Everything the compiler needs, the Go standard library, TinyGo's own
 +// source tree and the modules the program imports, has to be in the file
 +// system it runs against, since there is no go command to ask.
++//
++// Built as a reactor (-buildmode=c-shared), it stays loaded and builds as
++// often as it is asked: the host writes the arguments, separated by NUL
++// bytes, at the address tinygo_args gives and calls tinygo_build with
++// their length, which returns the exit status a run would have. Between
++// builds the loader keeps the standard library parsed and type-checked,
++// which is most of a build's time outside LLVM.
 +package main
 +
 +import (
@@ -1142,27 +1149,56 @@ index 0000000..4c3011b
 +	"runtime"
 +	"strings"
 +	"time"
++	"unsafe"
 +
 +	"github.com/tinygo-org/tinygo/builder"
 +	"github.com/tinygo-org/tinygo/compileopts"
 +	"github.com/tinygo-org/tinygo/goenv"
++	"github.com/tinygo-org/tinygo/loader"
 +)
 +
 +func main() {
-+	target := flag.String("target", "", "target to build for")
-+	output := flag.String("o", "", "output file")
-+	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
-+	tags := flag.String("tags", "", "a space-separated list of extra build tags")
-+	work := flag.Bool("work", false, "print the name of the temporary build directory and do not delete it")
-+	debug := flag.Bool("debug", false, "keep DWARF debug information, which nothing in the playground reads")
-+	printCommands := flag.Bool("x", false, "print commands")
-+	printIR := flag.Bool("printir", false, "print LLVM IR")
-+	verifyIR := flag.Bool("verifyir", false, "run extra verification steps on LLVM IR")
-+	interpTimeout := flag.Duration("interp-timeout", 180*time.Second, "interp optimization pass timeout")
-+	flag.Parse()
-+	if flag.NArg() != 1 {
++	os.Exit(build(os.Args[1:]))
++}
++
++// argsBuf holds the arguments of a build the host asks for.
++var argsBuf [1 << 16]byte
++
++//go:wasmexport tinygo_args
++func tinygoArgs() int32 {
++	return int32(uintptr(unsafe.Pointer(&argsBuf[0])))
++}
++
++//go:wasmexport tinygo_build
++func tinygoBuild(n int32) int32 {
++	if n < 0 || int(n) > len(argsBuf) {
++		return 2
++	}
++	loader.Keep = true
++	return int32(build(strings.Split(string(argsBuf[:n]), "\x00")))
++}
++
++// build runs one build with the arguments given and returns its exit
++// status, saying what went wrong on the standard error.
++func build(args []string) int {
++	flags := flag.NewFlagSet("tinygo-wasm", flag.ContinueOnError)
++	flags.SetOutput(os.Stderr)
++	target := flags.String("target", "", "target to build for")
++	output := flags.String("o", "", "output file")
++	opt := flags.String("opt", "z", "optimization level: 0, 1, 2, s, z")
++	tags := flags.String("tags", "", "a space-separated list of extra build tags")
++	work := flags.Bool("work", false, "print the name of the temporary build directory and do not delete it")
++	debug := flags.Bool("debug", false, "keep DWARF debug information, which nothing in the playground reads")
++	printCommands := flags.Bool("x", false, "print commands")
++	printIR := flags.Bool("printir", false, "print LLVM IR")
++	verifyIR := flags.Bool("verifyir", false, "run extra verification steps on LLVM IR")
++	interpTimeout := flags.Duration("interp-timeout", 180*time.Second, "interp optimization pass timeout")
++	if err := flags.Parse(args); err != nil {
++		return 2
++	}
++	if flags.NArg() != 1 {
 +		fmt.Fprintln(os.Stderr, "usage: tinygo-wasm -target=TARGET -o OUTPUT PACKAGE")
-+		os.Exit(2)
++		return 2
 +	}
 +
 +	options := &compileopts.Options{
@@ -1196,13 +1232,13 @@ index 0000000..4c3011b
 +	config, err := builder.NewConfig(options)
 +	if err != nil {
 +		fmt.Fprintln(os.Stderr, "error:", err)
-+		os.Exit(1)
++		return 1
 +	}
 +
 +	tmpdir, err := os.MkdirTemp("", "tinygo")
 +	if err != nil {
 +		fmt.Fprintln(os.Stderr, "error:", err)
-+		os.Exit(1)
++		return 1
 +	}
 +	if !*work {
 +		defer os.RemoveAll(tmpdir)
@@ -1210,7 +1246,7 @@ index 0000000..4c3011b
 +		fmt.Fprintln(os.Stderr, "WORK="+tmpdir)
 +	}
 +
-+	result, err := builder.Build(flag.Arg(0), *output, tmpdir, config)
++	result, err := builder.Build(flags.Arg(0), *output, tmpdir, config)
 +	if os.Getenv("TINYGO_TIMING") != "" {
 +		var m runtime.MemStats
 +		runtime.ReadMemStats(&m)
@@ -1218,14 +1254,15 @@ index 0000000..4c3011b
 +	}
 +	if err != nil {
 +		fmt.Fprintln(os.Stderr, "error:", err)
-+		os.Exit(1)
++		return 1
 +	}
 +	if result.Binary != "" && result.Binary != *output {
 +		if err := os.Rename(result.Binary, *output); err != nil {
 +			fmt.Fprintln(os.Stderr, "error:", err)
-+			os.Exit(1)
++			return 1
 +		}
 +	}
++	return 0
 +}
 diff --git a/goenv/goenv.go b/goenv/goenv.go
 index cecb5a8..9962679 100644
@@ -1455,6 +1492,145 @@ index 0000000..4c7664c
 +		return "", err
 +	}
 +	return goroot, nil
++}
+diff --git a/loader/keep.go b/loader/keep.go
+new file mode 100644
+index 0000000..fdb6ef1
+--- /dev/null
++++ b/loader/keep.go
+@@ -0,0 +1,133 @@
++package loader
++
++import (
++	"crypto/sha512"
++	"encoding/hex"
++	"go/token"
++	"os"
++	"path/filepath"
++	"strings"
++
++	"golang.org/x/tools/go/ssa"
++)
++
++// Keep has the loader keep what it parsed and type-checked from one build
++// to the next, for a process that builds more than once: the compiler run
++// in a browser, which stays loaded between a program's builds. A package
++// whose files and imports are as they were is taken from the last build
++// rather than parsed and checked again, which for a program's standard
++// library and the packages it imports is nearly all the work, since a
++// build changes the main package alone nearly always. Positions then come
++// from one file set across builds, and the SSA program is kept as well.
++var Keep bool
++
++// kept is what was parsed and checked, by the key of the package it was.
++var kept = map[string]*keptPackage{}
++
++// keptFset is the file set every build parses into when Keep is set.
++var keptFset = token.NewFileSet()
++
++// keptSSA is the SSA program every build adds its packages to when Keep is
++// set: a package whose types are the kept ones is already in it, built.
++var keptSSA *ssa.Program
++
++type keptPackage struct {
++	key  string
++	used bool // in the current build
++	pkg  *Package
++}
++
++// keptSSABuilds counts the builds that added to keptSSA, which holds every
++// main package they made: it is started over now and then so that those
++// do not pile up.
++var keptSSABuilds int
++
++// newFset is the file set a build parses into.
++func newFset() *token.FileSet {
++	if Keep {
++		return keptFset
++	}
++	return token.NewFileSet()
++}
++
++// keptKey names what a package's parsed and checked form depends on: the
++// files it is made of, as they are, the packages it imports, as they
++// were keyed, and the configuration that shapes type checking.
++func (p *Package) keptKey() (string, bool) {
++	h := sha512.New512_224()
++	h.Write([]byte(p.ImportPath + "\n" + p.program.config.Triple() + "\n" + strings.Join(p.program.config.BuildTags(), " ") + "\n" + p.Module.GoVersion + "\n"))
++	for _, file := range append(append([]string(nil), p.GoFiles...), p.CgoFiles...) {
++		if !filepath.IsAbs(file) {
++			file = filepath.Join(p.Dir, file)
++		}
++		data, err := os.ReadFile(file)
++		if err != nil {
++			return "", false
++		}
++		sum := sha512.Sum512_224(data)
++		h.Write([]byte(file + "\n"))
++		h.Write(sum[:])
++	}
++	for _, file := range p.EmbedFiles {
++		h.Write([]byte("embed " + file + "\n"))
++	}
++	for _, imp := range p.Imports {
++		if imp == "C" || imp == "unsafe" {
++			continue
++		}
++		if newImp, ok := p.ImportMap[imp]; ok {
++			imp = newImp
++		}
++		dep, ok := p.program.Packages[imp]
++		if !ok || dep.keyKept == "" {
++			return "", false
++		}
++		h.Write([]byte("import " + dep.keyKept + "\n"))
++	}
++	return hex.EncodeToString(h.Sum(nil)), true
++}
++
++// takeKept fills p from the kept package of its key, if there is one, and
++// reports whether it did.
++func (p *Package) takeKept() bool {
++	if !Keep || len(p.CgoFiles) != 0 {
++		return false
++	}
++	key, ok := p.keptKey()
++	if !ok {
++		return false
++	}
++	p.keyKept = key
++	k, ok := kept[key]
++	if !ok {
++		return false
++	}
++	k.used = true
++	p.Files = k.pkg.Files
++	p.FileHashes = k.pkg.FileHashes
++	p.CFlags = k.pkg.CFlags
++	p.CGoHeaders = k.pkg.CGoHeaders
++	p.EmbedGlobals = k.pkg.EmbedGlobals
++	p.Pkg = k.pkg.Pkg
++	p.info = k.pkg.info
++	return true
++}
++
++// keep puts p, parsed and checked, among the kept packages.
++func (p *Package) keep() {
++	if !Keep || p.keyKept == "" || p.Pkg == nil {
++		return
++	}
++	kept[p.keyKept] = &keptPackage{key: p.keyKept, used: true, pkg: p}
++}
++
++// pruneKept drops what the build just done did not use: an earlier form of
++// a package that changed, the main package nearly always.
++func pruneKept() {
++	for key, k := range kept {
++		if !k.used {
++			delete(kept, key)
++		}
++		k.used = false
++	}
 +}
 diff --git a/loader/list_exec.go b/loader/list_exec.go
 new file mode 100644
@@ -2006,7 +2182,7 @@ index 0000000..c6df169
 +	return keys
 +}
 diff --git a/loader/loader.go b/loader/loader.go
-index feec2f2..13ce869 100644
+index feec2f2..182cc79 100644
 --- a/loader/loader.go
 +++ b/loader/loader.go
 @@ -14,7 +14,6 @@ import (
@@ -2017,7 +2193,24 @@ index feec2f2..13ce869 100644
  	"path"
  	"path/filepath"
  	"runtime"
-@@ -140,27 +139,13 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
+@@ -96,6 +95,7 @@ type Package struct {
+ 	EmbedGlobals map[string][]*EmbedFile
+ 	Pkg          *types.Package
+ 	info         types.Info
++	keyKept      string // what parsing and checking it depends on, when kept
+ }
+ 
+ type EmbedFile struct {
+@@ -132,7 +132,7 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
+ 		goroot:      goroot,
+ 		workingDir:  wd,
+ 		Packages:    make(map[string]*Package),
+-		fset:        token.NewFileSet(),
++		fset:        newFset(),
+ 	}
+ 
+ 	// List the dependencies of this package, in raw JSON format.
+@@ -140,27 +140,13 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
  	if config.TestConfig.CompileTestBinary {
  		extraArgs = append(extraArgs, "-test")
  	}
@@ -2047,6 +2240,69 @@ index feec2f2..13ce869 100644
  	var pkgErrors []error
  	for {
  		pkg := &Package{
+@@ -352,9 +338,12 @@ func (p *Program) MainPkg() *Package {
+ //
+ // Idempotent.
+ func (p *Program) Parse() error {
+-	// Parse all packages.
++	// Parse all packages, those not kept from the last build.
+ 	// TODO: do this in parallel.
+ 	for _, pkg := range p.sorted {
++		if pkg.takeKept() {
++			continue
++		}
+ 		err := pkg.Parse()
+ 		if err != nil {
+ 			return err
+@@ -367,7 +356,9 @@ func (p *Program) Parse() error {
+ 		if err != nil {
+ 			return err
+ 		}
++		pkg.keep()
+ 	}
++	pruneKept()
+ 
+ 	return nil
+ }
+diff --git a/loader/ssa.go b/loader/ssa.go
+index f2cc453..35ad81f 100644
+--- a/loader/ssa.go
++++ b/loader/ssa.go
+@@ -10,13 +10,30 @@ import (
+ func (p *Program) LoadSSA() *ssa.Program {
+ 	// TODO: re-enable SanityCheckFunctions when x/tools is upgraded to
+ 	// a version with a fix for https://golang.org/issues/73594.
+-	prog := ssa.NewProgram(p.fset /*ssa.SanityCheckFunctions|*/, ssa.BareInits|ssa.GlobalDebug|ssa.InstantiateGenerics)
++	mode := ssa.BareInits | ssa.GlobalDebug | ssa.InstantiateGenerics /*| ssa.SanityCheckFunctions*/
++	if !Keep {
++		prog := ssa.NewProgram(p.fset, mode)
++		for _, pkg := range p.sorted {
++			prog.CreatePackage(pkg.Pkg, pkg.Files, &pkg.info, true)
++		}
++		return prog
++	}
+ 
++	// The kept program has the packages kept from the last build in it,
++	// built; what this build parsed afresh is added. The program is
++	// started over now and then, since every main package ever built stays
++	// in it otherwise.
++	if keptSSA == nil || keptSSABuilds >= 32 {
++		keptSSA = ssa.NewProgram(p.fset, mode)
++		keptSSABuilds = 0
++	}
++	keptSSABuilds++
+ 	for _, pkg := range p.sorted {
+-		prog.CreatePackage(pkg.Pkg, pkg.Files, &pkg.info, true)
++		if keptSSA.Package(pkg.Pkg) == nil {
++			keptSSA.CreatePackage(pkg.Pkg, pkg.Files, &pkg.info, true)
++		}
+ 	}
+-
+-	return prog
++	return keptSSA
+ }
+ 
+ // LoadSSA constructs the SSA form of this package.
 diff --git a/src/hash/maphash/maphash.go b/src/hash/maphash/maphash.go
 new file mode 100644
 index 0000000..a0d9a07

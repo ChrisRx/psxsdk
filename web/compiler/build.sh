@@ -140,6 +140,10 @@ echo "==> tinygo-full.wasm and tinygo.wasm"
 # which is a good deal quicker than TinyGo's allocator for the millions of
 # small allocations LLVM makes, and keeps C's memory out of the collector's
 # way as before.
+# The build that ships is a reactor (-buildmode=c-shared): loaded once, it
+# builds as often as it is asked, keeping the standard library parsed and
+# type-checked between builds (cmd/tinygo-wasm). The full build runs as a
+# command under wasmtime to fill the cache.
 FLAGS='-scheduler=none -panic-unwind=explicit'
 TAGS='byollvm llvm22 custommalloc'
 dev "cd '$TREE' \
@@ -148,7 +152,7 @@ dev "cd '$TREE' \
   && export PATH=\"\$PWD/build:$CLANG_BIN:\$PATH\" \
   && export CGO_CFLAGS='-I$OUT/llvm-build/include -I$SRC/llvm/include' \
   && tinygo build -target='$OUT/tinygo-wasm-full.json' -tags '$TAGS' $FLAGS -o '$OUT/tinygo-full.wasm' ./cmd/tinygo-wasm \
-  && tinygo build -target='$OUT/tinygo-wasm.json' -tags '$TAGS' $FLAGS -o '$OUT/tinygo-debug.wasm' ./cmd/tinygo-wasm \
+  && tinygo build -target='$OUT/tinygo-wasm.json' -tags '$TAGS' $FLAGS -buildmode=c-shared -o '$OUT/tinygo-debug.wasm' ./cmd/tinygo-wasm \
   && wasm-opt --strip-debug --strip-producers '$OUT/tinygo-debug.wasm' -o '$OUT/tinygo.wasm'"
 ls -la "$OUT/tinygo-full.wasm" "$OUT/tinygo.wasm"
 # The key of the recipe this build is of, for task compiler:release to

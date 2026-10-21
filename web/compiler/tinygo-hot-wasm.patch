@@ -1,16 +1,16 @@
 --- a/cmd/tinygo-wasm/main.go
 +++ b/cmd/tinygo-wasm/main.go
-@@ -32,6 +32,9 @@
- 	printIR := flag.Bool("printir", false, "print LLVM IR")
- 	verifyIR := flag.Bool("verifyir", false, "run extra verification steps on LLVM IR")
- 	interpTimeout := flag.Duration("interp-timeout", 180*time.Second, "interp optimization pass timeout")
-+	hot := flag.Bool("hot", false, "PlayStation targets: build a program that can take hot reload patches")
-+	hotBase := flag.String("hot-base", "", "PlayStation targets: build a hot reload patch for the program whose ELF is given, built with -hot")
-+	hotAt := flag.String("hot-at", "", "the address, hexadecimal, to link the patch of -hot-base at")
- 	flag.Parse()
- 	if flag.NArg() != 1 {
- 		fmt.Fprintln(os.Stderr, "usage: tinygo-wasm -target=TARGET -o OUTPUT PACKAGE")
-@@ -51,6 +54,9 @@
+@@ -68,6 +68,9 @@
+ 	printIR := flags.Bool("printir", false, "print LLVM IR")
+ 	verifyIR := flags.Bool("verifyir", false, "run extra verification steps on LLVM IR")
+ 	interpTimeout := flags.Duration("interp-timeout", 180*time.Second, "interp optimization pass timeout")
++	hot := flags.Bool("hot", false, "PlayStation targets: build a program that can take hot reload patches")
++	hotBase := flags.String("hot-base", "", "PlayStation targets: build a hot reload patch for the program whose ELF is given, built with -hot")
++	hotAt := flags.String("hot-at", "", "the address, hexadecimal, to link the patch of -hot-base at")
+ 	if err := flags.Parse(args); err != nil {
+ 		return 2
+ 	}
+@@ -89,6 +92,9 @@
  		Semaphore: make(chan struct{}, 1),
  		Debug:     true,
  		Tags:      strings.Fields(*tags),

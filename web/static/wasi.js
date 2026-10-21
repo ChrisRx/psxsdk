@@ -20,7 +20,7 @@ const WHENCE = { SET: 0, CUR: 1, END: 2 };
 const CLOCK = { REALTIME: 0, MONOTONIC: 1 };
 const PREOPEN_FD = 3;
 
-class ExitError extends Error {
+export class ExitError extends Error {
 	constructor(code) {
 		super("exit " + code);
 		this.code = code;
@@ -172,6 +172,37 @@ export class WASI {
 		this.decoder = new TextDecoder();
 		this.encoder = new TextEncoder();
 		this.started = performance.now();
+	}
+
+	// Takes an instantiated reactor module, one with _initialize rather
+	// than _start, runs that, and keeps the instance for calls to its
+	// exports: see call.
+	initialize(instance) {
+		this.instance = instance;
+		this.memory = instance.exports.memory;
+		instance.exports._initialize();
+	}
+
+	// Calls an export of the initialized reactor module. proc_exit from
+	// within it comes back as ExitError; a trap as the error thrown.
+	call(name, ...args) {
+		try {
+			return this.instance.exports[name](...args);
+		} finally {
+			this.flush(1);
+			this.flush(2);
+		}
+	}
+
+	// Points the standard output and error at other functions, for the
+	// next call.
+	setStreams(stdout, stderr) {
+		this.flush(1);
+		this.flush(2);
+		this.stdout = stdout;
+		this.stderr = stderr;
+		this.fds.get(1).stream = stdout;
+		this.fds.get(2).stream = stderr;
 	}
 
 	// Runs the instantiated module's _start and returns its exit code.
