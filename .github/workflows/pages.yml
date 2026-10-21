@@ -61,8 +61,6 @@ jobs:
 
     - name: Build playground
       if: steps.compiler.outputs.found == 'true'
-      env:
-        TINYGO_SRC: ${{ github.workspace }}/tinygo
       run: nix develop .#playground --command task playground
 
     - name: Upload site

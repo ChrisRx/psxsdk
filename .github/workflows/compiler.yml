@@ -2,9 +2,9 @@
 # linked in, caches it for the Pages workflow and publishes it as a release
 # (web/compiler/release.sh). The Pages workflow downloads the release when
 # its cache misses, and builds the compiler itself only when there is no
-# release either. It takes a couple of hours, so it runs when the recipe or
-# the TinyGo fork's revision changes, or by hand, rather than on every
-# push. A recipe whose release exists already is downloaded, not built.
+# release either. It takes a couple of hours, so it runs when the recipe,
+# TinyGo's revision or the PlayStation files laid over it change, or by
+# hand, rather than on every push. A recipe whose release exists already is downloaded, not built.
 # The Pages workflow leaves the build to this one and skips its deploy
 # while the compiler is missing, so a compiler built here runs Pages again
 # to deploy the playground with it.
@@ -17,6 +17,7 @@ on:
       - 'web/compiler/**'
       - 'flake.nix'
       - 'flake.lock'
+      - 'internal/toolchain/_tinygo/**'
       - '.github/actions/compiler/**'
       - '.github/workflows/compiler.yml'
   workflow_dispatch:

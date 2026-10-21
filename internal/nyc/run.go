@@ -70,7 +70,7 @@ func envCommand() *cobra.Command {
 				fmt.Fprintf(w, "tinygo: %s\n", c.Path)
 				fmt.Fprintf(w, "root: %s\n", c.Root)
 				if c.Overlaid {
-					fmt.Fprintln(w, "targets: from the fork, laid over the tinygo command's own root")
+					fmt.Fprintln(w, "targets: nyc's own, laid over the tinygo command's own root")
 				}
 			case *toolchain.Wasm:
 				fmt.Fprintf(w, "unpacked: %s\n", c.Dir())

@@ -14,7 +14,7 @@
 // Only the first step is outside nyc.
 //
 // TinyGo is the tinygo command when there is one, given the PlayStation
-// targets from the fork when it has none, or else TinyGo compiled to
+// targets nyc carries when it has none, or else TinyGo compiled to
 // WebAssembly, the playground's compiler, run in-process under wazero
 // (--compiler, NYC_COMPILER). Package go.chrisrx.dev/psx/internal/toolchain
 // says how each is found. This nyc has no WebAssembly compiler of its own,

@@ -38,7 +38,7 @@ go build -o bin/ ./cmd/... ./tools/...
 go test ./...
 ```
 
-Building the examples also needs a compiler, which `nyc` finds for itself: a tinygo command with the PlayStation targets, or failing that, TinyGo compiled to WebAssembly. The Nix flake provides the TinyGo fork, the cross binutils, [go-task](https://taskfile.dev), mednafen and a patched [psxe](https://github.com/allkern/psxe):
+Building the examples also needs a compiler, which `nyc` finds for itself: a tinygo command with the PlayStation targets, or failing that, TinyGo compiled to WebAssembly. The Nix flake provides TinyGo with those targets, the cross binutils, [go-task](https://taskfile.dev), mednafen and a patched [psxe](https://github.com/allkern/psxe):
 
 ```bash
 nix develop            # or: direnv allow

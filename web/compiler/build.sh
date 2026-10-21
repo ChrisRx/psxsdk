@@ -2,14 +2,15 @@
 # Builds the TinyGo compiler as a WebAssembly program, for the playground in
 # the player, into OUTDIR as tinygo.wasm:
 #
-#	TINYGO_SRC=~/src/tinygo web/compiler/build.sh .build/compiler
+#	web/compiler/build.sh .build/compiler
 #
-# TINYGO_SRC is a checkout of the TinyGo fork with the PlayStation targets.
-# The changes that make the compiler itself run as a WebAssembly program are
-# in tinygo-wasm.patch, which prepare.sh applies to a copy of the fork in
-# OUTDIR/tinygo. Everything else comes from nixpkgs, at the revision the
-# flake pins: the LLVM sources, the wasm32-wasi cross toolchain, and the
-# shell nixpkgs builds TinyGo in.
+# TinyGo is upstream's source at the revision the flake builds, with the
+# PlayStation targets and runtime from internal/toolchain/_tinygo laid over
+# it. The changes that make the compiler itself run as a WebAssembly
+# program are in tinygo-wasm.patch, which prepare.sh applies to that tree
+# in OUTDIR/tinygo. Everything else comes from
+# nixpkgs, at the revision the flake pins: the LLVM sources, the wasm32-wasi
+# cross toolchain, and the shell nixpkgs builds TinyGo in.
 #
 # The steps, each skipped when its output is already there:
 #
@@ -40,13 +41,12 @@
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 OUT=$(realpath -m "${1:?usage: build.sh OUTDIR}")
-TINYGO_SRC=$(realpath "${TINYGO_SRC:?set TINYGO_SRC to a checkout of the TinyGo fork}")
 JOBS=${JOBS:-$(nproc)}
 if [ -z "${NIXPKGS:-}" ]; then
   rev=$(nix flake metadata --json "$HERE/../.." | python3 -c 'import json, sys; print(json.load(sys.stdin)["locks"]["nodes"]["nixpkgs"]["locked"]["rev"])')
   NIXPKGS="github:NixOS/nixpkgs/$rev"
 fi
-export HERE OUT TINYGO_SRC JOBS NIXPKGS
+export HERE OUT JOBS NIXPKGS
 mkdir -p "$OUT"
 
 echo "==> nix store paths"

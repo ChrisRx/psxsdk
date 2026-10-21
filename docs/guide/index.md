@@ -50,7 +50,7 @@ go get -tool go.chrisrx.dev/psx/cmd/nyc
 go tool nyc run
 ```
 
-The Nix flake in this repository provides the TinyGo fork the examples are built with.
+The Nix flake in this repository provides a TinyGo with the PlayStation targets, which the examples are built with.
 
 ## Working on psxsdk itself
 

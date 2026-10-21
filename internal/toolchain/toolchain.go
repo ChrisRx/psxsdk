@@ -2,8 +2,9 @@
 // for nyc. TinyGo comes in one of two ways:
 //
 //   - Native runs the tinygo command. A TinyGo without the PlayStation
-//     targets gets them from the fork, whose files are embedded here and
-//     laid over a copy of its root made of links (Overlay).
+//     targets gets them from internal/toolchain/_tinygo, whose files are
+//     embedded here and laid over a copy of its root made of links
+//     (Overlay).
 //   - Wasm runs TinyGo compiled to WebAssembly, the compiler the
 //     playground runs in the browser, under wazero, with no tinygo or go
 //     command needed at all.

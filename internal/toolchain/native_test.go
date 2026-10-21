@@ -8,7 +8,7 @@ import (
 	"go.chrisrx.dev/x/assert"
 )
 
-// TestOverlay lays the fork's files over a small TinyGo root: the fork's
+// TestOverlay lays the PlayStation files over a small TinyGo root: those
 // files are real, directories on the way to them and everything under src
 // are real directories, and everything else is a link into the root.
 func TestOverlay(t *testing.T) {

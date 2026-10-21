@@ -50,40 +50,52 @@
         cross.buildPackages.binutils-unwrapped
       ];
 
-      # TinyGo, from a fork carrying the playstation target.
+      # TinyGo, upstream's source with the PlayStation targets and their
+      # runtime laid over it from internal/toolchain/_tinygo, the same files
+      # nyc lays over a TinyGo that lacks them.
       #
-      # It has to be a fork rather than an out-of-tree target file, because
-      # TinyGo selects a target's runtime files by build tag from inside its
-      # own source tree. The three files the PlayStation needs there are
-      # src/runtime/runtime_playstation.go, src/runtime/arch_playstation.go
-      # and src/runtime/interrupt/interrupt_playstation.go; the alternative
-      # was for every build to stage a modified copy of TINYGOROOT.
+      # They have to go into TinyGo's own tree rather than sit beside it as an
+      # out-of-tree target file, because TinyGo selects a target's runtime
+      # files by build tag from inside its source tree: src/runtime/
+      # runtime_playstation.go, arch_playstation.go and interrupt/
+      # interrupt_playstation.go, and their yaroze counterparts. They only
+      # add files, so the revision here is whichever upstream commit they
+      # were last checked against, and the source is kept in this repository
+      # rather than a fork of TinyGo.
+      #
+      # tinygoSrc is upstream's source alone, at that revision, with its
+      # submodules: web/compiler/prepare.sh lays the same files over it for
+      # the playground's compiler.
       #
       # This is nixpkgs' own derivation with the source swapped, so it keeps
-      # the LLVM and Go versions nixpkgs pinned for the release it packaged,
-      # which is what the fork is branched from. It does mean building TinyGo
-      # rather than taking it from the binary cache.
+      # the LLVM and Go versions nixpkgs pinned for the release it packaged.
+      # It does mean building TinyGo rather than taking it from the binary
+      # cache.
       #
-      # To move to a newer commit of the fork: change rev, set hash and
+      # To move to a newer upstream commit: change rev, set hash and
       # vendorHash to lib.fakeHash, build, and take the values nix reports.
+      tinygoSrc =
+        pkgs:
+        pkgs.fetchFromGitHub {
+          owner = "tinygo-org";
+          repo = "tinygo";
+          rev = "cb015201fd424e0d51a6100038071044409668ba";
+          hash = "sha256-mE+Du7dSGurAPX9XEbJvbC7yC9LnkWHjci5ahzN/6UQ=";
+          fetchSubmodules = true;
+          # cmsis-svd carries several GB of vendor data for parts that have
+          # nothing to do with this, which nixpkgs drops for the same reason.
+          postFetch = ''
+            rm -r $out/lib/cmsis-svd/data/{SiliconLabs,Freescale}
+          '';
+        };
+
       mkTinygo =
         pkgs:
         pkgs.tinygo.overrideAttrs (
           final: prev: {
             version = "0.44.0-dev-playstation";
 
-            src = pkgs.fetchFromGitHub {
-              owner = "ChrisRx";
-              repo = "tinygo";
-              rev = "6d5acbef9d6e9778e2616cf8accc9f4b26b280b9";
-              hash = "sha256-s0ARHvJoDCoLA6qkm5sMUorTSwjweb3Tnu9u7AKbT5g=";
-              fetchSubmodules = true;
-              # cmsis-svd carries several GB of vendor data for parts that have
-              # nothing to do with this, which nixpkgs drops for the same reason.
-              postFetch = ''
-                rm -r $out/lib/cmsis-svd/data/{SiliconLabs,Freescale}
-              '';
-            };
+            src = tinygoSrc pkgs;
 
             vendorHash = "sha256-Bliaz1fMIUnHD/S3ggNMRXh0rIlwrCCOXMr+uiP8NGc=";
 
@@ -91,7 +103,7 @@
             # release it packaged and no longer applies: make/release.mk has
             # moved on. The same changes are made here as substitutions, which
             # do not care where in the file the lines are, and which fail loudly
-            # rather than silently if the fork moves again.
+            # rather than silently if the revision moves again.
             #
             # All three are about Nix supplying something the makefile would
             # otherwise go looking for. LLVM_PROJECTDIR defaults to an
@@ -101,6 +113,8 @@
             # already built; and brew is not a thing that exists here.
             patches = [ ];
             postPatch = ''
+              cp -r --no-preserve=mode ${./internal/toolchain/_tinygo}/. .
+
               substituteInPlace make/config.mk \
                 --replace-fail 'BREW_PREFIX := $(shell brew --prefix)' 'BREW_PREFIX :='
 
@@ -214,6 +228,11 @@
               mainProgram = "psxe";
             };
           });
+
+          # Upstream TinyGo's source at the revision mkTinygo builds, with
+          # its submodules, for web/compiler/prepare.sh to make the tree the
+          # playground's compiler is built from.
+          tinygo-src = tinygoSrc pkgs;
         }
       );
 
@@ -284,7 +303,7 @@
 
           # What adding the playground to the site takes ("task playground"):
           # the compiler's own build inputs, LLVM among them, for building
-          # the fork's tinygo-sysroot command natively; wasmtime to run the
+          # the patched tree's tinygo-sysroot command natively; wasmtime to run the
           # compiler once to fill its cache; and Go for the disc tools'
           # WebAssembly builds. The compiler itself comes from the Compiler
           # workflow, or "task compiler".

@@ -227,14 +227,13 @@ tasks:
       - go run ./web/serve -dir .build/site
 
   # Builds the compiler the playground runs in the browser, TinyGo compiled
-  # to WebAssembly with LLVM and lld linked in, onto .build/compiler. It
-  # needs a checkout of the TinyGo fork in TINYGO_SRC, to which it applies
-  # web/compiler/tinygo-wasm.patch in a copy, and nix, and takes most of
-  # an hour, so it is not part of site; web/compiler/build.sh says how it
-  # works.
+  # to WebAssembly with LLVM and lld linked in, onto .build/compiler, from
+  # the TinyGo the flake builds with web/compiler/tinygo-wasm.patch
+  # applied. It needs nix and takes most of an hour, so it is not part of
+  # site; web/compiler/build.sh says how it works.
   compiler:
     cmds:
-      - TINYGO_SRC="${TINYGO_SRC:-$HOME/src/ChrisRx/tinygo}" web/compiler/build.sh .build/compiler
+      - web/compiler/build.sh .build/compiler
 
   # Says how to get the compiler when .build/compiler has none: task
   # compiler builds it, or another checkout's build can be linked in.
@@ -385,19 +384,3 @@ tasks:
       - task: build:disc
         vars: { NAME: compressbench, DIR: internal/compressbench }
       - go test ./tests -run TestCompressionBench -v | grep -E 'KB/s|ok|FAIL'
-
-  # Copies the files the TinyGo fork adds, the PlayStation targets and
-  # their runtime, from its last commit in TINYGO_SRC into
-  # internal/toolchain/_tinygo, which nyc lays over a TinyGo without them.
-  # Run it when the fork's pin in flake.nix moves.
-  nyc:fork:
-    vars:
-      DST: internal/toolchain/_tinygo
-    cmds:
-      - rm -rf {{.DST}}
-      - |
-        src="${TINYGO_SRC:-$HOME/src/ChrisRx/tinygo}"
-        git -C "$src" diff --name-only --diff-filter=A HEAD~1 HEAD | while read -r f; do
-          mkdir -p "{{.DST}}/$(dirname "$f")"
-          git -C "$src" show "HEAD:$f" > "{{.DST}}/$f"
-        done

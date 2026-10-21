@@ -16,10 +16,11 @@ import (
 	"time"
 )
 
-// fork holds the files the TinyGo fork adds, under the paths they have in
-// a TinyGo root: the targets and the runtime for them. The fork changes
-// nothing else, so these laid over a TinyGo of the same version are the
-// fork. task nyc:fork copies them from TINYGO_SRC.
+// fork holds the files that make TinyGo build for the PlayStation, under
+// the paths they have in a TinyGo root: the targets and the runtime for
+// them. They only add files, so these laid over a TinyGo of the same
+// version are a TinyGo with the PlayStation targets. They are the source
+// of them: the flake lays them over upstream TinyGo too.
 //
 //go:embed _tinygo
 var fork embed.FS
@@ -77,7 +78,7 @@ func (n *Native) Compile(ctx context.Context, b *Build) error {
 	cmd.Env = os.Environ()
 	if n.Overlaid {
 		cmd.Env = append(cmd.Env, "TINYGOROOT="+n.Root)
-		b.logf("tinygo root: %s (the fork's targets over %s)", n.Root, n.Path)
+		b.logf("tinygo root: %s (the PlayStation targets over %s)", n.Root, n.Path)
 	}
 	start := time.Now()
 	if err := cmd.Run(); err != nil {
@@ -87,13 +88,13 @@ func (n *Native) Compile(ctx context.Context, b *Build) error {
 	return nil
 }
 
-// Overlay returns a TinyGo root that is root with the fork's files added,
-// made of links: a tree in the user's cache directory whose directories on
-// the way to a fork file are real, and whose other entries are links into
+// Overlay returns a TinyGo root that is root with the PlayStation files
+// added, made of links: a tree in the user's cache directory whose
+// directories on the way to one of them are real, and whose other entries are links into
 // root. Under src every directory is real, with links only for files, since
 // TinyGo walks src when it merges it with the Go standard library, and takes
 // a link to a directory for a file. It is made once for each root and
-// version of the fork's files.
+// version of the PlayStation files.
 func Overlay(root string) (string, error) {
 	h := sha256.New()
 	h.Write([]byte(root))
