@@ -44,6 +44,7 @@
     </details>
     <button id="run" class="primary" type="button" title="Format, build and run (Ctrl+Enter)">Run</button>
     <button id="format" type="button" title="Format the program with gofmt (Ctrl+Shift+F)">Format</button>
+    <label class="pg-hot" title="Hot reload: while this project runs, Run builds a patch of its main package and loads it into the running program between frames, keeping its variables, instead of starting over. Experimental: a change to a variable's type, to a type's layout or to another package needs a restart, which Run does when it cannot build a patch, and the game may misbehave if a running function's locals changed."><input type="checkbox" id="hot"> Hot</label>
     <span id="live-pill" class="live-pill" hidden title="This project is running: changes to its scene show on the console at once">Live</span>
     <span class="pg-hint muted"><kbd>Ctrl</kbd> <kbd>Enter</kbd> runs, <kbd>Ctrl</kbd> <kbd>Space</kbd> completes</span>
     <nav class="pg-links" aria-label="Site">

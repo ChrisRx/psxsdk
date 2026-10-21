@@ -157,7 +157,54 @@ export class Pipeline {
 	// called with each line of output as it comes. The data files, such as
 	// assets/CUBE.TIM, are what the program registers with package disc and
 	// mkpsxiso puts on the disc.
-	async build(project, log) {
+	//
+	// With hot, the program is built to take patches (see patch): its main
+	// package's functions are called through slots and memory is reserved
+	// for the patches.
+	async build(project, log, { hot = false } = {}) {
+		const { fs, env } = this.workspace(project);
+		if (!(await this.generate(project, fs, log))) return { ok: false };
+		const tinygo = ["tinygo", "-target=" + this.env.target];
+		if (hot) tinygo.push("-hot");
+		const steps = [
+			["tinygo", [...tinygo, "-o", "/work/prog.elf", "/work/prog"]],
+			["mips1fix", ["mips1fix", "-q", "/work/prog.elf"]],
+			["eco2exe", ["eco2exe", "/work/prog.elf", "/work/prog.exe"]],
+			["mkpsxiso", ["mkpsxiso", "-o", "/work/prog.bin", "--volume-id", "prog.exe", "--boot", "MAIN.EXE", "--file", "MAIN.EXE=/work/prog.exe", "--src", "/work/prog"]],
+		];
+		if (!(await this.steps(steps, env, fs, log))) return { ok: false };
+		return {
+			ok: true,
+			files: {
+				"prog.cue": fs.get("/work/prog.cue"),
+				"prog.bin": fs.get("/work/prog.bin"),
+			},
+			elf: fs.get("/work/prog.elf"),
+		};
+	}
+
+	// patch compiles a project as a hot reload patch for the program whose
+	// ELF is base, built with hot and running, linked at the address at
+	// inside the program's region for patches, and returns {ok, elf}, the
+	// patch's ELF for the emulator to load. The compiler says on the log,
+	// in a line starting "hot:", when the program has to be built and
+	// started again instead: a variable that changed size, say.
+	async patch(project, base, at, log) {
+		const { fs, env } = this.workspace(project);
+		fs.put("/work/base.elf", base);
+		if (!(await this.generate(project, fs, log))) return { ok: false };
+		const steps = [
+			["tinygo", ["tinygo", "-target=" + this.env.target, "-hot-base=/work/base.elf", "-hot-at=0x" + at.toString(16), "-o", "/work/patch.elf", "/work/prog"]],
+			["mips1fix", ["mips1fix", "-q", "/work/patch.elf"]],
+		];
+		if (!(await this.steps(steps, env, fs, log))) return { ok: false };
+		return { ok: true, elf: fs.get("/work/patch.elf") };
+	}
+
+	// workspace stages a project with the sysroot, the compiler's cache and
+	// a go.mod naming the modules, and returns the file system and the
+	// environment the compiler runs in.
+	workspace(project) {
 		const fs = this.stage(project);
 		fs.root.children.set("sysroot", this.sysroot);
 		fs.mkdir("/tmp");
@@ -180,31 +227,23 @@ export class Pipeline {
 			// The cache is keyed by the compiler the host filled it with.
 			TINYGO_BUILD_ID: this.env.buildID ?? "",
 		};
-		if (!(await this.generate(project, fs, log))) return { ok: false };
-		const steps = [
-			["tinygo", ["tinygo", "-target=" + this.env.target, "-o", "/work/prog.elf", "/work/prog"]],
-			["mips1fix", ["mips1fix", "-q", "/work/prog.elf"]],
-			["eco2exe", ["eco2exe", "/work/prog.elf", "/work/prog.exe"]],
-			["mkpsxiso", ["mkpsxiso", "-o", "/work/prog.bin", "--volume-id", "prog.exe", "--boot", "MAIN.EXE", "--file", "MAIN.EXE=/work/prog.exe", "--src", "/work/prog"]],
-		];
+		return { fs, env };
+	}
+
+	// steps runs each of steps, [name, args], in turn, logging how long each
+	// took, and returns whether every one succeeded.
+	async steps(steps, env, fs, log) {
 		for (const [name, args] of steps) {
 			const started = performance.now();
 			const code = await this.run(name, args, env, fs, log);
 			const took = ((performance.now() - started) / 1000).toFixed(1);
 			if (code !== 0) {
 				log(`${name} failed with exit code ${code} after ${took}s\n`);
-				return { ok: false };
+				return false;
 			}
 			log(`${name}: ${took}s\n`);
 		}
-		return {
-			ok: true,
-			files: {
-				"prog.cue": fs.get("/work/prog.cue"),
-				"prog.bin": fs.get("/work/prog.bin"),
-			},
-			elf: fs.get("/work/prog.elf"),
-		};
+		return true;
 	}
 
 	// convert runs the project's generate lines other than discgen's, and

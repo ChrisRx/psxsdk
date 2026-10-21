@@ -18,3 +18,12 @@ func TestAddress(t *testing.T) {
 	assert.Error(t, "not an address", a.Set("801FFFF0"))
 	assert.Error(t, "not an address", a.Set("0x1801FFFF0"))
 }
+
+func TestAddresses(t *testing.T) {
+	var a Addresses
+	assert.NoError(t, a.Set("0x80010000"))
+	assert.NoError(t, a.Set("0x8001000c"))
+	assert.Equal(t, Addresses{0x80010000, 0x8001000c}, a)
+	assert.Equal(t, "0x80010000,0x8001000C", a.String())
+	assert.Error(t, "not an address", a.Set("main.main"))
+}

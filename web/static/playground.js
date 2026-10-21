@@ -219,8 +219,78 @@ $("format").addEventListener("click", async () => {
   }
 });
 
+// Hot reload: with the box ticked, a project is built to take patches,
+// and while it runs, Run builds a patch of its main package and loads it
+// into the running program between frames, keeping its variables, rather
+// than starting over. The compiler says when a patch cannot be made, a
+// variable having changed size say, and Run starts over then. The choice
+// is remembered.
+const hotBox = $("hot");
+try { hotBox.checked = localStorage.getItem("hot") === "on"; } catch { /* no storage */ }
+hotBox.addEventListener("change", () => {
+  try { localStorage.setItem("hot", hotBox.checked ? "on" : "off"); } catch { /* no storage */ }
+});
+
+// patchRunning builds a patch of project for its program, which is
+// running, and loads it. It returns whether that settled the run: it did
+// when the patch was loaded, or the program does not compile; it did not
+// when the program has to be started over, which the caller then does.
+async function patchRunning(project) {
+  building = true;
+  $("run").disabled = true;
+  showTab("build");
+  buildLog.textContent = "";
+  buildStatus.textContent = "Formatting…";
+  try {
+    if (!(await format())) {
+      buildStatus.textContent = "The program does not parse.";
+      return true;
+    }
+    const { region } = await call("hot");
+    if (!region) return false;
+    if (region.end <= region.at) {
+      buildStatus.textContent = "Starting over: the program is too large to leave room for patches";
+      return false;
+    }
+    buildStatus.textContent = "Building a patch…";
+    const t0 = performance.now();
+    let log = "";
+    const result = await request("patch", { files: project.list(), base: state.hot.base, at: region.at }, (text) => {
+      log += text;
+      appendLog(text);
+    });
+    if (!result.ok) {
+      const why = log.match(/^hot: (.*)$/m);
+      if (why) {
+        buildStatus.textContent = `Starting over: ${why[1]}`;
+        return false;
+      }
+      const errors = showErrors(log);
+      buildStatus.textContent = errors.length ? `${errors.length} error${errors.length > 1 ? "s" : ""}` : (result.error ?? "The patch failed.");
+      buildLog.scrollTop = 0;
+      return true;
+    }
+    const loaded = await call("patch", { elf: result.elf });
+    if (loaded.error) {
+      appendLog(`${loaded.error}\n`);
+      buildStatus.textContent = `Starting over: ${loaded.error}`;
+      return false;
+    }
+    files.markErrors([]);
+    buildStatus.textContent = `Patched in ${((performance.now() - t0) / 1000).toFixed(1)}s; ${(region.end - loaded.at) >> 10} KB left for patches`;
+    return true;
+  } finally {
+    building = false;
+    $("run").disabled = false;
+  }
+}
+
 async function buildAndRun() {
   if (building || !projects.current) return;
+  const project = projects.current;
+  if (hotBox.checked && state.hot?.projectId === project.id && state.current?.id === project.id && state.hot.base) {
+    if (await patchRunning(project)) return;
+  }
   building = true;
   $("run").disabled = true;
   showTab("build");
@@ -238,8 +308,7 @@ async function buildAndRun() {
   buildStatus.textContent = "Building…";
   const t0 = performance.now();
   let log = "";
-  const project = projects.current;
-  const result = await request("build", { files: project.list() }, (text) => {
+  const result = await request("build", { files: project.list(), hot: hotBox.checked }, (text) => {
     log += text;
     appendLog(text);
   });
@@ -256,6 +325,7 @@ async function buildAndRun() {
   buildStatus.textContent = `Built in ${((performance.now() - t0) / 1000).toFixed(1)}s`;
   state.current = { name: project.name, id: project.id };
   state.disc = { cue: "prog.cue", files: result.files, elf: result.elf };
+  state.hot = hotBox.checked ? { projectId: project.id, base: result.elf } : null;
   ttyLog.textContent = "";
   showTab("tty");
   try {

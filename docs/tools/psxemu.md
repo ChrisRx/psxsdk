@@ -28,4 +28,5 @@ $ psxemu --bios scph1001.bin --disc original.cue --until 8017fa54:e0 \
 - `--poke frame:addr:value` writes the word after that frame of the script; a value starting with `|` is ORed into the word. With the player's position and an edge flag poked, a game can be taken through its areas without the walk.
 - `--profile symbols.txt` samples where the cycles went through the script and prints the share of each symbol, then the hottest stretches of code; the file holds lines of a hexadecimal address and a name, as `go tool nm` prints. `--profile-window a:b` limits the sampling to those frames.
 - `--polygons` prints how many polygons the GPU drew per vertical blank over the script, by kind.
+- `--break 0x80012345` prints the frame and the argument, return address and stack registers each time the program reaches an address, with or without a script; it can be given more than once.
 

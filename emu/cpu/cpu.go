@@ -228,6 +228,10 @@ type Clock struct {
 	Hook, HookMask uint32
 	Hooked         bool
 
+	// Run stops before an instruction at an address in Breaks, if it is
+	// not nil.
+	Breaks *Breaks
+
 	// Run stops before the instruction at Spin, the head of a loop the
 	// machine can skip through.
 	Spin uint32
@@ -454,7 +458,8 @@ func (c *CPU) Run(n uint64, k *Clock) uint64 {
 		}
 		video := float32(*k.Video + float32(float32(c.LastCycles)*k.VideoRate))
 		if c.TotalCycles >= due || video >= *k.VideoEdge || i >= stepsDue || *k.Wake ||
-			k.Hooked && c.PC&k.HookMask == k.Hook || c.PC == k.Spin {
+			k.Hooked && c.PC&k.HookMask == k.Hook || c.PC == k.Spin ||
+			k.Breaks != nil && k.Breaks.Has(c.PC) {
 			break
 		}
 		*k.Video = video

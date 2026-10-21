@@ -71,7 +71,8 @@ func (n *Native) Compile(ctx context.Context, b *Build) error {
 	if len(b.Tags) > 0 {
 		args = append(args, "-tags="+strings.Join(b.Tags, " "))
 	}
-	args = append(args, b.Package)
+	args = append(args, b.hotArgs()...)
+	args = append(args, packageDir(b.Package))
 	cmd := exec.CommandContext(ctx, n.Path, args...)
 	cmd.Stdout = b.Stderr
 	cmd.Stderr = b.Stderr
@@ -86,6 +87,16 @@ func (n *Native) Compile(ctx context.Context, b *Build) error {
 	}
 	b.logf("tinygo: %s", since(start))
 	return nil
+}
+
+// packageDir returns pkg as a directory for the go tools, which take a
+// path without a leading ./ or / for an import path: examples/square
+// becomes ./examples/square.
+func packageDir(pkg string) string {
+	if filepath.IsAbs(pkg) || pkg == "." || pkg == ".." || strings.HasPrefix(pkg, "./") || strings.HasPrefix(pkg, "../") || strings.HasPrefix(pkg, `.\`) || strings.HasPrefix(pkg, `..\`) {
+		return pkg
+	}
+	return "./" + pkg
 }
 
 // Overlay returns a TinyGo root that is root with the PlayStation files

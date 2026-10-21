@@ -2,7 +2,7 @@
 // the sysroot the first time it is asked to build, keeps them, and builds
 // each project it is sent with pipeline.js.
 //
-// The page sends {type: "build", id, files}, the project's files as
+// The page sends {type: "build", id, files, hot}, the project's files as
 // {path, data}, its Go files at the root and its data files under assets/, or
 // {type: "load", id} to fetch the compiler ahead of the first build,
 // answered by {id, ok} or {id, ok: false, error}. While loading or
@@ -14,6 +14,10 @@
 // text}, which needs only gofmt.wasm, not the compiler, and is answered by
 // {id, ok, files} with those that changed, or {id, ok: false, error} with
 // gofmt's complaints, which name the files as they were sent.
+//
+// {type: "patch", id, files, base, at} compiles the project as a hot reload
+// patch for the running program whose ELF is base, built with hot, linked
+// at address at, and replies {ok, elf}.
 //
 // {type: "convert", id, files} runs the project's go:generate lines other
 // than discgen's, the converters that make assets/ from assets/, which needs
@@ -139,7 +143,7 @@ self.onmessage = async (e) => {
 		}
 		return;
 	}
-	if (msg.type !== "build" && msg.type !== "load") return;
+	if (msg.type !== "build" && msg.type !== "load" && msg.type !== "patch") return;
 	try {
 		pipeline ??= load(log);
 		const loaded = await pipeline;
@@ -147,7 +151,16 @@ self.onmessage = async (e) => {
 			self.postMessage({ id: msg.id, ok: true });
 			return;
 		}
-		const result = await loaded.build(msg.files, log);
+		if (msg.type === "patch") {
+			const result = await loaded.patch(msg.files, msg.base, msg.at, log);
+			if (!result.ok) {
+				self.postMessage({ id: msg.id, ok: false, error: "the patch failed" });
+				return;
+			}
+			self.postMessage({ id: msg.id, ok: true, elf: result.elf }, [result.elf.buffer]);
+			return;
+		}
+		const result = await loaded.build(msg.files, log, { hot: !!msg.hot });
 		if (!result.ok) {
 			self.postMessage({ id: msg.id, ok: false, error: "the build failed" });
 			return;

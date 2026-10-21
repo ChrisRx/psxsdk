@@ -44,6 +44,7 @@ var opts struct {
 	ProfileWindow string
 	Polygons      bool
 	Quiet         bool
+	Breaks        flags.Addresses
 }
 
 func main() {
@@ -95,6 +96,7 @@ compared frame by frame.
 	f.StringVar(&opts.ProfileWindow, "profile-window", "", "a:b, frames of the script to sample, with --profile")
 	f.BoolVar(&opts.Polygons, "polygons", false, "print the polygons drawn per vertical blank over the script")
 	f.BoolVar(&opts.Quiet, "quiet", false, "do not echo what the program writes to the TTY")
+	f.Var(&opts.Breaks, "break", "an address, hexadecimal with 0x: print the registers each time the program reaches it; repeatable")
 	cmd.MarkFlagRequired("bios")
 
 	if err := cmd.Execute(); err != nil {
@@ -133,6 +135,14 @@ func run(cmd *cobra.Command, args []string) error {
 	// its has to as well.
 	if opts.Trace != "" {
 		m.SetCDAudio(false)
+	}
+	for _, addr := range opts.Breaks {
+		m.SetBreak(addr, func(m *emu.Machine) bool {
+			c := m.CPU
+			fmt.Printf("break %08x frame %d a0 %08x a1 %08x a2 %08x a3 %08x ra %08x sp %08x\n",
+				c.PC, m.Frames(), c.R[4], c.R[5], c.R[6], c.R[7], c.R[31], c.R[29])
+			return false
+		})
 	}
 	if opts.Disc != "" {
 		d, err := emu.OpenDisc(opts.Disc)

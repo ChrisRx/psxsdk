@@ -53,9 +53,18 @@ func main() {
 	// that its malloc, should anything in the library call it, stops there
 	// rather than growing into Go's heap. Nothing has allocated from it yet,
 	// so starting it again loses nothing.
-	libps_initHeap(unsafe.Pointer(globalsEnd), uint32(heapStart-globalsEnd))
+	libps_initHeap(unsafe.Pointer(globalsEnd), uint32(libpsHeapEnd-globalsEnd))
 	run()
 }
+
+// _libps_heap_end is where the link script ends the library's reserve.
+// The Go heap starts there too, unless the program was built with -hot,
+// which puts the region for its patches between the two.
+//
+//go:extern _libps_heap_end
+var libpsHeapEndSymbol [0]byte
+
+var libpsHeapEnd = uintptr(unsafe.Pointer(&libpsHeapEndSymbol))
 
 // preinit would zero .bss and copy .data out of ROM on a typical bare-metal
 // target. Here the crt0 has already cleared .bss, and there is no ROM to copy

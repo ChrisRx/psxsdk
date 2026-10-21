@@ -1,0 +1,107 @@
+--- a/main.go
++++ b/main.go
+@@ -1811,6 +1811,9 @@
+ 	timeout := flag.Duration("timeout", 20*time.Second, "the length of time to retry locating the MSD volume to be used for flashing")
+ 	programmer := flag.String("programmer", "", "which hardware programmer to use")
+ 	ldflags := flag.String("ldflags", "", "Go link tool compatible ldflags")
++	hot := flag.Bool("hot", false, "PlayStation targets: build a program that can take hot reload patches")
++	hotBase := flag.String("hot-base", "", "PlayStation targets: build a hot reload patch for the program whose ELF is given, built with -hot")
++	hotAt := flag.String("hot-at", "", "the address, hexadecimal, to link the patch of -hot-base at")
+ 	llvmFeatures := flag.String("llvm-features", "", "comma separated LLVM features to enable")
+ 	cpuprofile := flag.String("cpuprofile", "", "cpuprofile output")
+ 	monitor := flag.Bool("monitor", false, "enable serial monitor")
+@@ -1959,6 +1962,9 @@
+ 		WITPackage:              witPackage,
+ 		WITWorld:                witWorld,
+ 		GoCompatibility:         *gocompatibility,
++		Hot:                     *hot,
++		HotBase:                 *hotBase,
++		HotAt:                   *hotAt,
+ 	}
+ 	if *printCommands {
+ 		options.PrintCommands = printCommand
+--- a/compileopts/options.go
++++ b/compileopts/options.go
+@@ -68,6 +68,14 @@
+ 	ExtLDFlags              []string
+ 	GoCompatibility         bool   // enable to check for Go version compatibility
+ 	BuildVCS                string // -buildvcs: "auto" (default), "true" or "false"
++
++	// Hot reload for the PlayStation targets (see transform/hot.go): Hot
++	// builds a program that can take patches, HotBase names the ELF of
++	// such a program to build a patch for, and HotAt is the address in
++	// the program's reserved region to link the patch at.
++	Hot     bool   // -hot flag
++	HotBase string // -hot-base flag
++	HotAt   string // -hot-at flag
+ }
+ 
+ // Verify performs a validation on the given options, raising an error if options are not valid.
+--- a/builder/build.go
++++ b/builder/build.go
+@@ -772,6 +772,40 @@
+ 	}
+ 	result.Binary = result.Executable // final file
+ 	ldflags := append(config.LDFlags(), "-o", result.Executable)
++	if config.Options.Hot || config.Options.HotBase != "" {
++		// Hot reload (see transform/hot.go): a program built with -hot
++		// reserves a region for patches, and a patch is linked at the
++		// address given, by the patch link script, rooted at the table the
++		// loader reads. The link scripts take these from a script of their
++		// own that comes before them, since --defsym is applied after the
++		// scripts have been evaluated.
++		var hotScript string
++		if config.Options.Hot {
++			hotScript += "__hot_size = 0x40000;\n"
++		}
++		if config.Options.HotBase != "" {
++			if config.Options.HotAt == "" {
++				return result, errors.New("-hot-base needs -hot-at, the address to link the patch at")
++			}
++			hotScript += "__hot_at = " + config.Options.HotAt + ";\n"
++			for i, flag := range ldflags {
++				if flag == "-T" && i+1 < len(ldflags) {
++					ldflags[i+1] = "targets/playstation-hot.ld"
++				}
++			}
++			ldflags = append(ldflags, "-u", "__hot_patch", "-u", "__hot_inits")
++		}
++		hotScriptPath := filepath.Join(tmpdir, "hot.ld")
++		if err := os.WriteFile(hotScriptPath, []byte(hotScript), 0o666); err != nil {
++			return result, err
++		}
++		for i, flag := range ldflags {
++			if flag == "-T" {
++				ldflags = append(ldflags[:i], append([]string{"-T", hotScriptPath}, ldflags[i:]...)...)
++				break
++			}
++		}
++	}
+ 
+ 	if config.Options.BuildMode == "c-shared" {
+ 		if !strings.HasPrefix(config.Triple(), "wasm32-") {
+@@ -1329,6 +1363,9 @@
+ 	if err != nil {
+ 		return err
+ 	}
++	if config.Options.Hot || config.Options.HotBase != "" {
++		transform.HotStubs(mod, config)
++	}
+ 	if config.VerifyIR() {
+ 		// Only verify if we really need it.
+ 		// The IR has already been verified before writing the bitcode to disk
+@@ -1351,6 +1388,14 @@
+ 	if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
+ 		return errors.New("verification failure after LLVM optimization passes")
+ 	}
++	if config.Options.HotBase != "" {
++		if err := transform.HotBind(mod, config); err != nil {
++			return err
++		}
++		if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
++			return errors.New("verification failure after binding the hot reload patch")
++		}
++	}
+ 
+ 	return nil
+ }

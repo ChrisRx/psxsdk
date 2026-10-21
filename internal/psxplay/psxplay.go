@@ -22,6 +22,7 @@ import (
 	"go.chrisrx.dev/psx/emu/openbios"
 	"go.chrisrx.dev/psx/format/psx"
 	"go.chrisrx.dev/psx/internal/flags"
+	"go.chrisrx.dev/psx/internal/hot"
 )
 
 // frameBudget bounds the instructions a tick runs looking for a vertical
@@ -49,6 +50,15 @@ type Options struct {
 	Fast  bool        // run as fast as the host allows, showing nothing, until the first picture
 	Loads flags.Loads // files to copy into RAM, with EXE
 	Title string      // the window's title, psxplay and what it runs if empty
+
+	// Breaks are addresses to print the registers at each time the program
+	// reaches one.
+	Breaks flags.Addresses
+
+	// Patches, if not nil, delivers hot reload patches for the program,
+	// which must have been built with --hot, each applied between frames
+	// as soon as it arrives, with a line on standard output.
+	Patches <-chan *hot.Patch
 }
 
 // Keys is the help on the keyboard and the gamepad, for a command's long
@@ -75,6 +85,7 @@ func (o *Options) AddFlags(fs *pflag.FlagSet, exe bool) {
 	fs.IntVar(&o.Scale, "scale", 2, "the window's initial size, as a multiple of 320x240")
 	fs.BoolVar(&o.Mute, "mute", false, "leave the sound off")
 	fs.BoolVar(&o.Fast, "fast-start", true, "run as fast as possible until the first picture, rather than through the BIOS's start in real time")
+	fs.Var(&o.Breaks, "break", "an address, hexadecimal with 0x: print the registers each time the program reaches it; repeatable")
 }
 
 // Command returns the psxplay command, as use.
@@ -117,6 +128,12 @@ func Run(opts Options) error {
 	}
 	m.TTY = os.Stdout
 	m.SetAudio(!opts.Mute)
+	for _, addr := range opts.Breaks {
+		m.SetBreak(addr, func(m *emu.Machine) bool {
+			fmt.Println(describeBreak(m))
+			return false
+		})
+	}
 
 	title := "psxplay"
 	if opts.Disc != "" {
@@ -153,7 +170,7 @@ func Run(opts Options) error {
 		title += " - " + opts.EXE
 	}
 
-	g := &game{machine: m, fast: opts.Fast}
+	g := &game{machine: m, fast: opts.Fast, patches: opts.Patches}
 	if !opts.Mute {
 		g.sound = newSoundBuffer()
 		player, err := audio.NewContext(sampleRate).NewPlayer(g.sound)
@@ -185,6 +202,14 @@ func Run(opts Options) error {
 	return runErr
 }
 
+// describeBreak says where the program is, for a breakpoint: its frame,
+// and the registers a call's arguments, return address and stack are in.
+func describeBreak(m *emu.Machine) string {
+	c := m.CPU
+	return fmt.Sprintf("break %08x frame %d a0 %08x a1 %08x a2 %08x a3 %08x ra %08x sp %08x",
+		c.PC, m.Frames(), c.R[4], c.R[5], c.R[6], c.R[7], c.R[31], c.R[29])
+}
+
 // game is the window: it runs the machine a frame a tick, reads the pad
 // from the keyboard and gamepads, and shows the display.
 type game struct {
@@ -201,6 +226,22 @@ type game struct {
 	// fastFrames how many frames it has run so far.
 	fast       bool
 	fastFrames int
+
+	// patches delivers hot reload patches, applied as they arrive.
+	patches <-chan *hot.Patch
+}
+
+// takePatch applies a patch that has arrived, if one has.
+func (g *game) takePatch() {
+	select {
+	case p, ok := <-g.patches:
+		if ok {
+			p.ApplyAt(g.machine, func() {
+				fmt.Printf("hot: applied the patch at %08x, %d bytes, at frame %d\n", p.Start, p.Size(), g.machine.Frames())
+			})
+		}
+	default:
+	}
 }
 
 // The fast start's limits: how long a tick may run frames for, which
@@ -320,6 +361,9 @@ func (g *game) Update() error {
 	pad := g.machine.Pad(1)
 	pad.Release(0xffff)
 	pad.Press(buttons())
+	if g.patches != nil {
+		g.takePatch()
+	}
 
 	if g.fast {
 		fast, err := g.fastStart()

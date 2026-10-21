@@ -410,6 +410,8 @@ body.resizing-rows { cursor: row-resize; user-select: none; -webkit-user-select:
   border-bottom: 1px solid var(--line);
 }
 .pg-top h1 { margin-right: 14px; font-size: 1.625rem; }
+.pg-hot { display: inline-flex; align-items: center; gap: 4px; font-size: 0.875rem; color: var(--muted); cursor: pointer; }
+.pg-hot:has(:checked) { color: var(--ink); }
 .pg-hint { margin-left: 6px; font-size: 0.875rem; }
 .pg-hint kbd { min-width: 0; font-size: 0.75rem; }
 /* The links to the rest of the site, the GitHub mark and the theme

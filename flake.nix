@@ -114,6 +114,7 @@
             patches = [ ];
             postPatch = ''
               cp -r --no-preserve=mode ${./internal/toolchain/_tinygo}/. .
+              patch -p1 < ${./internal/toolchain/tinygo-hot.patch}
 
               substituteInPlace make/config.mk \
                 --replace-fail 'BREW_PREFIX := $(shell brew --prefix)' 'BREW_PREFIX :='

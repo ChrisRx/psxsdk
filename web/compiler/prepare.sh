@@ -2,7 +2,8 @@
 # Makes the TinyGo tree the wasm compiler is built from, in $OUT/tinygo: a
 # copy of upstream TinyGo's source at the revision the flake builds (its
 # tinygo-src package), with the PlayStation targets and their runtime from
-# internal/toolchain/_tinygo laid over it, tinygo-wasm.patch applied, and
+# internal/toolchain/_tinygo laid over it, tinygo-wasm.patch and
+# internal/toolchain/tinygo-hot.patch applied, and
 # compiler-rt's builtins, which TinyGo's tree takes from an LLVM checkout
 # and nixpkgs copies in. Of upstream's submodules only wasi-libc, which
 # TinyGo builds its libc from, is kept; the rest are the empty directories
@@ -34,7 +35,8 @@ TREE=$OUT/tinygo
 SRC=$(nix build --no-link --print-out-paths "$HERE/../..#tinygo-src")
 OVERLAY=$HERE/../../internal/toolchain/_tinygo
 STAMP="$SRC $(cd "$OVERLAY" && find . -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)"
-if [ -e "$TREE/.prepared" ] && [ "$TREE/.prepared" -nt "$HERE/tinygo-wasm.patch" ] && [ "$(cat "$TREE/.prepared")" = "$STAMP" ]; then
+HOTPATCH=$HERE/../../internal/toolchain/tinygo-hot.patch
+if [ -e "$TREE/.prepared" ] && [ "$TREE/.prepared" -nt "$HERE/tinygo-wasm.patch" ] && [ "$TREE/.prepared" -nt "$HOTPATCH" ] && [ "$TREE/.prepared" -nt "$HERE/tinygo-hot-wasm.patch" ] && [ "$(cat "$TREE/.prepared")" = "$STAMP" ]; then
   exit 0
 fi
 echo "==> TinyGo tree"
@@ -61,4 +63,8 @@ cp -a "$CRT"/compiler-rt/lib/builtins/* "$TREE/lib/compiler-rt-builtins/"
 chmod -R u+w "$TREE"
 
 patch -p1 -d "$TREE" < "$HERE/tinygo-wasm.patch"
+# The hot reload flags and hooks, which the flake applies to its TinyGo too,
+# and the same flags on the wasm build command, which only this tree has.
+patch -p1 -d "$TREE" < "$HOTPATCH"
+patch -p1 -d "$TREE" < "$HERE/tinygo-hot-wasm.patch"
 echo "$STAMP" > "$TREE/.prepared"

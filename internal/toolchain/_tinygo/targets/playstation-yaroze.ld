@@ -150,7 +150,23 @@ SECTIONS
    * the reserve again at startup, so that libps's malloc stops at it rather
    * than growing into Go's heap should anything call it. */
   __libps_heap_size = DEFINED(__libps_heap_size) ? __libps_heap_size : 16K;
-  PROVIDE(_heap_start = _end + __libps_heap_size);
+  PROVIDE(_libps_heap_end = _end + __libps_heap_size);
+
+  /* A program built with -hot reserves a region above the library's for
+   * the patches that give it new code while it runs (see transform/hot.go
+   * and the hot package in psxsdk): __hot_size of it, which the compiler
+   * sets in a script of its own, and nothing otherwise. The Go heap starts
+   * above it. A program so large that the region would leave the heap
+   * less than __hot_min_heap gets a smaller region, down to none: the
+   * program comes first, and what it leaves for patches is in its symbols
+   * for the loader to read. */
+  PROVIDE(__hot_size = 0);
+  PROVIDE(__hot_min_heap = 256K);
+  PROVIDE(__hot_start = _libps_heap_end);
+  __hot_limit = __stack_top - __stack_size - __hot_min_heap;
+  PROVIDE(__hot_end = (__hot_start + __hot_size <= __hot_limit) ? __hot_start + __hot_size
+                    : (__hot_start <= __hot_limit) ? __hot_limit : __hot_start);
+  PROVIDE(_heap_start = __hot_end);
   PROVIDE(_heap_end = __stack_top - __stack_size);
   PROVIDE(_globals_start = _fdata);
   PROVIDE(_globals_end = _end);

@@ -3,6 +3,7 @@ package emu
 import (
 	"bytes"
 	"cmp"
+	"io"
 	"os"
 	"slices"
 	"testing"
@@ -252,4 +253,87 @@ func TestShown(t *testing.T) {
 
 	m.Bus.Write32(gp1, 0x03000001)
 	assert.Equal(t, true, m.Shown(), "it has shown something")
+}
+
+// TestBreak boots OpenBIOS with a breakpoint on the exception vector,
+// which every interrupt reaches: counting there, as a breakpoint that
+// does not stop, leaves the machine exactly as a run without it; stopping
+// there returns ErrBreak before the instruction, which the next run then
+// executes without stopping again.
+func TestBreak(t *testing.T) {
+	bios, err := os.ReadFile("openbios/openbios.bin")
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	boot := func() *Machine {
+		m, err := New(bios)
+		if !assert.NoError(t, err) {
+			t.FailNow()
+		}
+		m.TTY = io.Discard
+		return m
+	}
+	const vector = 0x80000080
+	const n = 20_000_000
+
+	plain := boot()
+	for left := uint64(n); left > 0; {
+		ran, err := plain.Run(min(left, 123_457))
+		if !assert.NoError(t, err) {
+			t.FailNow()
+		}
+		left -= ran
+	}
+
+	counting := boot()
+	hits := 0
+	counting.SetBreak(vector, func(m *Machine) bool {
+		assert.Equal(t, uint32(vector), m.CPU.PC)
+		hits++
+		return false
+	})
+	for left := uint64(n); left > 0; {
+		ran, err := counting.Run(min(left, 123_457))
+		if !assert.NoError(t, err) {
+			t.FailNow()
+		}
+		left -= ran
+	}
+	t.Logf("the vector was reached %d times", hits)
+	assert.Equal(t, true, hits > 0, "the vector should have been reached")
+	assert.Equal(t, plain.CPU.R, counting.CPU.R, "registers")
+	assert.Equal(t, [2]uint32{plain.CPU.PC, plain.CPU.NextPC}, [2]uint32{counting.CPU.PC, counting.CPU.NextPC}, "PC")
+	assert.Equal(t, plain.CPU.TotalCycles, counting.CPU.TotalCycles, "cycles")
+	assert.Equal(t, plain.steps, counting.steps, "steps")
+	assert.Equal(t, plain.gpu.frames, counting.gpu.frames, "frames")
+
+	stopping := boot()
+	stops := 0
+	stopping.SetBreak(vector, func(*Machine) bool { stops++; return true })
+	for left := uint64(n); left > 0; {
+		ran, err := stopping.Run(min(left, 123_457))
+		left -= ran
+		if err == nil {
+			continue
+		}
+		if err != ErrBreak {
+			t.Fatalf("Run returned %v, not ErrBreak", err)
+		}
+		assert.Equal(t, uint32(vector), stopping.CPU.PC, "stopped before the vector")
+		// A step runs the instruction at the breakpoint, then the run
+		// goes on from there.
+		assert.NoError(t, stopping.Step())
+		assert.Equal(t, uint32(vector+4), stopping.CPU.PC, "stepped past it")
+		left--
+	}
+	assert.Equal(t, hits, stops, "every pass through the vector should have stopped")
+	assert.Equal(t, plain.CPU.TotalCycles, stopping.CPU.TotalCycles, "cycles after stopping")
+	assert.Equal(t, plain.gpu.frames, stopping.gpu.frames, "frames after stopping")
+
+	stopping.ClearBreak(vector)
+	assert.Equal(t, 0, len(stopping.Breaks()))
+	before := stops
+	_, err = stopping.Run(1_000_000)
+	assert.NoError(t, err)
+	assert.Equal(t, before, stops, "a cleared breakpoint should not fire")
 }

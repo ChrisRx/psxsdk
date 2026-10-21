@@ -25,6 +25,7 @@ type buildFlags struct {
 	tags     []string
 	loads    flags.Loads
 	verbose  bool
+	hot      bool
 }
 
 func (f *buildFlags) register(cmd *cobra.Command) {
@@ -34,6 +35,7 @@ func (f *buildFlags) register(cmd *cobra.Command) {
 	fl.StringSliceVar(&f.tags, "tags", nil, "extra build tags")
 	fl.Var(&f.loads, "load", "file@addr: put a file into the executable at a hexadecimal address, as siocons' local dload did; may be repeated")
 	fl.BoolVarP(&f.verbose, "verbose", "v", false, "say which compiler runs, and how long each step takes")
+	fl.BoolVar(&f.hot, "hot", false, "build a program that can take patches from the patch command while it runs: its main package's functions are called through slots, which costs a little speed, and 256KB is reserved for the patches")
 }
 
 // logf prints a step's progress with -v.
@@ -72,15 +74,21 @@ func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
 		Package: pkg,
 		Opt:     f.opt,
 		Tags:    f.tags,
+		Hot:     f.hot,
 		Output:  filepath.Join(tmp, "prog.elf"),
 		Stderr:  os.Stderr,
 		Log:     f.logf,
 	}
+	return f.finish(ctx, c, b, exe, elf)
+}
+
+// finish compiles b and writes its outputs, as build does.
+func (f *buildFlags) finish(ctx context.Context, c toolchain.Compiler, b *toolchain.Build, exe, elf string) error {
 	if err := c.Compile(ctx, b); err != nil {
 		return err
 	}
 
-	start = time.Now()
+	start := time.Now()
 	data, err := os.ReadFile(b.Output)
 	if err != nil {
 		return err

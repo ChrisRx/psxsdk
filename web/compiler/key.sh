@@ -9,5 +9,5 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 rev=$(sed -n 's/.*rev = "\([0-9a-f]\{40\}\)".*/\1/p' flake.nix | head -1)
-sum=$(git ls-files -z --cached --others --exclude-standard -- web/compiler ':!*.md' ':!web/compiler/key.sh' ':!web/compiler/release.sh' internal/toolchain/_tinygo flake.lock | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
+sum=$(git ls-files -z --cached --others --exclude-standard -- web/compiler ':!*.md' ':!web/compiler/key.sh' ':!web/compiler/release.sh' internal/toolchain/_tinygo internal/toolchain/tinygo-hot.patch flake.lock | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
 echo "compiler-${rev:0:12}-$sum"

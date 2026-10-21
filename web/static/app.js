@@ -97,6 +97,11 @@ worker.onmessage = (e) => {
       setRunning(false);
       showOverlay(`Stopped: ${msg.error}`);
       return;
+    case "break":
+      // Paused at a breakpoint: Resume carries on from it.
+      setRunning(false);
+      status.textContent = `paused at ${msg.address.toString(16).padStart(8, "0")}`;
+      return;
   }
   const resolve = pending.get(msg.id);
   pending.delete(msg.id);

@@ -67,3 +67,17 @@ func TestOverlay(t *testing.T) {
 	want, _ := fork.ReadFile("_tinygo/targets/playstation-yaroze.json")
 	assert.Equal(t, string(want), string(assert.Ok(t, data, err)))
 }
+
+func TestPackageDir(t *testing.T) {
+	for in, want := range map[string]string{
+		"examples/square":   "./examples/square",
+		"./examples/square": "./examples/square",
+		"../other":          "../other",
+		".":                 ".",
+		"/abs/path":         "/abs/path",
+	} {
+		if got := packageDir(in); got != want {
+			t.Errorf("packageDir(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

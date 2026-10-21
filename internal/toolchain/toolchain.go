@@ -38,8 +38,27 @@ type Build struct {
 	Tags    []string // extra build tags
 	Output  string   // the ELF to write
 
+	// Hot builds a program that can take hot reload patches, and HotBase
+	// and HotAt build a patch for the program whose ELF HotBase names,
+	// linked at HotAt, instead of a program (see internal/hot).
+	Hot     bool
+	HotBase string
+	HotAt   uint32
+
 	Stderr io.Writer // the compiler's output
 	Log    func(format string, args ...any)
+}
+
+// hotArgs are the compiler flags for b's hot reload settings.
+func (b *Build) hotArgs() []string {
+	var args []string
+	if b.Hot {
+		args = append(args, "-hot")
+	}
+	if b.HotBase != "" {
+		args = append(args, "-hot-base="+b.HotBase, fmt.Sprintf("-hot-at=0x%x", b.HotAt))
+	}
+	return args
 }
 
 func (b *Build) logf(format string, args ...any) {

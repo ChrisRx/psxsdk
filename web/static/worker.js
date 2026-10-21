@@ -25,12 +25,32 @@
 //	                                    drawn, as an ImageBitmap, or null
 //	{type: "log", level}                sets the level the emulator logs at,
 //	                                    as psx.setLogLevel does
+//	{type: "break", address, stop}      sets a breakpoint: the program
+//	                                    reaching address is counted, and
+//	                                    with stop pauses it there; kept
+//	                                    across resets
+//	{type: "unbreak", address}          takes a breakpoint away
+//	{type: "step"}                      runs one instruction while paused,
+//	                                    and answers {registers, stopped}
+//	{type: "registers"}                 answers {registers}: {pc, hi, lo,
+//	                                    cycles, regs}, regs a Uint32Array
+//	{type: "hot"}                       answers {region}: {start, end, at},
+//	                                    the running program's region for
+//	                                    hot reload patches and where the
+//	                                    next goes, or null
+//	{type: "patch", elf}                loads a hot reload patch, built at
+//	                                    the region's at, between frames,
+//	                                    and answers {start, end, at}
 //
-// It sends the page, unasked, {event: "stats", fps, fast, tty, output}
-// twice a second, fast while the fast start is running, with what the BIOS
-// and the program printed meanwhile, as text in tty and, while logging,
-// interleaved with the log in output, as psx.takeOutput returns it; and
-// {event: "stopped", error} if the emulator stops.
+// It sends the page, unasked, {event: "stats", fps, fast, tty, output,
+// hits} twice a second, fast while the fast start is running, with what
+// the BIOS and the program printed meanwhile, as text in tty and, while
+// logging, interleaved with the log in output, as psx.takeOutput returns
+// it, and hits the breakpoints reached meanwhile, counts by address;
+// {event: "break", address, registers} when a breakpoint pauses the
+// program, which resume or step starts again; {event: "patched"} once a
+// patch has been loaded; and {event: "stopped", error} if the emulator
+// stops.
 "use strict";
 
 // The build's stamp, which app.js put after this worker's name, carried on
@@ -63,6 +83,9 @@ let psx = null;
 let ctx = null;
 let image = null; // the display's pixels, at its current size
 let booted = null; // the last boot's arguments, for a reset
+// The breakpoints set, by address, each whether it stops the program: set
+// in the emulator again whenever a disc boots.
+const breaks = new Map();
 let audioPort = null; // where the sound goes, audio.js's worklet
 let buttons = 0;
 
@@ -74,6 +97,7 @@ const clock = {
   frames: 0,     // run since the last stats
   since: 0,
   output: [],
+  hits: new Map(), // breakpoints reached since the last stats, counts by address
 };
 let logging = false;
 
@@ -102,6 +126,12 @@ function tick() {
       return;
     }
     clock.frames += res.frames;
+    countHits(res.hits);
+    if (res.patched) self.postMessage({ event: "patched" });
+    if (res.stopped !== undefined) {
+      pauseAt(res.stopped);
+      return;
+    }
     if (res.shown) {
       // Real time from the first picture on, with no sound from before.
       clock.fast = false;
@@ -116,6 +146,7 @@ function tick() {
   // Behind, after a stall or on a slow device, more than one frame is due:
   // only the last is worth copying out.
   let due = 0;
+  let stopped;
   if (!clock.fast && now >= clock.next) due = Math.min(BATCH, Math.floor((now - clock.next) / FRAME_MS) + 1);
   for (let i = 0; i < due; i++) {
     const last = i === due - 1;
@@ -123,6 +154,14 @@ function tick() {
     if (res.error) {
       stop(res.error);
       return;
+    }
+    countHits(res.hits);
+    if (res.patched) self.postMessage({ event: "patched" });
+    if (res.stopped !== undefined) {
+      // Paused before the instruction at the breakpoint: the frame so far
+      // is drawn, with its sound, and the page told.
+      due = i + 1;
+      stopped = res.stopped;
     }
     // A frame at a new size has nowhere to go; the next one does.
     if (last && (!image || image.width !== res.width || image.height !== res.height)) {
@@ -142,15 +181,38 @@ function tick() {
   }
 
   clock.output.push(...psx.takeOutput());
-  if (now - clock.since >= STATS_MS) {
-    const fps = (clock.frames * 1000) / (now - clock.since);
-    const tty = clock.output.filter((c) => !c.level).map((c) => c.text).join("");
-    self.postMessage({ event: "stats", fps, fast: clock.fast, tty, output: logging ? clock.output : undefined });
-    clock.frames = 0;
-    clock.since = now;
-    clock.output = [];
+  if (now - clock.since >= STATS_MS || stopped !== undefined) {
+    sendStats(now);
+  }
+  if (stopped !== undefined) {
+    pauseAt(stopped);
+    return;
   }
   schedule();
+}
+
+function sendStats(now) {
+  const fps = (clock.frames * 1000) / (now - clock.since);
+  const tty = clock.output.filter((c) => !c.level).map((c) => c.text).join("");
+  const hits = clock.hits.size ? Object.fromEntries(clock.hits) : undefined;
+  self.postMessage({ event: "stats", fps, fast: clock.fast, tty, output: logging ? clock.output : undefined, hits });
+  clock.frames = 0;
+  clock.since = now;
+  clock.output = [];
+  clock.hits.clear();
+}
+
+// countHits adds a run's breakpoint counts to the stats'.
+function countHits(hits) {
+  if (!hits) return;
+  for (const [address, n] of Object.entries(hits)) clock.hits.set(Number(address), (clock.hits.get(Number(address)) ?? 0) + n);
+}
+
+// pauseAt stops running at a breakpoint and tells the page where.
+function pauseAt(address) {
+  clock.running = false;
+  audioPort?.postMessage("flush");
+  self.postMessage({ event: "break", address, registers: psx.registers() });
 }
 
 function start() {
@@ -173,6 +235,7 @@ function boot({ bios, cue, files, elf, fastStart }) {
   booted = error ? null : { bios, cue, files, elf, fastStart };
   if (!error) {
     psx.setButtons(buttons);
+    for (const [address, stop] of breaks) psx.setBreak(address, stop);
     clock.fast = fastStart !== false;
     start();
   }
@@ -223,6 +286,45 @@ self.onmessage = async (e) => {
       case "poke":
         reply = { error: booted && psx.write(msg.address, msg.data) ? null : "could not write there" };
         break;
+      case "break":
+        breaks.set(msg.address, !!msg.stop);
+        if (booted) psx.setBreak(msg.address, !!msg.stop);
+        break;
+      case "unbreak":
+        breaks.delete(msg.address);
+        if (booted) psx.clearBreak(msg.address);
+        break;
+      case "step": {
+        if (!booted) {
+          reply = { error: "nothing is running" };
+          break;
+        }
+        if (clock.running) stop();
+        const res = psx.step();
+        if (res.error) {
+          stop(res.error);
+          reply = { error: res.error };
+          break;
+        }
+        countHits(res.hits);
+        reply = { error: null, stopped: res.stopped, registers: psx.registers() };
+        break;
+      }
+      case "registers":
+        reply = { error: null, registers: booted ? psx.registers() : null };
+        break;
+      case "hot":
+        reply = { error: null, region: booted ? psx.hotRegion() : null };
+        break;
+      case "patch": {
+        if (!booted) {
+          reply = { error: "nothing is running" };
+          break;
+        }
+        const res = psx.patch(msg.elf);
+        reply = res.error ? { error: res.error } : { error: null, ...res };
+        break;
+      }
       case "frame": {
         // The last picture drawn, for the page to show elsewhere.
         const bitmap = image ? await createImageBitmap(image) : null;

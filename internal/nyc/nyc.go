@@ -52,6 +52,7 @@ compiled to WebAssembly, built in, which needs nothing else installed.`
 		buildCommand(),
 		discCommand(),
 		runCommand(),
+		patchCommand(),
 		envCommand(),
 		discgen.Command("generate"),
 		mkpsxiso.Command("iso"),

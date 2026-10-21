@@ -82,6 +82,7 @@ var (
 	disc    *emu.Disc
 	frame   *image.RGBA
 	syms    []emu.Symbol
+	funcs   map[string]uint32 // the program's functions, by name
 
 	out      output
 	logLevel slog.LevelVar
@@ -112,6 +113,12 @@ func main() {
 		"symbol":      js.FuncOf(symbol),
 		"read":        js.FuncOf(readMemory),
 		"write":       js.FuncOf(writeMemory),
+		"setBreak":    js.FuncOf(setBreak),
+		"clearBreak":  js.FuncOf(clearBreak),
+		"step":        js.FuncOf(step),
+		"registers":   js.FuncOf(registers),
+		"hotRegion":   js.FuncOf(hotRegion),
+		"patch":       js.FuncOf(patch),
 	}))
 	select {}
 }
@@ -122,14 +129,23 @@ func boot(_ js.Value, args []js.Value) any {
 	}
 	syms = nil
 	globals = nil
+	funcs = nil
+	setHotRegion(nil)
 	if len(args) > 3 && args[3].Truthy() {
 		elfData := bytesFromJS(args[3])
+		setHotRegion(elfData)
 		s, err := emu.SymbolsFromELF(elfData)
 		if err != nil {
 			return fmt.Sprintf("reading the program's symbols: %v", err)
 		}
 		syms = s
 		globals, _ = globalsFromELF(elfData)
+		funcs = make(map[string]uint32, len(syms))
+		for _, s := range syms {
+			if _, ok := funcs[s.Name]; !ok {
+				funcs[s.Name] = s.Addr
+			}
+		}
 	}
 	bios := bytesFromJS(args[0])
 	fsys := fstest.MapFS{}
@@ -161,6 +177,8 @@ func boot(_ js.Value, args []js.Value) any {
 	m.InsertDisc(d)
 	machine, disc = m, d
 	fastFrames = 0
+	hits = nil
+	patched = false
 	return nil
 }
 
@@ -175,7 +193,9 @@ func runFast(_ js.Value, args []js.Value) any {
 	deadline := time.Now().Add(time.Duration(ms) * time.Millisecond)
 	n := 0
 	for !machine.Shown() && fastFrames < maxFastFrames && time.Now().Before(deadline) {
-		if _, err := machine.RunFrame(frameBudget); err != nil {
+		if _, err := machine.RunFrame(frameBudget); err == emu.ErrBreak {
+			return withHits(map[string]any{"stopped": int(machine.CPU.PC), "frames": n})
+		} else if err != nil {
 			machine = nil
 			return map[string]any{"error": err.Error()}
 		}
@@ -184,7 +204,7 @@ func runFast(_ js.Value, args []js.Value) any {
 		n++
 	}
 	shown := machine.Shown() || fastFrames >= maxFastFrames
-	return map[string]any{"shown": shown, "frames": n}
+	return withHits(map[string]any{"shown": shown, "frames": n})
 }
 
 func runFrame(_ js.Value, args []js.Value) any {
@@ -192,7 +212,9 @@ func runFrame(_ js.Value, args []js.Value) any {
 		return map[string]any{"error": "nothing is running"}
 	}
 	target := machine.Frames() + 1
-	if _, err := machine.RunFrame(frameBudget); err != nil {
+	if _, err := machine.RunFrame(frameBudget); err == emu.ErrBreak {
+		return withHits(map[string]any{"stopped": int(machine.CPU.PC)})
+	} else if err != nil {
 		machine = nil
 		return map[string]any{"error": err.Error()}
 	}
@@ -206,14 +228,14 @@ func runFrame(_ js.Value, args []js.Value) any {
 		if frame != nil {
 			w, h = frame.Rect.Dx(), frame.Rect.Dy()
 		}
-		return map[string]any{"width": w, "height": h}
+		return withHits(map[string]any{"width": w, "height": h})
 	}
 	frame = machine.DisplayInto(frame)
 	w, h := frame.Rect.Dx(), frame.Rect.Dy()
 	if len(args) > 0 && args[0].Truthy() && args[0].Length() >= len(frame.Pix) {
 		js.CopyBytesToJS(args[0], frame.Pix)
 	}
-	return map[string]any{"width": w, "height": h}
+	return withHits(map[string]any{"width": w, "height": h})
 }
 
 func setButtons(_ js.Value, args []js.Value) any {
@@ -391,17 +413,20 @@ func globalsFromELF(data []byte) (map[string]uint32, error) {
 	return out, nil
 }
 
-// symbol returns a variable's address, or -1 when the program has none of
-// that name.
+// symbol returns a variable's address, or failing that a function's, or
+// -1 when the program has none of that name.
 func symbol(_ js.Value, args []js.Value) any {
 	if len(args) < 1 {
 		return -1
 	}
-	addr, ok := globals[args[0].String()]
-	if !ok {
-		return -1
+	name := args[0].String()
+	if addr, ok := globals[name]; ok {
+		return int(addr)
 	}
-	return int(addr)
+	if addr, ok := funcs[name]; ok {
+		return int(addr)
+	}
+	return -1
 }
 
 // inRAM says whether n bytes at addr lie in the console's RAM, in any of

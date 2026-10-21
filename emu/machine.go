@@ -68,6 +68,9 @@ type Machine struct {
 	spin   spin
 	noSpin bool
 
+	// breaks is the breakpoints set (see breaks.go).
+	breaks breaks
+
 	// log is where the machine logs, if anywhere; log.go says what it
 	// logs. syms names addresses in it, and stuckAt is where the CPU was
 	// last reported looping, so that it is reported once.
@@ -417,7 +420,9 @@ func (m *Machine) Step() error {
 // Run runs up to n instructions, stopping at the first that a device cannot
 // emulate, or that the trace cannot be written for. It returns how many it
 // ran, counting the one it stopped at. A frontend running many instructions
-// at a time runs them faster this way than one by one with Step.
+// at a time runs them faster this way than one by one with Step. A
+// breakpoint that stops the run (see SetBreak) returns ErrBreak, before
+// the instruction at it.
 func (m *Machine) Run(n uint64) (uint64, error) {
 	return m.run(n, ^uint64(0))
 }
@@ -456,6 +461,14 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 	if !trace && !m.noSpin && m.spinAt() {
 		k.Spin = vsyncWaitHead
 	}
+	breaking := m.breaks.set.Len() > 0
+	if breaking {
+		k.Breaks = &m.breaks.set
+	}
+	// A stop is only being resumed while the CPU is still where it was.
+	if m.breaks.resuming && c.PC != m.breaks.resumeAt {
+		m.breaks.resuming = false
+	}
 
 	// Logging, the CPU stops anywhere in the first 256 bytes, which takes
 	// in 0xb4 as well as the exception vector and the BIOS's tables.
@@ -472,6 +485,9 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 		}
 		if logging && c.PC&0x3fffff00 == 0 {
 			m.hooked()
+		}
+		if breaking && k.Breaks.Has(c.PC) && m.atBreak() {
+			return i, ErrBreak
 		}
 
 		if trace {
