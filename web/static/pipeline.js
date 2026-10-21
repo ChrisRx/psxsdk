@@ -123,7 +123,7 @@ export class Pipeline {
 	// file system, with assets/ made, and returns it.
 	stage(project) {
 		const fs = new FileSystem();
-		fs.mkdir("/work/prog/data");
+		fs.mkdir("/work/prog/assets");
 		for (const { path, data } of project) fs.put("/work/prog/" + path, data);
 		return fs;
 	}
@@ -208,17 +208,18 @@ export class Pipeline {
 	}
 
 	// convert runs the project's generate lines other than discgen's, and
-	// returns {ok, files}: the files under assets/ and assets/ that the tools
-	// made or changed, as {path, data}, for the page to keep.
+	// returns {ok, files}: the files under assets/ and the archives'
+	// directories under pack/ that the tools made or changed, as {path,
+	// data}, for the page to keep.
 	async convert(project, log) {
 		const fs = this.stage(project);
 		const lines = project.filter((f) => !isGoSource(f.path));
 		const sources = new Map(lines.map((f) => [f.path, f.data]));
 		const ok = await this.generate(project.map((f) => (isGoSource(f.path) ? { path: f.path, data: withoutDiscgen(f.data) } : f)), fs, log);
 		const files = [];
-		for (const dir of ["data", "art"]) {
+		const collect = (dir) => {
 			const node = fs.lookup([], "/work/prog/" + dir).node;
-			if (!node) continue;
+			if (!node) return;
 			for (const [name, child] of node.children) {
 				if (!(child instanceof File)) continue;
 				const path = `${dir}/${name}`;
@@ -227,6 +228,11 @@ export class Pipeline {
 				if (before && before.length === data.length && before.every((b, i) => b === data[i])) continue;
 				files.push({ path, data });
 			}
+		};
+		collect("assets");
+		const pack = fs.lookup([], "/work/prog/pack").node;
+		for (const [name, child] of pack?.children ?? []) {
+			if (child instanceof Dir) collect(`pack/${name}`);
 		}
 		return { ok, files };
 	}
