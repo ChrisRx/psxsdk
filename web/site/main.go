@@ -14,8 +14,8 @@
 // There is no framework behind it. A page is a Markdown file with a short
 // front matter, rendered with goldmark and chroma into one template, and the
 // site's sections are the directories under docs/. Every link the output
-// holds is relative, so the same build serves from the root of a host and
-// from the directory a pull request preview is published under.
+// holds is relative, so the same build serves from the root of a host or
+// from any directory under it.
 //
 // Links in a page are written as paths and rewritten on the way out:
 //

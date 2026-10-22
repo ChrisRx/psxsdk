@@ -148,8 +148,7 @@ tasks:
   # Sony's BIOS must never be copied in.
   #
   # .github/workflows/pages.yml publishes this directory to GitHub Pages
-  # through the gh-pages branch, so it is never committed here. The
-  # .nojekyll file keeps Pages from running the branch through Jekyll.
+  # as the workflow's artifact, so it is never committed here.
   site:
     desc: Build what has changed of the site into .build/site
     cmds:
@@ -228,7 +227,6 @@ tasks:
           done
           printf '\n]\n'
         } > {{.PLAY}}/examples.json
-      - touch .build/site/.nojekyll
 
   # The emulator compiled to WebAssembly, with the loader Go ships.
   site:emu:
