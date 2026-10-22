@@ -27,8 +27,11 @@ tasks:
   # Builds every example's disc, each onto .build/NAME/NAME.cue: every
   # directory under examples with a main.go, since examples/internal holds
   # what they share and is not one.
+  # The discs are built one after another: each build runs the compiler,
+  # which takes a few hundred megabytes, and the first on a machine unpacks
+  # it and has the runtime compile its module, which the rest then find.
   build:discs:
-    deps:
+    cmds:
       - for: { var: EXAMPLES }
         task: build:disc
         vars: { NAME: '{{.ITEM}}' }

@@ -309,7 +309,12 @@ func modCache() string {
 }
 
 // unpack writes the compiler's module and its sysroot into dir, by way of a
-// directory beside it, so that an unpacking cut short is never used.
+// directory beside it, so that an unpacking cut short is never used. Other
+// processes may be unpacking the same compiler at the same time, as the
+// Taskfile's disc builds once did on a fresh machine: whichever puts its
+// directory in place first wins, and the others take it, since a complete
+// directory is never removed, which would pull it out from under the
+// processes running from it.
 func unpack(cache, dir string, module, sysroot func() ([]byte, error)) error {
 	tmp, err := os.MkdirTemp(cache, "wasm-tmp-")
 	if err != nil {
@@ -333,8 +338,26 @@ func unpack(cache, dir string, module, sysroot func() ([]byte, error)) error {
 	if err := os.WriteFile(filepath.Join(tmp, ".complete"), nil, 0o666); err != nil {
 		return err
 	}
-	os.RemoveAll(dir)
-	return os.Rename(tmp, dir)
+	return place(tmp, dir)
+}
+
+// place moves an unpacked compiler at tmp to dir, unless another process
+// has put a complete one there, which is then the one used. A directory
+// there that is not complete, from an unpacking cut short, goes.
+func place(tmp, dir string) error {
+	for attempt := 0; ; attempt++ {
+		err := os.Rename(tmp, dir)
+		if err == nil {
+			return nil
+		}
+		if _, cerr := os.Stat(filepath.Join(dir, ".complete")); cerr == nil {
+			return nil
+		}
+		if attempt > 0 {
+			return err
+		}
+		os.RemoveAll(dir)
+	}
 }
 
 // untar extracts a gzipped tar archive into dir, refusing any name that
