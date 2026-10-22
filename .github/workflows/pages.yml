@@ -50,8 +50,11 @@ jobs:
     - name: Cache Nix store
       uses: DeterminateSystems/magic-nix-cache-action@v8
 
+    # The examples' discs are built in parallel, each by a compiler of its
+    # own, which on a runner of a few cores and 28 at once is a crawl, so
+    # no more run at once than there are cores.
     - name: Build site
-      run: nix develop .#site --command task site
+      run: nix develop .#site --command task -C "$(nproc)" site
 
     - name: Get the playground's compiler
       id: compiler

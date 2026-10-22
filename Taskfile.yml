@@ -26,8 +26,19 @@ tasks:
 
   # Builds every example's disc, each onto .build/NAME/NAME.cue: every
   # directory under examples with a main.go, since examples/internal holds
-  # what they share and is not one.
+  # what they share and is not one. The tutorial's disc goes first, on its
+  # own, so that the compiler is unpacked and compiled for the runtime
+  # once, rather than by every build at the same time; the rest then run
+  # in parallel, as many at once as task -C allows, which CI limits to the
+  # runner's cores.
   build:discs:
+    deps:
+      - build:disc:tutorial
+    cmds:
+      - task: build:discs:examples
+
+  build:discs:examples:
+    internal: true
     deps:
       - for: { var: EXAMPLES }
         task: build:disc
