@@ -83,6 +83,7 @@ code, so a second patch goes after the first. -o names the ELF to write,
 patch.elf if not given.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			defer f.close()
 			pkg := "."
 			if len(args) == 1 {
 				pkg = args[0]

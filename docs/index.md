@@ -10,7 +10,7 @@ description: Write, build and play Net Yaroze programs: a Go toolchain for the o
 The Net Yaroze was Sony's 1990s kit for making PlayStation games at home. psxsdk is a Go toolchain for it: write programs in Go, build them onto discs that boot anywhere, and run them in an emulator, here in the browser.
 
 - **Play** [the examples](examples/index.md): Sony's Net Yaroze demos and members' games ported to Go, and a few new ones, each running on its own page, with touch controls on phones.
-- **Write** your own in [the playground](/play/), which compiles Go into a PlayStation disc in the browser, or with nothing but Go installed: `go run go.chrisrx.dev/psx/cmd/nycw@latest disc ./mygame`.
+- **Write** your own in [the playground](/play/), which compiles Go into a PlayStation disc in the browser, or with nothing but Go installed: `go run go.chrisrx.dev/psx/cmd/nyc@latest disc ./mygame`.
 - **Read** [Sony's manuals](manuals/index.md), with the FAQs, supplements and tutorial the members' websites carried.
 
 ## Start here

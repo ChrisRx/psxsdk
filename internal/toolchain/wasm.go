@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -14,44 +13,55 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"time"
-
-	"github.com/tetratelabs/wazero"
-	"github.com/tetratelabs/wazero/api"
-	"github.com/tetratelabs/wazero/experimental"
-	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
-	"github.com/tetratelabs/wazero/sys"
 )
 
-// Wasm is TinyGo compiled to WebAssembly, the playground's compiler, run
-// under wazero. It reads everything from a sysroot, as it does in the
-// browser: the standard library merged with TinyGo's, the target files,
-// and a cache holding the target's C and assembly already compiled, since
-// the compiler has no clang. The program and the modules it uses come from
-// the host's file system, read only.
+// Wasm is TinyGo compiled to WebAssembly, the playground's compiler. It
+// reads everything from a sysroot, as it does in the browser: the standard
+// library merged with TinyGo's, the target files, and a cache holding the
+// target's C and assembly already compiled, since the compiler has no
+// clang. The program and the modules it uses come from the host's file
+// system.
 //
 // The compiler and the sysroot are those of the site's play/ directory,
-// tinygo.wasm and sysroot.tar.gz: the ones given to Embed, as cmd/nycw
+// tinygo.wasm and sysroot.tar.gz: the ones given to Embed, as cmd/nyc
 // does, or else those of NYC_WASM when it names such a directory. NYC_WASM
 // is ignored when there are embedded ones. Either is unpacked once into
-// the user's cache directory, and wazero's compilation of the module,
-// which takes a while, is kept there too.
+// the user's cache directory, keyed by the compiler, and what the runtime
+// makes of the module, which takes a while, is kept there too.
+//
+// The module runs under one of two runtimes. wazero is built in, so it is
+// always there: it keeps the module loaded between the builds of a
+// process, and a snapshot of the compiler's memory between processes (see
+// wasm_snapshot.go). The wasmtime command, when there is one, runs the
+// module as a command for each build, and quicker, since its code is
+// better and its compiled module loads in no time.
 type Wasm struct {
 	dir     string // the unpacked compiler: tinygo.wasm and sysroot
 	sysroot string
 	env     sysrootEnv
+	rt      wasmRuntime
 
-	// The module, loaded by the first build and kept for the next (see
-	// load), its output's writer, the directory it writes to, and how
+	// The directory the module writes to, this process's own, and how
 	// many builds it has made, which name their outputs.
-	rt     wazero.Runtime
-	mod    api.Module
-	out    *switchWriter
 	tmp    string
 	builds int
+}
+
+// A wasmRuntime runs the compiler's module.
+type wasmRuntime interface {
+	// name is the runtime's, for messages: "wazero" or "wasmtime".
+	name() string
+	// describe says which runtime, and where it is, for nyc env.
+	describe() string
+	// build runs one build with the compiler arguments given, writing the
+	// compiler's output to b.Stderr, and returns an error for a build that
+	// failed.
+	build(ctx context.Context, b *Build, args []string) error
+	// close lets go of whatever the runtime holds.
+	close(ctx context.Context)
 }
 
 // sysrootEnv is the sysroot's env.json, as tinygo-sysroot and mkcache.sh
@@ -83,14 +93,16 @@ const (
 var embeddedWasm, embeddedSysroot []byte
 
 // Embed builds in the WebAssembly compiler, tinygo.wasm gzipped, and its
-// sysroot.tar.gz, for NewWasm to use in place of any NYC_WASM.
+// sysroot.tar.gz, for New to use in place of any NYC_WASM.
 func Embed(compiler, sysroot []byte) {
 	embeddedWasm, embeddedSysroot = compiler, sysroot
 }
 
-// NewWasm finds the WebAssembly compiler, built in or from NYC_WASM, and
-// unpacks it if it has not been.
-func NewWasm() (*Wasm, error) {
+// New finds the compiler, built in or from NYC_WASM, unpacks it if it has
+// not been, and has it run under the runtime named: wazero, wasmtime, or
+// with auto or nothing wasmtime when there is a wasmtime command and
+// wazero otherwise.
+func New(runtime string) (*Wasm, error) {
 	cache, err := cacheDir()
 	if err != nil {
 		return nil, err
@@ -121,7 +133,7 @@ func NewWasm() (*Wasm, error) {
 		module = func() ([]byte, error) { return os.ReadFile(wasmPath) }
 		sysroot = func() ([]byte, error) { return os.ReadFile(sysPath) }
 	} else {
-		return nil, errors.New("this nyc has no WebAssembly compiler built in (nycw has one); set NYC_WASM to a directory holding tinygo.wasm and sysroot.tar.gz, as the site's play/ does")
+		return nil, errors.New("this nyc has no compiler built in; set NYC_WASM to a directory holding tinygo.wasm and sysroot.tar.gz, as the site's play/ does")
 	}
 
 	w := &Wasm{dir: filepath.Join(cache, "wasm-"+key)}
@@ -139,12 +151,53 @@ func NewWasm() (*Wasm, error) {
 		return nil, fmt.Errorf("%s: %w", filepath.Join(w.sysroot, "env.json"), err)
 	}
 	if w.env.Target != Target {
-		return nil, fmt.Errorf("the WebAssembly compiler's sysroot is for %s, not %s", w.env.Target, Target)
+		return nil, fmt.Errorf("the compiler's sysroot is for %s, not %s", w.env.Target, Target)
+	}
+	markUsed(w.dir)
+	trimCache(cache, w.dir, time.Now())
+
+	// The module's own directory, for what it writes: this process's,
+	// since another may be building at the same time, removed by Close,
+	// and those of processes that never got there swept out after a day.
+	if entries, err := os.ReadDir(w.dir); err == nil {
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), "tmp-") {
+				if fi, err := e.Info(); err == nil && time.Since(fi.ModTime()) > 24*time.Hour {
+					os.RemoveAll(filepath.Join(w.dir, e.Name()))
+				}
+			}
+		}
+	}
+	w.tmp, err = os.MkdirTemp(w.dir, "tmp-")
+	if err != nil {
+		return nil, err
+	}
+
+	switch runtime {
+	case "wazero":
+		w.rt = newWazero(w)
+	case "wasmtime":
+		w.rt, err = newWasmtime(w)
+	case "", "auto":
+		if w.rt, err = newWasmtime(w); err != nil {
+			w.rt = newWazero(w)
+		}
+		err = nil
+	default:
+		err = fmt.Errorf("runtime %q is not wazero, wasmtime or auto", runtime)
+	}
+	if err != nil {
+		w.Close(context.Background())
+		return nil, err
 	}
 	return w, nil
 }
 
-func (w *Wasm) Name() string { return "wasm" }
+// Runtime says which runtime the compiler runs under, and where it is.
+func (w *Wasm) Runtime() string { return w.rt.describe() }
+
+// Dir is where the compiler is unpacked.
+func (w *Wasm) Dir() string { return w.dir }
 
 // opt returns the optimization level to build b at: the one it names,
 // which the cache has to hold, or else DefaultOpt, or the first level the
@@ -159,7 +212,7 @@ func (w *Wasm) opt(b *Build) (string, error) {
 	}
 	if b.Opt != "" {
 		if !slices.Contains(w.env.Opts, b.Opt) {
-			return "", fmt.Errorf("the WebAssembly compiler's cache holds the target's C and assembly compiled only at -opt=%s, so it cannot build at -opt=%s", strings.Join(w.env.Opts, " and -opt="), b.Opt)
+			return "", fmt.Errorf("the compiler's cache holds the target's C and assembly compiled only at -opt=%s, so it cannot build at -opt=%s", strings.Join(w.env.Opts, " and -opt="), b.Opt)
 		}
 		return b.Opt, nil
 	}
@@ -168,25 +221,30 @@ func (w *Wasm) opt(b *Build) (string, error) {
 	}
 	// Said whether or not the build is verbose, since it is not the
 	// executable the same build with the tinygo command writes.
-	fmt.Fprintf(b.Stderr, "nyc: building at -opt=%s, the level the WebAssembly compiler's cache holds, rather than -opt=%s\n", w.env.Opts[0], DefaultOpt)
+	fmt.Fprintf(b.Stderr, "nyc: building at -opt=%s, the level the compiler's cache holds, rather than -opt=%s\n", w.env.Opts[0], DefaultOpt)
 	return w.env.Opts[0], nil
 }
 
+// Compile builds b, writing the ELF to b.Output.
 func (w *Wasm) Compile(ctx context.Context, b *Build) error {
 	opt, err := w.opt(b)
 	if err != nil {
-		return err
-	}
-	if err := w.load(ctx, b); err != nil {
 		return err
 	}
 	pkg, err := filepath.Abs(b.Package)
 	if err != nil {
 		return err
 	}
+	// The compiler is told the working directory, where the main module's
+	// go.mod is looked for, rather than left to its own: a module restored
+	// from a snapshot has another process's.
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
 	w.builds++
 	out := fmt.Sprintf("%s/prog%d.elf", guestTmp, w.builds)
-	args := []string{"-target=" + Target, "-opt=" + opt, "-o", out}
+	args := []string{"-target=" + Target, "-opt=" + opt, "-C", filepath.ToSlash(wd), "-o", out}
 	if len(b.Tags) > 0 {
 		args = append(args, "-tags="+strings.Join(b.Tags, " "))
 	}
@@ -194,21 +252,10 @@ func (w *Wasm) Compile(ctx context.Context, b *Build) error {
 	args = append(args, filepath.ToSlash(pkg))
 
 	start := time.Now()
-	w.out.w = b.Stderr
-	err = buildWithReactor(ctx, w.mod, args)
-	w.out.w = io.Discard
-	var exit *sys.ExitError
-	if errors.As(err, &exit) {
-		if exit.ExitCode() != 0 {
-			return fmt.Errorf("tinygo (wasm) exited with %d", exit.ExitCode())
-		}
-	} else if err != nil {
-		// The module is in no state to build again: the next build loads
-		// it afresh.
-		w.unload(ctx)
-		return fmt.Errorf("tinygo (wasm): %w", err)
+	if err := w.rt.build(ctx, b, args); err != nil {
+		return err
 	}
-	b.logf("wasm: tinygo ran in %s", since(start))
+	b.logf("wasm: tinygo ran under %s in %s", w.rt.name(), since(start))
 
 	hostOut := filepath.Join(w.tmp, filepath.Base(out))
 	elf, err := os.ReadFile(hostOut)
@@ -219,82 +266,10 @@ func (w *Wasm) Compile(ctx context.Context, b *Build) error {
 	return os.WriteFile(b.Output, elf, 0o666)
 }
 
-// load has the module loaded and initialized, if it is not: it stays so
-// between builds, keeping what the compiler keeps, the standard library
-// parsed and type-checked, so that a process that builds more than once,
-// nyc run making patches say, pays for loading once.
-func (w *Wasm) load(ctx context.Context, b *Build) error {
-	if w.mod != nil {
-		return nil
-	}
-	start := time.Now()
-	module, err := os.ReadFile(filepath.Join(w.dir, "tinygo.wasm"))
-	if err != nil {
-		return err
-	}
-	ccache, err := wazero.NewCompilationCacheWithDir(filepath.Join(w.dir, "wazero"))
-	if err != nil {
-		return err
-	}
-	// No WithCloseOnContextDone: to stop a module when the context ends,
-	// wazero calls out to Go at the head of every loop, which made the
-	// compiler ten times slower than under wasmtime. Interrupting nyc ends
-	// the process, and the module with it.
-	r := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig().
-		WithCompilationCache(ccache))
-	wasi_snapshot_preview1.MustInstantiate(ctx, r)
-	b.logf("wasm: read %d MB in %s", len(module)>>20, since(start))
-
-	// The first compilation of the module is most of a minute on one
-	// thread, which is wazero's default, and the cache makes it once.
-	start = time.Now()
-	compiled, err := r.CompileModule(experimental.WithCompilationWorkers(ctx, runtime.GOMAXPROCS(0)), module)
-	if err != nil {
-		r.Close(ctx)
-		return fmt.Errorf("compiling tinygo.wasm: %w", err)
-	}
-	b.logf("wasm: compiled the module in %s", since(start))
-	if compiled.ExportedFunctions()["tinygo_build"] == nil {
-		r.Close(ctx)
-		return errors.New("tinygo.wasm is not a build of the compiler this nyc runs: it has no tinygo_build")
-	}
-
-	wd, err := os.Getwd()
-	if err != nil {
-		r.Close(ctx)
-		return err
-	}
-	// The module's own directory, for what it writes: cleared for each
-	// process, since it is the same one for every build.
-	w.tmp = filepath.Join(w.dir, "tmp")
-	os.RemoveAll(w.tmp)
-	if err := os.MkdirAll(w.tmp, 0o777); err != nil {
-		r.Close(ctx)
-		return err
-	}
-	cache := filepath.Join(w.sysroot, "cache")
-
-	// The host's file system is the compiler's, read only, so that the
-	// program, a replace directive's directory and the module cache are
-	// where the host has them. Mounts on longer paths take precedence.
-	fsc := wazero.NewFSConfig().
-		WithReadOnlyDirMount("/", "/").
-		WithReadOnlyDirMount(w.sysroot, guestSysroot).
-		WithDirMount(w.tmp, guestTmp).
-		WithDirMount(cache, guestCache+"/tinygo")
-	w.out = &switchWriter{w: io.Discard}
-	cfg := wazero.NewModuleConfig().
-		WithName("").
-		WithArgs("tinygo").
-		WithFSConfig(fsc).
-		WithStdout(w.out).
-		WithStderr(w.out).
-		WithRandSource(rand.Reader).
-		WithSysWalltime().
-		WithSysNanotime().
-		WithSysNanosleep().
-		WithStartFunctions("_initialize")
-	for k, v := range map[string]string{
+// environ is the compiler's environment: where its directories are, and
+// the working directory.
+func (w *Wasm) environ(wd string) map[string]string {
+	return map[string]string{
 		"GOROOT":          guestSysroot + "/" + w.env.GOROOT,
 		"GOVERSION":       w.env.GOVERSION,
 		"GOTOOLTAGS":      w.env.GOTOOLTAGS,
@@ -305,71 +280,17 @@ func (w *Wasm) load(ctx context.Context, b *Build) error {
 		"XDG_CACHE_HOME":  guestCache,
 		"PWD":             filepath.ToSlash(wd),
 		"TINYGO_BUILD_ID": w.env.BuildID,
-	} {
-		cfg = cfg.WithEnv(k, v)
-	}
-	start = time.Now()
-	mod, err := r.InstantiateModule(ctx, compiled, cfg)
-	if err != nil {
-		if mod != nil {
-			mod.Close(ctx)
-		}
-		r.Close(ctx)
-		return fmt.Errorf("tinygo (wasm): %w", err)
-	}
-	b.logf("wasm: loaded the module in %s", since(start))
-	w.rt, w.mod = r, mod
-	return nil
-}
-
-// unload lets the module go.
-func (w *Wasm) unload(ctx context.Context) {
-	if w.mod != nil {
-		w.mod.Close(ctx)
-		w.mod = nil
-	}
-	if w.rt != nil {
-		w.rt.Close(ctx)
-		w.rt = nil
 	}
 }
 
-// Close lets the module go and removes what it wrote.
+// Close lets the runtime go and removes what the module wrote.
 func (w *Wasm) Close(ctx context.Context) {
-	w.unload(ctx)
+	if w.rt != nil {
+		w.rt.close(ctx)
+	}
 	if w.tmp != "" {
 		os.RemoveAll(w.tmp)
 	}
-}
-
-// A switchWriter writes to whichever writer it holds: the module's output
-// goes to the build being made.
-type switchWriter struct {
-	w io.Writer
-}
-
-func (s *switchWriter) Write(p []byte) (int, error) { return s.w.Write(p) }
-
-// buildWithReactor asks the initialized reactor module for one build: the
-// arguments go, separated by NUL bytes, where tinygo_args says, and
-// tinygo_build returns the status a run would have exited with.
-func buildWithReactor(ctx context.Context, mod api.Module, args []string) error {
-	at, err := mod.ExportedFunction("tinygo_args").Call(ctx)
-	if err != nil {
-		return err
-	}
-	joined := []byte(strings.Join(args, "\x00"))
-	if !mod.Memory().Write(uint32(at[0]), joined) {
-		return errors.New("the arguments do not fit the module's buffer")
-	}
-	status, err := mod.ExportedFunction("tinygo_build").Call(ctx, uint64(len(joined)))
-	if err != nil {
-		return err
-	}
-	if code := int32(status[0]); code != 0 {
-		return sys.NewExitError(uint32(code))
-	}
-	return nil
 }
 
 // modCache is the host's module cache, as the go command finds it, without
@@ -468,6 +389,3 @@ func gunzip(data []byte) ([]byte, error) {
 	}
 	return io.ReadAll(zr)
 }
-
-// Dir is where the compiler is unpacked.
-func (w *Wasm) Dir() string { return w.dir }

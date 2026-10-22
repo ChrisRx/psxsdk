@@ -1119,10 +1119,10 @@ index 0000000..8aed415
 +}
 diff --git a/cmd/tinygo-wasm/main.go b/cmd/tinygo-wasm/main.go
 new file mode 100644
-index 0000000..e579439
+index 0000000..6e68fa1
 --- /dev/null
 +++ b/cmd/tinygo-wasm/main.go
-@@ -0,0 +1,141 @@
+@@ -0,0 +1,154 @@
 +// Command tinygo-wasm is the TinyGo compiler as a WebAssembly program: the
 +// build command alone, for compiling a program in a browser.
 +//
@@ -1137,7 +1137,8 @@ index 0000000..e579439
 +// Built as a reactor (-buildmode=c-shared), it stays loaded and builds as
 +// often as it is asked: the host writes the arguments, separated by NUL
 +// bytes, at the address tinygo_args gives and calls tinygo_build with
-+// their length, which returns the exit status a run would have. Between
++// their length, which returns the exit status a run would have, or, from a
++// host that can only call, sets TINYGO_ARGS and calls tinygo_main. Between
 +// builds the loader keeps the standard library parsed and type-checked,
 +// which is most of a build's time outside LLVM.
 +package main
@@ -1178,6 +1179,16 @@ index 0000000..e579439
 +	return int32(build(strings.Split(string(argsBuf[:n]), "\x00")))
 +}
 +
++// tinygo_main is for a host that can call an export but not write the
++// arguments, the wasmtime command say: it takes them from TINYGO_ARGS,
++// separated by unit separators (0x1f), builds once and exits with the
++// status.
++//
++//go:wasmexport tinygo_main
++func tinygoMain() {
++	os.Exit(build(strings.Split(os.Getenv("TINYGO_ARGS"), "\x1f")))
++}
++
 +// build runs one build with the arguments given and returns its exit
 +// status, saying what went wrong on the standard error.
 +func build(args []string) int {
@@ -1185,6 +1196,7 @@ index 0000000..e579439
 +	flags.SetOutput(os.Stderr)
 +	target := flags.String("target", "", "target to build for")
 +	output := flags.String("o", "", "output file")
++	dir := flags.String("C", "", "the directory to build in, where the main module's go.mod is looked for, instead of the current directory")
 +	opt := flags.String("opt", "z", "optimization level: 0, 1, 2, s, z")
 +	tags := flags.String("tags", "", "a space-separated list of extra build tags")
 +	work := flags.Bool("work", false, "print the name of the temporary build directory and do not delete it")
@@ -1207,6 +1219,7 @@ index 0000000..e579439
 +		GOARM:     goenv.Get("GOARM"),
 +		GOMIPS:    goenv.Get("GOMIPS"),
 +		Target:    *target,
++		Directory: *dir,
 +		Opt:       *opt,
 +		Work:      *work,
 +		PrintIR:   *printIR,

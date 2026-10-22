@@ -1,5 +1,8 @@
 // Command nyc builds Go programs for the Net Yaroze: a PSX-EXE, or a disc
-// image that boots one, from a main package, in one step.
+// image that boots one, from a main package, in one step, with nothing
+// else installed:
+//
+//	go run go.chrisrx.dev/psx/cmd/nyc@latest disc ./mygame
 //
 //	nyc build ./mygame        # mygame.exe
 //	nyc disc ./mygame         # mygame.bin and mygame.cue
@@ -11,19 +14,34 @@
 // nops (link.MIPS1Traps), the ELF becomes a PSX-EXE with the Net
 // Yaroze library combined in (link.Executable), and for a disc mkpsxiso
 // writes the image with the files the program registers with package disc.
-// Only the first step is outside nyc.
 //
-// TinyGo is the tinygo command when there is one, given the PlayStation
-// targets nyc carries when it has none, or else TinyGo compiled to
-// WebAssembly, the playground's compiler, run in-process under wazero
-// (--compiler, NYC_COMPILER). Package go.chrisrx.dev/psx/internal/toolchain
-// says how each is found. This nyc has no WebAssembly compiler of its own,
-// and NYC_WASM has to name one. cmd/nycw is nyc with one embedded.
+// TinyGo is the playground's compiler, TinyGo compiled to WebAssembly,
+// embedded with its sysroot, a copy of the playground's with the cache
+// filled at -opt=2 as well, in wasm/, which task nyc writes. It runs under
+// the wasmtime command when there is one, and otherwise under wazero,
+// built in (--runtime, NYC_RUNTIME). Package
+// go.chrisrx.dev/psx/internal/toolchain says how. NYC_WASM names another
+// compiler to use in place of the embedded one, for working on it.
 //
 // nyc generate is discgen, for go:generate, and nyc iso is mkpsxiso with
 // all of its flags.
 package main
 
-import "go.chrisrx.dev/psx/internal/nyc"
+import (
+	_ "embed"
 
-func main() { nyc.Main("nyc", "") }
+	"go.chrisrx.dev/psx/internal/nyc"
+	"go.chrisrx.dev/psx/internal/toolchain"
+)
+
+var (
+	//go:embed wasm/tinygo.wasm.gz
+	compiler []byte
+	//go:embed wasm/sysroot.tar.gz
+	sysroot []byte
+)
+
+func main() {
+	toolchain.Embed(compiler, sysroot)
+	nyc.Main("nyc")
+}

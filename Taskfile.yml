@@ -42,9 +42,7 @@ tasks:
   # prog.elf for its symbols, which the emulator tests read. The output
   # directory starts with a dot so that go list ./... leaves it alone. The
   # build optimizes for speed, OPT=2, since a game's frame has a budget;
-  # OPT=z is TinyGo's own default, for size. COMPILER=wasm builds with
-  # TinyGo compiled to WebAssembly instead of the tinygo command, from
-  # NYC_WASM.
+  # OPT=z is TinyGo's own default, for size.
   #
   # It is skipped when neither the program nor the packages a program may
   # use nor nyc has changed since it last ran.
@@ -55,7 +53,6 @@ tasks:
     vars:
       DIR: '{{.DIR | default (printf "examples/%s" .NAME)}}'
       OPT: '{{.OPT | default "2"}}'
-      COMPILER: '{{.COMPILER | default "auto"}}'
     sources:
       - '{{.DIR}}/**/*'
       - 'yaroze/**/*.go'
@@ -65,7 +62,7 @@ tasks:
       - 'format/**/*.go'
       - 'examples/internal/**/*.go'
       - 'internal/**/*'
-      - 'cmd/nyc/**/*.go'
+      - 'cmd/nyc/**/*'
       - 'link/**/*'
       - 'tools/**/*.go'
       - go.mod
@@ -77,7 +74,7 @@ tasks:
     cmds:
       - rm -rf .build/{{.NAME}}
       - mkdir -p .build/{{.NAME}}
-      - go run ./cmd/nyc disc --compiler={{.COMPILER}} --opt={{.OPT}} --elf .build/{{.NAME}}/prog.elf -o .build/{{.NAME}}/{{.NAME}}.bin ./{{.DIR}}
+      - go run ./cmd/nyc disc --opt={{.OPT}} --elf .build/{{.NAME}}/prog.elf -o .build/{{.NAME}}/{{.NAME}}.bin ./{{.DIR}}
 
   # Builds the hot reload test's fixtures onto .build/hot: v1 with --hot
   # onto a disc, with its ELF, and v2's patch against that ELF, which the
@@ -388,14 +385,13 @@ tasks:
       - mkdir -p .build/site/play
       - tar --format=ustar -C .build -cf - sysroot | gzip -9 > .build/site/play/sysroot.tar.gz
 
-  # Builds nycw onto .build/nycw, nyc with TinyGo compiled to WebAssembly
-  # built in, so that it compiles programs with nothing else installed: the
-  # compiler from the compiler task, and a sysroot of its own, a copy of
-  # the one the playground:sysroot task leaves in .build/sysroot with the
-  # cache filled at -opt=2 as well, the level nyc builds at by default,
-  # which the playground's leaves out to stay small. Both are written
-  # under cmd/nycw/wasm, which is committed so that go run of nycw works
-  # from the module.
+  # Refreshes the compiler nyc has built in, and builds nyc onto
+  # .build/nyc: the compiler from the compiler task, and a sysroot of its
+  # own, a copy of the one the playground:sysroot task leaves in
+  # .build/sysroot with the cache filled at -opt=2 as well, the level nyc
+  # builds at by default, which the playground's leaves out to stay small.
+  # Both are written under cmd/nyc/wasm, which is committed so that go run
+  # of nyc works from the module.
   nyc:
     vars:
       SYSROOT: .build/nyc-sysroot
@@ -405,11 +401,11 @@ tasks:
       - rm -rf {{.SYSROOT}}
       - cp -R .build/sysroot {{.SYSROOT}}
       - OPTS=2 web/compiler/mkcache.sh .build/compiler/tinygo-full.wasm .build/compiler/tinygo.wasm {{.SYSROOT}} $(cd {{.SYSROOT}} && ls -d mod/go.chrisrx.dev/psx/examples/*/ mod/go.chrisrx.dev/psx/docs/tutorial/hello/ | grep -v /internal/)
-      - mkdir -p cmd/nycw/wasm
-      - gzip -9 -n -c .build/compiler/tinygo.wasm > cmd/nycw/wasm/tinygo.wasm.gz
+      - mkdir -p cmd/nyc/wasm
+      - gzip -9 -n -c .build/compiler/tinygo.wasm > cmd/nyc/wasm/tinygo.wasm.gz
       # The archive's directory is sysroot, as the playground's is.
-      - tar --format=ustar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --mode=go-w -C .build --transform 's,^nyc-sysroot,sysroot,' -cf - nyc-sysroot | gzip -9 -n > cmd/nycw/wasm/sysroot.tar.gz
-      - go build -trimpath -ldflags=-s -o .build/nycw ./cmd/nycw
+      - tar --format=ustar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --mode=go-w -C .build --transform 's,^nyc-sysroot,sysroot,' -cf - nyc-sysroot | gzip -9 -n > cmd/nyc/wasm/sysroot.tar.gz
+      - go build -trimpath -ldflags=-s -o .build/nyc ./cmd/nyc
 
   # The compression benchmark behind docs/architecture/compression.md: packs
   # three of the examples' files with deflate and LZ4, builds the program

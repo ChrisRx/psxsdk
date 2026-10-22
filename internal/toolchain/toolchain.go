@@ -1,24 +1,19 @@
-// Package toolchain compiles a Go program for the Net Yaroze with TinyGo,
-// for nyc. TinyGo comes in one of two ways:
+// Package toolchain compiles a Go program for the Net Yaroze, for nyc,
+// with TinyGo compiled to WebAssembly: the compiler the playground runs in
+// the browser, so that no tinygo command, go command or C toolchain is
+// needed. It runs under wazero, built in, or under the wasmtime command
+// when there is one, which runs it quicker (see Wasm).
 //
-//   - Native runs the tinygo command. A TinyGo without the PlayStation
-//     targets gets them from internal/toolchain/_tinygo, whose files are
-//     embedded here and laid over a copy of its root made of links
-//     (Overlay).
-//   - Wasm runs TinyGo compiled to WebAssembly, the compiler the
-//     playground runs in the browser, under wazero, with no tinygo or go
-//     command needed at all.
-//
-// Either writes the ELF TinyGo links. What follows is the same for both:
+// The compiler writes the ELF TinyGo links. What follows is nyc's:
 // link.MIPS1Traps and RemoveTraps, then link.Executable.
 package toolchain
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -67,33 +62,18 @@ func (b *Build) logf(format string, args ...any) {
 	}
 }
 
-// A Compiler compiles programs for the target.
-type Compiler interface {
-	// Name is the compiler's name, for messages: "tinygo" or "wasm".
-	Name() string
-	// Compile builds b, writing the ELF to b.Output.
-	Compile(ctx context.Context, b *Build) error
-}
-
-// Find returns the compiler named, or with "auto" the native one when there
-// is a tinygo command and the WebAssembly one otherwise.
-func Find(name string) (Compiler, error) {
-	switch name {
-	case "tinygo", "native":
-		return NewNative()
-	case "wasm":
-		return NewWasm()
-	case "", "auto":
-		if c, err := NewNative(); err == nil {
-			return c, nil
-		}
-		c, err := NewWasm()
+// cacheDir is nyc's cache directory, NYC_CACHE or nyc under the user's,
+// made if need be.
+func cacheDir() (string, error) {
+	dir := os.Getenv("NYC_CACHE")
+	if dir == "" {
+		base, err := os.UserCacheDir()
 		if err != nil {
-			return nil, fmt.Errorf("no compiler: there is no tinygo command, and %w", err)
+			return "", err
 		}
-		return c, nil
+		dir = filepath.Join(base, "nyc")
 	}
-	return nil, fmt.Errorf("compiler %q is not tinygo, wasm or auto", name)
+	return dir, os.MkdirAll(dir, 0o777)
 }
 
 // since returns the time since start, rounded for a log line.

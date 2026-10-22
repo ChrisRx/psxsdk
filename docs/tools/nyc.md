@@ -1,7 +1,7 @@
 ---
 title: nyc
 weight: 1
-description: Build a Go program for the Net Yaroze into a PSX-EXE or a disc image in one step, with the tinygo command or with TinyGo compiled to WebAssembly.
+description: Build a Go program for the Net Yaroze into a PSX-EXE or a disc image in one step, with nothing but Go installed.
 ---
 
 `nyc` builds Go programs for the Net Yaroze. From a main package it writes a PSX-EXE, or a disc image that boots one, in one step:
@@ -16,6 +16,12 @@ A build runs the steps that are tools of their own here. TinyGo compiles the pac
 
 ## Installing
 
+`nyc` has its compiler built in, TinyGo compiled to WebAssembly, so it builds programs with nothing but Go installed, and `go run` alone is enough:
+
+```bash
+go run go.chrisrx.dev/psx/cmd/nyc@latest disc ./mygame
+```
+
 As a tool dependency of a program's module, which `go tool` builds and runs:
 
 ```bash
@@ -25,14 +31,6 @@ go tool nyc disc
 
 or on its own with `go install go.chrisrx.dev/psx/cmd/nyc@latest`.
 
-`nycw` is `nyc` with the WebAssembly compiler built in, so it builds programs with nothing but Go installed, and `go run` alone is enough:
-
-```bash
-go run go.chrisrx.dev/psx/cmd/nycw@latest disc ./mygame
-```
-
-Its commands and flags are `nyc`'s, less `--compiler`: it builds only with the WebAssembly compiler, even when there is a tinygo command, and always its own copy of it, ignoring `NYC_WASM`. The compiler and its sysroot are committed under `cmd/nycw/wasm`, which `task nyc` refreshes, building `.build/nycw` as well.
-
 ## The commands
 
 - **`nyc build [package]`** writes the PSX-EXE, named after the package's directory unless `-o` names it. A name ending in `.elf` writes the ELF TinyGo linked instead, with the traps replaced, which has the symbols an emulator's debugger wants.
@@ -40,28 +38,28 @@ Its commands and flags are `nyc`'s, less `--compiler`: it builds only with the W
 - **`nyc run [package]`** builds the disc in a temporary directory and plays it in a window, booting the OpenBIOS built in. It is [`psxplay`](psxplay.md), inside `nyc`, with its keys and its flags: `--bios` boots another BIOS, `--card` attaches a memory card image, `--scale` sizes the window, `--mute` leaves the sound off, and `--fast-start=false` plays the start in real time rather than running it as fast as it goes until the first picture. The window loads X11, OpenGL and the sound library at run time, so `nyc` still builds with nothing but Go. With `--hot`, the program is built to take patches, and each save of the package's Go files while it runs builds one and loads it into the running program between frames: the main package's functions are replaced and its variables keep their values, so a change to the frame loop shows in about a second without the boot. A changed constant comes with the functions, and a variable the program has never written takes a changed initial value, while one it has written, a score say, keeps its state. A change that a patch cannot carry, to a variable's type or size, to a type's layout or to another package, is reported on standard error, and the program has to be started again.
 - **`nyc patch --base prog.elf [package]`** builds such a patch by hand, for the program whose ELF `--base` names, built with `--hot` and kept with `--elf`, linked at `--at` inside the program's region, which an emulator loads with the `hot` package. It is what `run --hot` does on each save.
 - **`nyc generate`** is [`discgen`](discgen.md), and **`nyc iso`** is [`mkpsxiso`](mkpsxiso.md) with every flag, for a disc laid out by hand.
-- **`nyc env`** says which compiler a build would use, and where it is.
+- **`nyc env`** says how a build would run the compiler, and where it is.
 
-Every command that compiles takes `--opt`, TinyGo's optimization level, 2 by default since a frame has a budget, `--tags`, `--load file@addr` to put a file into the executable as siocons' `local dload` did, `--hot` to build a program that takes patches, which calls the main package's functions through a slot each and reserves 256KB for the patches, and `-v`, which says which compiler ran and how long each step took.
+Every command that compiles takes `--opt`, TinyGo's optimization level, 2 by default since a frame has a budget, `--tags`, `--load file@addr` to put a file into the executable as siocons' `local dload` did, `--hot` to build a program that takes patches, which calls the main package's functions through a slot each and reserves 256KB for the patches, and `-v`, which says how the compiler ran and how long each step took.
 
 ## The compiler
 
-`nyc` compiles with one of two TinyGos, chosen with `--compiler` or `NYC_COMPILER`:
+The compiler is the one the [playground](/play/) runs in the browser: TinyGo compiled to WebAssembly ([how it is built](../architecture/compiler.md)), so it needs no tinygo command, no go command and no C toolchain. It has no clang, so the target's C and assembly come compiled in its sysroot's cache, and it builds only at the optimization levels the cache holds: `nyc`'s own sysroot holds z and 2. It reads the program and the modules it uses from the host's file system. The compiler and its sysroot are committed under `cmd/nyc/wasm`, which `task nyc` refreshes, building `.build/nyc` as well, and are unpacked once into the cache directory, keyed by the build. `NYC_WASM` names a directory holding another `tinygo.wasm` and `sysroot.tar.gz`, as the site's `play/` directory does, to build with that compiler instead, for working on it; the playground's sysroot holds only z, which keeps it small for the browser, so a build with it is at `-opt=z` unless `--opt` asks for a level it cannot build at, which is an error.
 
-- **`tinygo`** is the tinygo command, `NYC_TINYGO` or the one on the `PATH`. A TinyGo without the PlayStation targets gets them anyway. The targets and the runtime for them only add files to TinyGo, so `nyc` carries those files (`internal/toolchain/_tinygo`) and lays them over the installed TinyGo's root, as a tree of links made once in its cache directory, and runs TinyGo with that as its root. The TinyGo has to be the version the files are written for, the revision the flake builds, since the runtime files are written against its internals.
-- **`wasm`** is TinyGo compiled to WebAssembly, the compiler the [playground](/play/) runs in the browser ([how it is built](../architecture/compiler.md)), run in-process by [wazero](https://wazero.io/), so it needs no tinygo command, no go command and no C toolchain. It has no clang, so the target's C and assembly come compiled in its sysroot's cache, and it builds only at the optimization levels the cache holds. It reads the program and the modules it uses from the host's file system, read only. It is built into `nycw`, with a sysroot of its own that holds levels z and 2. Otherwise `NYC_WASM` names a directory holding `tinygo.wasm` and `sysroot.tar.gz`, as the site's `play/` directory does, and the two files can be downloaded from there. The playground's sysroot holds only z, which keeps it small for the browser, so a build with it is at `-opt=z` unless `--opt` asks for a level it cannot build at, which is an error.
-- **`auto`**, the default, is `tinygo` when there is a tinygo command and `wasm` otherwise.
+What runs the module is chosen with `--runtime` or `NYC_RUNTIME`:
 
-Both write the same executable, byte for byte. What they cost differs:
+- **`wazero`** is [wazero](https://wazero.io/), built in, so it is always there. It keeps the module loaded for the builds of a command, so the patches `run --hot` makes get the compiler with the standard library already parsed and type-checked, which is most of a build's time outside LLVM. Between commands a snapshot of the compiler's memory does the same: the first build of a process writes the module's memory, about 140MB, to a file of the user's alone in the temporary directory, and the next process maps it under a fresh module in place of starting the compiler. The file lives in the temporary directory because the system clears that as it sees fit and a snapshot is a build away from being made again; a snapshot that fails to restore is removed and the build starts afresh. The first build anywhere also has wazero compile the 44MB module, which takes a few seconds over every core and is kept, about 270MB of it, beside the unpacked compiler.
+- **`wasmtime`** is the [wasmtime](https://wasmtime.dev/) command, `NYC_WASMTIME` or the one on the `PATH`, which runs the module as a command for each build. Its code runs the compiler about twice as fast as wazero's, and the module it compiles once, beside the unpacked compiler and tied to the command's version, loads in a few milliseconds, so a build is as quick as one from a snapshot with nothing kept in memory or in the temporary directory. The command has no read-only mount, so the compiler sees the whole file system writable, where wazero gives it the file system read only.
+- **`auto`**, the default, is `wasmtime` when there is a wasmtime command and `wazero` otherwise.
 
-| Disc of | `tinygo` | `wasm` |
-| --- | --- | --- |
-| hello | 0.3s | 1.4s |
-| square | 0.4s | 1.6s |
-| dino | 0.5s | 1.8s |
-| tunnel | 0.9s | 2.3s |
-| terra | 1.7s | 3.4s |
+Both write the same executable, byte for byte. What a build costs, on a 24-thread x86-64 desktop:
 
-Those are on a 24-thread x86-64 desktop. Each `wasm` build includes about half a second of loading the compiled module from the cache, once per command: `run --hot` keeps the module loaded, and with it the standard library parsed and type-checked, so its patches take a fraction of a second. The first build anywhere also unpacks the compiler and has wazero compile its 44MB module, which takes about 3 seconds over every core and is kept, about 270MB of it, in the cache directory. A `wasm` build of square peaks at about 660MB of memory, where `tinygo` takes about 130MB.
+| Disc of | `wazero`, no snapshot | `wazero`, from the snapshot | `wasmtime` |
+| --- | --- | --- | --- |
+| square | 1.2s | 0.7 to 1.2s | 0.5 to 0.8s |
+| dino | 1.5s | 0.8 to 1.4s | 0.7s |
+| terra | 3.3s | 3 to 4.5s | 1.7s |
 
-`NYC_CACHE` moves the cache directory, which is `nyc` under the user's cache directory otherwise.
+Those include about 0.2 seconds of wazero loading its compiled module. The wazero is a fork ([ChrisRx/wazero](https://github.com/ChrisRx/wazero), branch `psxsdk`) with one change: on a cache hit it does not validate the module's function bodies again, which was another 0.3 seconds of every start. A large program gains little from the snapshot under wazero, since LLVM is most of its build and the kept standard library is more for the collector to walk. The first build on a machine also unpacks the compiler and has the runtime compile the 44MB module, about 4 seconds under wazero over every core and 5 under wasmtime, once per runtime. A build of square peaks at about 660MB of memory under wazero.
+
+The cache directory, `NYC_CACHE` or `nyc` under the user's cache directory, holds a compiler per build of `nyc` that was run, each about 300MB with what the runtimes make of it. They are trimmed the way the go command trims its build cache: a compiler is marked used at most once an hour, and once a day those not used for five days are removed.

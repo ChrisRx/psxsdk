@@ -13,12 +13,12 @@ tool (
 )
 
 require (
+	github.com/ChrisRx/wazero v0.0.0-20261022122953-787716494703
 	github.com/alecthomas/chroma/v2 v2.27.0
 	github.com/hajimehoshi/ebiten/v2 v2.10.5
 	github.com/mewmew/mips v0.1.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.9
-	github.com/tetratelabs/wazero v1.12.0
 	github.com/yuin/goldmark v1.8.6
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
 	go.bug.st/serial v1.0.0

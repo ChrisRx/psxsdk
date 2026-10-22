@@ -35,6 +35,7 @@ built and started again, which run says when it cannot build a patch.
 ` + psxplay.Keys,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			defer f.close()
 			pkg := "."
 			if len(args) == 1 {
 				pkg = args[0]
@@ -72,31 +73,23 @@ built and started again, which run says when it cannot build a patch.
 }
 
 func envCommand() *cobra.Command {
-	var compiler string
+	var runtime string
 	cmd := &cobra.Command{
 		Use:   "env",
-		Short: "say which compiler nyc would use, and where it is",
+		Short: "say how nyc would run the compiler, and where it is",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			w := cmd.OutOrStdout()
-			c, err := toolchain.Find(compiler)
+			c, err := toolchain.New(runtime)
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(w, "compiler: %s\n", c.Name())
-			switch c := c.(type) {
-			case *toolchain.Native:
-				fmt.Fprintf(w, "tinygo: %s\n", c.Path)
-				fmt.Fprintf(w, "root: %s\n", c.Root)
-				if c.Overlaid {
-					fmt.Fprintln(w, "targets: nyc's own, laid over the tinygo command's own root")
-				}
-			case *toolchain.Wasm:
-				fmt.Fprintf(w, "unpacked: %s\n", c.Dir())
-			}
+			defer c.Close(cmd.Context())
+			fmt.Fprintf(w, "runtime: %s\n", c.Runtime())
+			fmt.Fprintf(w, "compiler: %s\n", c.Dir())
 			return nil
 		},
 	}
-	compilerFlag(cmd.Flags(), &compiler, "tinygo, wasm or auto")
+	runtimeFlag(cmd.Flags(), &runtime)
 	return cmd
 }

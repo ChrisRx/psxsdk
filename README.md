@@ -13,7 +13,7 @@ The Net Yaroze was Sony's 1990s kit for making PlayStation games at home. psxsdk
 </p>
 
 - **Play** [the examples](https://chrisrx.github.io/psxsdk/examples/) in your browser: Sony's Net Yaroze demos and members' games ported to Go, and a few new ones.
-- **Write** your own in [the playground](https://chrisrx.github.io/psxsdk/play/), or with nothing but Go installed: `go run go.chrisrx.dev/psx/cmd/nycw@latest disc ./mygame`. [The tutorial](https://chrisrx.github.io/psxsdk/tutorial/) starts from nothing.
+- **Write** your own in [the playground](https://chrisrx.github.io/psxsdk/play/), or with nothing but Go installed: `go run go.chrisrx.dev/psx/cmd/nyc@latest disc ./mygame`. [The tutorial](https://chrisrx.github.io/psxsdk/tutorial/) starts from nothing.
 - **Read** [Sony's manuals](https://chrisrx.github.io/psxsdk/manuals/), with the FAQs, supplements and tutorial the members' websites carried.
 
 ## What it does
@@ -54,7 +54,7 @@ task serve             # build the site and the playground, and serve them on lo
 | Directory | What is there |
 | --- | --- |
 | [`yaroze`](yaroze), [`disc`](disc), [`archive`](archive), [`scene`](scene) | What a program imports: the Net Yaroze library, its files on the disc, archives and scenes |
-| [`cmd`](cmd) | `nyc`, which builds a program onto a disc in one step, and `nycw`, the same with its compiler built in |
+| [`cmd`](cmd) | `nyc`, which builds a program onto a disc in one step, with its compiler built in |
 | [`tools`](tools) | The converters, the disc and executable tools, and the emulator's front ends, each [documented](https://chrisrx.github.io/psxsdk/tools/) |
 | [`link`](link), [`format`](format) | Executables, discs and the console's file formats |
 | [`emu`](emu) | The emulator, with [`emu/emutest`](emu/emutest) for driving it from tests |

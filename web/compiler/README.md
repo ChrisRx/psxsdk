@@ -1,7 +1,7 @@
 # The compiler in the browser
 
 The recipe for TinyGo compiled to WebAssembly, the compiler the
-playground runs and `nycw` embeds. `build.sh` is the whole of it; the
+playground runs and `nyc` embeds. `build.sh` is the whole of it; the
 other files are what it feeds to LLVM.
 
 How it is built, why clang is left out, how the playground runs a build,

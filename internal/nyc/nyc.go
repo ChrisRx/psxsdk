@@ -1,5 +1,5 @@
-// Package nyc is the nyc command, which cmd/nyc builds as it is and
-// cmd/nycw builds with the WebAssembly compiler embedded.
+// Package nyc is the nyc command, which cmd/nyc builds with the compiler
+// embedded.
 package nyc
 
 import (
@@ -13,38 +13,20 @@ import (
 	"go.chrisrx.dev/psx/internal/mkpsxiso"
 )
 
-// fixedCompiler is the compiler Main was given, which every build uses
-// when it is not empty, with no --compiler flag to choose another.
-var fixedCompiler string
-
-// compilerFlag adds the --compiler flag, defaulting to NYC_COMPILER, or,
-// when Main was given a compiler, sets p to it.
-func compilerFlag(fl *pflag.FlagSet, p *string, usage string) {
-	if fixedCompiler != "" {
-		*p = fixedCompiler
-		return
-	}
-	fl.StringVar(p, "compiler", os.Getenv("NYC_COMPILER"), usage)
+// runtimeFlag adds the --runtime flag, defaulting to NYC_RUNTIME.
+func runtimeFlag(fl *pflag.FlagSet, p *string) {
+	fl.StringVar(p, "runtime", os.Getenv("NYC_RUNTIME"), "wazero, wasmtime or auto (NYC_RUNTIME): what runs the compiler; auto is the wasmtime command if there is one, which is quicker, else wazero, built in")
 }
 
-// Main runs the command, as name, and exits. An empty compiler lets
-// --compiler and NYC_COMPILER choose one. Otherwise every build uses the
-// compiler named, as toolchain.Find names them.
-func Main(name, compiler string) {
-	fixedCompiler = compiler
-	long := name + ` builds Go programs for the Net Yaroze: a PSX-EXE, or a disc image
-that boots one, from a main package, in one step. It compiles with the
-tinygo command when there is one, and otherwise with TinyGo compiled to
-WebAssembly, which needs nothing else installed.`
-	if compiler == "wasm" {
-		long = name + ` builds Go programs for the Net Yaroze: a PSX-EXE, or a disc image
-that boots one, from a main package, in one step. It compiles with TinyGo
-compiled to WebAssembly, built in, which needs nothing else installed.`
-	}
+// Main runs the command, as name, and exits.
+func Main(name string) {
 	root := &cobra.Command{
-		Use:           name,
-		Short:         "build Go programs for the Net Yaroze",
-		Long:          long,
+		Use:   name,
+		Short: "build Go programs for the Net Yaroze",
+		Long: name + ` builds Go programs for the Net Yaroze: a PSX-EXE, or a disc image
+that boots one, from a main package, in one step. It compiles with TinyGo
+compiled to WebAssembly, built in, which needs nothing else installed, and
+runs it under the wasmtime command when there is one, which is quicker.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}

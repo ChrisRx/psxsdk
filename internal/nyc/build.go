@@ -20,22 +20,22 @@ import (
 
 // buildFlags are the flags of every command that compiles a program.
 type buildFlags struct {
-	compiler string
-	opt      string
-	tags     []string
-	loads    flags.Loads
-	verbose  bool
-	hot      bool
+	runtime string
+	opt     string
+	tags    []string
+	loads   flags.Loads
+	verbose bool
+	hot     bool
 
-	// c is the compiler found, kept for every build of the command: the
-	// WebAssembly one stays loaded between builds.
-	c toolchain.Compiler
+	// c is the compiler, found once and kept for every build of the
+	// command: under wazero it stays loaded between builds.
+	c *toolchain.Wasm
 }
 
-// find returns the compiler the flags name, found once.
-func (f *buildFlags) find() (toolchain.Compiler, error) {
+// find returns the compiler, under the runtime the flags name, found once.
+func (f *buildFlags) find() (*toolchain.Wasm, error) {
 	if f.c == nil {
-		c, err := toolchain.Find(f.compiler)
+		c, err := toolchain.New(f.runtime)
 		if err != nil {
 			return nil, err
 		}
@@ -44,9 +44,17 @@ func (f *buildFlags) find() (toolchain.Compiler, error) {
 	return f.c, nil
 }
 
+// close lets the compiler go, once the command is done building.
+func (f *buildFlags) close() {
+	if f.c != nil {
+		f.c.Close(context.Background())
+		f.c = nil
+	}
+}
+
 func (f *buildFlags) register(cmd *cobra.Command) {
 	fl := cmd.Flags()
-	compilerFlag(fl, &f.compiler, "tinygo, wasm or auto (NYC_COMPILER): the tinygo command if there is one, else TinyGo compiled to WebAssembly")
+	runtimeFlag(fl, &f.runtime)
 	fl.StringVar(&f.opt, "opt", "", "TinyGo's optimization level: 0, 1, 2, s or z; 2 if not given, for speed, since a frame has a budget, unless the WebAssembly compiler's cache holds only another")
 	fl.StringSliceVar(&f.tags, "tags", nil, "extra build tags")
 	fl.Var(&f.loads, "load", "file@addr: put a file into the executable at a hexadecimal address, as siocons' local dload did; may be repeated")
@@ -79,7 +87,7 @@ func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
 	if err != nil {
 		return err
 	}
-	f.logf("compiler: %s, found in %s", c.Name(), time.Since(start).Round(time.Millisecond))
+	f.logf("runtime: %s, found in %s", c.Runtime(), time.Since(start).Round(time.Millisecond))
 
 	tmp, err := os.MkdirTemp("", "nyc-")
 	if err != nil {
@@ -99,7 +107,7 @@ func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
 }
 
 // finish compiles b and writes its outputs, as build does.
-func (f *buildFlags) finish(ctx context.Context, c toolchain.Compiler, b *toolchain.Build, exe, elf string) error {
+func (f *buildFlags) finish(ctx context.Context, c *toolchain.Wasm, b *toolchain.Build, exe, elf string) error {
 	if err := c.Compile(ctx, b); err != nil {
 		return err
 	}
@@ -153,6 +161,7 @@ the instructions an R3000A cannot run replaced, which has the symbols an
 emulator's debugger wants.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			defer f.close()
 			pkg := "."
 			if len(args) == 1 {
 				pkg = args[0]
@@ -260,6 +269,7 @@ of them filled in with where they were put.
 a name ending in .cue names the .bin beside it.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			defer f.close()
 			pkg := "."
 			if len(args) == 1 {
 				pkg = args[0]

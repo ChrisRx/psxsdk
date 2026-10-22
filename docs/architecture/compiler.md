@@ -4,7 +4,7 @@ weight: 2
 description: TinyGo compiled to WebAssembly, with LLVM and lld linked in: how it is built, why clang is left out, how the playground runs a build, and its limits.
 ---
 
-The [playground](/play/) builds a program and runs it without anything installed, and so does [`nycw`](../tools/nyc.md). The compiler behind both is TinyGo itself, compiled to WebAssembly, with LLVM and lld linked into it the way a release build of TinyGo links them. In the browser it runs against a file system held in memory, and on the desktop `nyc` runs it in-process under [wazero](https://wazero.io/). [`web/compiler`](../../web/compiler) holds the recipe, and `build.sh` is the whole of it.
+The [playground](/play/) builds a program and runs it without anything installed, and so does [`nyc`](../tools/nyc.md). The compiler behind both is TinyGo itself, compiled to WebAssembly, with LLVM and lld linked into it the way a release build of TinyGo links them. In the browser it runs against a file system held in memory, and on the desktop `nyc` runs it in-process under [wazero](https://wazero.io/). [`web/compiler`](../../web/compiler) holds the recipe, and `build.sh` is the whole of it.
 
 ## TinyGo compiles TinyGo
 
@@ -17,7 +17,7 @@ TinyGo is a Go program bound to LLVM through cgo, and Go's own WebAssembly ports
 
 ## Leaving clang out
 
-A release TinyGo compiles a target's C and assembly with an in-process clang, and clang is more than half of the module. So there are two builds. The shipped `tinygo.wasm` leaves clang out and is 75MB, 22MB gzipped. `tinygo-full.wasm` keeps it, at 169MB, and never leaves the build machine: `mkcache.sh` runs it under wasmtime over every example, against the same sysroot paths the browser uses, and the cache it fills ships in `sysroot.tar.gz`, keyed by the shipped compiler's hash. A first build then finds the target's C and the standard library already compiled. The playground's sysroot holds the cache at TinyGo's default `-opt=z` and is 5MB; `nycw`'s holds `-opt=2` as well and is 8.8MB.
+A release TinyGo compiles a target's C and assembly with an in-process clang, and clang is more than half of the module. So there are two builds. The shipped `tinygo.wasm` leaves clang out and is 75MB, 22MB gzipped. `tinygo-full.wasm` keeps it, at 169MB, and never leaves the build machine: `mkcache.sh` runs it under wasmtime over every example, against the same sysroot paths the browser uses, and the cache it fills ships in `sysroot.tar.gz`, keyed by the shipped compiler's hash. A first build then finds the target's C and the standard library already compiled. The playground's sysroot holds the cache at TinyGo's default `-opt=z` and is 5MB; `nyc`'s holds `-opt=2` as well and is 8.8MB.
 
 ## A build in the playground
 
@@ -37,7 +37,7 @@ What a patch cannot do, the compiler reports as an error starting `hot:`, and th
 
 ## Building it
 
-`task compiler` builds the two modules, which takes most of an hour, and `task playground` adds them, the tools, gofmt and the sysroot to the site. The fork is checked out at the revision `flake.nix` pins, so the compiler in the browser is the TinyGo the examples were built with, and `task nyc` copies the same compiler and a sysroot into `cmd/nycw/wasm` for `nycw` to embed.
+`task compiler` builds the two modules, which takes most of an hour, and `task playground` adds them, the tools, gofmt and the sysroot to the site. The fork is checked out at the revision `flake.nix` pins, so the compiler in the browser is the TinyGo the examples were built with, and `task nyc` copies the same compiler and a sysroot into `cmd/nyc/wasm` for `nyc` to embed.
 
 In CI, the Compiler workflow builds the modules when `web/compiler`, the flake or the PlayStation files in `internal/toolchain/_tinygo` change, or on request. It caches them under a key made of those, less the Markdown (`key.sh`), publishes them as a release named by the key (`release.sh`), which outlives the cache's week, and then runs the Pages workflow. Pages restores the cache, or downloads the release on a miss, through the same composite action, and never builds the compiler itself: with neither, a push to main skips the deploy until the Compiler workflow has published one, and a pull request builds the site without the playground. A release published from a local build (`release.sh .build/compiler`) before the change is pushed saves the workflow the build.
 

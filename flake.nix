@@ -148,7 +148,7 @@
             version = "0.2.0";
             src = ./.;
 
-            vendorHash = "sha256-0U9jCp939HNc4BMdjwC9RafivzcM9ogXuhbis4KV0bs=";
+            vendorHash = "sha256-99KMvyc+Sqd1N+xvs12mpaHkyy+NxF5+dxr4RV9shbI=";
 
             # Matches the Makefile, which trims the build directory out of
             # recorded paths.
