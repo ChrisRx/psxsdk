@@ -52,7 +52,7 @@
 
       # TinyGo, upstream's source with the PlayStation targets and their
       # runtime laid over it from internal/toolchain/_tinygo, the same files
-      # nyc lays over a TinyGo that lacks them.
+      # yaroze lays over a TinyGo that lacks them.
       #
       # They have to go into TinyGo's own tree rather than sit beside it as an
       # out-of-tree target file, because TinyGo selects a target's runtime

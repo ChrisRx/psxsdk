@@ -58,7 +58,7 @@ const (
 
 // The sound data: the bank's header and waveforms, and the sequence, each
 // in a buffer of whole sectors, 512 words each, enough for its file. Each
-// is registered with mkpsxiso by its declaration, which also says where it
+// is registered with mkdisc by its declaration, which also says where it
 // is read into; see package disc.
 var (
 	vhData  [(vhSize + 2047) / 2048 * 512]uint32
@@ -109,7 +109,7 @@ func loadDataFiles() bool {
 	for i, f := range dataFiles {
 		status("reading sound data\n")
 
-		// From the sector mkpsxiso recorded, or by name in an executable
+		// From the sector mkdisc recorded, or by name in an executable
 		// it did not place.
 		if !f.Load() {
 			loadNote[i] = "not found"

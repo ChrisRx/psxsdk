@@ -1,6 +1,6 @@
 // Package discrecord finds the records package disc's Register leaves in
 // an executable, and fills them in: the host half of package disc, which
-// mkpsxiso uses. The layout of a record is here too, which disc's File
+// mkdisc uses. The layout of a record is here too, which disc's File
 // is checked against when it builds for the console.
 package discrecord
 
@@ -14,7 +14,7 @@ const Magic = 0x44585350
 
 // Size and the offsets lay out a record, a disc.File as TinyGo lays it out
 // on a 32-bit target: the magic word, the disc path and the host path each
-// as a pointer and a length, the sector and the length that mkpsxiso fills
+// as a pointer and a length, the sector and the length that mkdisc fills
 // in, and the destination as a slice, a pointer, a length and a capacity,
 // all zero when there is none. disc_yaroze.go in package disc asserts that
 // the type matches.

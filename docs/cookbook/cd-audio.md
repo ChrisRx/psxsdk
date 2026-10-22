@@ -15,7 +15,7 @@ A program declares each track with `disc.Track`, as it declares a file with `dis
 ```go src=../../examples/cdda/main.go#track1,track2,track3
 ```
 
-The build records each one after the data track, in the order the program declares them, and writes each track's number into the program, which `TrackNumber` returns. The WAV is 44.1 kHz, 16-bit stereo, as a CD's audio is. [mkpsxiso](../tools/mkpsxiso.md) puts the standard two-second pause before each track, which is where the drive's play starts when the library asks for a track by number.
+The build records each one after the data track, in the order the program declares them, and writes each track's number into the program, which `TrackNumber` returns. The WAV is 44.1 kHz, 16-bit stereo, as a CD's audio is. [mkdisc](../tools/mkdisc.md) puts the standard two-second pause before each track, which is where the drive's play starts when the library asks for a track by number.
 
 ## Playing
 

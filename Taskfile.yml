@@ -37,7 +37,7 @@ tasks:
         sh: for f in examples/*/main.go; do basename "$(dirname "$f")"; done
 
   # Builds the program in DIR, examples/NAME unless told otherwise, onto
-  # .build/NAME/NAME.cue with nyc, with the files it registers, which nyc
+  # .build/NAME/NAME.cue with yaroze, with the files it registers, which yaroze
   # reads out of the executable and takes from DIR, and keeps the ELF in
   # prog.elf for its symbols, which the emulator tests read. The output
   # directory starts with a dot so that go list ./... leaves it alone. The
@@ -45,7 +45,7 @@ tasks:
   # OPT=z is TinyGo's own default, for size.
   #
   # It is skipped when neither the program nor the packages a program may
-  # use nor nyc has changed since it last ran.
+  # use nor yaroze has changed since it last ran.
   build:disc:
     label: 'disc:{{.NAME}}'
     requires:
@@ -62,7 +62,7 @@ tasks:
       - 'format/**/*.go'
       - 'examples/internal/**/*.go'
       - 'internal/**/*'
-      - 'cmd/nyc/**/*'
+      - 'cmd/yaroze/**/*'
       - 'link/**/*'
       - 'tools/**/*.go'
       - go.mod
@@ -74,7 +74,7 @@ tasks:
     cmds:
       - rm -rf .build/{{.NAME}}
       - mkdir -p .build/{{.NAME}}
-      - go run ./cmd/nyc disc --opt={{.OPT}} --elf .build/{{.NAME}}/prog.elf -o .build/{{.NAME}}/{{.NAME}}.bin ./{{.DIR}}
+      - go run ./cmd/yaroze disc --opt={{.OPT}} --elf .build/{{.NAME}}/prog.elf -o .build/{{.NAME}}/{{.NAME}}.bin ./{{.DIR}}
 
   # Builds the hot reload test's fixtures onto .build/hot: v1 with --hot
   # onto a disc, with its ELF, and v2's patch against that ELF, which the
@@ -84,7 +84,7 @@ tasks:
       - 'internal/hot/testdata/**/*'
       - 'yaroze/**/*.go'
       - 'internal/**/*'
-      - 'cmd/nyc/**/*.go'
+      - 'cmd/yaroze/**/*.go'
       - 'link/**/*'
     generates:
       - .build/hot/v1.cue
@@ -93,8 +93,8 @@ tasks:
     cmds:
       - rm -rf .build/hot
       - mkdir -p .build/hot
-      - go run ./cmd/nyc disc --hot --opt=2 --elf .build/hot/prog.elf -o .build/hot/v1.bin ./internal/hot/testdata/v1
-      - go run ./cmd/nyc patch --opt=2 --base .build/hot/prog.elf -o .build/hot/v2.patch.elf ./internal/hot/testdata/v2
+      - go run ./cmd/yaroze disc --hot --opt=2 --elf .build/hot/prog.elf -o .build/hot/v1.bin ./internal/hot/testdata/v1
+      - go run ./cmd/yaroze patch --opt=2 --base .build/hot/prog.elf -o .build/hot/v2.patch.elf ./internal/hot/testdata/v2
 
   # Builds the tutorial's first program onto .build/hello/hello.cue, so
   # that it runs on its page like the examples and in the emulator tests.
@@ -105,15 +105,15 @@ tasks:
         vars: { NAME: hello, DIR: docs/tutorial/hello }
 
   # Builds the program in DIR, examples/NAME unless told otherwise, onto a
-  # disc and runs it in a window with nyc run, booting OpenBIOS. Flags
-  # after -- go to nyc run: task play NAME=check -- --mute
+  # disc and runs it in a window with yaroze run, booting OpenBIOS. Flags
+  # after -- go to yaroze run: task play NAME=check -- --mute
   play:
     requires:
       vars: [NAME]
     vars:
       DIR: '{{.DIR | default (printf "examples/%s" .NAME)}}'
     cmds:
-      - go run ./cmd/nyc run {{.CLI_ARGS}} ./{{.DIR}}
+      - go run ./cmd/yaroze run {{.CLI_ARGS}} ./{{.DIR}}
 
   # Builds whatever has changed of the site and the playground, and serves
   # the site on localhost:8000. The playground needs the compiler from
@@ -196,7 +196,7 @@ tasks:
       - '{{.PLAY}}/openbios.bin'
     cmds:
       - mkdir -p {{.PLAY}}/examples
-      - cp emu/openbios/openbios.bin emu/openbios/OPENBIOS-LICENSE.txt {{.PLAY}}/
+      - cp emu/openbios/openbios.bin licenses/OPENBIOS-LICENSE.txt {{.PLAY}}/
       - for: { var: EXAMPLES }
         cmd: |
           mkdir -p {{.PLAY}}/examples/{{.ITEM}}
@@ -314,7 +314,7 @@ tasks:
   # to format on Run.
   playground:tools:
     cmds:
-      - for: [discgen, mips1fix, eco2exe, mkpsxiso, png2tim, obj2tmd, wav2vag, mkvab, smf2seq, mkscene, mkarc]
+      - for: [discgen, mips1fix, eco2exe, mkdisc, png2tim, obj2tmd, wav2vag, mkvab, smf2seq, mkscene, mkarc]
         task: playground:tool
         vars: { NAME: '{{.ITEM}}' }
       - task: playground:gofmt
@@ -385,27 +385,27 @@ tasks:
       - mkdir -p .build/site/play
       - tar --format=ustar -C .build -cf - sysroot | gzip -9 > .build/site/play/sysroot.tar.gz
 
-  # Refreshes the compiler nyc has built in, and builds nyc onto
-  # .build/nyc: the compiler from the compiler task, and a sysroot of its
+  # Refreshes the compiler yaroze has built in, and builds yaroze onto
+  # .build/yaroze: the compiler from the compiler task, and a sysroot of its
   # own, a copy of the one the playground:sysroot task leaves in
-  # .build/sysroot with the cache filled at -opt=2 as well, the level nyc
+  # .build/sysroot with the cache filled at -opt=2 as well, the level yaroze
   # builds at by default, which the playground's leaves out to stay small.
-  # Both are written under cmd/nyc/wasm, which is committed so that go run
-  # of nyc works from the module.
-  nyc:
+  # Both are written under cmd/yaroze/wasm, which is committed so that go run
+  # of yaroze works from the module.
+  yaroze:
     vars:
-      SYSROOT: .build/nyc-sysroot
+      SYSROOT: .build/yaroze-sysroot
     cmds:
       - task: compiler:check
       - task: playground:sysroot
       - rm -rf {{.SYSROOT}}
       - cp -R .build/sysroot {{.SYSROOT}}
       - OPTS=2 web/compiler/mkcache.sh .build/compiler/tinygo-full.wasm .build/compiler/tinygo.wasm {{.SYSROOT}} $(cd {{.SYSROOT}} && ls -d mod/go.chrisrx.dev/psx/examples/*/ mod/go.chrisrx.dev/psx/docs/tutorial/hello/ | grep -v /internal/)
-      - mkdir -p cmd/nyc/wasm
-      - gzip -9 -n -c .build/compiler/tinygo.wasm > cmd/nyc/wasm/tinygo.wasm.gz
+      - mkdir -p cmd/yaroze/wasm
+      - gzip -9 -n -c .build/compiler/tinygo.wasm > cmd/yaroze/wasm/tinygo.wasm.gz
       # The archive's directory is sysroot, as the playground's is.
-      - tar --format=ustar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --mode=go-w -C .build --transform 's,^nyc-sysroot,sysroot,' -cf - nyc-sysroot | gzip -9 -n > cmd/nyc/wasm/sysroot.tar.gz
-      - go build -trimpath -ldflags=-s -o .build/nyc ./cmd/nyc
+      - tar --format=ustar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --mode=go-w -C .build --transform 's,^yaroze-sysroot,sysroot,' -cf - yaroze-sysroot | gzip -9 -n > cmd/yaroze/wasm/sysroot.tar.gz
+      - go build -trimpath -ldflags=-s -o .build/yaroze ./cmd/yaroze
 
   # The compression benchmark behind docs/architecture/compression.md: packs
   # three of the examples' files with deflate and LZ4, builds the program

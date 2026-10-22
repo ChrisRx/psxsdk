@@ -59,6 +59,10 @@ type Machine struct {
 
 	allowFaults bool
 	symbols     map[string]uint32
+
+	// bios names the BIOS the machine booted, as BIOSName does, for the
+	// golden images Golden compares with.
+	bios string
 }
 
 type step struct {
@@ -130,7 +134,7 @@ func Boot(tb testing.TB, opts ...Option) *Machine {
 		tb.Fatal(err)
 	}
 
-	m := &Machine{Machine: em, tb: tb, allowFaults: cfg.allowFaults}
+	m := &Machine{Machine: em, tb: tb, allowFaults: cfg.allowFaults, bios: BIOSName(bios)}
 	em.TTY = &m.tty
 	if cfg.disc != "" {
 		d, err := emu.OpenDisc(cfg.disc)

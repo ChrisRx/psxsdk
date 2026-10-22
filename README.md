@@ -13,7 +13,7 @@ The Net Yaroze was Sony's 1990s kit for making PlayStation games at home. psxsdk
 </p>
 
 - **Play** [the examples](https://chrisrx.github.io/psxsdk/examples/) in your browser: Sony's Net Yaroze demos and members' games ported to Go, and a few new ones.
-- **Write** your own in [the playground](https://chrisrx.github.io/psxsdk/play/), or with nothing but Go installed: `go run go.chrisrx.dev/psx/cmd/nyc@latest disc ./mygame`. [The tutorial](https://chrisrx.github.io/psxsdk/tutorial/) starts from nothing.
+- **Write** your own in [the playground](https://chrisrx.github.io/psxsdk/play/), or with nothing but Go installed: `go run go.chrisrx.dev/psx/cmd/yaroze@latest disc ./mygame`. [The tutorial](https://chrisrx.github.io/psxsdk/tutorial/) starts from nothing.
 - **Read** [Sony's manuals](https://chrisrx.github.io/psxsdk/manuals/), with the FAQs, supplements and tutorial the members' websites carried.
 
 ## What it does
@@ -38,7 +38,7 @@ go build -o bin/ ./cmd/... ./tools/...
 go test ./...
 ```
 
-Building the examples also needs a compiler, which `nyc` finds for itself: a tinygo command with the PlayStation targets, or failing that, TinyGo compiled to WebAssembly. The Nix flake provides TinyGo with those targets, the cross binutils, [go-task](https://taskfile.dev), mednafen and a patched [psxe](https://github.com/allkern/psxe):
+The examples are built with `yaroze`, which carries its own compiler, TinyGo compiled to WebAssembly, so no tinygo command is needed. The Nix flake provides what working on the repository itself takes: the TinyGo with the PlayStation targets that compiler is built from, the cross binutils, [go-task](https://taskfile.dev), mednafen and a patched [psxe](https://github.com/allkern/psxe):
 
 ```bash
 nix develop            # or: direnv allow
@@ -54,7 +54,7 @@ task serve             # build the site and the playground, and serve them on lo
 | Directory | What is there |
 | --- | --- |
 | [`yaroze`](yaroze), [`disc`](disc), [`archive`](archive), [`scene`](scene) | What a program imports: the Net Yaroze library, its files on the disc, archives and scenes |
-| [`cmd`](cmd) | `nyc`, which builds a program onto a disc in one step, with its compiler built in |
+| [`cmd`](cmd) | `yaroze`, which builds a program onto a disc in one step, with its compiler built in |
 | [`tools`](tools) | The converters, the disc and executable tools, and the emulator's front ends, each [documented](https://chrisrx.github.io/psxsdk/tools/) |
 | [`link`](link), [`format`](format) | Executables, discs and the console's file formats |
 | [`emu`](emu) | The emulator, with [`emu/emutest`](emu/emutest) for driving it from tests |
@@ -73,7 +73,11 @@ The one rule: no `Co-Authored-By` lines, or any other attribution, naming an AI 
 
 ## License
 
-[MIT](LICENSE). Two parts carry their own notices:
+[MIT](LICENSE). Four parts carry their own notices:
 
-- The emulator in `emu` is derived from [psxe](https://github.com/allkern/psxe), Copyright (c) 2024 Allkern (Lisandro Alarcón), under the MIT license in [`emu/PSXE-LICENSE.txt`](emu/PSXE-LICENSE.txt).
-- The OpenBIOS image in `emu/openbios` is under the license in [`emu/openbios/OPENBIOS-LICENSE.txt`](emu/openbios/OPENBIOS-LICENSE.txt).
+- The emulator in `emu` is derived from [psxe](https://github.com/allkern/psxe), Copyright (c) 2024 Allkern (Lisandro Alarcón), under the MIT license in [`licenses/PSXE-LICENSE.txt`](licenses/PSXE-LICENSE.txt).
+- The OpenBIOS image in `emu/openbios` is under the license in [`licenses/OPENBIOS-LICENSE.txt`](licenses/OPENBIOS-LICENSE.txt).
+- The dogtale example is a port of [A Dog Tale](https://github.com/irarainey/a-dog-tale), Copyright (c) 2023 Ira Rainey, under the MIT license in [`licenses/ADOGTALE-LICENSE.txt`](licenses/ADOGTALE-LICENSE.txt), with its pictures from his data file.
+- The disc tools in `tools/mkpsxiso` and `tools/dumpsxiso` are translations of [mkpsxiso](https://github.com/Lameguy64/mkpsxiso), by Lameguy64 and its contributors, and are under the GPL-2.0 in [`licenses/GPL-2.0-only.txt`](licenses/GPL-2.0-only.txt), not the MIT license; see [`tools/mkpsxiso/README.md`](tools/mkpsxiso/README.md) and [`tools/dumpsxiso/README.md`](tools/dumpsxiso/README.md). Nothing else in the repository uses either: `yaroze` and the playground build discs with `mkdisc`, which was written from the standards.
+
+Projects this one was informed by are listed in [CREDITS](CREDITS).

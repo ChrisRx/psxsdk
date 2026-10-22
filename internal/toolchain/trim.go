@@ -8,9 +8,9 @@ import (
 	"time"
 )
 
-// The cache directory gets a compiler per nyc build and per rebuild of what
-// NYC_WASM names: the module unpacked, its sysroot, and wazero's compiled
-// code, about 270MB each. Nothing but the one this nyc runs is needed, so
+// The cache directory gets a compiler per yaroze build and per rebuild of what
+// YAROZE_WASM names: the module unpacked, its sysroot, and wazero's compiled
+// code, about 270MB each. Nothing but the one this yaroze runs is needed, so
 // they are trimmed the way the go command trims its build cache: a compiler
 // is marked used at most once an hour, and once a day the ones not used for
 // five days are removed.

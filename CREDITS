@@ -1,0 +1,36 @@
+CREDITS
+
+This project is informed by the following projects. Each entry says how
+its code relates to this repository; the License section of README.md says
+which parts carry their own notices.
+
+mkpsxiso
+  https://github.com/Lameguy64/mkpsxiso
+  Copyright Lameguy64 and the mkpsxiso contributors
+  Licensed under the GNU General Public License, version 2
+  The repository began with translations of mkpsxiso and its dumpsxiso
+  into Go, which are kept in tools/mkpsxiso and tools/dumpsxiso under the
+  same license, each with its own notice, and are not used by anything
+  else. mkdisc, in internal/mkdisc and tools/mkdisc, was written in
+  mkpsxiso's place from the ISO 9660 and CD-ROM XA standards and the
+  format packages. mkpsxiso remains the reference for what a PlayStation
+  disc image has to hold.
+
+  Commits before the one that added this file carried the translations
+  without their notices, under internal/mkpsxiso, tools/mkpsxiso and
+  tools/dumpsxiso, in a repository labelled MIT alone; that was a
+  mistake, and those files were GPL-2.0 then as now.
+
+A Dog Tale
+  https://github.com/irarainey/a-dog-tale
+  Copyright (c) 2023 Ira Rainey
+  Licensed under the MIT License
+  The dogtale example is a port of the game to Go, with its pictures from
+  his data file. See licenses/ADOGTALE-LICENSE.txt. His readme
+  asks anyone who uses the code for a thank you: thanks, Ira.
+
+psxe
+  https://github.com/allkern/psxe
+  Copyright (c) 2024 Allkern (Lisandro Alarcón)
+  Licensed under the MIT License
+  The emulator in emu is derived from psxe. See licenses/PSXE-LICENSE.txt.

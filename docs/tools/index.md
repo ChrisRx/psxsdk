@@ -3,18 +3,18 @@ title: Tools
 weight: 7
 group: Docs
 section: Tools
-description: The commands: nyc to build a program onto a disc, the converters that make its pictures, sounds, music and models, and the tools for discs, executables and the emulator.
-order: nyc
+description: The commands: yaroze to build a program onto a disc, the converters that make its pictures, sounds, music and models, and the tools for discs, executables and the emulator.
+order: yaroze
 ---
 
 | Tool | Purpose |
 | --- | --- |
-| [nyc](nyc.md) | Build a Go program into a PSX-EXE or a disc image in one step, with the tinygo command or TinyGo compiled to WebAssembly |
+| [yaroze](yaroze.md) | Build a Go program into a PSX-EXE or a disc image in one step, with the tinygo command or TinyGo compiled to WebAssembly |
 | [eco2exe](eco2exe.md) | Combine a Net Yaroze program with `libps` into a bootable PSX-EXE |
 | [elf2exe](elf2exe.md) | Write a standalone ELF or ECOFF program as a PSX-EXE |
 | [mips1fix](mips1fix.md) | Replace the MIPS II traps LLVM emits with nops so the code runs on an R3000A |
 | [discgen](discgen.md) | Write the declarations that put a program's data files on its disc |
-| [mkpsxiso](mkpsxiso.md) | Build a CD-XA disc image from a directory |
+| [mkdisc](mkdisc.md) | Build a CD-XA disc image from a directory |
 | [dumpsxiso](dumpsxiso.md) | List or extract a disc image |
 | [mdecenc](mdecenc.md) | Encode pictures into an MDEC movie |
 | [png2tim](png2tim.md) | Convert pictures into TIM images for sprites and textures, and `tim2png` back |
@@ -34,3 +34,5 @@ order: nyc
 | [ecoff2asm](ecoff2asm.md) | Convert ECOFF objects to GNU as source, for relinking the Net Yaroze library as ELF |
 | [ecoffcmp](ecoff2asm.md) | Check ecoff2asm output against the original objects |
 | [gteprog](gteprog.md) | Write a GTE exercise program as a PSX-EXE, for comparing emulators |
+
+`tools/mkpsxiso` holds the disc tool the repository began with, a translation of Lameguy64's mkpsxiso under the GPL-2.0, which [mkdisc](mkdisc.md) replaces; [dumpsxiso](dumpsxiso.md) is a translation from the same project, under the same license.

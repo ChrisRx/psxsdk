@@ -1,13 +1,17 @@
-The emulator in this directory is a rewrite in Go of psxe, by Allkern
-(Lisandro Alarcón), which it was written with as a guide:
-https://github.com/allkern/psxe
+The dogtale example is a port to Go of A Dog Tale, by Ira Rainey, written
+with his source as the guide. Its pictures are his: examples/dogtale/assets/DOG.DAT
+is the first part of the dog.dat in his repository, the twenty-four pictures
+the game draws with: https://github.com/irarainey/a-dog-tale
 
-psxe is distributed under the following license, from
-https://github.com/allkern/psxe/blob/master/LICENSE
+His code and graphics are under the MIT license, which follows. The rest of
+his dog.dat is the tune and the sound bank, which are not his: they are the
+sample sound from Sony's Net Yaroze SDK, as his message in the game says,
+the one the check example plays, and the port reads them from the SDK's own
+files, SAMPLE1.SEQ, STD0.VH and STD0.VB, beside DOG.DAT.
 
 MIT License
 
-Copyright (c) 2024 Allkern (Lisandro Alarcón)
+Copyright (c) 2023 Ira Rainey
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

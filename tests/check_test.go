@@ -17,7 +17,7 @@ import (
 // cleanly: through the crt0's saved return address, which the Yaroze
 // startup stub has to preserve, and to a BIOS whose stack frame the
 // program's stack has not overwritten, which needs the SYSTEM.CNF stack
-// mkpsxiso writes. The BIOS then reports "End of Main".
+// mkdisc writes. The BIOS then reports "End of Main".
 //
 // That message is Sony's BIOS's.
 func TestCheckQuitReturnsToBIOS(t *testing.T) {
@@ -51,7 +51,7 @@ func TestCheckScreenshot(t *testing.T) {
 	)
 	m.RunUntilFunc("main.padRead", 90*emutest.Second)
 	m.RunFrames(60)
-	emutest.Golden(t, m.Display(), "check-main-loop.png")
+	m.Golden("check-main-loop.png")
 }
 
 // TestCheckRunMatchesStep runs check twice, once a step at a time and once

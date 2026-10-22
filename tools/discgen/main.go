@@ -4,7 +4,7 @@
 //	//go:generate go run go.chrisrx.dev/psx/tools/discgen data
 //
 // Package go.chrisrx.dev/psx/internal/discgen says what it writes. It is
-// also nyc's generate command.
+// also yaroze's generate command.
 package main
 
 import (

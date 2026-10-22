@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"go.chrisrx.dev/x/assert"
+
+	"go.chrisrx.dev/psx/emu/openbios"
 )
 
 // Instructions for the test ROMs.
@@ -157,4 +159,69 @@ func TestGolden(t *testing.T) {
 	assert.Equal(t, "1 pixels differ from testdata/x.png, the first at (3,0); the image is in testdata/x.actual.png", msg)
 	_, err := os.Stat("testdata/x.actual.png")
 	assert.NoError(t, err)
+}
+
+// TestGoldenBIOS checks the images a BIOS other than the default keeps:
+// the default's stands in while it has none, -update-golden records one
+// only where the BIOS differs, and takes it away again when it no longer
+// does.
+func TestGoldenBIOS(t *testing.T) {
+	t.Chdir(t.TempDir())
+	img := image.NewRGBA(image.Rect(0, 0, 4, 2))
+	img.SetRGBA(1, 1, color.RGBA{R: 0xff, A: 0xff})
+	*updateGolden = true
+	Golden(t, img, "x.png")
+	*updateGolden = false
+
+	// The same as the default: compared with it, and not recorded.
+	golden(t, img, "sony-3.0a", "x.png")
+	*updateGolden = true
+	golden(t, img, "sony-3.0a", "x.png")
+	*updateGolden = false
+	_, err := os.Stat("testdata/sony-3.0a/x.png")
+	assert.Equal(t, true, os.IsNotExist(err), "an image the same as the default's is not written")
+
+	// Different: the failure says the default stood in, and the image
+	// goes in the BIOS's directory.
+	other := image.NewRGBA(image.Rect(0, 0, 4, 2))
+	other.SetRGBA(1, 1, color.RGBA{R: 0xff, A: 0xff})
+	other.SetRGBA(3, 0, color.RGBA{G: 0xff, A: 0xff})
+	msg := failure(t, func(tb testing.TB) { golden(tb, other, "sony-3.0a", "x.png") })
+	assert.Equal(t, "1 pixels differ from testdata/x.png, which stands in for testdata/sony-3.0a/x.png, since the sony-3.0a BIOS has no image of its own; -update-golden under it records one, the first at (3,0); the image is in testdata/sony-3.0a/x.actual.png", msg)
+	_, err = os.Stat("testdata/sony-3.0a/x.actual.png")
+	assert.NoError(t, err)
+
+	// Recorded, it is what the BIOS is compared with, and the default
+	// is untouched.
+	*updateGolden = true
+	golden(t, other, "sony-3.0a", "x.png")
+	*updateGolden = false
+	golden(t, other, "sony-3.0a", "x.png")
+	Golden(t, img, "x.png")
+	msg = failure(t, func(tb testing.TB) { golden(tb, img, "sony-3.0a", "x.png") })
+	assert.Equal(t, "1 pixels differ from testdata/sony-3.0a/x.png, the first at (3,0); the image is in testdata/sony-3.0a/x.actual.png", msg)
+
+	// Back to the same as the default, recording removes it.
+	*updateGolden = true
+	golden(t, img, "sony-3.0a", "x.png")
+	*updateGolden = false
+	_, err = os.Stat("testdata/sony-3.0a/x.png")
+	assert.Equal(t, true, os.IsNotExist(err), "an image the same as the default's again is removed")
+}
+
+func TestBIOSName(t *testing.T) {
+	assert.Equal(t, DefaultBIOS, BIOSName(openbios.Image))
+
+	sony := make([]byte, 512*1024)
+	copy(sony[0x7ff32:], "System ROM Version 3.0 11/18/96 A\x00Copyright 1993")
+	assert.Equal(t, "sony-3.0a", BIOSName(sony))
+	copy(sony[0x7ff32:], "System ROM Version 4.5 05/25/00 E\x00")
+	assert.Equal(t, "sony-4.5e", BIOSName(sony))
+
+	// Anything else is named by its hash, the same every time.
+	other := make([]byte, 512*1024)
+	other[0] = 1
+	assert.Equal(t, BIOSName(other), BIOSName(other))
+	assert.Equal(t, true, strings.HasPrefix(BIOSName(other), "bios-") && len(BIOSName(other)) == len("bios-")+8, BIOSName(other))
+	assert.Equal(t, false, BIOSName(other) == BIOSName(sony))
 }

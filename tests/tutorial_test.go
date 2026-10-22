@@ -2,8 +2,6 @@ package tests
 
 import (
 	"testing"
-
-	"go.chrisrx.dev/psx/emu/emutest"
 )
 
 // TestHelloScreenshot runs the tutorial's first program, which
@@ -14,5 +12,5 @@ import (
 func TestHelloScreenshot(t *testing.T) {
 	m := bootExample(t, "hello")
 	m.RunUntilCount("main.screen", 30, frameBudget)
-	emutest.Golden(t, m.Display(), "hello.png")
+	m.Golden("hello.png")
 }

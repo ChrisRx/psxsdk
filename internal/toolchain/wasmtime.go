@@ -26,10 +26,10 @@ type wasmtimeRuntime struct {
 	cwasm   string // the module compiled by this version of the command
 }
 
-// newWasmtime finds the wasmtime command, NYC_WASMTIME or wasmtime on the
+// newWasmtime finds the wasmtime command, YAROZE_WASMTIME or wasmtime on the
 // PATH, and its version, which its compiled modules are tied to.
 func newWasmtime(w *Wasm) (*wasmtimeRuntime, error) {
-	path := os.Getenv("NYC_WASMTIME")
+	path := os.Getenv("YAROZE_WASMTIME")
 	if path == "" {
 		var err error
 		if path, err = exec.LookPath("wasmtime"); err != nil {

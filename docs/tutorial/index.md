@@ -12,7 +12,7 @@ The program it writes is the [square](../examples/square.md) example, the one th
 
 <!-- player square -->
 
-1. [Setting up](setting-up.md): a module of your own with the toolchain as a dependency, the smallest program that puts something on the screen, and `nyc`, which turns it into a disc and plays it.
+1. [Setting up](setting-up.md): a module of your own with the toolchain as a dependency, the smallest program that puts something on the screen, and `yaroze`, which turns it into a disc and plays it.
 2. [The frame and the controller](frame.md): the frame loop, drawing a box, and moving it with the directional buttons.
 3. [Files from the disc](disc.md): putting a model, a texture and music on the disc, and reading them while the frames go on.
 4. [A model in 3D](model.md): the texture into video memory, the model linked to an object, a camera and a light, and the cube turning.

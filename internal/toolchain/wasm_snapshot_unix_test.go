@@ -17,7 +17,7 @@ func TestSnapshotPath(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("TMPDIR", tmp)
 	w := &Wasm{dir: filepath.Join(tmp, "wasm-abc")}
-	dir := filepath.Join(tmp, "nyc"+userSuffix())
+	dir := filepath.Join(tmp, "yaroze"+userSuffix())
 
 	t.Run("made", func(t *testing.T) {
 		path, err := snapshotPath(w)

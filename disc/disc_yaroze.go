@@ -9,7 +9,7 @@ import (
 )
 
 // The record a File is on the console, where a pointer and a string's
-// length are 32 bits, is what mkpsxiso looks for; these fail the build if it
+// length are 32 bits, is what mkdisc looks for; these fail the build if it
 // drifts from what discrecord says. On a host the type is wider and nothing
 // reads it as a record.
 var (

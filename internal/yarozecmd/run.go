@@ -1,4 +1,4 @@
-package nyc
+package yarozecmd
 
 import (
 	"context"
@@ -44,7 +44,7 @@ built and started again, which run says when it cannot build a patch.
 			if err != nil {
 				return err
 			}
-			tmp, err := os.MkdirTemp("", "nyc-run-")
+			tmp, err := os.MkdirTemp("", "yaroze-run-")
 			if err != nil {
 				return err
 			}
@@ -56,7 +56,7 @@ built and started again, which run says when it cannot build a patch.
 				return err
 			}
 			play.Disc = filepath.Join(tmp, name+".cue")
-			play.Title = "nyc - " + name
+			play.Title = "yaroze - " + name
 			if f.hot {
 				ctx, cancel := context.WithCancel(cmd.Context())
 				defer cancel()
@@ -76,7 +76,7 @@ func envCommand() *cobra.Command {
 	var runtime string
 	cmd := &cobra.Command{
 		Use:   "env",
-		Short: "say how nyc would run the compiler, and where it is",
+		Short: "say how yaroze would run the compiler, and where it is",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			w := cmd.OutOrStdout()

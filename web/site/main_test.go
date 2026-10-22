@@ -22,13 +22,13 @@ func site(t *testing.T) (*Site, string) {
 	dir := t.TempDir()
 	docs := filepath.Join(dir, "docs")
 	write(t, docs, "index.md", "---\ntitle: Front\n---\n\nSee the [guide](guide/index.md) and [tools](tools/index.md), or the [player](/play/).\n")
-	write(t, docs, "guide/index.md", "---\ntitle: How it fits\nsection: Guide\nweight: 1\n---\n\n## First\n\nA [page](getting-started.md), a [tool](../tools/mkpsxiso.md#streams), a [package](yaroze) and a picture: ![diagram](diagram.png)\n\n### Under first\n\nText.\n")
+	write(t, docs, "guide/index.md", "---\ntitle: How it fits\nsection: Guide\nweight: 1\n---\n\n## First\n\nA [page](getting-started.md), a [tool](../tools/mkdisc.md#streams), a [package](yaroze) and a picture: ![diagram](diagram.png)\n\n### Under first\n\nText.\n")
 	write(t, docs, "guide/getting-started.md", "---\ntitle: Getting started\nweight: 2\n---\n\nBack to [the index](index.md) and [the front](../index.md).\n\n```go\nfunc main() {}\n```\n")
 	write(t, docs, "guide/diagram.png", "not really a png")
 	write(t, docs, "tools/index.md", "---\ntitle: Tools\nweight: 2\n---\n\nThe tools.\n")
 	write(t, docs, "tools/listing.md", "---\ntitle: Listing\n---\n\nThe program:\n\n```go src=prog/main.go\n```\n\nTry it:\n\n<!-- player prog -->\n")
 	write(t, docs, "tools/prog/main.go", "package main\n\nfunc main() {}\n")
-	write(t, docs, "tools/mkpsxiso.md", "---\ntitle: mkpsxiso\n---\n\n## Streams\n\nRaw sectors.\n")
+	write(t, docs, "tools/mkdisc.md", "---\ntitle: mkdisc\n---\n\n## Streams\n\nRaw sectors.\n")
 	write(t, docs, "examples/index.md", "---\ntitle: Examples\nweight: 3\norder: zebra\n---\n\nThe examples.\n")
 
 	examples := filepath.Join(dir, "examples")
@@ -154,7 +154,7 @@ func TestLinks(t *testing.T) {
 
 	guide := string(page(s, "guide/").Content)
 	assert.Equal(t, true, strings.Contains(guide, `href="../guide/getting-started/"`), guide)
-	assert.Equal(t, true, strings.Contains(guide, `href="../tools/mkpsxiso/#streams"`), guide)
+	assert.Equal(t, true, strings.Contains(guide, `href="../tools/mkdisc/#streams"`), guide)
 	assert.Equal(t, true, strings.Contains(guide, `href="https://github.com/ChrisRx/psxsdk/tree/main/yaroze"`), guide)
 	assert.Equal(t, true, strings.Contains(guide, `src="../guide/diagram.png"`), guide)
 	assert.Equal(t, 1, len(s.assets))
@@ -187,7 +187,7 @@ func TestWrite(t *testing.T) {
 	assert.NoError(t, s.write(out, static))
 
 	for _, name := range []string{
-		"index.html", "guide/index.html", "guide/getting-started/index.html", "tools/mkpsxiso/index.html",
+		"index.html", "guide/index.html", "guide/getting-started/index.html", "tools/mkdisc/index.html",
 		"examples/demo/index.html", "guide/diagram.png", "search.json",
 		"assets/site.css", "assets/chroma.css", "assets/search.js",
 		"play/index.html", "play/fonts/a.woff2",

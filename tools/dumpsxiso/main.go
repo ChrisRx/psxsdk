@@ -1,3 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-FileCopyrightText: Lameguy64 and the mkpsxiso contributors
+// SPDX-FileCopyrightText: 2026 Chris Marshall
+//
+// This file is a translation into Go of dumpsxiso, part of mkpsxiso,
+// https://github.com/Lameguy64/mkpsxiso, made in 2026 by Chris Marshall
+// and changed in the translation to read the image through this
+// repository's format packages and to extract a directory tree rather than
+// write an XML project file. See README.md in this directory. It is free
+// software under the GNU General Public License version 2, the text of
+// which is licenses/GPL-2.0-only.txt at the root of the repository, and it
+// is not covered by the MIT license the rest of the repository is under.
+
 // Command dumpsxiso lists and extracts the contents of a PlayStation disc
 // image.
 package main
@@ -30,7 +43,7 @@ func main() {
 With no --output it lists what the image holds, which is the quickest way to
 see whether a file landed on the disc under the name a program will ask for.
 With --output the tree is written to a directory, and a directory built that
-way can be handed back to mkpsxiso.
+way can be handed back to mkdisc.
 
 Either a .bin of raw 2352-byte sectors or a .iso of 2048-byte blocks will do;
 which one it is follows from the image itself. Reading a raw image checks each

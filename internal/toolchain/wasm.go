@@ -26,8 +26,8 @@ import (
 // system.
 //
 // The compiler and the sysroot are those of the site's play/ directory,
-// tinygo.wasm and sysroot.tar.gz: the ones given to Embed, as cmd/nyc
-// does, or else those of NYC_WASM when it names such a directory. NYC_WASM
+// tinygo.wasm and sysroot.tar.gz: the ones given to Embed, as cmd/yaroze
+// does, or else those of YAROZE_WASM when it names such a directory. YAROZE_WASM
 // is ignored when there are embedded ones. Either is unpacked once into
 // the user's cache directory, keyed by the compiler, and what the runtime
 // makes of the module, which takes a while, is kept there too.
@@ -54,7 +54,7 @@ type Wasm struct {
 type wasmRuntime interface {
 	// name is the runtime's, for messages: "wazero" or "wasmtime".
 	name() string
-	// describe says which runtime, and where it is, for nyc env.
+	// describe says which runtime, and where it is, for yaroze env.
 	describe() string
 	// build runs one build with the compiler arguments given, writing the
 	// compiler's output to b.Stderr, and returns an error for a build that
@@ -85,20 +85,20 @@ type sysrootEnv struct {
 // entries for them are keyed by their paths.
 const (
 	guestSysroot = "/sysroot"
-	guestTmp     = "/.nyc/tmp"
-	guestCache   = "/.nyc/cache"
+	guestTmp     = "/.yaroze/tmp"
+	guestCache   = "/.yaroze/cache"
 )
 
 // The compiler and sysroot given to Embed.
 var embeddedWasm, embeddedSysroot []byte
 
 // Embed builds in the WebAssembly compiler, tinygo.wasm gzipped, and its
-// sysroot.tar.gz, for New to use in place of any NYC_WASM.
+// sysroot.tar.gz, for New to use in place of any YAROZE_WASM.
 func Embed(compiler, sysroot []byte) {
 	embeddedWasm, embeddedSysroot = compiler, sysroot
 }
 
-// New finds the compiler, built in or from NYC_WASM, unpacks it if it has
+// New finds the compiler, built in or from YAROZE_WASM, unpacks it if it has
 // not been, and has it run under the runtime named: wazero, wasmtime, or
 // with auto or nothing wasmtime when there is a wasmtime command and
 // wazero otherwise.
@@ -117,14 +117,14 @@ func New(runtime string) (*Wasm, error) {
 		key = hex.EncodeToString(h.Sum(nil))[:16]
 		module = func() ([]byte, error) { return gunzip(embeddedWasm) }
 		sysroot = func() ([]byte, error) { return embeddedSysroot, nil }
-	} else if dir := os.Getenv("NYC_WASM"); dir != "" {
+	} else if dir := os.Getenv("YAROZE_WASM"); dir != "" {
 		wasmPath := filepath.Join(dir, "tinygo.wasm")
 		sysPath := filepath.Join(dir, "sysroot.tar.gz")
 		h := sha256.New()
 		for _, p := range []string{wasmPath, sysPath} {
 			info, err := os.Stat(p)
 			if err != nil {
-				return nil, fmt.Errorf("NYC_WASM: %w", err)
+				return nil, fmt.Errorf("YAROZE_WASM: %w", err)
 			}
 			abs, _ := filepath.Abs(p)
 			fmt.Fprintf(h, "%s %d %d\n", abs, info.Size(), info.ModTime().UnixNano())
@@ -133,7 +133,7 @@ func New(runtime string) (*Wasm, error) {
 		module = func() ([]byte, error) { return os.ReadFile(wasmPath) }
 		sysroot = func() ([]byte, error) { return os.ReadFile(sysPath) }
 	} else {
-		return nil, errors.New("this nyc has no compiler built in; set NYC_WASM to a directory holding tinygo.wasm and sysroot.tar.gz, as the site's play/ does")
+		return nil, errors.New("this yaroze has no compiler built in; set YAROZE_WASM to a directory holding tinygo.wasm and sysroot.tar.gz, as the site's play/ does")
 	}
 
 	w := &Wasm{dir: filepath.Join(cache, "wasm-"+key)}
@@ -202,7 +202,7 @@ func (w *Wasm) Dir() string { return w.dir }
 // opt returns the optimization level to build b at: the one it names,
 // which the cache has to hold, or else DefaultOpt, or the first level the
 // cache holds if it does not hold that. The playground's sysroot holds only
-// z, the level the playground builds at, and task nyc adds 2 to its own.
+// z, the level the playground builds at, and task yaroze adds 2 to its own.
 func (w *Wasm) opt(b *Build) (string, error) {
 	if len(w.env.Opts) == 0 {
 		if b.Opt == "" {
@@ -221,7 +221,7 @@ func (w *Wasm) opt(b *Build) (string, error) {
 	}
 	// Said whether or not the build is verbose, since it is not the
 	// executable the same build with the tinygo command writes.
-	fmt.Fprintf(b.Stderr, "nyc: building at -opt=%s, the level the compiler's cache holds, rather than -opt=%s\n", w.env.Opts[0], DefaultOpt)
+	fmt.Fprintf(b.Stderr, "yaroze: building at -opt=%s, the level the compiler's cache holds, rather than -opt=%s\n", w.env.Opts[0], DefaultOpt)
 	return w.env.Opts[0], nil
 }
 

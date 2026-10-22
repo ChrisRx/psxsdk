@@ -21,7 +21,7 @@ const readTimeout = 300
 //
 // On a Net Yaroze the files were sent from the PC by the loader's batch
 // script, to addresses the script chose; here each is on the disc, put
-// there by mkpsxiso from the declaration that registers it, and read into
+// there by mkdisc from the declaration that registers it, and read into
 // the program's own memory:
 //
 //	var wall0Data [(112 + 2047) / 2048 * 512]uint32

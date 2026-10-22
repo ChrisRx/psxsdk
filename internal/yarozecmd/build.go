@@ -1,4 +1,4 @@
-package nyc
+package yarozecmd
 
 import (
 	"bytes"
@@ -13,7 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.chrisrx.dev/psx/internal/flags"
-	"go.chrisrx.dev/psx/internal/mkpsxiso"
+	"go.chrisrx.dev/psx/internal/mkdisc"
 	"go.chrisrx.dev/psx/internal/toolchain"
 	"go.chrisrx.dev/psx/link"
 )
@@ -65,7 +65,7 @@ func (f *buildFlags) register(cmd *cobra.Command) {
 // logf prints a step's progress with -v.
 func (f *buildFlags) logf(format string, args ...any) {
 	if f.verbose {
-		fmt.Fprintf(os.Stderr, "nyc: "+format+"\n", args...)
+		fmt.Fprintf(os.Stderr, "yaroze: "+format+"\n", args...)
 	}
 }
 
@@ -89,7 +89,7 @@ func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
 	}
 	f.logf("runtime: %s, found in %s", c.Runtime(), time.Since(start).Round(time.Millisecond))
 
-	tmp, err := os.MkdirTemp("", "nyc-")
+	tmp, err := os.MkdirTemp("", "yaroze-")
 	if err != nil {
 		return err
 	}
@@ -211,7 +211,7 @@ func (f *discFlags) disc(ctx context.Context, pkg, bin string, stdout io.Writer)
 	if err != nil {
 		return err
 	}
-	tmp, err := os.MkdirTemp("", "nyc-")
+	tmp, err := os.MkdirTemp("", "yaroze-")
 	if err != nil {
 		return err
 	}
@@ -222,7 +222,7 @@ func (f *discFlags) disc(ctx context.Context, pkg, bin string, stdout io.Writer)
 	}
 
 	start := time.Now()
-	opts := mkpsxiso.NewOptions()
+	opts := mkdisc.NewOptions()
 	opts.Output = bin
 	opts.VolumeID = f.volumeID
 	if opts.VolumeID == "" {
@@ -235,7 +235,7 @@ func (f *discFlags) disc(ctx context.Context, pkg, bin string, stdout io.Writer)
 	opts.License = f.license
 	opts.Verbose = f.verbose
 	opts.Stdout = stdout
-	if err := mkpsxiso.Build(opts); err != nil {
+	if err := mkdisc.Build(opts); err != nil {
 		return err
 	}
 	f.logf("wrote the disc in %s", time.Since(start).Round(time.Millisecond))

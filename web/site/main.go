@@ -19,7 +19,7 @@
 //
 // Links in a page are written as paths and rewritten on the way out:
 //
-//   - to another page, by its source file: "../tools/mkpsxiso.md"
+//   - to another page, by its source file: "../tools/mkdisc.md"
 //   - to somewhere on the site outside the pages, from the root: "/play/"
 //   - to a file beside the page, such as a picture, which is copied through
 //   - to anything else in the repository, by its path from the root there:

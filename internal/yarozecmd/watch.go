@@ -1,4 +1,4 @@
-package nyc
+package yarozecmd
 
 import (
 	"context"
@@ -20,25 +20,25 @@ import (
 func (f *buildFlags) watchPatches(ctx context.Context, pkg, base string, patches chan<- *hot.Patch) {
 	data, err := os.ReadFile(base)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "nyc: hot: %v\n", err)
+		fmt.Fprintf(os.Stderr, "yaroze: hot: %v\n", err)
 		return
 	}
 	at, end, err := hot.Region(data)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "nyc: hot: %v\n", err)
+		fmt.Fprintf(os.Stderr, "yaroze: hot: %v\n", err)
 		return
 	}
-	tmp, err := os.MkdirTemp("", "nyc-hot-")
+	tmp, err := os.MkdirTemp("", "yaroze-hot-")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "nyc: hot: %v\n", err)
+		fmt.Fprintf(os.Stderr, "yaroze: hot: %v\n", err)
 		return
 	}
 	defer os.RemoveAll(tmp)
 	if end == at {
-		fmt.Fprintf(os.Stderr, "nyc: hot: the program is too large to leave room for patches, so a change to it needs a build and start again\n")
+		fmt.Fprintf(os.Stderr, "yaroze: hot: the program is too large to leave room for patches, so a change to it needs a build and start again\n")
 		return
 	}
-	fmt.Fprintf(os.Stderr, "nyc: hot: watching %s; a change to its Go files patches the running program, with %d KB for the patches\n", pkg, (end-at)>>10)
+	fmt.Fprintf(os.Stderr, "yaroze: hot: watching %s; a change to its Go files patches the running program, with %d KB for the patches\n", pkg, (end-at)>>10)
 
 	last := goFilesSignature(pkg)
 	for n := 0; ; n++ {
@@ -58,31 +58,31 @@ func (f *buildFlags) watchPatches(ctx context.Context, pkg, base string, patches
 		}
 		last = sig
 		if at >= end {
-			fmt.Fprintf(os.Stderr, "nyc: hot: the program's region for patches is full: build and start it again\n")
+			fmt.Fprintf(os.Stderr, "yaroze: hot: the program's region for patches is full: build and start it again\n")
 			continue
 		}
 		out := filepath.Join(tmp, fmt.Sprintf("patch%d.elf", n))
 		start := time.Now()
 		if err := f.patch(ctx, pkg, base, at, out); err != nil {
-			fmt.Fprintf(os.Stderr, "nyc: hot: %v\n", err)
+			fmt.Fprintf(os.Stderr, "yaroze: hot: %v\n", err)
 			continue
 		}
 		data, err := os.ReadFile(out)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "nyc: hot: %v\n", err)
+			fmt.Fprintf(os.Stderr, "yaroze: hot: %v\n", err)
 			continue
 		}
 		p, err := hot.Parse(data)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "nyc: hot: %v\n", err)
+			fmt.Fprintf(os.Stderr, "yaroze: hot: %v\n", err)
 			continue
 		}
 		if p.End > end {
-			fmt.Fprintf(os.Stderr, "nyc: hot: the patch does not fit what is left of the program's region: build and start it again\n")
+			fmt.Fprintf(os.Stderr, "yaroze: hot: the patch does not fit what is left of the program's region: build and start it again\n")
 			at = end
 			continue
 		}
-		fmt.Fprintf(os.Stderr, "nyc: hot: built a patch of %d bytes in %s, %d KB of the region left\n", p.Size(), time.Since(start).Round(time.Millisecond), (end-p.End)>>10)
+		fmt.Fprintf(os.Stderr, "yaroze: hot: built a patch of %d bytes in %s, %d KB of the region left\n", p.Size(), time.Since(start).Round(time.Millisecond), (end-p.End)>>10)
 		at = (p.End + 15) &^ 15
 		select {
 		case patches <- p:

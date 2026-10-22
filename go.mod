@@ -8,6 +8,7 @@ tool (
 	go.chrisrx.dev/psx/tools/eco2exe
 	go.chrisrx.dev/psx/tools/elf2exe
 	go.chrisrx.dev/psx/tools/mips1fix
+	go.chrisrx.dev/psx/tools/mkdisc
 	go.chrisrx.dev/psx/tools/mkpsxiso
 	go.chrisrx.dev/psx/tools/psxplay
 )

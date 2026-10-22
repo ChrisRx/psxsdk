@@ -1,10 +1,10 @@
-// Package toolchain compiles a Go program for the Net Yaroze, for nyc,
+// Package toolchain compiles a Go program for the Net Yaroze, for yaroze,
 // with TinyGo compiled to WebAssembly: the compiler the playground runs in
 // the browser, so that no tinygo command, go command or C toolchain is
 // needed. It runs under wazero, built in, or under the wasmtime command
 // when there is one, which runs it quicker (see Wasm).
 //
-// The compiler writes the ELF TinyGo links. What follows is nyc's:
+// The compiler writes the ELF TinyGo links. What follows is yaroze's:
 // link.MIPS1Traps and RemoveTraps, then link.Executable.
 package toolchain
 
@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-// Target is the TinyGo target nyc builds for.
+// Target is the TinyGo target yaroze builds for.
 const Target = "playstation-yaroze"
 
 // DefaultOpt is the optimization level a build has when it names none: for
@@ -62,16 +62,16 @@ func (b *Build) logf(format string, args ...any) {
 	}
 }
 
-// cacheDir is nyc's cache directory, NYC_CACHE or nyc under the user's,
+// cacheDir is yaroze's cache directory, YAROZE_CACHE or yaroze under the user's,
 // made if need be.
 func cacheDir() (string, error) {
-	dir := os.Getenv("NYC_CACHE")
+	dir := os.Getenv("YAROZE_CACHE")
 	if dir == "" {
 		base, err := os.UserCacheDir()
 		if err != nil {
 			return "", err
 		}
-		dir = filepath.Join(base, "nyc")
+		dir = filepath.Join(base, "yaroze")
 	}
 	return dir, os.MkdirAll(dir, 0o777)
 }

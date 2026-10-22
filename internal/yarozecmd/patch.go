@@ -1,4 +1,4 @@
-package nyc
+package yarozecmd
 
 import (
 	"context"
@@ -42,7 +42,7 @@ func (f *buildFlags) patch(ctx context.Context, pkg, base string, at uint32, out
 	if err != nil {
 		return err
 	}
-	tmp, err := os.MkdirTemp("", "nyc-")
+	tmp, err := os.MkdirTemp("", "yaroze-")
 	if err != nil {
 		return err
 	}

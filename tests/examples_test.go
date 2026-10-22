@@ -30,7 +30,7 @@ const frameBudget = 30 * emutest.Second
 func TestMDECScreenshot(t *testing.T) {
 	m := bootExample(t, "mdec")
 	m.RunUntilCount("main.shown", 86, frameBudget)
-	emutest.Golden(t, m.Display(), "mdec.png")
+	m.Golden("mdec.png")
 }
 
 // TestDungeonScreenshot checks the maze after a turn to the left and a walk
@@ -43,7 +43,7 @@ func TestDungeonScreenshot(t *testing.T) {
 	m.Hold(1, emu.ButtonLeft, 40)
 	m.Hold(1, emu.ButtonUp, 150)
 	m.RunFrames(10)
-	emutest.Golden(t, m.Display(), "dungeon.png")
+	m.Golden("dungeon.png")
 }
 
 // TestCarScreenshot checks the car fifty frames after its drive in from
@@ -51,7 +51,7 @@ func TestDungeonScreenshot(t *testing.T) {
 func TestCarScreenshot(t *testing.T) {
 	m := bootExample(t, "car")
 	m.RunUntilCount("main.frameNumber", 520, frameBudget)
-	emutest.Golden(t, m.Display(), "car.png")
+	m.Golden("car.png")
 }
 
 // TestOdenScreenshot checks the three shapes under the three lights after
@@ -62,7 +62,7 @@ func TestOdenScreenshot(t *testing.T) {
 	m.Hold(1, emu.ButtonLeft, 3)
 	m.Hold(1, emu.ButtonSquare, 20)
 	m.RunFrames(5)
-	emutest.Golden(t, m.Display(), "oden.png")
+	m.Golden("oden.png")
 }
 
 // TestMorphScreenshot checks the sheet most of the way to becoming a
@@ -70,7 +70,7 @@ func TestOdenScreenshot(t *testing.T) {
 func TestMorphScreenshot(t *testing.T) {
 	m := bootExample(t, "morph")
 	m.RunUntilCount("main.frameNumber", 400, frameBudget)
-	emutest.Golden(t, m.Display(), "morph.png")
+	m.Golden("morph.png")
 }
 
 // TestOffscrScreenshot checks the sphere wearing the texture the sprite is
@@ -81,7 +81,7 @@ func TestMorphScreenshot(t *testing.T) {
 func TestOffscrScreenshot(t *testing.T) {
 	m := bootExample(t, "offscr")
 	m.RunUntilCount("main.frameNumber", 330, frameBudget)
-	emutest.Golden(t, m.Display(), "offscr.png")
+	m.Golden("offscr.png")
 }
 
 // TestTunnelScreenshot checks the tunnel after the flight in, with the
@@ -89,7 +89,7 @@ func TestOffscrScreenshot(t *testing.T) {
 func TestTunnelScreenshot(t *testing.T) {
 	m := bootExample(t, "tunnel")
 	m.RunUntilCount("main.frameNumber", 166, frameBudget)
-	emutest.Golden(t, m.Display(), "tunnel.png")
+	m.Golden("tunnel.png")
 }
 
 // TestFlameScreenshot checks the sheet of fire a second and a half in, with
@@ -98,7 +98,7 @@ func TestTunnelScreenshot(t *testing.T) {
 func TestFlameScreenshot(t *testing.T) {
 	m := bootExample(t, "flame")
 	m.RunUntilCount("main.frameNumber", 90, frameBudget)
-	emutest.Golden(t, m.Display(), "flame.png")
+	m.Golden("flame.png")
 }
 
 // TestInvadersScreenshot checks the invaders on their march after the ship
@@ -110,7 +110,7 @@ func TestInvadersScreenshot(t *testing.T) {
 	m.RunFrames(5)
 	m.Hold(1, emu.ButtonTriangle, 5)
 	m.RunFrames(40)
-	emutest.Golden(t, m.Display(), "invaders.png")
+	m.Golden("invaders.png")
 }
 
 // TestBreakoutScreenshot checks the wall of bricks with the ball on its
@@ -120,7 +120,7 @@ func TestBreakoutScreenshot(t *testing.T) {
 	m.RunUntilCount("main.frameNumber", 30, frameBudget)
 	m.Hold(1, emu.ButtonRight, 20)
 	m.RunFrames(100)
-	emutest.Golden(t, m.Display(), "breakout.png")
+	m.Golden("breakout.png")
 }
 
 // TestBlowScreenshot checks the shuttle's first piece a second and a half
@@ -136,7 +136,7 @@ func TestBlowScreenshot(t *testing.T) {
 	m.RunFrames(15)
 	m.Hold(1, emu.ButtonTriangle, 3)
 	m.RunFrames(90)
-	emutest.Golden(t, m.Display(), "blow.png")
+	m.Golden("blow.png")
 }
 
 // TestDinoScreenshot checks the dinosaur in front of the castle two
@@ -144,7 +144,7 @@ func TestBlowScreenshot(t *testing.T) {
 func TestDinoScreenshot(t *testing.T) {
 	m := bootExample(t, "dino")
 	m.RunUntilCount("main.frameNumber", 120, frameBudget)
-	emutest.Golden(t, m.Display(), "dino.png")
+	m.Golden("dino.png")
 }
 
 // TestDogTaleScreenshot checks the level a little way in: the title is
@@ -161,7 +161,7 @@ func TestDogTaleScreenshot(t *testing.T) {
 	m.Hold(1, emu.ButtonRight, 25)
 	m.Hold(1, emu.ButtonCross|emu.ButtonRight, 3)
 	m.RunFrames(10)
-	emutest.Golden(t, m.Display(), "dogtale.png")
+	m.Golden("dogtale.png")
 }
 
 // TestSceneScreenshot checks the three cubes a scene file places, under
@@ -178,12 +178,12 @@ func TestSceneScreenshot(t *testing.T) {
 	still := m.Display()
 	m.RunFrames(15)
 	assert.Equal(t, true, bytes.Equal(still.Pix, m.Display().Pix), "the cube should have stopped turning")
-	emutest.Golden(t, m.Display(), "scene.png")
+	m.Golden("scene.png")
 
 	// Start loads the other scene file: the tower, under its own camera.
 	m.Hold(1, emu.ButtonStart, 2)
 	m.RunFrames(5)
-	emutest.Golden(t, m.Display(), "scene-tower.png")
+	m.Golden("scene-tower.png")
 }
 
 // TestSceneLive checks the playground's live view of a scene: a new scene
@@ -218,7 +218,7 @@ func TestSceneLive(t *testing.T) {
 	m.RunFrames(3)
 	assert.Equal(t, uint32(0), m.Read32(live+8), "the program should have taken the flag")
 	assert.Equal(t, false, bytes.Equal(before.Pix, m.Display().Pix), "the picture should have changed")
-	emutest.Golden(t, m.Display(), "scene-live.png")
+	m.Golden("scene-live.png")
 }
 
 // TestSquareScreenshot checks the box after it is moved up and to the right
@@ -247,7 +247,7 @@ func TestSquareScreenshot(t *testing.T) {
 	m.Hold(1, emu.ButtonUp|emu.ButtonRight, 60)
 	m.Hold(1, emu.ButtonLeft|emu.ButtonRight, 20)
 	m.RunFrames(5)
-	emutest.Golden(t, m.Display(), "square.png")
+	m.Golden("square.png")
 }
 
 // TestTerraScreenshot checks the first conversation at the port: the
@@ -268,7 +268,7 @@ func TestTerraScreenshot(t *testing.T) {
 	m.Hold(1, emu.ButtonCross, 4)
 	m.RunUntilCount("main.sceneT", 0x2c0, frameBudget)
 	m.RunFrames(80)
-	emutest.Golden(t, m.Display(), "terra.png")
+	m.Golden("terra.png")
 }
 
 // peak runs the machine for frames frames and returns the loudest sample
@@ -310,7 +310,7 @@ func TestPadsScreenshot(t *testing.T) {
 	x1, y1 := int32(m.Read32(cx)), int32(m.Read32(cy))
 	assert.Equal(t, true, x1 > x0, "the stick moves the cursor right")
 	assert.Equal(t, true, y1 < y0, "the mouse moves the cursor up")
-	emutest.Golden(t, m.Display(), "pads.png")
+	m.Golden("pads.png")
 
 	// A GunCon in port 2, aimed at the middle of the picture, puts the
 	// cursor there; a neGcon in port 1 twisted right moves it right.
@@ -387,7 +387,7 @@ func TestCardScreenshot(t *testing.T) {
 	press(emu.ButtonDown) // DUMP
 	act()
 	act()
-	emutest.Golden(t, m.Display(), "card.png")
+	m.Golden("card.png")
 }
 
 // TestCDDAScreenshot checks that the program learns its tracks' numbers,
@@ -400,7 +400,13 @@ func TestCDDAScreenshot(t *testing.T) {
 	m.RunUntilCount("main.screen", 30, frameBudget)
 	tracks, playing := m.Sym("main.tracks"), m.Sym("main.playing")
 	assert.Equal(t, [3]uint32{2, 3, 4}, [3]uint32{m.Read32(tracks), m.Read32(tracks + 4), m.Read32(tracks + 8)}, "the tracks' numbers")
+	// Sony's BIOS plays a chime with its logo, which is still ringing down
+	// when the program starts, so wait for the SPU to fall silent before
+	// taking that as what silence sounds like.
 	quiet := peak(m, 30)
+	for i := 0; i < 10 && quiet >= 100; i++ {
+		quiet = peak(m, 30)
+	}
 
 	m.Hold(1, emu.ButtonRight, 3) // the second track
 	m.Hold(1, emu.ButtonCross, 3)
@@ -409,7 +415,7 @@ func TestCDDAScreenshot(t *testing.T) {
 	loud := peak(m, 30)
 	t.Logf("peak %d stopped, %d playing", quiet, loud)
 	assert.Equal(t, true, loud > 1000 && quiet < 100, "the track is heard")
-	emutest.Golden(t, m.Display(), "cdda.png")
+	m.Golden("cdda.png")
 
 	m.Hold(1, emu.ButtonCircle, 3)
 	m.RunFrames(30)
@@ -432,7 +438,7 @@ func TestTimersScreenshot(t *testing.T) {
 	t.Logf("%d lines with 20 sprites, %d with 400; the counter passed its mark %d times", few, many, m.Read32(wraps))
 	assert.Equal(t, true, many > few+20, "more sprites take more of the frame")
 	assert.Equal(t, true, m.Read32(wraps) >= 1, "the line counter passes its mark")
-	emutest.Golden(t, m.Display(), "timers.png")
+	m.Golden("timers.png")
 }
 
 // TestTilesScreenshot scrolls the map right and down, to where its four
@@ -441,7 +447,7 @@ func TestTilesScreenshot(t *testing.T) {
 	m := bootExample(t, "tiles")
 	m.RunUntilCount("main.screen", 30, frameBudget)
 	m.Hold(1, emu.ButtonRight|emu.ButtonDown, 60)
-	emutest.Golden(t, m.Display(), "tiles.png")
+	m.Golden("tiles.png")
 	m.Hold(1, emu.ButtonRight|emu.ButtonDown, 200)
 	bg := m.Sym("main.bg")
 	scroll := m.Read32(bg + 12)
@@ -475,7 +481,7 @@ func TestAIScreenshot(t *testing.T) {
 	first := m.Read32(st)
 	m.RunUntil(func() bool { return m.Read32(st) != first }, 60*emutest.Second, "a change of state")
 	m.RunFrames(40)
-	emutest.Golden(t, m.Display(), "ai.png")
+	m.Golden("ai.png")
 }
 
 // The layout of yaroze.Object on the console: a GsDOBJ2 of 16 bytes and a
@@ -502,9 +508,9 @@ func TestSplitScreenshot(t *testing.T) {
 	t.Logf("player 1 %d to %d, player 2 %d to %d", x0, pos(0), x1, pos(1))
 	assert.Equal(t, true, pos(0) > x0, "the first cube moves right")
 	assert.Equal(t, true, pos(1) < x1, "the second cube moves left")
-	emutest.Golden(t, m.Display(), "split.png")
+	m.Golden("split.png")
 
 	m.Hold(1, emu.ButtonSelect, 6)
 	assert.Equal(t, uint32(1), m.Read32(m.Sym("main.sideBySide"))&0xff, "side by side")
-	emutest.Golden(t, m.Display(), "split-side.png")
+	m.Golden("split-side.png")
 }

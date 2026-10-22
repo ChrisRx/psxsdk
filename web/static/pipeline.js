@@ -11,7 +11,7 @@
 //	tinygo build -target=playstation-yaroze -o prog.elf ./prog
 //	mips1fix prog.elf
 //	eco2exe prog.elf prog.exe
-//	mkpsxiso -o prog.bin --volume-id prog.exe --boot MAIN.EXE --file MAIN.EXE=prog.exe --src prog
+//	mkdisc -o prog.bin --volume-id prog.exe --boot MAIN.EXE --file MAIN.EXE=prog.exe --src prog
 //
 // It runs in a browser worker or in Node, so it takes the module loader and
 // the fetched bytes from its caller rather than fetching itself.
@@ -107,7 +107,7 @@ export function projectGenerateLines(project) {
 // since the compiler has no clang of its own; what a build adds stays for
 // the next one.
 export class Pipeline {
-	// modules: {tinygo, discgen, mips1fix, eco2exe, mkpsxiso} as
+	// modules: {tinygo, discgen, mips1fix, eco2exe, mkdisc} as
 	// WebAssembly.Module; loadModule: a function from a tool's name to a
 	// promise of its module, for the converters, fetched when first named;
 	// sysroot: the Dir the sysroot tarball was read into; env: its env.json.
@@ -180,7 +180,7 @@ export class Pipeline {
 	// prog.bin when ok, and elf is the executable, for its symbols. log is
 	// called with each line of output as it comes. The data files, such as
 	// assets/CUBE.TIM, are what the program registers with package disc and
-	// mkpsxiso puts on the disc.
+	// mkdisc puts on the disc.
 	//
 	// With hot, the program is built to take patches (see patch): its main
 	// package's functions are called through slots and memory is reserved
@@ -194,7 +194,7 @@ export class Pipeline {
 			["tinygo", [...tinygo, "-o", "/work/prog.elf", "/work/prog"]],
 			["mips1fix", ["mips1fix", "-q", "/work/prog.elf"]],
 			["eco2exe", ["eco2exe", "/work/prog.elf", "/work/prog.exe"]],
-			["mkpsxiso", ["mkpsxiso", "-o", "/work/prog.bin", "--volume-id", "prog.exe", "--boot", "MAIN.EXE", "--file", "MAIN.EXE=/work/prog.exe", "--src", "/work/prog"]],
+			["mkdisc", ["mkdisc", "-o", "/work/prog.bin", "--volume-id", "prog.exe", "--boot", "MAIN.EXE", "--file", "MAIN.EXE=/work/prog.exe", "--src", "/work/prog"]],
 		];
 		if (!(await this.steps(steps, env, fs, log))) return { ok: false };
 		return {

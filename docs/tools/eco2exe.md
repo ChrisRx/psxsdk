@@ -14,4 +14,4 @@ created "MAIN.EXE": 47fb1ad6d1aee3c8bdf71bdc2ecd144b
 
 *Note: The Net Yaroze development library itself is relatively small, so it has been embedded in the `eco2exe` binary, meaning it doesn't need to be provided by the user!*
 
-[`nyc`](nyc.md) does the same for every program it builds, so a build with it needs no separate step.
+[`yaroze`](yaroze.md) does the same for every program it builds, so a build with it needs no separate step.

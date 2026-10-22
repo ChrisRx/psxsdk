@@ -16,7 +16,9 @@
 // spun away to nothing. The tune is Sony's sample, the one the check
 // sample plays, which the author's message says was borrowed. The
 // author's readme asks anyone using the code for a thank you: thanks,
-// Ira.
+// Ira. His code and graphics are under the MIT license, Copyright (c)
+// 2023 Ira Rainey, which licenses/ADOGTALE-LICENSE.txt at the root of the
+// repository carries.
 //
 // Differences from the original:
 //

@@ -14,7 +14,7 @@ import (
 )
 
 // TestWasmOpt checks the level a build runs at against the levels the
-// sysroot's cache holds: nyc's own holds z and 2, the playground's only z,
+// sysroot's cache holds: yaroze's own holds z and 2, the playground's only z,
 // and one from before the levels were recorded says nothing.
 func TestWasmOpt(t *testing.T) {
 	for _, c := range []struct {
@@ -45,11 +45,11 @@ func TestWasmOpt(t *testing.T) {
 // TestWasmKeepsModule builds a program twice with one Wasm under wazero,
 // which keeps the compiler's module loaded between builds, and expects
 // the second build to be quicker and to write the same executable. It
-// needs the compiler: NYC_WASM naming a directory with tinygo.wasm and
+// needs the compiler: YAROZE_WASM naming a directory with tinygo.wasm and
 // sysroot.tar.gz, as the site's play/ directory is.
 func TestWasmKeepsModule(t *testing.T) {
-	if os.Getenv("NYC_WASM") == "" {
-		t.Skip("NYC_WASM is not set")
+	if os.Getenv("YAROZE_WASM") == "" {
+		t.Skip("YAROZE_WASM is not set")
 	}
 	t.Setenv("TMPDIR", t.TempDir()) // no snapshot
 	w, err := New("wazero")
@@ -86,8 +86,8 @@ func TestWasmKeepsModule(t *testing.T) {
 // the same executable from it, more quickly, and build a package the
 // snapshot never saw. It needs the compiler, as TestWasmKeepsModule does.
 func TestWasmSnapshot(t *testing.T) {
-	if os.Getenv("NYC_WASM") == "" {
-		t.Skip("NYC_WASM is not set")
+	if os.Getenv("YAROZE_WASM") == "" {
+		t.Skip("YAROZE_WASM is not set")
 	}
 	t.Setenv("TMPDIR", t.TempDir())
 	ctx := context.Background()
@@ -137,8 +137,8 @@ func TestWasmSnapshot(t *testing.T) {
 // wazero, and expects the same executable. It needs the compiler, as
 // TestWasmKeepsModule does, and a wasmtime command.
 func TestWasmtime(t *testing.T) {
-	if os.Getenv("NYC_WASM") == "" {
-		t.Skip("NYC_WASM is not set")
+	if os.Getenv("YAROZE_WASM") == "" {
+		t.Skip("YAROZE_WASM is not set")
 	}
 	if _, err := exec.LookPath("wasmtime"); err != nil {
 		t.Skip("there is no wasmtime command")

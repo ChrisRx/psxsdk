@@ -4,24 +4,24 @@ weight: 1
 description: A module of your own with the toolchain as a dependency, the smallest program that puts something on the screen, and the one command that turns it into a disc.
 ---
 
-A program for the PlayStation is an ordinary Go module. It depends on `go.chrisrx.dev/psx` for the library bindings, and on its build command, `nyc`, for turning the program into a disc. This page sets one up and gets a line of text on the screen.
+A program for the PlayStation is an ordinary Go module. It depends on `go.chrisrx.dev/psx` for the library bindings, and on its build command, `yaroze`, for turning the program into a disc. This page sets one up and gets a line of text on the screen.
 
 ## What you need
 
 - **Go**, 1.27 or newer.
-- **TinyGo**, which compiles Go for the console's MIPS processor and links against the Net Yaroze library. Any TinyGo of the version the toolchain is built against will do: `nyc` adds the `playstation-yaroze` target to one that does not have it. Without TinyGo, `nyc` can run the compiler the [playground](/play/) runs, TinyGo compiled to WebAssembly, instead; [its page](../tools/nyc.md) says how.
-- **An emulator** to run the result in. The toolchain has one: `nyc run` plays a program in a window, and `psxemu` runs one headless and saves a picture of the screen. [mednafen](https://mednafen.github.io/) or any other that takes a cue sheet works too.
-- **A BIOS image**, for `psxemu` and other emulators. The console's own is Sony's and cannot be distributed, but the open source [OpenBIOS](https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios) boots everything here, and `nyc run` has it built in. The copy the [examples](../examples/index.md) on this site run on is at [openbios.bin](/play/openbios.bin).
+- **TinyGo**, which compiles Go for the console's MIPS processor and links against the Net Yaroze library. Any TinyGo of the version the toolchain is built against will do: `yaroze` adds the `playstation-yaroze` target to one that does not have it. Without TinyGo, `yaroze` can run the compiler the [playground](/play/) runs, TinyGo compiled to WebAssembly, instead; [its page](../tools/yaroze.md) says how.
+- **An emulator** to run the result in. The toolchain has one: `yaroze run` plays a program in a window, and `psxemu` runs one headless and saves a picture of the screen. [mednafen](https://mednafen.github.io/) or any other that takes a cue sheet works too.
+- **A BIOS image**, for `psxemu` and other emulators. The console's own is Sony's and cannot be distributed, but the open source [OpenBIOS](https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios) boots everything here, and `yaroze run` has it built in. The copy the [examples](../examples/index.md) on this site run on is at [openbios.bin](/play/openbios.bin).
 
 ## The module
 
-Make a directory and a module in it, add the toolchain, and add `nyc` and the emulator as tool dependencies, which `go tool` then runs without installing anything:
+Make a directory and a module in it, add the toolchain, and add `yaroze` and the emulator as tool dependencies, which `go tool` then runs without installing anything:
 
 ```bash
 mkdir hello && cd hello
 go mod init example.com/hello
 go get go.chrisrx.dev/psx
-go get -tool go.chrisrx.dev/psx/cmd/nyc go.chrisrx.dev/psx/tools/psxemu
+go get -tool go.chrisrx.dev/psx/cmd/yaroze go.chrisrx.dev/psx/tools/psxemu
 curl -LO https://chrisrx.github.io/psxsdk/play/openbios.bin
 ```
 
@@ -47,17 +47,17 @@ The program needs no build constraint. The `yaroze` package builds under the ord
 One command turns the source into a disc the console boots:
 
 ```bash
-go tool nyc disc
+go tool yaroze disc
 ```
 
-It does four things. TinyGo compiles and links the program against the Net Yaroze library's addresses. The few instructions LLVM emits that the console's R3000A does not have are replaced. The program is combined with the library itself, which a Net Yaroze had resident in RAM and an ordinary console does not, into the PSX-EXE the BIOS knows how to load. And the executable goes onto a disc as `MAIN.EXE`, with the `SYSTEM.CNF` the BIOS reads to find it. The disc is named after the directory, `hello.bin` with `hello.cue` beside it, which any emulator opens. `go tool nyc build` stops at the executable, `hello.exe`, and `-v` says how long each step took.
+It does four things. TinyGo compiles and links the program against the Net Yaroze library's addresses. The few instructions LLVM emits that the console's R3000A does not have are replaced. The program is combined with the library itself, which a Net Yaroze had resident in RAM and an ordinary console does not, into the PSX-EXE the BIOS knows how to load. And the executable goes onto a disc as `MAIN.EXE`, with the `SYSTEM.CNF` the BIOS reads to find it. The disc is named after the directory, `hello.bin` with `hello.cue` beside it, which any emulator opens. `go tool yaroze build` stops at the executable, `hello.exe`, and `-v` says how long each step took.
 
 ## Running it
 
-`nyc run` builds the disc as `nyc disc` does and plays it in a window, with the keyboard as the controller, arrows for the directions, Enter for Start and Z, X, A and S for the four buttons:
+`yaroze run` builds the disc as `yaroze disc` does and plays it in a window, with the keyboard as the controller, arrows for the directions, Enter for Start and Z, X, A and S for the four buttons:
 
 ```bash
-go tool nyc run
+go tool yaroze run
 ```
 
 `psxemu` boots the disc headless instead and, when stopped, saves what the screen shows:

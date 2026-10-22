@@ -3,7 +3,7 @@ title: discgen
 weight: 14
 ---
 
-`discgen` writes the Go declarations that put a program's data files on its disc: for each file under a directory, the `disc.File` that registers it with [`mkpsxiso`](mkpsxiso.md), and a slice of every file for `disc.LoadAll`, which reads each into memory it allocates.
+`discgen` writes the Go declarations that put a program's data files on its disc: for each file under a directory, the `disc.File` that registers it with [`mkdisc`](mkdisc.md), and a slice of every file for `disc.LoadAll`, which reads each into memory it allocates.
 
 It is meant for `go:generate`, in the program's package:
 
@@ -48,6 +48,6 @@ var (
 )
 ```
 
-A name is the file's path under the directory, its words run together in camel case, then its extension in capitals: `sound/STD0.VH` is `soundStd0VH`. Two files that would get the same name are an error. Files are placed under the directory's name in capitals unless `--root` says otherwise, `-o` names the output, and `--files` the slice. With `--into`, a file that grows needs the command run again, and `mkpsxiso` fails the build of a disc for one that has outgrown its array.
+A name is the file's path under the directory, its words run together in camel case, then its extension in capitals: `sound/STD0.VH` is `soundStd0VH`. Two files that would get the same name are an error. Files are placed under the directory's name in capitals unless `--root` says otherwise, `-o` names the output, and `--files` the slice. With `--into`, a file that grows needs the command run again, and `mkdisc` fails the build of a disc for one that has outgrown its array.
 
-[`nyc`](nyc.md) has it as `nyc generate`, with the same flags.
+[`yaroze`](yaroze.md) has it as `yaroze generate`, with the same flags.

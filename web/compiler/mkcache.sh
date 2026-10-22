@@ -20,8 +20,8 @@
 #
 # The C and assembly entries are keyed by the optimization level too, so
 # each program is built at every level in OPTS: z by default, TinyGo's own
-# and the playground's. task nyc runs it again over a copy of the
-# playground's sysroot with OPTS=2, the level nyc builds at by default.
+# and the playground's. task yaroze runs it again over a copy of the
+# playground's sysroot with OPTS=2, the level yaroze builds at by default.
 # env.json's opts lists the levels the cache holds.
 set -euo pipefail
 usage="usage: mkcache.sh FULL.wasm TINYGO.wasm SYSROOT PROGRAM..."
@@ -38,7 +38,7 @@ p, id, opts = sys.argv[1], sys.argv[2], sys.argv[3].split()
 env = json.load(open(p))
 env["buildID"] = id
 # The levels the cache holds, those of an earlier run on the same sysroot
-# included, which nyc reads to know what it can build at.
+# included, which yaroze reads to know what it can build at.
 env["opts"] = env.get("opts", []) + [o for o in opts if o not in env.get("opts", [])]
 json.dump(env, open(p, "w"), indent="\t")
 open(p, "a").write("\n")

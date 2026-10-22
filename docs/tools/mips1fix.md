@@ -17,4 +17,4 @@ A trap and a nop are the same width, so nothing moves and no relocation or symbo
 
 `-n` reports without writing.
 
-`nyc` does the same to every program it builds, so a build with [`nyc`](nyc.md) needs no separate step.
+`yaroze` does the same to every program it builds, so a build with [`yaroze`](yaroze.md) needs no separate step.

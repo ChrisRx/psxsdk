@@ -1,12 +1,12 @@
 // Package discgen writes the Go declarations for a program's data files:
 // for each file under a directory, the disc.File that registers it with
-// mkpsxiso, and a slice of every File for disc.LoadAll, which reads each
+// mkdisc, and a slice of every File for disc.LoadAll, which reads each
 // into memory it allocates. The sources the converters read, which lie in
 // the same directory, are left off the disc: a picture, model, sound or
 // score by its extension, and any file a go:generate line of the package
 // reads.
 //
-// It is the discgen command, and nyc's generate command, meant for
+// It is the discgen command, and yaroze's generate command, meant for
 // go:generate in the program's package:
 //
 //	//go:generate go run go.chrisrx.dev/psx/tools/discgen assets
@@ -19,7 +19,7 @@
 //
 // With --into it declares the memory too, as Into takes it: for each file
 // a package-level array, sized to the whole sectors the drive delivers,
-// which mkpsxiso checks the file fits, and a yaroze.TIM or yaroze.TMD over
+// which mkdisc checks the file fits, and a yaroze.TIM or yaroze.TMD over
 // the array for an image or a model:
 //
 //	cubeTMDData [512]uint32 // 344 bytes
@@ -28,7 +28,7 @@
 //
 // Each name is the file's path under the directory, its words run together
 // in camel case, then its extension in capitals. With --into, a file that
-// changes size needs the command run again, and mkpsxiso fails the build
+// changes size needs the command run again, and mkdisc fails the build
 // of a disc for one that has outgrown its array.
 package discgen
 
@@ -264,7 +264,7 @@ func Command(use string) *cobra.Command {
 		Use:   use + " [flags] <dir>",
 		Short: "write the declarations that put a program's data files on its disc",
 		Long: use + ` writes Go declarations for every file under dir: the disc.File
-registering it for mkpsxiso, and a slice of every File for disc.LoadAll, which
+registering it for mkdisc, and a slice of every File for disc.LoadAll, which
 reads each into memory it allocates. The sources the converters read are left
 out: pictures, models, sounds and scores by their extension, and any file a
 go:generate line of the package reads. With --into it declares that memory as

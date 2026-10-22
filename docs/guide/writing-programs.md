@@ -68,7 +68,7 @@ The [`disc`](disc) package declares a program's files. A registration names the 
 - A `Loader` reads them a step a frame, while the frames go on.
 - With `Into`, a registration names memory of the program's own instead, and the build checks the file fits it. That suits a program that wants to know a file's size, or to share one buffer between files.
 
-[`discgen`](../tools/discgen.md), also `nyc generate`, writes the registrations for every file under a directory from `go:generate`, which the playground runs too.
+[`discgen`](../tools/discgen.md), also `yaroze generate`, writes the registrations for every file under a directory from `go:generate`, which the playground runs too.
 
 ## Memory
 

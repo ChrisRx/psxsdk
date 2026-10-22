@@ -2,6 +2,9 @@ package cdrom
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"math/rand/v2"
 	"testing"
 )
@@ -215,5 +218,41 @@ func TestECCCoversEveryProtectedByte(t *testing.T) {
 		if bytes.Equal(sector[eccPOffset:], base[eccPOffset:]) {
 			t.Errorf("flipping byte %d left the ECC unchanged", off)
 		}
+	}
+}
+
+// TestForm1KnownAnswer encodes one fixed sector and checks its EDC and the
+// digest of the whole. The other tests check properties every linear code
+// has, which a wrong field constant can keep, so this pins the bytes: the
+// digest is of the sector as the encoder wrote it before it was rewritten
+// from the standard, which is what every disc the emulator tests boot was
+// written with.
+func TestForm1KnownAnswer(t *testing.T) {
+	r := rand.New(rand.NewPCG(9, 10))
+	data := make([]byte, Form1DataSize)
+	for i := range data {
+		data[i] = byte(r.UintN(256))
+	}
+	sector := make([]byte, SectorSize)
+	if err := EncodeForm1(sector, 1234, DataSubheader, data); err != nil {
+		t.Fatal(err)
+	}
+	if got := binary.LittleEndian.Uint32(sector[form1EDCOffset:]); got != 0x0f19563b {
+		t.Errorf("EDC is %#08x, want 0x0f19563b", got)
+	}
+	sum := sha256.Sum256(sector)
+	if got := hex.EncodeToString(sum[:]); got != "0d75cfaeda92d15f79fd72e2d41df68f01bb55464f79f0d8ab66b9dcb8281ea8" {
+		t.Errorf("sector digest is %s, want 0d75cfae…", got)
+	}
+}
+
+// The inverse the parity is scaled by has to be one: a wrong element there
+// keeps the code linear and still breaks every sector.
+func TestFieldInverse(t *testing.T) {
+	if got := gfMul(gfInvAlphaPlusOne, 0x03); got != 1 {
+		t.Errorf("(α+1)·1/(α+1) = %#x, want 1", got)
+	}
+	if gfExp[1] != 0x02 || gfExp[8] != 0x1d {
+		t.Errorf("α = %#x and α^8 = %#x, want 0x02 and 0x1d", gfExp[1], gfExp[8])
 	}
 }

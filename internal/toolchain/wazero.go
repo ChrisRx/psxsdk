@@ -22,7 +22,7 @@ import (
 
 // wazeroRuntime runs the compiler's module in-process under wazero. The
 // module, loaded by the first build, is kept for the next (see load), as a
-// process making more than one build, nyc run making patches say, pays
+// process making more than one build, yaroze run making patches say, pays
 // for loading once and gets what the compiler keeps between builds, the
 // standard library parsed and type-checked. Across processes a snapshot of
 // the compiler's memory does the same (see wasm_snapshot.go).
@@ -100,7 +100,7 @@ func (r *wazeroRuntime) load(ctx context.Context, b *Build) error {
 	}
 	// No WithCloseOnContextDone: to stop a module when the context ends,
 	// wazero calls out to Go at the head of every loop, which made the
-	// compiler ten times slower than under wasmtime. Interrupting nyc ends
+	// compiler ten times slower than under wasmtime. Interrupting yaroze ends
 	// the process, and the module with it. The wazero is a fork for the
 	// other option: validating the 41MB module's function bodies again
 	// when its compiled code is in the cache was most of loading it.
@@ -121,7 +121,7 @@ func (r *wazeroRuntime) load(ctx context.Context, b *Build) error {
 	b.logf("wasm: compiled the module in %s", since(start))
 	if compiled.ExportedFunctions()["tinygo_build"] == nil {
 		rt.Close(ctx)
-		return errors.New("tinygo.wasm is not a build of the compiler this nyc runs: it has no tinygo_build")
+		return errors.New("tinygo.wasm is not a build of the compiler this yaroze runs: it has no tinygo_build")
 	}
 
 	wd, err := os.Getwd()

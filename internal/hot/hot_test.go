@@ -42,6 +42,10 @@ func TestPatch(t *testing.T) {
 	assert.Equal(t, true, len(p.Inits) >= 1, "the patch should carry speed's new initial value")
 
 	m := emutest.Boot(t, emutest.BIOS(emutest.BIOSFromEnv(t)), emutest.Disc(disc), emutest.Symbols(base))
+	// Until the BIOS has loaded the program its variables' addresses hold
+	// whatever the BIOS keeps there, which under Sony's is not zero, so
+	// wait for the program to start before watching its count.
+	m.RunUntilTTY("Execute !", 30*emutest.Second)
 	m.RunUntilCount("main.frames", 30, 20*emutest.Second)
 	assert.Equal(t, uint32(1), m.Read32(m.Sym("main.speed")), "v1's speed")
 	before := m.Display()

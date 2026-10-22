@@ -35,7 +35,7 @@ const (
 // snapshotPath is where w's snapshot is, or an error saying why there can
 // be none.
 func snapshotPath(w *Wasm) (string, error) {
-	dir := filepath.Join(os.TempDir(), "nyc"+userSuffix())
+	dir := filepath.Join(os.TempDir(), "yaroze"+userSuffix())
 	if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, fs.ErrExist) {
 		return "", err
 	}
