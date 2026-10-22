@@ -48,6 +48,7 @@ tasks:
   # use nor nyc has changed since it last ran.
   build:disc:
     label: 'disc:{{.NAME}}'
+    deps: [nyc:warm]
     requires:
       vars: [NAME]
     vars:
@@ -384,6 +385,17 @@ tasks:
       - web/compiler/mkcache.sh .build/compiler/tinygo-full.wasm .build/compiler/tinygo.wasm .build/sysroot $(cd .build/sysroot && ls -d mod/go.chrisrx.dev/psx/examples/*/ mod/go.chrisrx.dev/psx/docs/tutorial/hello/ | grep -v /internal/)
       - mkdir -p .build/site/play
       - tar --format=ustar -C .build -cf - sysroot | gzip -9 > .build/site/play/sysroot.tar.gz
+
+  # Builds one small program before the disc builds fan out, so that the
+  # compiler is unpacked and its module compiled by the runtime once: on a
+  # fresh machine every disc build would otherwise do both at the same
+  # time. It runs once however many builds depend on it. CI also limits how
+  # many builds run at once (task -C 4), since each holds the compiler.
+  nyc:warm:
+    run: once
+    cmds:
+      - mkdir -p .build/warm
+      - go run ./cmd/nyc build -o .build/warm/hello.exe ./docs/tutorial/hello
 
   # Refreshes the compiler nyc has built in, and builds nyc onto
   # .build/nyc: the compiler from the compiler task, and a sysroot of its

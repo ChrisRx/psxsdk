@@ -167,3 +167,43 @@ func TestWasmtime(t *testing.T) {
 	}
 	assert.Equal(t, elfs[0], elfs[1])
 }
+
+// TestPlace expects an unpacked compiler to take the place of a directory
+// from an unpacking cut short, and to leave one another process completed
+// alone.
+func TestPlace(t *testing.T) {
+	cache := t.TempDir()
+	dir := filepath.Join(cache, "wasm-key")
+	unpacked := func(name, mark string) string {
+		tmp := filepath.Join(cache, name)
+		assert.NoError(t, os.Mkdir(tmp, 0o777))
+		assert.NoError(t, os.WriteFile(filepath.Join(tmp, "tinygo.wasm"), []byte(name), 0o666))
+		if mark != "" {
+			assert.NoError(t, os.WriteFile(filepath.Join(tmp, mark), nil, 0o666))
+		}
+		return tmp
+	}
+	holds := func(name string) {
+		data, err := os.ReadFile(filepath.Join(dir, "tinygo.wasm"))
+		assert.NoError(t, err)
+		assert.Equal(t, name, string(data))
+	}
+
+	// Nothing there: placed.
+	assert.NoError(t, place(unpacked("first", ".complete"), dir))
+	holds("first")
+
+	// Another process completed one meanwhile: it stays, ours is left
+	// behind for the caller to remove.
+	second := unpacked("second", ".complete")
+	assert.NoError(t, place(second, dir))
+	holds("first")
+	_, err := os.Stat(second)
+	assert.NoError(t, err)
+
+	// One cut short is replaced.
+	assert.NoError(t, os.RemoveAll(dir))
+	unpacked("wasm-key", "")
+	assert.NoError(t, place(unpacked("third", ".complete"), dir))
+	holds("third")
+}

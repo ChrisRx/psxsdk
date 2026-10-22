@@ -22,4 +22,4 @@ jobs:
       uses: DeterminateSystems/magic-nix-cache-action@v8
 
     - name: Test
-      run: nix develop .#ci --command task test
+      run: nix develop .#ci --command task -C 4 test

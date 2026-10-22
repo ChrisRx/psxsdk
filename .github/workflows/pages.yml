@@ -51,7 +51,7 @@ jobs:
       uses: DeterminateSystems/magic-nix-cache-action@v8
 
     - name: Build site
-      run: nix develop .#site --command task site
+      run: nix develop .#site --command task -C 4 site
 
     - name: Get the playground's compiler
       id: compiler
