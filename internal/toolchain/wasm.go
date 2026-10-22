@@ -138,7 +138,7 @@ func New(runtime string) (*Wasm, error) {
 
 	w := &Wasm{dir: filepath.Join(cache, "wasm-"+key)}
 	w.sysroot = filepath.Join(w.dir, "sysroot")
-	if _, err := os.Stat(filepath.Join(w.dir, ".complete")); err != nil {
+	if !complete(w.dir) {
 		if err := unpack(cache, w.dir, module, sysroot); err != nil {
 			return nil, err
 		}
@@ -310,6 +310,11 @@ func modCache() string {
 
 // unpack writes the compiler's module and its sysroot into dir, by way of a
 // directory beside it, so that an unpacking cut short is never used.
+//
+// Several processes may unpack the same compiler at once, as the examples'
+// discs are built, and the first to finish is the one the rest run from:
+// a dir that is complete is never removed or replaced, since a process may
+// be running from it, and a copy made too late is thrown away.
 func unpack(cache, dir string, module, sysroot func() ([]byte, error)) error {
 	tmp, err := os.MkdirTemp(cache, "wasm-tmp-")
 	if err != nil {
@@ -330,11 +335,33 @@ func unpack(cache, dir string, module, sysroot func() ([]byte, error)) error {
 	if err := untar(data, tmp); err != nil {
 		return fmt.Errorf("unpacking the sysroot: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(tmp, ".complete"), nil, 0o666); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, completeMark), nil, 0o666); err != nil {
 		return err
 	}
-	os.RemoveAll(dir)
-	return os.Rename(tmp, dir)
+	for range 2 {
+		if complete(dir) {
+			return nil
+		}
+		err := os.Rename(tmp, dir)
+		if err == nil || complete(dir) {
+			return nil
+		}
+		// What is there is not a compiler: an unpacking cut short before
+		// the mark was written, from a version that wrote it last. Clear
+		// it and try once more.
+		os.RemoveAll(dir)
+	}
+	return fmt.Errorf("could not put the compiler in %s", dir)
+}
+
+// completeMark is the file an unpacked compiler's directory ends with,
+// which says the whole of it is there.
+const completeMark = ".complete"
+
+// complete reports whether dir holds a whole compiler.
+func complete(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, completeMark))
+	return err == nil
 }
 
 // untar extracts a gzipped tar archive into dir, refusing any name that
