@@ -283,8 +283,22 @@ tasks:
         fi
       - web/compiler/release.sh .build/compiler
 
-  # Says how to get the compiler when .build/compiler has none: task
-  # compiler builds it, or another checkout's build can be linked in.
+  # Puts the compiler yaroze embeds, cmd/yaroze/wasm/tinygo.wasm.gz, in
+  # .build/compiler as tinygo.wasm, for the playground, unless the
+  # compiler task has built one there, which has the full compiler beside
+  # it and is left alone.
+  compiler:embedded:
+    sources:
+      - cmd/yaroze/wasm/tinygo.wasm.gz
+    generates:
+      - .build/compiler/tinygo.wasm
+    cmds:
+      - mkdir -p .build/compiler
+      - test -f .build/compiler/tinygo-full.wasm || gunzip -c cmd/yaroze/wasm/tinygo.wasm.gz > .build/compiler/tinygo.wasm
+
+  # Says how to get the full compiler when .build/compiler has none, for
+  # what needs its clang: task compiler builds it, or another checkout's
+  # build can be linked in.
   compiler:check:
     silent: true
     cmds:
@@ -297,16 +311,21 @@ tasks:
           exit 1
         fi
 
-  # Adds the playground to the built site: the compiler from the compiler
-  # task, the disc tools, the converters, discgen and gofmt compiled to
-  # WebAssembly, and the sysroot, the standard library and psx packages
-  # the examples use together with the target files and the compiler's
-  # cache, packed for the compiler to read. Each part is skipped when what
-  # it reads has not changed; the sysroot and its cache take minutes.
+  # Adds the playground to the built site: the compiler, the disc tools,
+  # the converters, discgen and gofmt compiled to WebAssembly, and the
+  # sysroot, the standard library and psx packages the examples use
+  # together with the target files and the compiler's cache, packed for
+  # the compiler to read. Each part is skipped when what it reads has not
+  # changed; the sysroot and its cache take minutes.
+  #
+  # The compiler is the one in .build/compiler when the compiler task has
+  # built one, and otherwise the one yaroze embeds, which is the same
+  # compiler committed, so that the site builds from a checkout alone, as
+  # it does on CI.
   playground:
     desc: Add what has changed of the playground to the built site
     cmds:
-      - task: compiler:check
+      - task: compiler:embedded
       - task: playground:compiler
       - task: playground:tools
       - task: playground:sysroot
@@ -357,13 +376,16 @@ tasks:
       - GOOS=wasip1 GOARCH=wasm go build -trimpath -ldflags=-s -o .build/site/play/tools/gofmt.wasm cmd/gofmt
 
   # The sysroot: tinygo-sysroot, from the patched TinyGo tree the compiler
-  # task leaves in .build/compiler/tinygo, gathers the merged GOROOT, the
-  # psx packages and the target files; then the full compiler, which has
-  # clang where the shipped one does not, runs under wasmtime over every
-  # example to fill the cache with the target's C and the standard
-  # library, at -opt=z, the level the playground builds at. It is skipped
-  # when no Go package an example may use, no example and neither compiler
-  # has changed.
+  # task or web/compiler/prepare.sh leaves in .build/compiler/tinygo,
+  # gathers the merged GOROOT, the psx packages and the target files; then
+  # a compiler runs under wasmtime over every example to fill the cache
+  # with the target's C and the standard library, at -opt=z, the level the
+  # playground builds at. With the full compiler built, the one with
+  # clang, that is it; with only the embedded one, which has no clang, the
+  # compiled C and assembly come from the sysroot yaroze embeds, and the
+  # compiler makes the rest. It is skipped when no Go package an example
+  # may use, no example, neither compiler nor the embedded sysroot has
+  # changed.
   playground:sysroot:
     vars:
       TREE: .build/compiler/tinygo
@@ -374,6 +396,7 @@ tasks:
       - 'examples/*/pack/**/*'
       - .build/compiler/tinygo.wasm
       - .build/compiler/tinygo-full.wasm
+      - cmd/yaroze/wasm/sysroot.tar.gz
       - web/compiler/mkcache.sh
       - go.mod
       - go.sum
@@ -392,7 +415,15 @@ tasks:
       - test -x {{.TREE}}/build/tinygo-sysroot || (cd {{.TREE}} && GOFLAGS=-mod=mod go build -tags llvm22 -ldflags "-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=$(clang-22 -print-resource-dir)" -o build/tinygo-sysroot ./cmd/tinygo-sysroot)
       - rm -rf .build/sysroot
       - '{{.TREE}}/build/tinygo-sysroot -target=playstation-yaroze -o .build/sysroot ./examples/... ./docs/tutorial/hello'
-      - web/compiler/mkcache.sh .build/compiler/tinygo-full.wasm .build/compiler/tinygo.wasm .build/sysroot $(cd .build/sysroot && ls -d mod/go.chrisrx.dev/psx/examples/*/ mod/go.chrisrx.dev/psx/docs/tutorial/hello/ | grep -v /internal/)
+      - |
+        programs=$(cd .build/sysroot && ls -d mod/go.chrisrx.dev/psx/examples/*/ mod/go.chrisrx.dev/psx/docs/tutorial/hello/ | grep -v /internal/)
+        if [ -f .build/compiler/tinygo-full.wasm ]; then
+          web/compiler/mkcache.sh .build/compiler/tinygo-full.wasm .build/compiler/tinygo.wasm .build/sysroot $programs
+        else
+          rm -rf .build/seed && mkdir -p .build/seed
+          tar -xzf cmd/yaroze/wasm/sysroot.tar.gz -C .build/seed --wildcards 'sysroot/cache/obj-*.bc' 'sysroot/cache/dep-*.json'
+          OBJ_CACHE=.build/seed/sysroot/cache web/compiler/mkcache.sh .build/compiler/tinygo.wasm .build/compiler/tinygo.wasm .build/sysroot $programs
+        fi
       - mkdir -p .build/site/play
       - tar --format=ustar -C .build -cf - sysroot | gzip -9 > .build/site/play/sysroot.tar.gz
 

@@ -3,15 +3,15 @@ description: >-
   Puts the playground's compiler, TinyGo compiled to WebAssembly, in
   .build/compiler: from the cache when the recipe has not changed, then
   from the release named by its key, and built otherwise, which takes a
-  couple of hours. Leaves the patched TinyGo tree in .build/compiler/tinygo,
-  which the playground task needs as well. Nix must be installed already.
+  couple of hours. Leaves the patched TinyGo tree in .build/compiler/tinygo.
+  Nix must be installed already. The Compiler workflow is its only user;
+  the Pages workflow builds the playground with the compiler the
+  repository embeds and prepares the tree itself.
 inputs:
   build:
     description: >-
       Whether to build the compiler when neither the cache nor a release has
-      it. The Pages workflow passes false and leaves the build to the
-      Compiler workflow, which would otherwise be doing the same build at
-      the same time.
+      it, as against only reporting that it is missing.
     default: 'true'
 outputs:
   key:

@@ -1,13 +1,15 @@
 # Builds the playground's compiler, TinyGo compiled to WebAssembly with LLVM
-# linked in, caches it for the Pages workflow and publishes it as a release
-# (web/compiler/release.sh). The Pages workflow downloads the release when
-# its cache misses, and builds the compiler itself only when there is no
-# release either. It takes a couple of hours, so it runs when the recipe,
-# TinyGo's revision or the PlayStation files laid over it change, or by
-# hand, rather than on every push. A recipe whose release exists already is downloaded, not built.
-# The Pages workflow leaves the build to this one and skips its deploy
-# while the compiler is missing, so a compiler built here runs Pages again
-# to deploy the playground with it.
+# linked in, caches it and publishes it as a release (web/compiler/
+# release.sh), named by the recipe's key. It takes a couple of hours, so it
+# runs when the recipe, TinyGo's revision or the PlayStation files laid
+# over it change, or by hand, rather than on every push, and a recipe
+# whose release exists already is downloaded, not built.
+#
+# The site does not wait on it: the Pages workflow builds the playground
+# with the compiler yaroze embeds, cmd/yaroze/wasm/tinygo.wasm.gz. A
+# release made here is what task yaroze refreshes that from, by hand, with
+# the embedded sysroot, after which the next push carries the new compiler
+# to the site and to go run alike.
 name: Compiler
 
 on:
@@ -48,8 +50,3 @@ jobs:
         TARGET: ${{ github.sha }}
       run: web/compiler/release.sh .build/compiler
 
-    - name: Deploy the site with the compiler
-      if: steps.compiler.outputs.built == 'true' && github.ref == 'refs/heads/main'
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: gh workflow run pages.yml --ref main
