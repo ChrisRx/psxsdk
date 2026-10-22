@@ -39,3 +39,7 @@ require (
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
+
+// Sony's manuals, 11MB of PDFs the docs site serves, which nothing that
+// imports the module reads: left out of the module zip and of ./... patterns.
+ignore ./docs/manuals
