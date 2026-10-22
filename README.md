@@ -61,6 +61,16 @@ task serve             # build the site and the playground, and serve them on lo
 | [`examples`](examples) | The examples, one directory each, with the data they load |
 | [`docs`](docs), [`web`](web) | The documentation, Sony's manuals, the playground, and the site's generator |
 
+## Contributing
+
+Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) has the details.
+
+### AI usage
+
+AI was used for substantial portions of this project and you are free to use AI tools to help with your changes, and those changes are as welcome as any other. What matters is the change, not how it was made.
+
+The one rule: no `Co-Authored-By` lines, or any other attribution, naming an AI in commits or pull requests. An AI cannot author anything. The person who submits a change is its author and is accountable for it, which means understanding it, having tested it, and being able to answer for it in review. Pull requests carrying AI attribution will be asked to remove it before they are merged.
+
 ## License
 
 [MIT](LICENSE). Two parts carry their own notices:
