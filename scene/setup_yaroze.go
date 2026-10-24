@@ -4,10 +4,10 @@ package scene
 
 import "go.chrisrx.dev/psx/yaroze"
 
-// setUp makes the library's calls for what parse read: the textures into
+// setup makes the library's calls for what parse read: the textures into
 // video memory, the models mapped, the objects linked and the camera and
 // lights set.
-func (s *Scene) setUp() {
+func (s *Scene) setup() {
 	for i := range s.NTextures {
 		s.Textures[i].Load()
 	}

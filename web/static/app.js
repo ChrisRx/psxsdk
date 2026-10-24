@@ -444,7 +444,7 @@ function showSound() {
   }
 }
 
-async function setUpSound() {
+async function setupSound() {
   let ctx;
   try {
     // At the SPU's rate, if the browser allows it, so nothing is resampled.
@@ -470,7 +470,7 @@ async function setUpSound() {
 }
 
 async function startSound() {
-  sound.setup ??= setUpSound().catch((e) => {
+  sound.setup ??= setupSound().catch((e) => {
     $("sound").disabled = true;
     $("sound").title = `Sound is unavailable: ${e.message}`;
     throw e;

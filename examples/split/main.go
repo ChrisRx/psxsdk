@@ -100,7 +100,7 @@ func main() {
 			yaroze.Print(f.Name)
 		}
 	}
-	setUp()
+	setup()
 
 	for {
 		ot := screen.Begin()
@@ -147,9 +147,9 @@ func main() {
 	}
 }
 
-// setUp loads the models and texture, places the cubes, and sets the
+// setup loads the models and texture, places the cubes, and sets the
 // light.
-func setUp() {
+func setup() {
 	yaroze.TIM(stone02TIM.Data()).Load()
 	cube := yaroze.TMD(cubeTMD.Data())
 	cube.Map()

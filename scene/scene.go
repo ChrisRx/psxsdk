@@ -168,7 +168,7 @@ func (s *Scene) Load(data []uint32, src Source) error {
 	if err := s.parse(data, src); err != nil {
 		return err
 	}
-	s.setUp()
+	s.setup()
 	s.ready = true
 	s.data = data
 	s.src = src
@@ -197,7 +197,7 @@ func (s *Scene) reload() {
 	if s.parse(s.data, s.src) != nil {
 		return
 	}
-	s.setUp()
+	s.setup()
 }
 
 // parse reads the file into the Scene's fields, with no call on the

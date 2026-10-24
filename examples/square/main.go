@@ -77,7 +77,7 @@ func main() {
 		switch {
 		case !loader.Done():
 			if done, failed := loader.Step(); done && !failed {
-				setUpCube()
+				setupCube()
 				startMusic()
 			}
 			bar.W = uint16(200 * loader.Loaded() / len(files))
@@ -96,9 +96,9 @@ func main() {
 	}
 }
 
-// setUpCube puts the cube's texture into video memory, links the cube to
+// setupCube puts the cube's texture into video memory, links the cube to
 // the model, and sets up the camera and the light it is seen by.
-func setUpCube() {
+func setupCube() {
 	yaroze.TIM(cubeTIM.Data()).Load()
 	model := yaroze.TMD(cubeTMD.Data())
 	model.Map()

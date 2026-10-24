@@ -207,7 +207,7 @@ func main() {
 					quit = true
 				}
 			} else {
-				setUpLevel1()
+				setupLevel1()
 			}
 		}
 
@@ -233,7 +233,7 @@ func newGame() {
 	numberOfLives = 5
 	destroyAllBricks()
 	currentScore.points = 0
-	setUpLevel1()
+	setupLevel1()
 }
 
 // crudestPause waits n frames.
@@ -243,10 +243,10 @@ func crudestPause(n int) {
 	}
 }
 
-// setUpLevel1 sets up a level, which are all alike: the bat and the ball
+// setupLevel1 sets up a level, which are all alike: the bat and the ball
 // at their starts, three rows of fifteen bricks, and two rows of fourteen
 // between them with a half brick at each end.
-func setUpLevel1() {
+func setupLevel1() {
 	restartPlayersBat()
 	restartTheBall()
 
@@ -387,7 +387,7 @@ func initializeAll() bool {
 
 	level = 1
 	numberOfLives = 5
-	setUpLevel1()
+	setupLevel1()
 	clearScores()
 
 	initSound()

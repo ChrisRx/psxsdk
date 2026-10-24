@@ -4,9 +4,9 @@ weight: 4
 description: The square example's cube: its texture loaded into video memory, its model linked to an object, a camera and a light set up, and the cube turned by the frame count.
 ---
 
-Once the files are read, `setUpCube` turns two of them into a cube the frame can draw:
+Once the files are read, `setupCube` turns two of them into a cube the frame can draw:
 
-```go src=../../examples/square/main.go#setUpCube
+```go src=../../examples/square/main.go#setupCube
 ```
 
 ## The texture

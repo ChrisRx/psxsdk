@@ -242,7 +242,7 @@ func newGame() {
 	level = 1
 	numberOfLives = 5
 	currentScore.points = 0
-	setUpLevel1()
+	setupLevel1()
 }
 
 // crudestPause waits n frames.
@@ -252,9 +252,9 @@ func crudestPause(n int) {
 	}
 }
 
-// setUpLevel1 sets up a level, which are all alike: the ship still at the
+// setupLevel1 sets up a level, which are all alike: the ship still at the
 // middle of the bottom, and four rows of eight invaders moving right.
-func setUpLevel1() {
+func setupLevel1() {
 	destroyAllInvaders()
 
 	playersMovement.x = (minX + screenWidth/2) * fix
@@ -277,7 +277,7 @@ func setUpLevel1() {
 
 func renewLevel() {
 	destroyAllShots()
-	setUpLevel1()
+	setupLevel1()
 }
 
 // dealWithEnd shows the score and the high score table under a heading, and
@@ -391,7 +391,7 @@ func initializeAll() bool {
 
 	level = 1
 	numberOfLives = 5
-	setUpLevel1()
+	setupLevel1()
 	clearScores()
 
 	initSound()

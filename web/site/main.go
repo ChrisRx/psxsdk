@@ -457,7 +457,7 @@ func frontMatter(src []byte) (map[string]string, []byte, error) {
 //   - an empty fenced code block whose info string names a file relative to
 //     the page, "```go src=square/main.go", is filled with that file, so
 //     that a program a page shows is the one that is built and tested; with
-//     names after the path, "src=square/main.go#main,setUp", it is filled
+//     names after the path, "src=square/main.go#main,setup", it is filled
 //     with those declarations of the Go file alone, each with its comment,
 //     a function or method, or a var, const or type, out of its group if it
 //     is in one
