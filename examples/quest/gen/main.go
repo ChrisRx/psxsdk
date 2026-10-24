@@ -1,9 +1,10 @@
 // Command gen writes the quest example's placeholder art: a flagstone floor
 // texture, a stone wall texture, a grass texture, a log wall and a
-// shingled roof for the house, a bed, a treasure chest, the text box's
-// letters, and two sprite sheets, Hero's and the villager's, eight ways to
-// face by four frames of walking. Hand-made art of the same names and
-// sizes replaces the pictures.
+// shingled roof for the house, a bed, a treasure chest, the sky's backdrop
+// of clouds and hills, a sun, the text box's letters, and two sprite
+// sheets, Hero's and the villager's, eight ways to face by four frames of
+// walking. Hand-made art of the same names and sizes replaces the
+// pictures.
 package main
 
 import (
@@ -11,6 +12,7 @@ import (
 	"image/color"
 	"image/png"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 )
@@ -24,6 +26,8 @@ func main() {
 	writePNG(filepath.Join(dir, "grass.png"), grass())
 	writePNG(filepath.Join(dir, "log.png"), logs())
 	writePNG(filepath.Join(dir, "roof.png"), roof())
+	writePNG(filepath.Join(dir, "sky.png"), sky())
+	writePNG(filepath.Join(dir, "sun.png"), sun())
 	writePNG(filepath.Join(dir, "bed.png"), bed())
 	writePNG(filepath.Join(dir, "chest.png"), chest())
 	writePNG(filepath.Join(dir, "font.png"), font())
@@ -290,6 +294,78 @@ func roof() image.Image {
 				b = 105 + hash((x+row%2*8)/16, row, 18)%30 - 15 + hash(x, y, 19)%16 - 8 - iy
 			}
 			img.SetColorIndex(x, y, shade(b))
+		}
+	}
+	return img
+}
+
+// sky is the backdrop, 256x64 that wraps across: clouds in the top half,
+// white above and gray below, on nothing, and in the bottom half two
+// lines of hills, the farther paler, solid to the bottom.
+func sky() image.Image {
+	pal := color.Palette{
+		color.NRGBA{0, 0, 0, 0},
+		color.NRGBA{255, 255, 255, 255},
+		color.NRGBA{190, 200, 220, 255},
+		color.NRGBA{90, 140, 150, 255},
+		color.NRGBA{50, 110, 80, 255},
+	}
+	img := image.NewPaletted(image.Rect(0, 0, 256, 64), pal)
+	// Each cloud is a row of discs along a line, flatter below.
+	for n := range 5 {
+		cx, cy := 20+n*50+hash(n, 0, 11)%20, 8+hash(n, 1, 11)%10
+		for k := range 5 {
+			x, y := cx+k*7-14, cy+hash(n, k, 12)%3
+			r := 4 + hash(n, k, 13)%4
+			for dy := -r; dy <= r/2; dy++ {
+				for dx := -r; dx <= r; dx++ {
+					if dx*dx+dy*dy*2 > r*r {
+						continue
+					}
+					c := uint8(1)
+					if dy > 0 {
+						c = 2
+					}
+					img.SetColorIndex((x+dx+256)%256, y+dy, c)
+				}
+			}
+		}
+	}
+	// The hills: heights from sines whose periods divide 256, so they
+	// wrap, the far line above the near one.
+	for x := range 256 {
+		t := float64(x) * 2 * math.Pi / 256
+		far := 40 - 5*math.Sin(3*t) - 3*math.Sin(7*t+1)
+		near := 50 - 6*math.Sin(2*t+2) - 3*math.Sin(5*t)
+		for y := 32; y < 64; y++ {
+			switch {
+			case float64(y) >= near:
+				img.SetColorIndex(x, y, 4)
+			case float64(y) >= far:
+				img.SetColorIndex(x, y, 3)
+			}
+		}
+	}
+	return img
+}
+
+// sun is a 32x32 sun: a pale yellow disc with a brighter middle.
+func sun() image.Image {
+	pal := color.Palette{
+		color.NRGBA{0, 0, 0, 0},
+		color.NRGBA{255, 250, 200, 255},
+		color.NRGBA{255, 225, 120, 255},
+	}
+	img := image.NewPaletted(image.Rect(0, 0, 32, 32), pal)
+	for y := range 32 {
+		for x := range 32 {
+			d := (x-16)*(x-16) + (y-16)*(y-16)
+			switch {
+			case d <= 7*7:
+				img.SetColorIndex(x, y, 1)
+			case d <= 11*11:
+				img.SetColorIndex(x, y, 2)
+			}
 		}
 	}
 	return img

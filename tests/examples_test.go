@@ -248,8 +248,9 @@ func TestQuestChest(t *testing.T) {
 
 // TestQuestMeadow walks Hero straight down out of the hall's doorway,
 // below where they start, into the meadow, just inside the doorway in its
-// far edge, still walking down, for a picture of the grass and the house;
-// then across to the house's doorway, in its far side, and down through
+// far edge, still walking down, for a picture of the grass and the sky,
+// and another with the camera turned to the sun; then across to the
+// house's doorway, in its far side, and down through
 // it into the room inside, for a picture of the villager and the bed, and
 // on to the villager, who says their line.
 func TestQuestMeadow(t *testing.T) {
@@ -268,6 +269,16 @@ func TestQuestMeadow(t *testing.T) {
 	assert.Equal(t, uint32(4), m.Read32(j.facing), "Hero should face into the meadow")
 	m.RunFrames(20)
 	m.Golden("quest-meadow.png")
+
+	// R1 turns the camera an eighth back, to its first step, from which
+	// the sun stands over the hills, and L1 turns it round again.
+	m.Hold(1, emu.ButtonR1, 2)
+	m.RunFrames(10)
+	assert.Equal(t, uint32(0), m.Read32(j.camDir), "R1 should turn the camera to its first step")
+	m.Golden("quest-sky.png")
+	m.Hold(1, emu.ButtonL1, 2)
+	m.RunFrames(10)
+	assert.Equal(t, uint32(1), m.Read32(j.camDir), "L1 should turn it back")
 
 	// The house's doorway is the 23rd column, x 416 to 480, of the ninth
 	// row, z 224 to 288: 149 frames right put Hero at x 447, in its

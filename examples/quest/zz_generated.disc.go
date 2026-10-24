@@ -20,6 +20,8 @@ var (
 	meadowDAT = disc.Register("ASSETS/MEADOW.DAT", "assets/MEADOW.DAT")
 	npcTIM    = disc.Register("ASSETS/NPC.TIM", "assets/NPC.TIM")
 	roofTIM   = disc.Register("ASSETS/ROOF.TIM", "assets/ROOF.TIM")
+	skyTIM    = disc.Register("ASSETS/SKY.TIM", "assets/SKY.TIM")
+	sunTIM    = disc.Register("ASSETS/SUN.TIM", "assets/SUN.TIM")
 	wallTIM   = disc.Register("ASSETS/WALL.TIM", "assets/WALL.TIM")
 )
 
@@ -37,5 +39,7 @@ var files = []*disc.File{
 	&meadowDAT,
 	&npcTIM,
 	&roofTIM,
+	&skyTIM,
+	&sunTIM,
 	&wallTIM,
 }

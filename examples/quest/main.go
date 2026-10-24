@@ -31,6 +31,11 @@
 // far side leads to the room inside it, where the villager lives, with a
 // bed along the wall.
 //
+// Outdoors the sky (sky.go) fills the screen behind the ground: a
+// gradient from the room's two sky colors, a backdrop of clouds and hills
+// that turns with the camera as anything far away would, the clouds
+// drifting, and a sun at a fixed point of the turn.
+//
 // Hero (hero.go) is a sprite, placed each frame where their
 // feet project to on the screen and sorted at that depth, a little in
 // front of the floor under them. The sprite sheet has a column of frames
@@ -75,9 +80,10 @@ package main
 // memory: the display buffers take x 0-319; the floor, the wall, the
 // grass and the chest share the top of the texture page at x 320 (4-bit,
 // so 64 pixels is 16 units), the hero's 256x192 sheet fills most of the
-// page at x 384, the logs, the roof and the bed share the page at x 448,
-// the villager's sheet the page at x 512, and the letters start the page
-// at x 576. The CLUTs take a row each from y 480.
+// page at x 384 but for its last 64 rows, where the sky's backdrop goes,
+// the logs, the roof, the bed and the sun share the page at x 448, the
+// villager's sheet the page at x 512, and the letters start the page at x
+// 576. The CLUTs take a row each from y 480.
 //go:generate go run ./gen assets
 //go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 320,0 --clut 0,480 -o assets/FLOOR.TIM assets/floor.png
 //go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 336,0 --clut 0,481 --semi -o assets/WALL.TIM assets/wall.png
@@ -89,6 +95,8 @@ package main
 //go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 512,0 --clut 0,487 -o assets/NPC.TIM assets/npc.png
 //go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 576,0 --clut 0,488 -o assets/FONT.TIM assets/font.png
 //go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 480,0 --clut 0,489 -o assets/BED.TIM assets/bed.png
+//go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 384,192 --clut 0,490 -o assets/SKY.TIM assets/sky.png
+//go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 496,0 --clut 0,491 -o assets/SUN.TIM assets/sun.png
 //go:generate go run go.chrisrx.dev/psx/tools/mkscene -o assets/HALL.DAT scenes/hall.json
 //go:generate go run go.chrisrx.dev/psx/tools/mkscene -o assets/MEADOW.DAT scenes/meadow.json
 //go:generate go run go.chrisrx.dev/psx/tools/mkscene -o assets/HOUSE.DAT scenes/house.json
@@ -197,6 +205,7 @@ func main() {
 		set.Draw(ot, &view)
 		hero.draw(ot)
 		drawNPCs(ot)
+		sky.draw(ot, b)
 		if blank > 0 {
 			blank--
 			black.Sort(ot, 0)
@@ -207,7 +216,7 @@ func main() {
 
 // setup loads the textures and the sprite sheets into video memory,
 // keeps what the polygons name the textures by, cuts the sprites, sets up
-// the text box, and sets the projection.
+// the sky and the text box, and sets the projection.
 func setup(b yaroze.RECT) {
 	floors[floorStone] = stage.NewSurface(yaroze.TIM(floorTIM.Data()).Load().Texture())
 	floors[floorGrass] = stage.NewSurface(yaroze.TIM(grassTIM.Data()).Load().Texture())
@@ -223,6 +232,7 @@ func setup(b yaroze.RECT) {
 	}
 	people.cut(yaroze.TIM(npcTIM.Data()).Load())
 	hero.cut(yaroze.TIM(heroTIM.Data()).Load())
+	sky.setup(b)
 	talk.setup(b)
 
 	yaroze.GsSetProjection(projection)
