@@ -9,7 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/png"
 	"os"
+	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -50,6 +53,7 @@ type Options struct {
 	Fast  bool        // run as fast as the host allows, showing nothing, until the first picture
 	Loads flags.Loads // files to copy into RAM, with EXE
 	Title string      // the window's title, psxplay and what it runs if empty
+	Shots string      // the directory a screenshot is written into, on F12 or SIGUSR1
 
 	// Breaks are addresses to print the registers at each time the program
 	// reaches one.
@@ -71,7 +75,9 @@ const Keys = `The keyboard is the pad in port 1, laid out as the site's player h
   Q W           L1 R1          1 2        L2 R2
 
 A gamepad with a standard layout works as itself. F11 toggles full screen
-and Escape leaves it.`
+and Escape leaves it. F12 saves the picture as a PNG, at the display's own
+size, into the directory --shots names, and so does a SIGUSR1 sent to the
+process, for a script to take one of a running window.`
 
 // AddFlags adds the flags for the window, the BIOS and the memory card to
 // fs, and with exe those for loading an executable too.
@@ -86,6 +92,7 @@ func (o *Options) AddFlags(fs *pflag.FlagSet, exe bool) {
 	fs.BoolVar(&o.Mute, "mute", false, "leave the sound off")
 	fs.BoolVar(&o.Fast, "fast-start", true, "run as fast as possible until the first picture, rather than through the BIOS's start in real time")
 	fs.Var(&o.Breaks, "break", "an address, hexadecimal with 0x: print the registers each time the program reaches it; repeatable")
+	fs.StringVar(&o.Shots, "shots", ".", "directory to write the picture into as a PNG on F12 or SIGUSR1")
 }
 
 // Command returns the psxplay command, as use.
@@ -170,7 +177,8 @@ func Run(opts Options) error {
 		title += " - " + opts.EXE
 	}
 
-	g := &game{machine: m, fast: opts.Fast, patches: opts.Patches}
+	g := &game{machine: m, fast: opts.Fast, patches: opts.Patches, shots: opts.Shots}
+	watchShots(&g.shot)
 	if !opts.Mute {
 		g.sound = newSoundBuffer()
 		player, err := audio.NewContext(sampleRate).NewPlayer(g.sound)
@@ -229,6 +237,43 @@ type game struct {
 
 	// patches delivers hot reload patches, applied as they arrive.
 	patches <-chan *hot.Patch
+
+	// shots is where a screenshot goes, and shot is set, from the signal's
+	// goroutine, when one is asked for; the next tick takes it.
+	shots string
+	shot  atomic.Bool
+	// flash is the ticks left of the brighter picture shown after a
+	// screenshot, so that a press of F12 is seen to have done something.
+	flash int
+}
+
+// flashTicks is how long the flash lasts: three ticks is a twentieth of a
+// second, a blink.
+const flashTicks = 3
+
+// saveShot writes the frame as a PNG into the shots directory, under the
+// first free number, and says where.
+func (g *game) saveShot() {
+	if g.frame == nil {
+		return
+	}
+	for n := 1; ; n++ {
+		path := filepath.Join(g.shots, fmt.Sprintf("shot-%04d.png", n))
+		if _, err := os.Stat(path); err == nil {
+			continue
+		}
+		f, err := os.Create(path)
+		if err == nil {
+			err = errors.Join(png.Encode(f, g.frame), f.Close())
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "screenshot:", err)
+			return
+		}
+		fmt.Println("screenshot:", path)
+		g.flash = flashTicks
+		return
+	}
 }
 
 // takePatch applies a patch that has arrived, if one has.
@@ -390,6 +435,9 @@ func (g *game) Update() error {
 		}
 	}
 	g.frame = g.machine.DisplayInto(g.frame)
+	if inpututil.IsKeyJustPressed(ebiten.KeyF12) || g.shot.Swap(false) {
+		g.saveShot()
+	}
 	return nil
 }
 
@@ -454,6 +502,13 @@ func (g *game) Draw(screen *ebiten.Image) {
 	op.GeoM.Translate((sw-pw)/2, (sh-ph)/2)
 	op.Filter = ebiten.FilterLinear
 	screen.DrawImage(g.image, &op)
+	if g.flash > 0 {
+		// Drawn over itself added, the picture is twice as bright: the
+		// flash after a screenshot.
+		g.flash--
+		op.Blend = ebiten.BlendLighter
+		screen.DrawImage(g.image, &op)
+	}
 }
 
 // Layout is never called, since LayoutF is there, but the Game interface

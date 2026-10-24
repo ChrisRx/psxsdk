@@ -21,7 +21,7 @@ The keyboard is laid out as the player has it:
 | 1, 2 | L2, R2 |
 | Enter, Backspace | Start, Select |
 
-A gamepad with a standard layout works as itself, with the left stick doubling as the d-pad. F11 toggles full screen and Escape leaves it.
+A gamepad with a standard layout works as itself, with the left stick doubling as the d-pad. F11 toggles full screen and Escape leaves it. F12 saves the picture as a PNG at the display's own size, `shot-0001.png` and so on under the first free number, into the directory `--shots` names, the current one by default; sending the process SIGUSR1 saves one the same way, so that a script can take a picture of a running window: `kill -USR1 $(pgrep -f 'yaroze run')`. The picture flashes brighter for a moment, and the path written is printed on standard output.
 
 [`yaroze run`](yaroze.md) builds a program onto a disc and runs it in the same window, with the same flags: `yaroze run --mute ./examples/check`. In the repository, `task play NAME=check` does that for an example, with flags after `--` passed on: `task play NAME=check -- --mute`.
 
