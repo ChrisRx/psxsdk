@@ -245,11 +245,11 @@
             inherit system;
             inherit crossSystem;
           };
-          # psxplay opens its window and plays its sound through libraries
+          # yaroze run opens its window and plays its sound through libraries
           # it loads at run time rather than links against: X11 and OpenGL
           # for the window, ALSA for the sound. They go on the loader's
           # path, since nothing is compiled against them.
-          psxplayLibs = with pkgs; [
+          windowLibs = with pkgs; [
             libx11
             libxcursor
             libxext
@@ -275,7 +275,7 @@
               pkgs.gh
             ];
             shellHook = ''
-              export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath psxplayLibs}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+              export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath windowLibs}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
             '';
           };
 

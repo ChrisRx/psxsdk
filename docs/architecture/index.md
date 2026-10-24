@@ -20,7 +20,7 @@ check.bin + check.cue
         |
         +--------------------------+--------------------------+-----------------------------+
         v                          v                          v                             v
-emu (go test, emutest)    web (WebAssembly, Pages)    yaroze run, psxplay (a window)    real hardware / psxe
+emu (go test, emutest)    web (WebAssembly, Pages)        yaroze run (a window)         real hardware / psxe
 ```
 
 [`yaroze`](../tools/yaroze.md) runs all of it, from the package to the disc, in one step, and `yaroze run` plays the disc in a window as well. Each step is also a tool of its own, named on its right, for a build that wants only one of them.

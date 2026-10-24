@@ -10,6 +10,7 @@ description: Build a Go program for the Net Yaroze into a PSX-EXE or a disc imag
 yaroze build ./mygame      # mygame.exe
 yaroze disc ./mygame       # mygame.bin and mygame.cue
 yaroze run ./mygame        # the disc, played in a window
+yaroze run mygame.cue      # a disc as it is, played in a window
 ```
 
 A build runs the steps that are tools of their own here. TinyGo compiles the package for the `playstation-yaroze` target. The trap instructions LLVM leaves in that an R3000A cannot run are replaced with nops, as [`mips1fix`](mips1fix.md) does. The ELF becomes a PSX-EXE with the Net Yaroze library combined in, as [`eco2exe`](eco2exe.md) does. For a disc, the executable goes on as `MAIN.EXE` with a `SYSTEM.CNF` naming it, together with the files the program registers with package [`disc`](../guide/writing-programs.md), as [`mkdisc`](mkdisc.md) does. Only the first step is outside `yaroze`.
@@ -35,12 +36,34 @@ or on its own with `go install go.chrisrx.dev/psx/cmd/yaroze@latest`.
 
 - **`yaroze build [package]`** writes the PSX-EXE, named after the package's directory unless `-o` names it. A name ending in `.elf` writes the ELF TinyGo linked instead, with the traps replaced, which has the symbols an emulator's debugger wants.
 - **`yaroze disc [package]`** writes the disc image, a `.bin` with its `.cue` beside it. `--elf` keeps the ELF too, `--file DISC=HOST` places more files, `--audio` adds CD audio tracks, and `-v` lists what went where.
-- **`yaroze run [package]`** builds the disc in a temporary directory and plays it in a window, booting the OpenBIOS built in. It is [`psxplay`](psxplay.md), inside `yaroze`, with its keys and its flags: `--bios` boots another BIOS, `--card` attaches a memory card image, `--scale` sizes the window, `--mute` leaves the sound off, `--shots` names the directory F12 or a SIGUSR1 saves the picture into as a PNG, and `--fast-start=false` plays the start in real time rather than running it as fast as it goes until the first picture. The window loads X11, OpenGL and the sound library at run time, so `yaroze` still builds with nothing but Go. With `--hot`, the program is built to take patches, and each save of the package's Go files while it runs builds one and loads it into the running program between frames: the main package's functions are replaced and its variables keep their values, so a change to the frame loop shows in about a second without the boot. A changed constant comes with the functions, and a variable the program has never written takes a changed initial value, while one it has written, a score say, keeps its state. A change that a patch cannot carry, to a variable's type or size, to a type's layout or to another package, is reported on standard error, and the program has to be started again.
+- **`yaroze run [package | disc.cue]`** builds the disc in a temporary directory and plays it in [a window](#the-window), booting the OpenBIOS built in. Given a cue sheet, it plays that disc as it is, with nothing built. `--exe prog.exe` runs a PSX-EXE instead, loaded when the BIOS reaches its shell as `psxemu --exe` does, with `--load file@addr` putting files in memory beside it as siocons' `local dload` did. With `--hot`, the program is built to take patches, and each save of the package's Go files while it runs builds one and loads it into the running program between frames: the main package's functions are replaced and its variables keep their values, so a change to the frame loop shows in about a second without the boot. A changed constant comes with the functions, and a variable the program has never written takes a changed initial value, while one it has written, a score say, keeps its state. A change that a patch cannot carry, to a variable's type or size, to a type's layout or to another package, is reported on standard error, and the program has to be started again.
 - **`yaroze patch --base prog.elf [package]`** builds such a patch by hand, for the program whose ELF `--base` names, built with `--hot` and kept with `--elf`, linked at `--at` inside the program's region, which an emulator loads with the `hot` package. It is what `run --hot` does on each save.
 - **`yaroze generate`** is [`discgen`](discgen.md), and **`yaroze iso`** is [`mkdisc`](mkdisc.md) with every flag, for a disc laid out by hand.
 - **`yaroze env`** says how a build would run the compiler, and where it is.
 
 Every command that compiles takes `--opt`, TinyGo's optimization level, 2 by default since a frame has a budget, `--tags`, `--load file@addr` to put a file into the executable as siocons' `local dload` did, `--hot` to build a program that takes patches, which calls the main package's functions through a slot each and reserves 256KB for the patches, and `-v`, which says how the compiler ran and how long each step took.
+
+## The window
+
+`yaroze run` plays in a window, with the keyboard or a gamepad as the pad in port 1 and the SPU's sound on the speakers. It is the desktop counterpart of the player on the [examples](../examples/index.md) pages of this site, which runs the same emulator in a browser.
+
+OpenBIOS is built in, so no BIOS image is needed, and `--bios` boots another, such as Sony's. `--card` attaches a memory card image to slot 1 and writes it back on exit, `--scale` sets the window's initial size as a multiple of 320x240, and `--mute` leaves the sound off. The BIOS's start and a program's loading, a few seconds of black screen, run as fast as the host allows, with no picture or sound, until the display first shows something, and in real time from then on. `--fast-start=false` runs them in real time too. What the program prints goes to standard output. `--break 0x80012345` prints the frame and the argument, return address and stack registers each time the program reaches an address, which `go tool nm` on the program's ELF gives for a function. It can be given more than once.
+
+The keyboard is laid out as the player has it:
+
+| Keys | Pad |
+| --- | --- |
+| Arrows | D-pad |
+| Z, X, A, S | Cross, circle, square, triangle |
+| Q, W | L1, R1 |
+| 1, 2 | L2, R2 |
+| Enter, Backspace | Start, Select |
+
+A gamepad with a standard layout works as itself, with the left stick doubling as the d-pad. F11 toggles full screen and Escape leaves it. F12 saves the picture as a PNG at the display's own size, `shot-0001.png` and so on under the first free number, into the directory `--shots` names, the current one by default. Sending the process SIGUSR1 saves one the same way, so that a script can take a picture of a running window: `kill -USR1 $(pgrep -f 'yaroze run')`. The picture flashes brighter for a moment, and the path written is printed on standard output.
+
+In the repository, `task play NAME=check` builds an example and plays it, with flags after `--` passed on: `task play NAME=check -- --mute`.
+
+The window is drawn with [Ebitengine](https://ebitengine.org), which loads X11, OpenGL and ALSA at run time rather than linking against them, so `yaroze` still builds with nothing but Go. On Linux the libraries must be on the loader's path to run it, which the Nix development shell does.
 
 ## The compiler
 

@@ -9,7 +9,7 @@ order: yaroze
 
 | Tool | Purpose |
 | --- | --- |
-| [yaroze](yaroze.md) | Build a Go program into a PSX-EXE or a disc image in one step, with the tinygo command or TinyGo compiled to WebAssembly |
+| [yaroze](yaroze.md) | Build a Go program into a PSX-EXE or a disc image in one step, with TinyGo compiled to WebAssembly, and play a disc in a window |
 | [eco2exe](eco2exe.md) | Combine a Net Yaroze program with `libps` into a bootable PSX-EXE |
 | [elf2exe](elf2exe.md) | Write a standalone ELF or ECOFF program as a PSX-EXE |
 | [mips1fix](mips1fix.md) | Replace the MIPS II traps LLVM emits with nops so the code runs on an R3000A |
@@ -27,7 +27,6 @@ order: yaroze
 | [mkarc](mkarc.md) | Pack files into one archive for the disc, with deflate, which package archive unpacks piece by piece |
 | [hdr2go](hdr2go.md) | Generate layout-checked Go bindings from a C header |
 | [psxemu](psxemu.md) | Run the emulator headless, with traces, VRAM dumps and screenshots, or drive a program with scripted presses, watched and poked memory, and a profile |
-| [psxplay](psxplay.md) | Run the emulator in a window, booting the built-in OpenBIOS, with the keyboard or a gamepad as the pad |
 | [psxtrace](psxtrace.md) | Print and diff instruction traces, compare VRAM dumps |
 | [sioload](sioload.md) | Upload an executable to a Net Yaroze over the serial cable |
 | [ecoffdump](ecoffdump.md) | Display ECOFF object files, with disassembly |

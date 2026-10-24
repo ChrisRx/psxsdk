@@ -57,7 +57,7 @@ func (f *buildFlags) register(cmd *cobra.Command) {
 	runtimeFlag(fl, &f.runtime)
 	fl.StringVar(&f.opt, "opt", "", "TinyGo's optimization level: 0, 1, 2, s or z; 2 if not given, for speed, since a frame has a budget, unless the WebAssembly compiler's cache holds only another")
 	fl.StringSliceVar(&f.tags, "tags", nil, "extra build tags")
-	fl.Var(&f.loads, "load", "file@addr: put a file into the executable at a hexadecimal address, as siocons' local dload did; may be repeated")
+	fl.Var(&f.loads, "load", "file@addr: put a file into the executable at a hexadecimal address, or with run --exe into memory there, as siocons' local dload did; may be repeated")
 	fl.BoolVarP(&f.verbose, "verbose", "v", false, "say which compiler runs, and how long each step takes")
 	fl.BoolVar(&f.hot, "hot", false, "build a program that can take patches from the patch command while it runs: its main package's functions are called through slots, which costs a little speed, and 256KB is reserved for the patches")
 }

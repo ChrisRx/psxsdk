@@ -1,6 +1,6 @@
 // Package psxplay runs the emulator in a window, with the keyboard or a
 // gamepad as the pad in port 1 and the SPU's sound on the speakers. It is
-// the psxplay command, and what yaroze run runs a disc in, and the desktop
+// what yaroze run plays a disc or an executable in, and the desktop
 // counterpart of the player on the site, which runs the same emulator in a
 // browser.
 package psxplay
@@ -18,7 +18,6 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/audio"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
-	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
 	"go.chrisrx.dev/psx/emu"
@@ -52,7 +51,7 @@ type Options struct {
 	Mute  bool        // leave the sound off
 	Fast  bool        // run as fast as the host allows, showing nothing, until the first picture
 	Loads flags.Loads // files to copy into RAM, with EXE
-	Title string      // the window's title, psxplay and what it runs if empty
+	Title string      // the window's title, yaroze and what it runs if empty
 	Shots string      // the directory a screenshot is written into, on F12 or SIGUSR1
 
 	// Breaks are addresses to print the registers at each time the program
@@ -79,45 +78,18 @@ and Escape leaves it. F12 saves the picture as a PNG, at the display's own
 size, into the directory --shots names, and so does a SIGUSR1 sent to the
 process, for a script to take one of a running window.`
 
-// AddFlags adds the flags for the window, the BIOS and the memory card to
-// fs, and with exe those for loading an executable too.
-func (o *Options) AddFlags(fs *pflag.FlagSet, exe bool) {
+// AddFlags adds the flags for the window, the BIOS, the memory card and an
+// executable to load to fs. The files to load with the executable, Loads,
+// are the caller's to fill.
+func (o *Options) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&o.BIOS, "bios", "", "BIOS image to boot instead of the OpenBIOS built in")
-	if exe {
-		fs.StringVar(&o.EXE, "exe", "", "PSX-EXE to load when the BIOS reaches its shell, as psxe -x does")
-		fs.Var(&o.Loads, "load", "file@addr: copy a file into RAM at a hexadecimal address, with --exe, as siocons' local dload did")
-	}
+	fs.StringVar(&o.EXE, "exe", "", "PSX-EXE to load when the BIOS reaches its shell, as psxe -x does, in place of building a package")
 	fs.StringVar(&o.Card, "card", "", "memory card image for slot 1, made blank if it does not exist, and written back on exit")
 	fs.IntVar(&o.Scale, "scale", 2, "the window's initial size, as a multiple of 320x240")
 	fs.BoolVar(&o.Mute, "mute", false, "leave the sound off")
 	fs.BoolVar(&o.Fast, "fast-start", true, "run as fast as possible until the first picture, rather than through the BIOS's start in real time")
 	fs.Var(&o.Breaks, "break", "an address, hexadecimal with 0x: print the registers each time the program reaches it; repeatable")
 	fs.StringVar(&o.Shots, "shots", ".", "directory to write the picture into as a PNG on F12 or SIGUSR1")
-}
-
-// Command returns the psxplay command, as use.
-func Command(use string) *cobra.Command {
-	var opts Options
-	cmd := &cobra.Command{
-		Use:   use + " [flags] [disc.cue]",
-		Short: "run the emulator in a window",
-		Long: use + ` boots OpenBIOS, or the BIOS given with --bios, in a window, with
-the disc whose cue sheet is given in the drive, or with --exe loaded when
-the BIOS reaches its shell. What the BIOS prints to the TTY goes to
-standard output.
-
-` + Keys,
-		Args:         cobra.MaximumNArgs(1),
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 1 {
-				opts.Disc = args[0]
-			}
-			return Run(opts)
-		},
-	}
-	opts.AddFlags(cmd.Flags(), true)
-	return cmd
 }
 
 // Run runs the machine in a window until the window is closed.
@@ -142,7 +114,7 @@ func Run(opts Options) error {
 		})
 	}
 
-	title := "psxplay"
+	title := "yaroze"
 	if opts.Disc != "" {
 		d, err := emu.OpenDisc(opts.Disc)
 		if err != nil {

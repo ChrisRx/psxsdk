@@ -5,7 +5,7 @@ weight: 2
 
 - [Nocash PSX Specification](https://problemkaputt.de/psx-spx.htm) - comprehensive PSX hardware information
 - [psxe](https://github.com/allkern/psxe) - the emulator `emu` was rewritten from, and is traced against
-- [OpenBIOS](https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios) - the open source BIOS the browser demo, psxplay and the tests boot, kept in `emu/openbios`
+- [OpenBIOS](https://github.com/grumpycoders/pcsx-redux/tree/main/src/mips/openbios) - the open source BIOS the browser demo, `yaroze run` and the tests boot, kept in `emu/openbios`
 - [mipsel-ecoff-toolchain](https://github.com/ChrisRx/mipsel-ecoff-toolchain) - a compiler toolchain for Net Yaroze development on Linux
 - [gwald/netyaroze_demo](https://github.com/gwald/netyaroze_demo) - Net Yaroze demo sources the examples are ported from
 - [psxdev.net](http://www.psxdev.net) - a helpful and active PlayStation 1 development community
