@@ -164,6 +164,209 @@ func TestDogTaleScreenshot(t *testing.T) {
 	m.Golden("dogtale.png")
 }
 
+// The camera's quarters look along the rooms' diagonals, so a pair of
+// directions walks the hero straight along a room's axis: before the
+// camera has turned, up and left is +Z, the far wall, up and right +X,
+// down and right -Z and down and left -X, and each quarter turn of the
+// camera moves them round a pair.
+
+// questState is where the quest example's state the tests read lies: the
+// hero's room, position, height and facing are the first words of
+// main.nora, the camera's quarter the first of main.cam, and the text
+// box's up flag and line the first of main.talk.
+type questSyms struct {
+	cur, px, pz, py, facing, camDir, talking, talkLine uint32
+}
+
+func questState(m *emutest.Machine) questSyms {
+	n, talk := m.Sym("main.nora"), m.Sym("main.talk")
+	return questSyms{cur: n, px: n + 4, pz: n + 8, py: n + 12, facing: n + 16, camDir: m.Sym("main.cam"), talking: talk, talkLine: talk + 4}
+}
+
+// TestQuestScreenshot starts Nora in the middle of the hall, walks them
+// up into its far wall, which stops them at the wall's margin, and right
+// along it until the chest stops them, for the first picture; then L1
+// eight times turns the camera all the way round.
+func TestQuestScreenshot(t *testing.T) {
+	m := bootExample(t, "quest")
+	m.RunUntilCount("main.screen", 60, frameBudget)
+	// The count is reached in the middle of a frame, after its controller
+	// read; a frame on, a hold is seen from its first frame.
+	m.RunFrames(1)
+	j := questState(m)
+	assert.Equal(t, uint32(0), m.Read32(j.cur), "Nora should start in the hall")
+	assert.Equal(t, uint32(0), m.Read32(j.px), "in its middle")
+	assert.Equal(t, uint32(0), m.Read32(j.pz), "in its middle")
+
+	// The hall is 17 by 13 cells of 64, so its floor reaches z 352, and
+	// the hero's footprint of 14 either way stops them at 336, in steps
+	// of 3.
+	m.Hold(1, emu.ButtonUp|emu.ButtonLeft, 150)
+	assert.Equal(t, uint32(0), m.Read32(j.px), "walking to +Z before the camera has turned should not move the hero across")
+	assert.Equal(t, uint32(336<<4), m.Read32(j.pz), "the hero should have stopped at the far wall")
+	assert.Equal(t, uint32(0), m.Read32(j.facing), "the hero should face away from the camera")
+	assert.Equal(t, uint32(0), m.Read32(j.py), "the hall is flat")
+
+	// The chest is at x 384, z 320, its box 20 either side across and 14
+	// deep, so along the wall the footprint's 14 stops Nora at x 348.
+	m.Hold(1, emu.ButtonUp|emu.ButtonRight, 130)
+	assert.Equal(t, int32(348<<4), int32(m.Read32(j.px)), "the chest should stop Nora")
+	assert.Equal(t, uint32(2), m.Read32(j.facing), "Nora should face along the wall")
+	m.Golden("quest.png")
+
+	// The camera starts at its second step, along the room's diagonals;
+	// eight presses of L1 turn it all the way round.
+	for k := range 8 {
+		m.Hold(1, emu.ButtonL1, 2)
+		m.RunFrames(10)
+		assert.Equal(t, uint32(2+k)%8, m.Read32(j.camDir), "each press of L1 should turn the camera an eighth")
+	}
+}
+
+// TestQuestChest walks Nora to the chest in the hall's far right corner,
+// opens it with Cross, and reads what the text box says: the first three
+// lines come a letter a frame, then the box waits with its arrow, Cross
+// scrolls the last line in, and Cross closes the box, leaving the chest
+// open; opened again, it is empty.
+func TestQuestChest(t *testing.T) {
+	m := bootExample(t, "quest")
+	m.RunUntilCount("main.screen", 60, frameBudget)
+	m.RunFrames(1)
+	j := questState(m)
+
+	// The chest is in the fifteenth column, x 384, and the second row, z
+	// 320: 128 frames right reach its column and up stops Nora against
+	// the chest's box, 14 deep, the footprint's 14 short of it, at z 291.
+	m.Hold(1, emu.ButtonUp|emu.ButtonRight, 128)
+	m.Hold(1, emu.ButtonUp|emu.ButtonLeft, 120)
+	assert.Equal(t, int32(384<<4), int32(m.Read32(j.px)), "Nora should stand in the chest's column")
+	assert.Equal(t, int32(291<<4), int32(m.Read32(j.pz)), "the chest should stop Nora")
+	m.Hold(1, emu.ButtonCross, 2)
+	assert.Equal(t, uint32(1), m.Read32(j.talking)&0xff, "Cross at the chest should open it and put the text box up")
+	// The first page is 21, 25 and 23 letters, a frame each, then the box
+	// waits, the arrow showing on frames 96 to 111 of its count.
+	m.RunFrames(100)
+	assert.Equal(t, uint32(3), m.Read32(j.talkLine), "the first three lines should have been read out")
+	m.Golden("quest-chest.png")
+	m.Hold(1, emu.ButtonCross, 2)
+	m.RunFrames(30)
+	assert.Equal(t, uint32(4), m.Read32(j.talkLine), "Cross should scroll the last line in")
+	assert.Equal(t, uint32(1), m.Read32(j.talking)&0xff, "the box should wait at the end of the text")
+	m.Hold(1, emu.ButtonCross, 2)
+	assert.Equal(t, uint32(0), m.Read32(j.talking)&0xff, "Cross at the end should close the box")
+	m.RunFrames(10)
+	m.Golden("quest-chest-open.png")
+	m.Hold(1, emu.ButtonCross, 2)
+	m.RunFrames(25)
+	assert.Equal(t, uint32(1), m.Read32(j.talking)&0xff, "Cross at the opened chest should say it is empty")
+	assert.Equal(t, uint32(1), m.Read32(j.talkLine), "the empty chest's line is one line")
+}
+
+// TestQuestMeadow walks Nora straight down out of the hall's doorway,
+// below where they start, into the meadow, just inside the doorway in its
+// far side, still walking down, for a picture of the grass and the
+// house; then down to the villager's row and right until the villager
+// stops them, and has the villager say their line.
+func TestQuestMeadow(t *testing.T) {
+	m := bootExample(t, "quest")
+	m.RunUntilCount("main.screen", 60, frameBudget)
+	m.RunFrames(1)
+	j := questState(m)
+
+	// The hall's floor reaches z -352, so the doorway is entered on the
+	// 118th frame down, and Nora lands in the meadow's sixteenth column,
+	// second row, z 704, where they stand through the black frames.
+	m.Hold(1, emu.ButtonDown|emu.ButtonRight, 125)
+	assert.Equal(t, uint32(1), m.Read32(j.cur), "the hall's doorway should lead to the meadow")
+	assert.Equal(t, uint32(0), m.Read32(j.px), "Nora should stand in the doorway's column")
+	assert.Equal(t, int32(704<<4), int32(m.Read32(j.pz)), "Nora should stand in the cell inside the meadow's doorway")
+	assert.Equal(t, uint32(4), m.Read32(j.facing), "Nora should face into the meadow")
+	m.RunFrames(20)
+	m.Golden("quest-meadow.png")
+
+	// The villager stands at x 256, z 0: 234 frames down is z 2, their
+	// row, and right stops Nora a footprint either side short of them,
+	// at x 228, facing them, close enough to speak to.
+	m.Hold(1, emu.ButtonDown|emu.ButtonRight, 234)
+	assert.Equal(t, int32(2<<4), int32(m.Read32(j.pz)), "Nora should stand in the villager's row")
+	m.Hold(1, emu.ButtonUp|emu.ButtonRight, 100)
+	assert.Equal(t, int32(228<<4), int32(m.Read32(j.px)), "the villager should stop Nora")
+	assert.Equal(t, uint32(2), m.Read32(j.facing), "Nora should face the villager")
+	m.Hold(1, emu.ButtonCross, 2)
+	assert.Equal(t, uint32(1), m.Read32(j.talking)&0xff, "Cross facing the villager should put their line up")
+	m.RunFrames(80)
+	m.Golden("quest-villager.png")
+}
+
+// TestQuestLive plays the playground's part: it asks the program to put
+// Nora on a cell through the scene package's live hook, as Play from
+// here does, and writes a hall with a wall painted beside her over the
+// file the program loaded, as the Room panel does, which the program
+// places again, so that the wall stops her.
+func TestQuestLive(t *testing.T) {
+	m := bootExample(t, "quest")
+	m.RunUntilCount("main.screen", 60, frameBudget)
+	m.RunFrames(1)
+	j := questState(m)
+	live := m.Sym("go.chrisrx.dev/psx/scene.live")
+	ptr, words := m.Read32(live), m.Read32(live+4)
+	assert.Equal(t, true, ptr != 0 && words > 0, "the hall's file should be the live scene")
+	name := make([]byte, 0, 32)
+	for k := uint32(0); k < 32; k += 4 {
+		name = binary.LittleEndian.AppendUint32(name, m.Read32(live+16+k))
+	}
+	assert.Equal(t, "ASSETS/HALL.DAT", string(bytes.TrimRight(name, "\x00")), "the scene should know its file")
+
+	// Play from here: cell 2, 2 of the hall.
+	m.Bus.Write32(live+48, 2|2<<16)
+	m.Bus.Write32(live+52, 1)
+	m.RunFrames(2)
+	assert.Equal(t, int32(-384<<4), int32(m.Read32(j.px)), "Nora should stand on cell 2, 2")
+	assert.Equal(t, uint32(256<<4), m.Read32(j.pz))
+	assert.Equal(t, uint32(0), m.Read32(live+52), "the request should be taken once")
+
+	// A wall painted on the cell to her right, written over the file.
+	b, err := os.ReadFile("../examples/quest/assets/HALL.DAT")
+	assert.NoError(t, err)
+	sc, err := scene.Decode(b)
+	assert.NoError(t, err)
+	row := []byte(sc.Room.Cells[2])
+	row[3] = '#'
+	sc.Room.Cells[2] = string(row)
+	nb, err := sc.Bytes()
+	assert.NoError(t, err)
+	assert.Equal(t, true, len(nb) <= int(words)*4, "the room should fit the memory it was loaded into")
+	for k := 0; k+4 <= len(nb); k += 4 {
+		m.Bus.Write32(ptr+uint32(k), binary.LittleEndian.Uint32(nb[k:]))
+	}
+	m.Bus.Write32(live+8, 1)
+	m.RunFrames(2)
+	assert.Equal(t, uint32(0), m.Read32(live+8), "the file should have been read again")
+	m.Hold(1, emu.ButtonUp|emu.ButtonRight, 30)
+	assert.Equal(t, int32(-369<<4), int32(m.Read32(j.px)), "the new wall should stop Nora at its edge")
+	m.Golden("quest-live.png")
+
+	// Play from here in the other room: the meadow's cell 4, 5, named
+	// after the cell and the flag.
+	want := []byte("ASSETS/MEADOW.DAT")
+	for k := 0; k < 32; k += 4 {
+		var w [4]byte
+		copy(w[:], want[min(k, len(want)):])
+		m.Bus.Write32(live+56+uint32(k), binary.LittleEndian.Uint32(w[:]))
+	}
+	m.Bus.Write32(live+48, 4|5<<16)
+	m.Bus.Write32(live+52, 1)
+	m.RunFrames(20)
+	assert.Equal(t, uint32(1), m.Read32(j.cur), "Nora should be in the meadow")
+	assert.Equal(t, int32(-704<<4), int32(m.Read32(j.px)), "on cell 4, 5")
+	assert.Equal(t, int32(448<<4), int32(m.Read32(j.pz)))
+	name = name[:0]
+	for k := uint32(0); k < 32; k += 4 {
+		name = binary.LittleEndian.AppendUint32(name, m.Read32(live+16+k))
+	}
+	assert.Equal(t, "ASSETS/MEADOW.DAT", string(bytes.TrimRight(name, "\x00")), "the live scene should be the meadow")
+}
+
 // TestSceneScreenshot checks the three cubes a scene file places, under
 // its camera and light, with the sprite in the corner, after the middle
 // cube has turned by the screen's count and been turned further to the
