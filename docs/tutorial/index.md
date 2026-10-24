@@ -8,7 +8,7 @@ description: Writing a PlayStation program in Go from nothing: a project of your
 
 The tutorial writes a PlayStation program in Go from nothing, outside this repository, the way a program of your own would be written. It assumes Go and nothing about the PlayStation. Where the machine's way of doing things differs from what a modern one would do, the page says why, because most of what looks strange about writing for it stops being strange once the reason is known.
 
-The program it writes is the [square](../examples/square.md) example, the one the [playground](/play/) starts from: a box moved around the screen with the controller, in front of a textured cube turning in 3D, to music, with the cube and the music read off the disc while the frames go on. It is small, but it has the parts nearly every program needs, and each page adds one of them.
+The program it writes is the [square](../examples/square.md) example: a box moved around the screen with the controller, in front of a textured cube turning in 3D, to music, with the cube and the music read off the disc while the frames go on. It is small, but it has the parts nearly every program needs, and each page adds one of them.
 
 <!-- player square -->
 

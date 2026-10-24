@@ -25,12 +25,13 @@
 //   - to anything else in the repository, by its path from the root there:
 //     "examples/check", the same on every page
 //
-// The playground starts a project from one of the examples, square or
-// scene, whose sources are copied under play/starters and listed in
-// play/starters.json, so that the program a newcomer first sees is one that
-// builds as an example does and cannot drift from the package; the list
-// names each example, for the playground to add its data files from the
-// example's beside it.
+// The playground starts a project from one of the examples, jumpcube or
+// quest, whose sources are copied under play/starters and listed in
+// play/starters.json, so that the program a newcomer first sees is one
+// that builds as an example does and cannot drift from the package; the
+// list names each example, for the playground to add its data files from
+// the example's beside it, says what it is, from its package comment, and
+// shows it with the picture the tests take of it, from -goldens.
 //
 // task site runs it after building the examples' discs and the emulator,
 // then puts those under play/ beside the player.
@@ -83,6 +84,7 @@ var opts = struct {
 	Examples string
 	Static   string
 	Starters string
+	Goldens  string
 	API      string
 	Out      string
 	Repo     string
@@ -91,8 +93,9 @@ var opts = struct {
 	Docs:     "docs",
 	Examples: "examples",
 	Static:   "web/static",
-	Starters: "square,scene",
-	API:      "yaroze,scene,disc,archive",
+	Starters: "jumpcube,quest",
+	Goldens:  "tests/testdata",
+	API:      "yaroze,scene,stage,disc,archive",
 	Out:      ".build/site",
 	Repo:     "https://github.com/ChrisRx/psxsdk",
 	Name:     "psxsdk",
@@ -103,6 +106,7 @@ func main() {
 	flag.StringVar(&opts.Examples, "examples", opts.Examples, "directory of example programs, one page each")
 	flag.StringVar(&opts.Static, "static", opts.Static, "the playground and the player, copied under play/")
 	flag.StringVar(&opts.Starters, "starters", opts.Starters, "the examples the playground starts a project from, copied under play/starters")
+	flag.StringVar(&opts.Goldens, "goldens", opts.Goldens, "directory of the examples' screenshots, NAME.png, which the playground shows its starters by")
 	flag.StringVar(&opts.API, "api", opts.API, "packages whose exported names the playground completes and explains, written to play/api.json")
 	flag.StringVar(&opts.Out, "out", opts.Out, "directory to write the site into")
 	flag.StringVar(&opts.Repo, "repo", opts.Repo, "repository that paths in links refer to")
@@ -117,7 +121,7 @@ func main() {
 		log.Fatal(err)
 	}
 	if opts.Static != "" && opts.Starters != "" {
-		if err := writeStarters(opts.Examples, strings.Split(opts.Starters, ","), filepath.Join(opts.Out, "play")); err != nil {
+		if err := writeStarters(opts.Examples, opts.Goldens, strings.Split(opts.Starters, ","), filepath.Join(opts.Out, "play")); err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -851,18 +855,22 @@ func headingText(h *comment.Heading) string {
 }
 
 // A Starter is an example the playground starts a project from: its name,
-// whose data the site publishes under play/examples, and its files, by the
-// path each takes in the project, as copied under play/starters.
+// whose data the site publishes under play/examples, what it is, the first
+// paragraph of its package comment, the picture the tests take of it when
+// there is one, and its files, by the path each takes in the project, as
+// copied under play/starters.
 type Starter struct {
-	Name  string            `json:"name"`
-	Files map[string]string `json:"files"`
+	Name        string            `json:"name"`
+	Description string            `json:"description,omitempty"`
+	Picture     string            `json:"picture,omitempty"`
+	Files       map[string]string `json:"files"`
 }
 
-// writeStarters copies each named example's main.go, its scenes under
-// scenes/, the sources under its assets/ directory and the files under its
-// pack/ directories, under play/starters, and writes play/starters.json
-// listing them.
-func writeStarters(examples string, names []string, play string) error {
+// writeStarters copies each named example's Go files, its scenes under
+// scenes/, the sources under its assets/ directory, the files under its
+// pack/ directories and its screenshot in goldens, under play/starters,
+// and writes play/starters.json listing them.
+func writeStarters(examples, goldens string, names []string, play string) error {
 	dir := filepath.Join(play, "starters")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -870,7 +878,26 @@ func writeStarters(examples string, names []string, play string) error {
 	var starters []Starter
 	for _, name := range names {
 		st := Starter{Name: name, Files: map[string]string{}}
+		if p, err := new(Site).examplePage(name, filepath.Join(examples, name, "main.go")); err == nil {
+			st.Description = p.Description
+		}
+		if goldens != "" {
+			if pic := filepath.Join(goldens, name+".png"); exists(pic) {
+				if err := copyFile(pic, filepath.Join(dir, name+".png")); err != nil {
+					return err
+				}
+				st.Picture = "starters/" + name + ".png"
+			}
+		}
 		files := []struct{ src, dst string }{{"main.go", name + ".go.txt"}}
+		// The example's other Go files, a program of several files.
+		if entries, err := os.ReadDir(filepath.Join(examples, name)); err == nil {
+			for _, e := range entries {
+				if n := e.Name(); !e.IsDir() && n != "main.go" && strings.HasSuffix(n, ".go") && !strings.HasSuffix(n, "_test.go") {
+					files = append(files, struct{ src, dst string }{n, name + "." + n + ".txt"})
+				}
+			}
+		}
 		for _, dir := range []string{"scenes", "assets"} {
 			entries, err := os.ReadDir(filepath.Join(examples, name, dir))
 			if err != nil {

@@ -11,7 +11,7 @@ It is meant for `go:generate`, in the program's package:
 //go:generate go run go.chrisrx.dev/psx/tools/discgen assets
 ```
 
-The [playground](/play/) runs it too, before each build, for a program with that line, over the data files beside it, so a program there names its files without declaring them; the square example, which the playground starts from, does.
+The [playground](/play/) runs it too, before each build, for a program with that line, over the data files beside it, so a program there names its files without declaring them, as the examples a project there starts from, jumpcube and quest, do.
 
 The sources the converters read lie in the same directory and are left off the disc: pictures, models, sounds and scores by their extension, and any file a `go:generate` line of the package reads.
 

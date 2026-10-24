@@ -176,6 +176,9 @@ tasks:
       - 'web/site/**/*'
       - 'web/static/**/*'
       - 'yaroze/**/*.go'
+      # The starters' pictures, the screenshots the tests keep.
+      - 'tests/testdata/jumpcube.png'
+      - 'tests/testdata/quest.png'
     generates:
       - .build/site/index.html
       - .build/site/play/index.html

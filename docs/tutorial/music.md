@@ -44,6 +44,6 @@ That is all of the square:
 
 ## Where to go next
 
-- The [playground](/play/) starts from this program and builds it in the browser, so it can be changed and run without installing anything.
+- The [playground](/play/) builds a program like this one in the browser, so it can be changed and run without installing anything. Its New project starts one from the [jumpcube](../examples/jumpcube.md) or the [quest](../examples/quest.md) example.
 - The [examples](../examples/index.md) do much more with each of these parts: [check](../examples/check.md) draws hundreds of sprites, [dino](../examples/dino.md) animates a model vertex by vertex with the GTE, [clone](../examples/clone.md) plays sound effects on voices of its own, and [tunnel](../examples/tunnel.md) adds fog and colored lights.
 - [Writing programs in Go](../guide/writing-programs.md) in the guide covers the `yaroze` package as a whole: the library as Go, the methods on its types, and what it leaves to the program.
