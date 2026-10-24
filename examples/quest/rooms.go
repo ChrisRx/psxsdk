@@ -31,7 +31,7 @@ type room struct {
 
 // An npc is a person standing on a cell, facing a way in eighths of a
 // turn from +Z clockwise, the marker's first field, who turns to face
-// Nora when they come near, and says their line when spoken to.
+// Hero when they come near, and says their line when spoken to.
 type npc struct {
 	name   string
 	i, j   int
@@ -39,7 +39,7 @@ type npc struct {
 	say    string
 }
 
-// A chest is a treasure chest on a cell, with what is said when Nora opens
+// A chest is a treasure chest on a cell, with what is said when Hero opens
 // it, and whether it has been opened.
 type chest struct {
 	name   string

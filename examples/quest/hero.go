@@ -5,7 +5,7 @@ import (
 	"go.chrisrx.dev/psx/yaroze"
 )
 
-// Nora, the hero: a figure drawn flat over the room, walked by the
+// Hero, the player's figure: drawn flat over the room, walked by the
 // direction buttons relative to the camera, kept to the floor and off
 // cliffs, taken through doorways, and speaking to what they face.
 const (
@@ -26,14 +26,14 @@ const (
 	// stepTime is the frames a step of the walk lasts.
 	stepTime = 8
 
-	// reach is how far in front of Nora interact looks, in units: a
-	// person or a chest within it, the way Nora faces, is spoken to.
+	// reach is how far in front of Hero interact looks, in units: a
+	// person or a chest within it, the way Hero faces, is spoken to.
 	reach = stage.Tile + margin
 )
 
-// A hero's first fields are what the tests read: the room, the position,
-// the height and the facing, a word each.
-type hero struct {
+// A player's first fields are what the tests read: the room, the
+// position, the height and the facing, a word each.
+type player struct {
 	// room is the room they are in, pos where they stand on its floor,
 	// in sixteenths of a unit from the room's middle, height the ground's
 	// height under them in units, facing the way they face, in eighths
@@ -56,7 +56,7 @@ type hero struct {
 	figure
 }
 
-var nora hero
+var hero player
 
 // screenFacing is the way the direction buttons point as eighths of a turn
 // on the screen from up clockwise, indexed by (dx+1)*3 + dy+1 as Pad.Dir
@@ -67,16 +67,16 @@ var screenFacing = [9]int{7, 6, 5, 0, -1, 4, 1, 2, 3}
 var dirs = [8]stage.Vec{{X: 0, Z: 1}, {X: 1, Z: 1}, {X: 1, Z: 0}, {X: 1, Z: -1}, {X: 0, Z: -1}, {X: -1, Z: -1}, {X: -1, Z: 0}, {X: -1, Z: 1}}
 
 // here is the room the hero is in.
-func (h *hero) here() *room { return &rooms[h.room] }
+func (h *player) here() *room { return &rooms[h.room] }
 
 // at is where the hero stands, in world units.
-func (h *hero) at() stage.Vec { return h.pos.Units() }
+func (h *player) at() stage.Vec { return h.pos.Units() }
 
 // walk moves the hero the way the direction buttons point, relative to
 // the camera's angle, turns them that way, and keeps them on the floor
 // and off cliffs: each axis is tried on its own, so a step into a wall
 // slides along it. A doorway stepped onto takes the hero through it.
-func (h *hero) walk() {
+func (h *player) walk() {
 	r := h.here()
 	dx, dy := pad.Dir()
 	f := screenFacing[(dx+1)*3+dy+1]
@@ -113,7 +113,7 @@ func (h *hero) walk() {
 // moving v sixteenths to get there: the four corners of their footprint
 // are all on floor, the ground there is within the step's climb, and
 // nobody is standing there, nor a chest.
-func (h *hero) fits(to stage.Vec, v int) bool {
+func (h *player) fits(to stage.Vec, v int) bool {
 	r := h.here()
 	if abs(set.HeightAt(to)-set.HeightAt(h.pos))*speed > maxStep*v {
 		return false
@@ -138,7 +138,7 @@ func (h *hero) fits(to stage.Vec, v int) bool {
 // digit and facing into the room, and blanks the screen for a few
 // frames. A doorway without a link, or whose room is not among rooms,
 // leads nowhere.
-func (h *hero) enter(c byte) {
+func (h *player) enter(c byte) {
 	path := world.Link(c)
 	n := -1
 	for k := range rooms {
@@ -177,7 +177,7 @@ func (h *hero) enter(c byte) {
 
 // put stands the hero on a cell of the room, facing away from the
 // camera.
-func (h *hero) put(i, j int) {
+func (h *player) put(i, j int) {
 	r := h.here()
 	h.pos = r.Middle(i, j).Sixteenths()
 	h.height = set.HeightAt(h.pos) >> 4
@@ -187,7 +187,7 @@ func (h *hero) put(i, j int) {
 // visit puts the hero on a cell of the room whose file is at path, or of
 // the room they are in when path is empty, going through a doorway's
 // black frames to another room: the playground's Play from here.
-func (h *hero) visit(path string, i, j int) {
+func (h *player) visit(path string, i, j int) {
 	if path != "" && path != h.here().file.Name {
 		n := -1
 		for k := range rooms {
@@ -211,7 +211,7 @@ func (h *hero) visit(path string, i, j int) {
 
 // project works out where the hero's feet are on the screen, and how
 // deep, before the room is drawn.
-func (h *hero) project() {
+func (h *player) project() {
 	h.otz = 0
 	if sx, sy, otz, ok := h.figure.draw(nil, h.at(), h.height, 0, 0); ok {
 		h.sx, h.sy, h.otz = sx, sy, otz
@@ -220,7 +220,7 @@ func (h *hero) project() {
 
 // draw draws the hero where they stand, facing their way, in the frame
 // of the walk they are at.
-func (h *hero) draw(ot *yaroze.GsOT) {
+func (h *player) draw(ot *yaroze.GsOT) {
 	frame := 0
 	if h.walkTick > 0 {
 		frame = (h.walkTick/stepTime + 1) & 3
@@ -233,7 +233,7 @@ func (h *hero) draw(ot *yaroze.GsOT) {
 // chest there is opened and gives up what is in it, once. The way the
 // hero faces is taken loosely, as a half-turn either side, so that
 // standing a little off to the side of something still counts.
-func (h *hero) interact() {
+func (h *player) interact() {
 	r := h.here()
 	at, dir := h.at(), dirs[h.facing]
 	ahead := func(p stage.Vec) bool {
@@ -265,11 +265,11 @@ func (h *hero) interact() {
 // drawNPCs draws the room's people, each on their cell, facing their way,
 // or the hero when the hero is within three tiles of them.
 func drawNPCs(ot *yaroze.GsOT) {
-	r := nora.here()
+	r := hero.here()
 	for k := range r.npcs {
 		n := &r.npcs[k]
 		p := r.Middle(n.i, n.j)
-		d := nora.at().Sub(p)
+		d := hero.at().Sub(p)
 		f := n.facing
 		if abs(d.X) < 3*stage.Tile && abs(d.Z) < 3*stage.Tile {
 			f = toward(d)

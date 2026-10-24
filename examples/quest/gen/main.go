@@ -1,7 +1,7 @@
 // Command gen writes the quest example's placeholder art: a flagstone floor
 // texture, a stone wall texture, a grass texture, a log wall and a
 // shingled roof for the house, a treasure chest, the text box's letters,
-// and two sprite sheets, Nora's and the villager's, eight ways to face by
+// and two sprite sheets, Hero's and the villager's, eight ways to face by
 // four frames of walking. Hand-made art of the same names and sizes
 // replaces the pictures.
 package main

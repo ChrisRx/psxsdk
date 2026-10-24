@@ -38,7 +38,7 @@ const (
 	blinkTime  = 16
 
 	// heroName takes the place of "{Player Name}" in what is said.
-	heroName = "Nora"
+	heroName = "Hero"
 	namePart = "{Player Name}"
 )
 
@@ -148,7 +148,7 @@ func (t *textBox) say(s string) {
 	t.top, t.line, t.col = 0, 0, 0
 	t.wait = t.count == 0
 	t.scroll, t.tick = 0, 0
-	nora.walkTick = 0
+	hero.walkTick = 0
 }
 
 // update brings the next letter, scrolls, and takes Cross, pressed this

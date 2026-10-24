@@ -1,5 +1,5 @@
 // Two rooms seen from above at a slant, a stone hall and a meadow, walked
-// around by Nora, a figure drawn flat over them, and joined by a doorway,
+// around by Hero, a figure drawn flat over them, and joined by a doorway,
 // as Dragon Quest VII's towns were: the start of a role playing game.
 //
 // Each room is a scene file in scenes/, cooked by mkscene onto the disc
@@ -29,7 +29,7 @@
 // log walls and whose top is a roof of two slopes meeting at a ridge
 // between the rows, with gables at the block's ends.
 //
-// Nora, the hero (hero.go), is a sprite, placed each frame where their
+// Hero (hero.go) is a sprite, placed each frame where their
 // feet project to on the screen and sorted at that depth, a little in
 // front of the floor under them. The sprite sheet has a column of frames
 // for each of the eight ways the hero can face, the figure seen from
@@ -43,7 +43,7 @@
 // doorway puts the hero in the other room, just inside its doorway, after
 // a few black frames.
 //
-// Cross speaks to whoever Nora faces, or opens the chest in front of
+// Cross speaks to whoever Hero faces, or opens the chest in front of
 // them, and what is said comes up in a text box along the bottom of the
 // screen as Dragon Quest's did, a letter at a time, three lines at a
 // time, with an arrow for more (talk.go).
@@ -64,7 +64,7 @@
 //
 // The directions walk, relative to the camera: up is away from it. L1 and
 // R1 turn the camera an eighth of a turn each way. Cross speaks to the
-// person in front of Nora, or opens the chest there, and reads on through
+// person in front of Hero, or opens the chest there, and reads on through
 // what is said.
 package main
 
@@ -144,8 +144,8 @@ func main() {
 	}
 	if failed = disc.LoadAll(300, files...); failed == nil {
 		setup(b)
-		nora.here().load()
-		screen.Background = nora.here().background()
+		hero.here().load()
+		screen.Background = hero.here().background()
 		cam.slant(world.Room())
 	}
 	for ot := range screen.Frames() {
@@ -157,12 +157,12 @@ func main() {
 		pad.Update()
 		// The playground's live view: a room painted in the editor is
 		// written over the file and placed again, and Play from here
-		// puts Nora on a cell, in the other room when it says so.
+		// puts Hero on a cell, in the other room when it says so.
 		if world.Reload() {
-			nora.here().place()
+			hero.here().place()
 		}
 		if scene, i, j, ok := world.Teleport(); ok {
-			nora.visit(scene, i, j)
+			hero.visit(scene, i, j)
 		}
 		// A frame that took two fields moves everything twice, so that
 		// the hero's speed holds whatever is on the screen. Through the
@@ -180,18 +180,18 @@ func main() {
 			if talk.up {
 				talk.update(cross)
 			} else {
-				nora.walk()
+				hero.walk()
 				if cross {
-					nora.interact()
+					hero.interact()
 				}
 			}
 			cam.update(k == 0 && !talk.up)
 		}
-		cam.place(nora.at(), nora.height)
-		nora.project()
-		view = stage.View{At: nora.at(), Ahead: cam.ahead, Right: cam.right, X: nora.sx, Y: nora.sy, Depth: nora.otz}
+		cam.place(hero.at(), hero.height)
+		hero.project()
+		view = stage.View{At: hero.at(), Ahead: cam.ahead, Right: cam.right, X: hero.sx, Y: hero.sy, Depth: hero.otz}
 		set.Draw(ot, &view)
-		nora.draw(ot)
+		hero.draw(ot)
 		drawNPCs(ot)
 		if blank > 0 {
 			blank--
@@ -217,9 +217,9 @@ func setup(b yaroze.RECT) {
 		Chest:  yaroze.TIM(chestTIM.Data()).Load().Texture(),
 	}
 	people.cut(yaroze.TIM(npcTIM.Data()).Load())
-	nora.cut(yaroze.TIM(heroTIM.Data()).Load())
+	hero.cut(yaroze.TIM(heroTIM.Data()).Load())
 	talk.setup(b)
 
 	yaroze.GsSetProjection(projection)
-	cam.place(nora.at(), nora.height)
+	cam.place(hero.at(), hero.height)
 }
