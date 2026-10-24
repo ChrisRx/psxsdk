@@ -24,3 +24,12 @@ A cell is 16 by 16 pixels within one texture page, 256 by 256, so a page holds 2
 A 0xffff in the map leaves a cell empty, so a background over another shows through it. Two backgrounds scrolled at different speeds, a near one over a far one, are the parallax of many 2D games.
 
 <!-- player tiles -->
+
+## Layers and flags from a scene
+
+A scene file can hold the maps instead of the program: up to three tile layers, which the playground's scene editor paints and [`mkscene`](../tools/mkscene.md) cooks, and which package [`scene`](scene) sets up when it loads the file, cells, maps and work areas, and draws behind everything else, the first farthest. Each layer has a speed, the percent of the scene's scroll it moves, so that `Scroll(x, y)` moves a far layer at 50 half as far as the ground at 100, and each cell of a layer's texture carries flags set on the editor's palette: `scene.Solid`, `scene.OneWay`, `scene.Hurts`, `scene.Pickup` and four of the program's own. A program asks the map what is at a point instead of keeping its own copy of the level. The [jumpcube](../examples/jumpcube.md) example moves its cube a pixel at a time and stops it where the ground layer says the row of pixels under it holds it up, which a one-way plank does only at its top:
+
+```go src=../../examples/jumpcube/main.go#moveY,holds
+```
+
+A coin is a cell flagged `Pickup`, which the program takes with `SetCell(x, y, scene.EmptyCell)`, and the level's flag carries the first of the program's own four bits, which ends the level. Since the level is a scene, it can be changed in the editor while the program runs, and the program draws the change at its next frame.
