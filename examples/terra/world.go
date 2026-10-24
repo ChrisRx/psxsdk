@@ -881,7 +881,7 @@ func drawPrims(ot *yaroze.GsOT, first, count int) {
 		pk[11] = sxy3
 		pk[1], pk[4], pk[7], pk[10] = p.rgb[0], p.rgb[1], p.rgb[2], p.rgb[3]
 		pk[0] = 12 << 24
-		ot.Link(min(max((int32(p.bias)+z)>>shift, 0), maxDepth), pk)
+		ot.Link(int(min(max((int32(p.bias)+z)>>shift, 0), maxDepth)), pk)
 		commit(13)
 	}
 }

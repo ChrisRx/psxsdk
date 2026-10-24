@@ -377,7 +377,7 @@ func entDraw(e *entity) {
 	p[5] = u1 | v0<<8 | uint32(tex.tpageY>>4&0x10|(tex.tpageX&0x3ff)>>6|0x40|(tex.tpageY&0x200)<<2)<<16
 	p[7] = u0 | v1<<8
 	p[9] = u1 | v1<<8
-	ot.Link(max((otz-2)>>2, 0), p)
+	ot.Link(int(max((otz-2)>>2, 0)), p)
 }
 
 // entSpawn makes an entity of a type at x, y, z, facing dir quarters from

@@ -27,7 +27,7 @@ func AllocPacket(n int) []uint32 {
 // Link puts the packet, whose first word is its tag, at the head of the
 // table's entry for depth, keeping the tag's length and the entry's. Depth
 // 0 is drawn last, in front of everything, and 1<<Length-1 first.
-func (ot *GsOT) Link(depth int32, packet []uint32) {
+func (ot *GsOT) Link(depth int, packet []uint32) {
 	tag := (*uint32)(unsafe.Add(unsafe.Pointer(ot.Org), 4*depth))
 	packet[0] = packet[0]&0xff000000 | *tag&0xffffff
 	*tag = *tag&0xff000000 | uint32(uintptr(unsafe.Pointer(&packet[0])))&0xffffff
@@ -42,6 +42,6 @@ func LinkTag(tag *uint32, packet []uint32) {
 }
 
 // Entry returns the word at depth in the table, for LinkTag.
-func (ot *GsOT) Entry(depth int32) *uint32 {
+func (ot *GsOT) Entry(depth int) *uint32 {
 	return (*uint32)(unsafe.Add(unsafe.Pointer(ot.Org), 4*depth))
 }
