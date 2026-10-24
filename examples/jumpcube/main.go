@@ -18,8 +18,8 @@
 // scrolls both layers with Scroll, each at its own speed. The hero is the
 // scene's sprite named so, the cube, so the hero starts where the editor
 // put that sprite; the program draws it itself, turned about its middle
-// with GsSortSprite, which the scene's own drawing of its sprites does
-// not do, and has the scene leave its copy undrawn. Since the level is a
+// with GsSortSprite while it turns, which the scene's own drawing of its
+// sprites does not do, and has the scene leave its copy undrawn. Since the level is a
 // scene, a change made in the editor while the program runs is in the
 // level at the next frame.
 //
@@ -179,7 +179,11 @@ func main() {
 		world.Scroll(camX, 0)
 		show(sp, b)
 		world.Draw(ot, ot)
-		cube.Sort(ot, 0)
+		if spin%quarter == 0 {
+			cube.SortFast(ot, 0)
+		} else {
+			cube.Sort(ot, 0)
+		}
 
 		// The panels go in after the cube, at the same depth, so that they
 		// are drawn before it, under the cube. The text goes over everything.
@@ -415,16 +419,24 @@ func turn() {
 	}
 }
 
-// show puts the cube where the hero is on the screen, turned about its
-// middle, with the box's fourteen rows over their feet, and leaves the
-// scene's own copy of the sprite undrawn.
+// show puts the cube where the hero is on the screen, with the box's
+// fourteen rows over their feet, and leaves the scene's own copy of the
+// sprite undrawn. Turning, the cube is a sprite turned about its middle,
+// which GsSortSprite draws as a textured quad. At rest on a side it looks
+// as it does unturned, and is a plain sprite placed by its top left
+// corner, which GsSortFastSprite draws texel for texel, so its border is
+// exact.
 func show(sp *yaroze.GsSPRITE, b yaroze.RECT) {
 	cube = *sp
 	cube.Attribute &^= doff
-	cube.Mx, cube.My = int16(sp.W/2), int16(sp.H/2)
-	cube.Scalex, cube.Scaley = 4096, 4096
-	cube.Rotate = int32(spin)
-	cube.X = int16(heroX - camX + int(b.X))
-	cube.Y = int16(heroY - tall + int(sp.H)/2 - 1 + int(b.Y))
+	x, y := heroX-camX+int(b.X), heroY-tall+int(sp.H)/2-1+int(b.Y) // the middle
+	if spin%quarter == 0 {
+		cube.X, cube.Y = int16(x-int(sp.W)/2), int16(y-int(sp.H)/2)
+	} else {
+		cube.Mx, cube.My = int16(sp.W/2), int16(sp.H/2)
+		cube.Scalex, cube.Scaley = 4096, 4096
+		cube.Rotate = int32(spin)
+		cube.X, cube.Y = int16(x), int16(y)
+	}
 	sp.Attribute |= doff
 }

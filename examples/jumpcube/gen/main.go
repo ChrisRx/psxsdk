@@ -149,39 +149,27 @@ func far() *image.Paletted {
 
 func within(x, y, cx, cy, r int) bool { return (x-cx)*(x-cx)+(y-cy)*(y-cy) <= r*r }
 
-// The cube: one frame, sixteen pixels square, a square of fourteen with a
-// dark edge, a lighter rim and a darker middle, the same each way round,
-// so that it looks the same after each quarter turn.
+// The cube: one frame, sixteen pixels square, a square of fourteen in one
+// color with a dark border a pixel wide round the outside, the same each
+// way round, so that it looks the same after each quarter turn.
 var cubePalette = color.Palette{
-	color.NRGBA{0, 0, 0, 0},         // see-through
-	color.NRGBA{40, 36, 48, 255},    // edge
-	color.NRGBA{255, 176, 64, 255},  // rim
-	color.NRGBA{232, 128, 40, 255},  // middle
-	color.NRGBA{255, 230, 170, 255}, // shine
+	color.NRGBA{0, 0, 0, 0},        // see-through
+	color.NRGBA{40, 36, 48, 255},   // border
+	color.NRGBA{240, 140, 40, 255}, // cube
 }
 
 func cube() *image.Paletted {
 	im := image.NewPaletted(image.Rect(0, 0, 16, 16), cubePalette)
 	for y := range 16 {
 		for x := range 16 {
-			d := min(x, y, 15-x, 15-y) // how far in from the frame's edge
-			var c uint8
-			switch {
-			case d == 0:
-				c = 0
-			case d == 1:
-				c = 1
-			case d <= 3:
-				c = 2
-			case d == 4:
-				c = 1
+			switch min(x, y, 15-x, 15-y) { // how far in from the frame's edge
+			case 0:
+				im.SetColorIndex(x, y, 0)
+			case 1:
+				im.SetColorIndex(x, y, 1)
 			default:
-				c = 3
+				im.SetColorIndex(x, y, 2)
 			}
-			if d >= 6 && d <= 7 {
-				c = 4
-			}
-			im.SetColorIndex(x, y, c)
 		}
 	}
 	return im
