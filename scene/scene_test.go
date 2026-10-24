@@ -10,6 +10,7 @@ import (
 
 	"go.chrisrx.dev/psx/disc"
 	format "go.chrisrx.dev/psx/format/scene"
+	"go.chrisrx.dev/psx/stage"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -128,56 +129,179 @@ func TestLoad(t *testing.T) {
 	assert.Equal(t, [2]int32{0, 0}, [2]int32{f0, f1})
 }
 
-func TestLoadBackground(t *testing.T) {
-	sc := sample()
-	sc.Background = &format.Background{
-		Texture: "ASSETS/STONE.TIM", Cell: 16, Width: 3, Height: 2,
-		Map:        []uint16{7, 7, 7, 2, format.EmptyCell, 2},
-		Scroll:     [2]int16{4, -8},
-		Brightness: [3]uint8{128, 100, 90},
+// withLayers gives the sample a far layer and a ground layer with flags,
+// as a 2D game's are.
+func withLayers(sc *format.Scene) *format.Scene {
+	sc.Layers = []format.Layer{
+		{
+			Name: "far", Texture: "ASSETS/STONE.TIM", Cell: 16, Width: 4, Height: 2,
+			Map:        []uint16{0, 1, 2, 3, 4, format.EmptyCell, 4, 5},
+			Scroll:     [2]int16{0, 8},
+			Brightness: [3]uint8{128, 128, 128},
+			Speed:      50,
+		},
+		{
+			Name: "ground", Texture: "ASSETS/STONE.TIM", Cell: 16, Width: 3, Height: 2,
+			Map:        []uint16{7, 7, 7, 2, format.EmptyCell, 2},
+			Scroll:     [2]int16{4, -8},
+			Brightness: [3]uint8{128, 100, 90},
+			Speed:      100,
+			Flags:      []int{0, 0, Solid | Hurts, 0, 0, 0, 0, Pickup | 1<<5},
+		},
 	}
-	b, err := sc.Bytes()
+	return sc
+}
+
+func TestLoadLayers(t *testing.T) {
+	b, err := withLayers(sample()).Bytes()
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
 	var s Scene
 	assert.NoError(t, s.Load(words(b), Files(files)))
+	assert.Equal(t, 2, s.NLayers())
+	far, ground := s.Layer("far"), s.Layer("ground")
+	if far == nil || ground == nil {
+		t.Fatal("both layers should be found by name")
+	}
+	assert.Equal(t, far, s.LayerAt(0), "the far layer is the first")
+	assert.Equal(t, (*Layer)(nil), s.Layer("sky"))
 	got := struct {
-		Has      bool
+		Names    [2]string
+		Speeds   [2]int
+		Size     [2]int
 		Scroll   [2]int16
 		Window   [4]int16
 		RGB      [3]uint8
-		MapSize  [2]uint16
-		Map      [6]uint16
-		Texture  int
 		Scale    [2]int16
 		MapBound bool
 	}{
-		Has: s.HasBackground, Scroll: [2]int16{s.Background.Scrollx, s.Background.Scrolly},
-		Window:   [4]int16{s.Background.X, s.Background.Y, s.Background.W, s.Background.H},
-		RGB:      [3]uint8{s.Background.R, s.Background.G, s.Background.B},
-		MapSize:  [2]uint16{s.tileMap.Ncellw, s.tileMap.Ncellh},
-		Map:      [6]uint16(s.mapIndex[:6]),
-		Texture:  s.backgroundTex,
-		Scale:    [2]int16{s.Background.Scalex, s.Background.Scaley},
-		MapBound: s.Background.Map == &s.tileMap && s.tileMap.Base == &s.cells[0] && s.tileMap.Index == &s.mapIndex[0],
+		Names:  [2]string{far.Name(), ground.Name()},
+		Speeds: [2]int{far.Speed, ground.Speed},
+		Size:   [2]int{ground.Width(), ground.Height()},
+		Scroll: [2]int16{ground.BG.Scrollx, ground.BG.Scrolly},
+		Window: [4]int16{ground.BG.X, ground.BG.Y, ground.BG.W, ground.BG.H},
+		RGB:    [3]uint8{ground.BG.R, ground.BG.G, ground.BG.B},
+		Scale:  [2]int16{ground.BG.Scalex, ground.BG.Scaley},
+		MapBound: ground.BG.Map == &ground.tileMap && ground.tileMap.Base == &ground.cells[0] && ground.tileMap.Index == &ground.index[0] &&
+			far.BG.Map == &far.tileMap && far.tileMap.Index == &far.index[0],
 	}
-	want := got
-	want.Has = true
-	want.Scroll = [2]int16{4, -8}
-	want.Window = [4]int16{-160, -120, 320, 240}
-	want.RGB = [3]uint8{128, 100, 90}
-	want.MapSize = [2]uint16{3, 2}
-	want.Map = [6]uint16{7, 7, 7, 2, format.EmptyCell, 2}
-	want.Texture = 0
-	want.Scale = [2]int16{4096, 4096}
-	want.MapBound = true
-	assert.Equal(t, want, got)
+	assert.Equal(t, struct {
+		Names    [2]string
+		Speeds   [2]int
+		Size     [2]int
+		Scroll   [2]int16
+		Window   [4]int16
+		RGB      [3]uint8
+		Scale    [2]int16
+		MapBound bool
+	}{[2]string{"far", "ground"}, [2]int{50, 100}, [2]int{3, 2}, [2]int16{4, -8}, [4]int16{-160, -120, 320, 240}, [3]uint8{128, 100, 90}, [2]int16{4096, 4096}, true}, got)
 
-	// Without one, a scene loaded into the same Scene has none.
+	// Cells and their flags, by cell and by pixel, off the map none.
+	assert.Equal(t, 2, ground.Cell(0, 1))
+	assert.Equal(t, EmptyCell, ground.Cell(1, 1))
+	assert.Equal(t, EmptyCell, ground.Cell(3, 0))
+	assert.Equal(t, EmptyCell, ground.Cell(-1, 0))
+	assert.Equal(t, uint8(Solid|Hurts), ground.Flags(2, 1))
+	assert.Equal(t, uint8(0), ground.Flags(1, 1), "an empty cell has no flags")
+	assert.Equal(t, uint8(Pickup|1<<5), ground.FlagsAt(20, 3))
+	assert.Equal(t, uint8(Solid|Hurts), ground.FlagsAt(47, 31))
+	assert.Equal(t, uint8(0), ground.FlagsAt(-1, 3), "a point left of the map is off it")
+	assert.Equal(t, uint8(0), far.Flags(0, 0), "a layer without flags has none")
+
+	// SetCell changes the scene's map, not the file's.
+	ground.SetCell(1, 0, EmptyCell)
+	ground.SetCell(9, 9, 3)
+	assert.Equal(t, EmptyCell, ground.Cell(1, 0))
+	assert.Equal(t, uint8(0), ground.Flags(1, 0))
+
+	// Scroll moves each layer by its speed's share, from where the file
+	// put it.
+	s.Scroll(100, -20)
+	assert.Equal(t, [4]int16{50, -2, 104, -28}, [4]int16{far.BG.Scrollx, far.BG.Scrolly, ground.BG.Scrollx, ground.BG.Scrolly})
+	s.Scroll(0, 0)
+	assert.Equal(t, [4]int16{0, 8, 4, -8}, [4]int16{far.BG.Scrollx, far.BG.Scrolly, ground.BG.Scrollx, ground.BG.Scrolly})
+
+	// Without layers, a scene loaded into the same Scene has none.
 	b, _ = sample().Bytes()
 	assert.NoError(t, s.Load(words(b), Files(files)))
-	assert.Equal(t, false, s.HasBackground)
+	assert.Equal(t, 0, s.NLayers())
+	assert.Equal(t, (*Layer)(nil), s.Layer("ground"))
+}
+
+// A file cooked before layers had one, with no name or flags after its map:
+// it loads as a layer named "background", moving with the scroll.
+func TestLoadBeforeLayers(t *testing.T) {
+	sc := sample()
+	sc.Background = &format.Background{
+		Texture: "ASSETS/STONE.TIM", Cell: 16, Width: 3, Height: 2,
+		Map:        []uint16{7, 7, 7, 2, format.EmptyCell, 2},
+		Brightness: [3]uint8{128, 128, 128},
+	}
+	b, err := sc.Bytes()
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	at := format.HeaderSize + 2*format.PathSize + 2*format.ObjectSize + format.SpriteSize
+	old := append([]byte{}, b[:at+format.LayerSize+12]...)
+	old[at+6], old[at+7], old[at+27] = 0, 0, 0
+	var s Scene
+	assert.NoError(t, s.Load(words(old), Files(files)))
+	assert.Equal(t, 1, s.NLayers())
+	l := s.Layer("background")
+	if l == nil {
+		t.Fatal("the old file's map should load as the layer named background")
+	}
+	assert.Equal(t, 100, l.Speed)
+	assert.Equal(t, 2, l.Cell(2, 1))
+}
+
+func TestLoadRoom(t *testing.T) {
+	sc := &format.Scene{Room: &format.Room{
+		Floor: 1, Wall: 2, Tint: [3]uint8{128, 100, 90},
+		Cells:   []string{"#1##", "#..#", "#2##"},
+		Heights: []string{"0000", "0120", "0000"},
+		Rough:   true, RockTall: 128, RockLean: 36, CamUp: 560, CamBack: 300,
+		Sky:        [2][3]uint8{{30, 70, 190}, {170, 210, 245}},
+		Background: [3]uint8{1, 1, 1},
+		Links:      []format.Link{{Door: 1, Scene: "ASSETS/HALL.DAT"}, {Door: 2, Scene: "ASSETS/CAVE.DAT"}},
+		Markers:    []format.Marker{{Name: "chest", Cell: [2]int{1, 1}, Fields: [2]int32{4, -1}}, {Name: "host", Cell: [2]int{2, 1}}},
+	}}
+	b, err := sc.Bytes()
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	var s Scene
+	// A room's file needs no source: it names no texture or model.
+	assert.NoError(t, s.Load(words(b), nil))
+	r := s.Room()
+	if r == nil {
+		t.Fatal("the scene has no room")
+	}
+	assert.Equal(t, []string{"#1##", "#..#", "#2##"}, r.Cells)
+	assert.Equal(t, []string{"0000", "0120", "0000"}, r.Heights, "the levels come back as digits")
+	assert.Equal(t, stage.Map{Floor: 1, Wall: 2, Tint: stage.Color{128, 100, 90}, Cells: r.Cells, Heights: r.Heights, Rough: true, RockTall: 128, RockLean: 36}, r.Map)
+	assert.Equal(t, [2]stage.Color{{30, 70, 190}, {170, 210, 245}}, r.Sky)
+	assert.Equal(t, stage.Color{1, 1, 1}, r.Background)
+	assert.Equal(t, 560, r.CamUp)
+	assert.Equal(t, 300, r.CamBack)
+	assert.Equal(t, "ASSETS/CAVE.DAT", s.Link('2'))
+	assert.Equal(t, "", s.Link('3'))
+	assert.Equal(t, &Marker{I: 1, J: 1, Fields: [2]int32{4, -1}}, s.Marker("chest"))
+	assert.Equal(t, &Marker{I: 2, J: 1}, s.Marker("host"))
+	assert.Equal(t, (*Marker)(nil), s.Marker("nobody"))
+	assert.Equal(t, 2, s.NMarkers())
+	assert.Equal(t, "host", s.MarkerName(1))
+	assert.Equal(t, 2, r.Level(2, 1))
+	assert.Equal(t, byte('1'), r.Cell(1, 0))
+
+	// A file with no room has none, and a room's rows are read again
+	// on a second load without harm.
+	assert.NoError(t, s.Load(words(b), nil))
+	assert.Equal(t, []string{"0000", "0120", "0000"}, s.Room().Heights)
+	plain, _ := sample().Bytes()
+	assert.NoError(t, s.Load(words(plain), Files(files)))
+	assert.Equal(t, (*Room)(nil), s.Room())
 }
 
 func TestLoadMissing(t *testing.T) {

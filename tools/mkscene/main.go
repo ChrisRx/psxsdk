@@ -30,7 +30,8 @@ package scene. The JSON is what the playground's scene editor writes, and
 what format/scene describes: a camera, the projection, the ambient light,
 up to three lights, the TIMs and TMDs the scene needs by their paths on the
 disc, the objects placed from those models and the sprites cut from those
-textures, each with a name the program finds it by.
+textures, each with a name the program finds it by; or a room of cells for
+package stage, with its links to other scenes and its markers.
 
 -r reads a cooked scene and prints it as JSON, or writes it to -o.`,
 		Args:         cobra.ExactArgs(1),
@@ -81,11 +82,23 @@ func run(cmd *cobra.Command, args []string) error {
 	if err := os.WriteFile(out, b, 0o644); err != nil {
 		return err
 	}
-	fmt.Printf("created %q: %d bytes, %d object%s, %d sprite%s, %d light%s, camera at %d,%d,%d looking at %d,%d,%d\n",
-		out, len(b), len(s.Objects), plural(len(s.Objects)), len(s.Sprites), plural(len(s.Sprites)), len(s.Lights), plural(len(s.Lights)),
-		s.Camera.From[0], s.Camera.From[1], s.Camera.From[2], s.Camera.At[0], s.Camera.At[1], s.Camera.At[2])
+	camera := fmt.Sprintf("camera at %d,%d,%d looking at %d,%d,%d", s.Camera.From[0], s.Camera.From[1], s.Camera.From[2], s.Camera.At[0], s.Camera.At[1], s.Camera.At[2])
+	if s.Camera == (scene.Camera{}) {
+		camera = "no camera, the program's own"
+	}
+	fmt.Printf("created %q: %d bytes, %d object%s, %d sprite%s, %d light%s, %s\n",
+		out, len(b), len(s.Objects), plural(len(s.Objects)), len(s.Sprites), plural(len(s.Sprites)), len(s.Lights), plural(len(s.Lights)), camera)
 	for _, o := range s.Objects {
 		fmt.Printf("  %s: %s object %d at %d,%d,%d\n", o.Name, strings.TrimPrefix(o.Model, "DATA/"), o.Index, o.Position[0], o.Position[1], o.Position[2])
+	}
+	if r := s.Room; r != nil {
+		fmt.Printf("  a room of %d by %d cells, %d link%s, %d marker%s\n", len(r.Cells[0]), len(r.Cells), len(r.Links), plural(len(r.Links)), len(r.Markers), plural(len(r.Markers)))
+		for _, l := range r.Links {
+			fmt.Printf("    door %d leads to %s\n", l.Door, l.Scene)
+		}
+		for _, m := range r.Markers {
+			fmt.Printf("    %s on cell %d, %d\n", m.Name, m.Cell[0], m.Cell[1])
+		}
 	}
 	return nil
 }

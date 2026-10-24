@@ -1,7 +1,8 @@
 // Package scene reads and writes scene files, which place what the library
 // draws: models from TMDs, each at a position, a rotation and a scale, a
-// camera, up to three lights and the ambient light, and sprites cut from
-// TIMs. The playground's scene editor writes one as JSON, scene.json;
+// camera, up to three lights and the ambient light, sprites cut from TIMs,
+// and up to three layers of 16 by 16 cells behind them, the tile maps of
+// a 2D game. The playground's scene editor writes one as JSON, scene.json;
 // mkscene cooks that into the binary file a program reads with package
 // scene, SCENE.DAT, and this package is both forms.
 //
@@ -32,16 +33,47 @@
 //	      then the sprite as GsSPRITE packs it: the attribute, X and Y, W
 //	      and H, the texture page with U and V above it, CX and CY, R, G
 //	      and B, MX and MY, the scales, the rotation, and two pad words
-//	      the background, when bit 8 of the word at 008h is set: the
-//	      texture's index, the cell size and a pad (16 bits each), the
-//	      map's width and height in cells, the scroll X and Y, the window's
-//	      X, Y, W and H on the screen (16 bits each), R, G, B and a pad
-//	      byte, then the map, a 16-bit cell index per cell, a row at a
-//	      time, 0xffff for an empty cell, padded to a word
+//	      the layers, when bit 8 of the word at 008h is set, as many as
+//	      bits 10 and 11 say plus one, each: the texture's index (32
+//	      bits), the cell size and the speed, the percent of the scene's
+//	      scroll the layer moves (16 bits each), the map's width and height
+//	      in cells, the scroll X and Y, the window's X, Y, W and H on the
+//	      screen (16 bits each), R, G and B and a byte whose bit 0 says a
+//	      name and flags follow the map, then the map, a 16-bit cell index
+//	      per cell, a row at a time, 0xffff for an empty cell, padded to a
+//	      word, then the name, NUL-padded to 16 bytes, the number of flag
+//	      bytes and a pad (16 bits each), and the flags, a byte for each
+//	      of the texture's cells in order, padded to a word
+//	      the room, when bit 9 of the word at 008h is set: the map's
+//	      columns and rows, the floor and wall texture indexes (16 bits
+//	      each), the tint R, G, B and a flags byte (bit 0 rough, bit 1
+//	      black, bit 2 heights given), the rock's height and lean, the
+//	      camera's height and distance (16 bits each), the sky's top and
+//	      bottom colors and the background color (R, G, B and a pad byte
+//	      each), the numbers of links and of markers (16 bits each), then
+//	      the cells, a byte each, a row at a time, padded to a word, the
+//	      heights the same way when given, the level of each cell as a
+//	      byte, the links, 36 bytes each: the door's digit as a word and
+//	      the scene's path, as the program registered it, NUL-padded to
+//	      32, and the markers, 28 bytes each: a name of up to 15 bytes,
+//	      NUL-padded to 16, the column and row (16 bits each), and two
+//	      fields, numbers of the program's own
 //
-// A background's cells are cut from its texture in reading order, 16 by
-// 16 pixels each, as many across as the picture is wide, as GsSortFixBg16
-// draws them.
+// A layer's cells are cut from its texture in reading order, 16 by 16
+// pixels each, as many across as the picture is wide, as GsSortFixBg16
+// draws them. The layers are drawn back to front, the first farthest, and
+// their flags say what each cell is to the program: solid, passed through
+// from below, hurting, to be picked up, and four bits of its own. A file
+// from before layers has one, with no name or flags, whose speed reads as
+// 100.
+//
+// A room is a map of cells for package stage to draw, with the look
+// round it: rows of runes in stage's legend, a level of height for each
+// cell, the textures by index into the program's art, and the colors of
+// the sky and the background. Its links say which scene each doorway
+// digit leads to, where the doorway with the same digit is, and its
+// markers name cells for the program's own things to stand on: a person,
+// a chest, a creature, each with two fields for the program to read.
 package scene
 
 import (
@@ -64,28 +96,50 @@ const (
 	MaxName     = 15 // bytes of an object's or a sprite's name
 	MaxPath     = 31 // bytes of a disc path
 
-	// A background's map holds at most MaxMapCells cells, its texture at
-	// most MaxCells, and its cells are CellSize square.
+	// A scene has at most MaxLayers layers. A layer's map holds at most
+	// MaxMapCells cells, its texture at most MaxCells, and its cells are
+	// CellSize square.
+	MaxLayers   = 3
 	MaxMapCells = 4096
 	MaxCells    = 256
 	CellSize    = 16
 	EmptyCell   = 0xffff
+
+	// A room is at most MaxRoomCells across and down, as package stage
+	// has it, with at most MaxLinks links, one a digit, and MaxMarkers
+	// markers.
+	MaxRoomCells = 32
+	MaxLinks     = 10
+	MaxMarkers   = 64
+)
+
+// The flags the editor names for a layer's cells; the other four bits are
+// the program's own.
+const (
+	Solid  = 1 << 0 // nothing passes through it
+	OneWay = 1 << 1 // stood on from above, passed through from below
+	Hurts  = 1 << 2 // hurts what touches it
+	Pickup = 1 << 3 // taken by what touches it
 )
 
 // The sizes of the records, in bytes.
 const (
-	HeaderSize     = 0x68
-	PathSize       = 32
-	ObjectSize     = 64
-	SpriteSize     = 64
-	BackgroundSize = 28         // before its map
-	ObjectsAt      = HeaderSize // plus the paths
-	nameSize       = 16
-	lightSize      = 16
-	lightsAt       = 0x38
-	cameraAt       = 0x1C
-	ambientAt      = 0x10
-	projectionAt   = 0x0C
+	HeaderSize    = 0x68
+	PathSize      = 32
+	ObjectSize    = 64
+	SpriteSize    = 64
+	LayerSize     = 28 // before its map
+	LayerNameSize = 20 // after its map: the name, the count of flags and a pad
+	RoomSize      = 36 // before its cells
+	LinkSize      = 36
+	MarkerSize    = 28
+	ObjectsAt     = HeaderSize // plus the paths
+	nameSize      = 16
+	lightSize     = 16
+	lightsAt      = 0x38
+	cameraAt      = 0x1C
+	ambientAt     = 0x10
+	projectionAt  = 0x0C
 )
 
 // A Camera is a viewpoint and the point it looks at, with a twist about
@@ -152,8 +206,53 @@ type Sprite struct {
 	Rotate    int32  `json:"rotate,omitempty"`
 }
 
-// A Background is a map of cells cut from a texture, drawn behind
-// everything through a window on the screen, as GsSortFixBg16 draws it.
+// A Layer is a map of cells cut from a texture, drawn behind everything
+// through a window on the screen, as GsSortFixBg16 draws it, scrolled by
+// its own share of the scene's scroll, with a byte of flags for each of
+// its texture's cells.
+type Layer struct {
+	// Name is what the program finds the layer by, up to 15 bytes.
+	Name string `json:"name"`
+
+	// Texture is the TIM's path on the disc, one of the scene's Textures,
+	// whose 16 by 16 cells the map indexes in reading order.
+	Texture string `json:"texture"`
+
+	// Cell is the cells' size, which is 16.
+	Cell int `json:"cell"`
+
+	// Width and Height are the map's size in cells, at most MaxMapCells in
+	// all, and Map its cells, a row at a time: an index into the
+	// texture's cells, or EmptyCell.
+	Width  int      `json:"width"`
+	Height int      `json:"height"`
+	Map    []uint16 `json:"map"`
+
+	// Scroll is how far the map is scrolled within the window, in pixels,
+	// where the scene's scroll at 0, 0 leaves it.
+	Scroll [2]int16 `json:"scroll"`
+
+	// Window is the window's X, Y, W and H on the screen, from the middle
+	// as GsInit3D places the origin; all zero is the whole of a 320 by
+	// 240 screen.
+	Window [4]int16 `json:"window,omitempty"`
+
+	// Brightness is R, G and B, 128 showing the cells as they are.
+	Brightness [3]uint8 `json:"brightness"`
+
+	// Speed is the percent of the scene's scroll the layer moves: 100
+	// with it, less for one farther off, 0 not at all.
+	Speed int `json:"speed"`
+
+	// Flags are a byte for each of the texture's cells, in order, those
+	// past the end none: Solid, OneWay, Hurts and Pickup, and four bits
+	// of the program's own.
+	Flags []int `json:"flags,omitempty"`
+}
+
+// A Background is the one map a scene had before it had layers, as an
+// older scene.json writes it: a layer named "background", moving with the
+// scene's scroll, with no flags.
 type Background struct {
 	// Texture is the TIM's path on the disc, one of the scene's Textures,
 	// whose 16 by 16 cells the map indexes in reading order.
@@ -180,6 +279,62 @@ type Background struct {
 	Brightness [3]uint8 `json:"brightness"`
 }
 
+// A Room is a map of cells with heights, drawn by package stage, and the
+// look round it.
+type Room struct {
+	// Floor and Wall are the ground's and the walls' textures, as
+	// indexes into the program's art, and Tint the ground's color, 128
+	// leaving the texture as it is.
+	Floor int      `json:"floor,omitempty"`
+	Wall  int      `json:"wall,omitempty"`
+	Tint  [3]uint8 `json:"tint"`
+
+	// Cells are the map's rows, a rune a cell in stage's legend, all the
+	// same length, and Heights the ground's level at each, a digit a
+	// cell, the same shape, or none for level ground.
+	Cells   []string `json:"cells"`
+	Heights []string `json:"heights,omitempty"`
+
+	// Rough breaks the outlines of the cells, for a cave; RockTall is
+	// how high rock stands, a tile when zero, RockLean how far a rock
+	// face's top leans back, and Black leaves the rock beyond the
+	// passages undrawn.
+	Rough    bool `json:"rough,omitempty"`
+	Black    bool `json:"black,omitempty"`
+	RockTall int  `json:"rockTall,omitempty"`
+	RockLean int  `json:"rockLean,omitempty"`
+
+	// CamUp and CamBack put the program's camera that high above its
+	// figure and that far behind, or leave its usual slant when zero.
+	CamUp   int `json:"camUp,omitempty"`
+	CamBack int `json:"camBack,omitempty"`
+
+	// Sky is the color at the top of the screen and at the bottom,
+	// shaded between, behind everything outdoors; all zero, there is
+	// none and Background shows, the color the screen clears to, or
+	// the program's own when that is zero too.
+	Sky        [2][3]uint8 `json:"sky"`
+	Background [3]uint8    `json:"background"`
+
+	Links   []Link   `json:"links,omitempty"`
+	Markers []Marker `json:"markers,omitempty"`
+}
+
+// A Link says where a doorway leads: the cells with the digit Door lead
+// to the scene at the path Scene, in at its doorway with the same digit.
+type Link struct {
+	Door  int    `json:"door"`
+	Scene string `json:"scene"`
+}
+
+// A Marker names a cell for the program's own thing to stand on, with
+// two fields of the program's own: which way it faces, what it says.
+type Marker struct {
+	Name   string   `json:"name"`
+	Cell   [2]int   `json:"cell"`
+	Fields [2]int32 `json:"fields,omitempty"`
+}
+
 // A Scene is what a file holds, in the form scene.json has.
 type Scene struct {
 	Camera     Camera   `json:"camera"`
@@ -195,21 +350,66 @@ type Scene struct {
 	Objects []Object `json:"objects"`
 	Sprites []Sprite `json:"sprites"`
 
-	// Background is the map drawn behind everything, or nil.
+	// Layers are the maps drawn behind everything, back to front.
+	Layers []Layer `json:"layers,omitempty"`
+
+	// Background is an older scene.json's one map, written as the first
+	// layer; Decode never sets it.
 	Background *Background `json:"background,omitempty"`
+
+	// Room is the room of cells the scene is, or nil.
+	Room *Room `json:"room,omitempty"`
+}
+
+// AllLayers returns the scene's layers, an older file's Background first.
+func (s *Scene) AllLayers() []Layer {
+	bg := s.Background
+	if bg == nil {
+		return s.Layers
+	}
+	first := Layer{
+		Name: "background", Texture: bg.Texture, Cell: bg.Cell, Width: bg.Width, Height: bg.Height, Map: bg.Map,
+		Scroll: bg.Scroll, Window: bg.Window, Brightness: bg.Brightness, Speed: 100,
+	}
+	return append([]Layer{first}, s.Layers...)
 }
 
 // Size returns the file's size in bytes.
 func (s *Scene) Size() int {
 	n := HeaderSize + PathSize*(len(s.Textures)+len(s.Models)) + ObjectSize*len(s.Objects) + SpriteSize*len(s.Sprites)
-	if s.Background != nil {
-		n += BackgroundSize + mapBytes(s.Background.Width*s.Background.Height)
+	for _, l := range s.AllLayers() {
+		n += LayerSize + mapBytes(l.Width*l.Height) + LayerNameSize + cellBytes(len(l.Flags))
+	}
+	if r := s.Room; r != nil {
+		n += r.size()
 	}
 	return n
 }
 
 // mapBytes is the size of a map of n cells, padded to a word.
 func mapBytes(n int) int { return (2*n + 3) &^ 3 }
+
+// cellBytes is the size of a room's cells, a byte each, padded to a word.
+func cellBytes(n int) int { return (n + 3) &^ 3 }
+
+// cols and rows are the room's size in cells, 0 by 0 when it has none.
+func (r *Room) cols() int {
+	if len(r.Cells) == 0 {
+		return 0
+	}
+	return len(r.Cells[0])
+}
+
+func (r *Room) rows() int { return len(r.Cells) }
+
+// size is the room's size in the file.
+func (r *Room) size() int {
+	n := RoomSize + cellBytes(r.cols()*r.rows())
+	if r.Heights != nil {
+		n += cellBytes(r.cols() * r.rows())
+	}
+	return n + LinkSize*len(r.Links) + MarkerSize*len(r.Markers)
+}
 
 func index(list []string, path string) (int, bool) {
 	for i, p := range list {
@@ -246,23 +446,113 @@ func (s *Scene) Check() error {
 			return fmt.Errorf("scene: sprite %q names texture %q, which is not in the scene's textures", sp.Name, sp.Texture)
 		}
 	}
-	if bg := s.Background; bg != nil {
-		if _, ok := index(s.Textures, bg.Texture); !ok {
-			return fmt.Errorf("scene: the background names texture %q, which is not in the scene's textures", bg.Texture)
+	layers := s.AllLayers()
+	if len(layers) > MaxLayers {
+		return fmt.Errorf("scene: %d layers; a scene has at most %d", len(layers), MaxLayers)
+	}
+	for i, l := range layers {
+		if err := l.check(s.Textures); err != nil {
+			return fmt.Errorf("scene: layer %d, %q: %w", i, l.Name, err)
 		}
-		if bg.Cell != CellSize {
-			return fmt.Errorf("scene: the background's cells are %d pixels; GsSortFixBg16 draws cells of %d", bg.Cell, CellSize)
-		}
-		if bg.Width < 1 || bg.Height < 1 || bg.Width*bg.Height > MaxMapCells {
-			return fmt.Errorf("scene: the background's map is %d by %d cells; it needs at least one and at most %d", bg.Width, bg.Height, MaxMapCells)
-		}
-		if len(bg.Map) != bg.Width*bg.Height {
-			return fmt.Errorf("scene: the background's map has %d cells for %d by %d", len(bg.Map), bg.Width, bg.Height)
-		}
-		for i, c := range bg.Map {
-			if c != EmptyCell && int(c) >= MaxCells {
-				return fmt.Errorf("scene: the background's cell %d is %d, past the %d a texture holds", i, c, MaxCells)
+		for _, m := range layers[:i] {
+			if m.Name == l.Name {
+				return fmt.Errorf("scene: two layers are named %q", l.Name)
 			}
+		}
+	}
+	if r := s.Room; r != nil {
+		return r.check()
+	}
+	return nil
+}
+
+// check reports what keeps the layer from being written.
+func (l *Layer) check(textures []string) error {
+	if len(l.Name) > MaxName {
+		return fmt.Errorf("the name is longer than %d bytes", MaxName)
+	}
+	if _, ok := index(textures, l.Texture); !ok {
+		return fmt.Errorf("it names texture %q, which is not in the scene's textures", l.Texture)
+	}
+	if l.Cell != CellSize {
+		return fmt.Errorf("its cells are %d pixels; GsSortFixBg16 draws cells of %d", l.Cell, CellSize)
+	}
+	if l.Width < 1 || l.Height < 1 || l.Width*l.Height > MaxMapCells {
+		return fmt.Errorf("its map is %d by %d cells; it needs at least one and at most %d", l.Width, l.Height, MaxMapCells)
+	}
+	if len(l.Map) != l.Width*l.Height {
+		return fmt.Errorf("its map has %d cells for %d by %d", len(l.Map), l.Width, l.Height)
+	}
+	for i, c := range l.Map {
+		if c != EmptyCell && int(c) >= MaxCells {
+			return fmt.Errorf("its cell %d is %d, past the %d a texture holds", i, c, MaxCells)
+		}
+	}
+	if l.Speed < 0 || l.Speed > 0xffff {
+		return fmt.Errorf("its speed is %d percent; it is 0 to 65535", l.Speed)
+	}
+	if len(l.Flags) > MaxCells {
+		return fmt.Errorf("it has flags for %d cells; a texture holds %d", len(l.Flags), MaxCells)
+	}
+	for i, f := range l.Flags {
+		if f < 0 || f > 0xff {
+			return fmt.Errorf("the flags of its cell %d are %d, not a byte", i, f)
+		}
+	}
+	return nil
+}
+
+// check reports what keeps the room from being written.
+func (r *Room) check() error {
+	cols, rows := r.cols(), r.rows()
+	if cols < 1 || rows < 1 || cols > MaxRoomCells || rows > MaxRoomCells {
+		return fmt.Errorf("scene: the room is %d by %d cells; it needs at least one each way and at most %d", cols, rows, MaxRoomCells)
+	}
+	for j, row := range r.Cells {
+		if len(row) != cols {
+			return fmt.Errorf("scene: the room's row %d has %d cells, not %d", j, len(row), cols)
+		}
+	}
+	if r.Heights != nil {
+		if len(r.Heights) != rows {
+			return fmt.Errorf("scene: the room's heights have %d rows, not %d", len(r.Heights), rows)
+		}
+		for j, row := range r.Heights {
+			if len(row) != cols {
+				return fmt.Errorf("scene: the room's heights row %d has %d cells, not %d", j, len(row), cols)
+			}
+			for i := 0; i < len(row); i++ {
+				if row[i] < '0' || row[i] > '9' {
+					return fmt.Errorf("scene: the room's height at %d, %d is %q, not a digit", i, j, row[i])
+				}
+			}
+		}
+	}
+	if r.Floor < 0 || r.Wall < 0 || r.Floor > 0xffff || r.Wall > 0xffff {
+		return errors.New("scene: the room's floor and wall are indexes into the program's textures")
+	}
+	for _, v := range [4]int{r.RockTall, r.RockLean, r.CamUp, r.CamBack} {
+		if v < 0 || v > 0x7fff {
+			return errors.New("scene: the room's rock height and lean and camera height and distance are 0 to 32767")
+		}
+	}
+	if len(r.Links) > MaxLinks || len(r.Markers) > MaxMarkers {
+		return fmt.Errorf("scene: a room has at most %d links and %d markers", MaxLinks, MaxMarkers)
+	}
+	for _, l := range r.Links {
+		if l.Door < 0 || l.Door > 9 {
+			return fmt.Errorf("scene: link to %q is from door %d; doors are digits", l.Scene, l.Door)
+		}
+		if l.Scene == "" || len(l.Scene) > MaxPath {
+			return fmt.Errorf("scene: link from door %d names scene %q, which is empty or longer than %d bytes", l.Door, l.Scene, MaxPath)
+		}
+	}
+	for _, m := range r.Markers {
+		if len(m.Name) > MaxName {
+			return fmt.Errorf("scene: marker %q's name is longer than %d bytes", m.Name, MaxName)
+		}
+		if m.Cell[0] < 0 || m.Cell[0] >= cols || m.Cell[1] < 0 || m.Cell[1] >= rows {
+			return fmt.Errorf("scene: marker %q is on cell %d, %d, outside the room", m.Name, m.Cell[0], m.Cell[1])
 		}
 	}
 	return nil
@@ -278,8 +568,12 @@ func (s *Scene) Bytes() ([]byte, error) {
 	b = le.AppendUint32(b, ID)
 	b = le.AppendUint32(b, uint32(len(s.Textures))|uint32(len(s.Models))<<8|uint32(len(s.Objects))<<16|uint32(len(s.Sprites))<<24)
 	lights := uint32(len(s.Lights))
-	if s.Background != nil {
-		lights |= 1 << 8
+	layers := s.AllLayers()
+	if len(layers) > 0 {
+		lights |= 1<<8 | uint32(len(layers)-1)<<10
+	}
+	if s.Room != nil {
+		lights |= 1 << 9
 	}
 	b = le.AppendUint32(b, lights)
 	b = le.AppendUint32(b, uint32(s.Projection))
@@ -349,24 +643,84 @@ func (s *Scene) Bytes() ([]byte, error) {
 		b = le.AppendUint32(b, uint32(sp.Rotate))
 		b = append(b, 0, 0, 0, 0, 0, 0, 0, 0)
 	}
-	if bg := s.Background; bg != nil {
-		t, _ := index(s.Textures, bg.Texture)
+	for _, l := range layers {
+		t, _ := index(s.Textures, l.Texture)
 		b = le.AppendUint32(b, uint32(t))
-		b = le.AppendUint16(b, uint16(bg.Cell))
-		b = le.AppendUint16(b, 0)
-		b = le.AppendUint16(b, uint16(bg.Width))
-		b = le.AppendUint16(b, uint16(bg.Height))
-		b = le.AppendUint16(b, uint16(bg.Scroll[0]))
-		b = le.AppendUint16(b, uint16(bg.Scroll[1]))
-		for _, c := range bg.Window {
+		b = le.AppendUint16(b, uint16(l.Cell))
+		b = le.AppendUint16(b, uint16(l.Speed))
+		b = le.AppendUint16(b, uint16(l.Width))
+		b = le.AppendUint16(b, uint16(l.Height))
+		b = le.AppendUint16(b, uint16(l.Scroll[0]))
+		b = le.AppendUint16(b, uint16(l.Scroll[1]))
+		for _, c := range l.Window {
 			b = le.AppendUint16(b, uint16(c))
 		}
-		b = append(b, bg.Brightness[0], bg.Brightness[1], bg.Brightness[2], 0)
-		for _, c := range bg.Map {
+		b = append(b, l.Brightness[0], l.Brightness[1], l.Brightness[2], 1)
+		for _, c := range l.Map {
 			b = le.AppendUint16(b, c)
 		}
 		for len(b)%4 != 0 {
 			b = append(b, 0)
+		}
+		b = append(b, pad(l.Name, nameSize)...)
+		b = le.AppendUint16(b, uint16(len(l.Flags)))
+		b = le.AppendUint16(b, 0)
+		for _, f := range l.Flags {
+			b = append(b, uint8(f))
+		}
+		for len(b)%4 != 0 {
+			b = append(b, 0)
+		}
+	}
+	if r := s.Room; r != nil {
+		b = le.AppendUint16(b, uint16(r.cols()))
+		b = le.AppendUint16(b, uint16(r.rows()))
+		b = le.AppendUint16(b, uint16(r.Floor))
+		b = le.AppendUint16(b, uint16(r.Wall))
+		var flags uint8
+		if r.Rough {
+			flags |= 1
+		}
+		if r.Black {
+			flags |= 2
+		}
+		if r.Heights != nil {
+			flags |= 4
+		}
+		b = append(b, r.Tint[0], r.Tint[1], r.Tint[2], flags)
+		b = le.AppendUint16(b, uint16(r.RockTall))
+		b = le.AppendUint16(b, uint16(r.RockLean))
+		b = le.AppendUint16(b, uint16(r.CamUp))
+		b = le.AppendUint16(b, uint16(r.CamBack))
+		b = append(b, r.Sky[0][0], r.Sky[0][1], r.Sky[0][2], 0)
+		b = append(b, r.Sky[1][0], r.Sky[1][1], r.Sky[1][2], 0)
+		b = append(b, r.Background[0], r.Background[1], r.Background[2], 0)
+		b = le.AppendUint16(b, uint16(len(r.Links)))
+		b = le.AppendUint16(b, uint16(len(r.Markers)))
+		for _, row := range r.Cells {
+			b = append(b, row...)
+		}
+		for len(b)%4 != 0 {
+			b = append(b, 0)
+		}
+		for _, row := range r.Heights {
+			for i := 0; i < len(row); i++ {
+				b = append(b, row[i]-'0')
+			}
+		}
+		for len(b)%4 != 0 {
+			b = append(b, 0)
+		}
+		for _, l := range r.Links {
+			b = le.AppendUint32(b, uint32(l.Door))
+			b = append(b, pad(l.Scene, PathSize)...)
+		}
+		for _, m := range r.Markers {
+			b = append(b, pad(m.Name, nameSize)...)
+			b = le.AppendUint16(b, uint16(m.Cell[0]))
+			b = le.AppendUint16(b, uint16(m.Cell[1]))
+			b = le.AppendUint32(b, uint32(m.Fields[0]))
+			b = le.AppendUint32(b, uint32(m.Fields[1]))
 		}
 	}
 	return b, nil
@@ -391,8 +745,12 @@ func Decode(b []byte) (*Scene, error) {
 	nt, nm, no, ns := int(counts&0xff), int(counts>>8&0xff), int(counts>>16&0xff), int(counts>>24)
 	lights := le.Uint32(b[8:])
 	nl := int(lights & 0xff)
-	hasBG := lights&(1<<8) != 0
-	if nt > MaxTextures || nm > MaxModels || no > MaxObjects || ns > MaxSprites || nl > MaxLights {
+	nLayers := 0
+	if lights&(1<<8) != 0 {
+		nLayers = int(lights>>10&3) + 1
+	}
+	hasRoom := lights&(1<<9) != 0
+	if nt > MaxTextures || nm > MaxModels || no > MaxObjects || ns > MaxSprites || nl > MaxLights || nLayers > MaxLayers {
 		return nil, errors.New("scene: the counts are past what a scene holds")
 	}
 	s := &Scene{Projection: int32(le.Uint32(b[projectionAt:]))}
@@ -465,31 +823,105 @@ func Decode(b []byte) (*Scene, error) {
 		s.Sprites = append(s.Sprites, sp)
 		at += SpriteSize
 	}
-	if hasBG {
-		if len(b) < at+BackgroundSize {
-			return nil, errors.New("scene: the background runs past the end of the file")
+	for k := range nLayers {
+		if len(b) < at+LayerSize {
+			return nil, fmt.Errorf("scene: layer %d runs past the end of the file", k)
 		}
 		r := b[at:]
-		bg := &Background{Cell: int(le.Uint16(r[4:])), Width: int(le.Uint16(r[8:])), Height: int(le.Uint16(r[10:]))}
+		l := Layer{Cell: int(le.Uint16(r[4:])), Speed: int(le.Uint16(r[6:])), Width: int(le.Uint16(r[8:])), Height: int(le.Uint16(r[10:]))}
 		t := int(le.Uint32(r))
 		if t >= nt {
-			return nil, fmt.Errorf("scene: the background names texture %d of %d", t, nt)
+			return nil, fmt.Errorf("scene: layer %d names texture %d of %d", k, t, nt)
 		}
-		bg.Texture = s.Textures[t]
-		bg.Scroll = [2]int16{int16(le.Uint16(r[12:])), int16(le.Uint16(r[14:]))}
-		for i := range bg.Window {
-			bg.Window[i] = int16(le.Uint16(r[16+2*i:]))
+		l.Texture = s.Textures[t]
+		l.Scroll = [2]int16{int16(le.Uint16(r[12:])), int16(le.Uint16(r[14:]))}
+		for i := range l.Window {
+			l.Window[i] = int16(le.Uint16(r[16+2*i:]))
 		}
-		bg.Brightness = [3]uint8{r[24], r[25], r[26]}
-		n := bg.Width * bg.Height
-		if n > MaxMapCells || len(b) < at+BackgroundSize+mapBytes(n) {
-			return nil, errors.New("scene: the background's map runs past the end of the file")
+		l.Brightness = [3]uint8{r[24], r[25], r[26]}
+		named := r[27]&1 != 0
+		n := l.Width * l.Height
+		if n > MaxMapCells || len(b) < at+LayerSize+mapBytes(n) {
+			return nil, fmt.Errorf("scene: layer %d's map runs past the end of the file", k)
 		}
-		bg.Map = make([]uint16, n)
-		for i := range bg.Map {
-			bg.Map[i] = le.Uint16(r[BackgroundSize+2*i:])
+		l.Map = make([]uint16, n)
+		for i := range l.Map {
+			l.Map[i] = le.Uint16(r[LayerSize+2*i:])
 		}
-		s.Background = bg
+		at += LayerSize + mapBytes(n)
+		if !named {
+			// A file from before layers: its one map, moving with the
+			// scroll.
+			l.Name, l.Speed = "background", 100
+			s.Layers = append(s.Layers, l)
+			continue
+		}
+		if len(b) < at+LayerNameSize {
+			return nil, fmt.Errorf("scene: layer %d's name runs past the end of the file", k)
+		}
+		r = b[at:]
+		l.Name = str(r[:nameSize])
+		nf := int(le.Uint16(r[nameSize:]))
+		if nf > MaxCells || len(b) < at+LayerNameSize+cellBytes(nf) {
+			return nil, fmt.Errorf("scene: layer %q's flags run past the end of the file", l.Name)
+		}
+		for _, f := range r[LayerNameSize : LayerNameSize+nf] {
+			l.Flags = append(l.Flags, int(f))
+		}
+		at += LayerNameSize + cellBytes(nf)
+		s.Layers = append(s.Layers, l)
+	}
+	if hasRoom {
+		if len(b) < at+RoomSize {
+			return nil, errors.New("scene: the room runs past the end of the file")
+		}
+		r := b[at:]
+		room := &Room{Floor: int(le.Uint16(r[4:])), Wall: int(le.Uint16(r[6:]))}
+		cols, rows := int(le.Uint16(r)), int(le.Uint16(r[2:]))
+		room.Tint = [3]uint8{r[8], r[9], r[10]}
+		flags := r[11]
+		room.Rough, room.Black = flags&1 != 0, flags&2 != 0
+		room.RockTall, room.RockLean = int(le.Uint16(r[12:])), int(le.Uint16(r[14:]))
+		room.CamUp, room.CamBack = int(le.Uint16(r[16:])), int(le.Uint16(r[18:]))
+		room.Sky = [2][3]uint8{{r[20], r[21], r[22]}, {r[24], r[25], r[26]}}
+		room.Background = [3]uint8{r[28], r[29], r[30]}
+		nl, nmk := int(le.Uint16(r[32:])), int(le.Uint16(r[34:]))
+		n := cols * rows
+		size := RoomSize + cellBytes(n) + LinkSize*nl + MarkerSize*nmk
+		if flags&4 != 0 {
+			size += cellBytes(n)
+		}
+		if cols < 1 || rows < 1 || cols > MaxRoomCells || rows > MaxRoomCells || nl > MaxLinks || nmk > MaxMarkers || len(b) < at+size {
+			return nil, errors.New("scene: the room's cells run past the end of the file")
+		}
+		r = r[RoomSize:]
+		for range rows {
+			room.Cells = append(room.Cells, string(r[:cols]))
+			r = r[cols:]
+		}
+		r = r[cellBytes(n)-n:]
+		if flags&4 != 0 {
+			for range rows {
+				row := make([]byte, cols)
+				for i := range row {
+					row[i] = '0' + r[i]
+				}
+				room.Heights = append(room.Heights, string(row))
+				r = r[cols:]
+			}
+			r = r[cellBytes(n)-n:]
+		}
+		for range nl {
+			room.Links = append(room.Links, Link{Door: int(le.Uint32(r)), Scene: str(r[4 : 4+PathSize])})
+			r = r[LinkSize:]
+		}
+		for range nmk {
+			m := Marker{Name: str(r[:nameSize]), Cell: [2]int{int(le.Uint16(r[16:])), int(le.Uint16(r[18:]))}}
+			m.Fields = [2]int32{int32(le.Uint32(r[20:])), int32(le.Uint32(r[24:]))}
+			room.Markers = append(room.Markers, m)
+			r = r[MarkerSize:]
+		}
+		s.Room = room
 	}
 	return s, nil
 }
