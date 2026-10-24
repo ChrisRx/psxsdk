@@ -15,6 +15,7 @@ These are what a PlayStation program imports. Each builds on the host too, with 
 | [`disc`](https://pkg.go.dev/go.chrisrx.dev/psx/disc) | Declaring the files a program reads off its disc, which the build puts there |
 | [`archive`](https://pkg.go.dev/go.chrisrx.dev/psx/archive) | Reading archives: many files in one, unpacked piece by piece |
 | [`scene`](https://pkg.go.dev/go.chrisrx.dev/psx/scene) | Drawing a scene made in the playground's scene editor |
+| [`stage`](https://pkg.go.dev/go.chrisrx.dev/psx/stage) | Drawing a room of cells with heights, Dragon Quest VII's way: floors, walls, rock, water, cabins |
 
 ## On the host
 

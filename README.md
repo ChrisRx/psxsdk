@@ -53,7 +53,7 @@ task serve             # build the site and the playground, and serve them on lo
 
 | Directory | What is there |
 | --- | --- |
-| [`yaroze`](yaroze), [`disc`](disc), [`archive`](archive), [`scene`](scene) | What a program imports: the Net Yaroze library, its files on the disc, archives and scenes |
+| [`yaroze`](yaroze), [`disc`](disc), [`archive`](archive), [`scene`](scene), [`stage`](stage) | What a program imports: the Net Yaroze library, its files on the disc, archives, scenes and rooms of cells |
 | [`cmd`](cmd) | `yaroze`, which builds a program onto a disc in one step, with its compiler built in |
 | [`tools`](tools) | The converters, the disc and executable tools, and the emulator's front ends, each [documented](https://chrisrx.github.io/psxsdk/tools/) |
 | [`link`](link), [`format`](format) | Executables, discs and the console's file formats |
