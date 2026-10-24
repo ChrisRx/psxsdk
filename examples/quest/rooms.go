@@ -9,13 +9,14 @@ import (
 
 // A room is a scene file in scenes/, cooked by mkscene onto the disc: a
 // map of cells for package stage to draw, in its legend ('#' a wall, '.'
-// floor, 'c' a house's wall, 't' a treasure chest and a digit a
-// doorway), the look round it, its links, which say which room each
-// doorway's digit leads to, and its markers, cells named for the people
-// and things that stand on them. What they say is here, by the markers'
-// names. The hall's doorway in its near side leads to the meadow's in
-// its far side, so that the hero comes out of it walking the way they
-// went in and a held direction carries them on into the meadow.
+// floor, 'c' a house's wall, 'b' and 'p' a bed, 't' a treasure chest and
+// a digit a doorway), the look round it, its links, which say which room
+// each doorway's digit leads to, and its markers, cells named for the
+// people and things that stand on them. What they say is here, by the
+// markers' names. A doorway in a room's near side leads to one in the next
+// room's far side, and one in a far side to one in a near side, so that
+// the hero comes out of it walking the way they went in and a held
+// direction carries them on into the room.
 type room struct {
 	// Map is the room's map, once it is loaded, which world holds.
 	*stage.Map
@@ -64,7 +65,7 @@ const (
 // can write a room painted larger over the one the program loaded.
 var (
 	world    scene.Scene
-	roomData [2][4096]uint32
+	roomData [3][4096]uint32
 )
 
 var rooms = [...]room{
@@ -76,11 +77,18 @@ var rooms = [...]room{
 		chests: []chest{{name: "chest", text: "{Player Name} opens the chest.\nInside she found a Copper Sword. She puts it away in her bag."}},
 	},
 	{
-		// The meadow: open grass, flat all over, with a house of logs
-		// and the villager who lives in it standing at its corner.
+		// The meadow: open grass, flat all over, with the way back to
+		// the hall in its far edge and a house of logs whose doorway is
+		// in its far side.
 		name: "meadow",
 		file: &meadowDAT,
-		npcs: []npc{{name: "villager", say: "Welcome to the meadow, traveler! That house is mine. The hall behind you is older than anyone can remember."}},
+	},
+	{
+		// Inside the house: a room of logs with a warm floor, a bed
+		// along its right wall, and the villager at home.
+		name: "house",
+		file: &houseDAT,
+		npcs: []npc{{name: "villager", say: "Welcome, traveler! Make yourself at home. There is a bed if you are weary, and the kettle is always on."}},
 	},
 }
 

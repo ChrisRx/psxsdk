@@ -1,12 +1,12 @@
-// Two rooms seen from above at a slant, a stone hall and a meadow, walked
-// around by Hero, a figure drawn flat over them, and joined by a doorway,
+// A stone hall, a meadow and a house seen from above at a slant, walked
+// around by Hero, a figure drawn flat over them, and joined by doorways,
 // as Dragon Quest VII's towns were: the start of a role playing game.
 //
 // Each room is a scene file in scenes/, cooked by mkscene onto the disc
 // and read with package scene: a map of cells, a tile each, walls, floor,
-// a doorway and a house; links from the doorway to the room it leads to;
-// and markers, the cells the chest and the villager stand on, which
-// rooms.go gives their lines by name. Package stage draws the room from
+// doorways, a house and a bed; links from each doorway to the room it
+// leads to; and markers, the cells the chest and the villager stand on,
+// which rooms.go gives their lines by name. Package stage draws the room from
 // the map every frame, a textured quad for each floor cell, for each side
 // of a wall cell that borders floor, two tiles high, and for the wall's
 // top, each put through the GTE and built as a GPU packet, which is what
@@ -27,7 +27,9 @@
 //
 // The house is a block of cells two rows deep whose sides are drawn as
 // log walls and whose top is a roof of two slopes meeting at a ridge
-// between the rows, with gables at the block's ends.
+// between the rows, with gables at the block's ends. The doorway in its
+// far side leads to the room inside it, where the villager lives, with a
+// bed along the wall.
 //
 // Hero (hero.go) is a sprite, placed each frame where their
 // feet project to on the screen and sorted at that depth, a little in
@@ -39,9 +41,9 @@
 // whichever way it has turned. A step is tried a map cell at a time: the
 // corners of the hero's footprint must all be on floor, and the ground
 // must not rise or fall too steeply for the step; each axis is tried on
-// its own, so that a step into a wall slides along it. Stepping onto the
-// doorway puts the hero in the other room, just inside its doorway, after
-// a few black frames.
+// its own, so that a step into a wall slides along it. Stepping onto a
+// doorway puts the hero in the room it leads to, just inside its doorway,
+// after a few black frames.
 //
 // Cross speaks to whoever Hero faces, or opens the chest in front of
 // them, and what is said comes up in a text box along the bottom of the
@@ -73,9 +75,9 @@ package main
 // memory: the display buffers take x 0-319; the floor, the wall, the
 // grass and the chest share the top of the texture page at x 320 (4-bit,
 // so 64 pixels is 16 units), the hero's 256x192 sheet fills most of the
-// page at x 384, the logs and the roof share the page at x 448, the
-// villager's sheet the page at x 512, and the letters start the page at
-// x 576. The CLUTs take a row each from y 480.
+// page at x 384, the logs, the roof and the bed share the page at x 448,
+// the villager's sheet the page at x 512, and the letters start the page
+// at x 576. The CLUTs take a row each from y 480.
 //go:generate go run ./gen assets
 //go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 320,0 --clut 0,480 -o assets/FLOOR.TIM assets/floor.png
 //go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 336,0 --clut 0,481 --semi -o assets/WALL.TIM assets/wall.png
@@ -86,8 +88,10 @@ package main
 //go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 464,0 --clut 0,486 --semi -o assets/ROOF.TIM assets/roof.png
 //go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 512,0 --clut 0,487 -o assets/NPC.TIM assets/npc.png
 //go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 576,0 --clut 0,488 -o assets/FONT.TIM assets/font.png
+//go:generate go run go.chrisrx.dev/psx/tools/png2tim --at 480,0 --clut 0,489 -o assets/BED.TIM assets/bed.png
 //go:generate go run go.chrisrx.dev/psx/tools/mkscene -o assets/HALL.DAT scenes/hall.json
 //go:generate go run go.chrisrx.dev/psx/tools/mkscene -o assets/MEADOW.DAT scenes/meadow.json
+//go:generate go run go.chrisrx.dev/psx/tools/mkscene -o assets/HOUSE.DAT scenes/house.json
 //go:generate go run go.chrisrx.dev/psx/tools/discgen assets
 
 import (
@@ -157,7 +161,7 @@ func main() {
 		pad.Update()
 		// The playground's live view: a room painted in the editor is
 		// written over the file and placed again, and Play from here
-		// puts Hero on a cell, in the other room when it says so.
+		// puts Hero on a cell, in another room when it says so.
 		if world.Reload() {
 			hero.here().place()
 		}
@@ -214,6 +218,7 @@ func setup(b yaroze.RECT) {
 		Walls:  walls[:],
 		Logs:   walls[wallLog],
 		Roof:   stage.NewSurface(yaroze.TIM(roofTIM.Data()).Load().Texture()),
+		Bed:    yaroze.TIM(bedTIM.Data()).Load().Texture(),
 		Chest:  yaroze.TIM(chestTIM.Data()).Load().Texture(),
 	}
 	people.cut(yaroze.TIM(npcTIM.Data()).Load())

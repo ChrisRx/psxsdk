@@ -8,12 +8,14 @@ import (
 
 // The files under assets, placed on the disc under ASSETS.
 var (
+	bedTIM    = disc.Register("ASSETS/BED.TIM", "assets/BED.TIM")
 	chestTIM  = disc.Register("ASSETS/CHEST.TIM", "assets/CHEST.TIM")
 	floorTIM  = disc.Register("ASSETS/FLOOR.TIM", "assets/FLOOR.TIM")
 	fontTIM   = disc.Register("ASSETS/FONT.TIM", "assets/FONT.TIM")
 	grassTIM  = disc.Register("ASSETS/GRASS.TIM", "assets/GRASS.TIM")
 	hallDAT   = disc.Register("ASSETS/HALL.DAT", "assets/HALL.DAT")
 	heroTIM   = disc.Register("ASSETS/HERO.TIM", "assets/HERO.TIM")
+	houseDAT  = disc.Register("ASSETS/HOUSE.DAT", "assets/HOUSE.DAT")
 	logTIM    = disc.Register("ASSETS/LOG.TIM", "assets/LOG.TIM")
 	meadowDAT = disc.Register("ASSETS/MEADOW.DAT", "assets/MEADOW.DAT")
 	npcTIM    = disc.Register("ASSETS/NPC.TIM", "assets/NPC.TIM")
@@ -23,12 +25,14 @@ var (
 
 // files is every file above, in the order disc.LoadAll reads them.
 var files = []*disc.File{
+	&bedTIM,
 	&chestTIM,
 	&floorTIM,
 	&fontTIM,
 	&grassTIM,
 	&hallDAT,
 	&heroTIM,
+	&houseDAT,
 	&logTIM,
 	&meadowDAT,
 	&npcTIM,

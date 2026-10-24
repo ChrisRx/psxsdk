@@ -1,9 +1,9 @@
 // Command gen writes the quest example's placeholder art: a flagstone floor
 // texture, a stone wall texture, a grass texture, a log wall and a
-// shingled roof for the house, a treasure chest, the text box's letters,
-// and two sprite sheets, Hero's and the villager's, eight ways to face by
-// four frames of walking. Hand-made art of the same names and sizes
-// replaces the pictures.
+// shingled roof for the house, a bed, a treasure chest, the text box's
+// letters, and two sprite sheets, Hero's and the villager's, eight ways to
+// face by four frames of walking. Hand-made art of the same names and
+// sizes replaces the pictures.
 package main
 
 import (
@@ -24,6 +24,7 @@ func main() {
 	writePNG(filepath.Join(dir, "grass.png"), grass())
 	writePNG(filepath.Join(dir, "log.png"), logs())
 	writePNG(filepath.Join(dir, "roof.png"), roof())
+	writePNG(filepath.Join(dir, "bed.png"), bed())
 	writePNG(filepath.Join(dir, "chest.png"), chest())
 	writePNG(filepath.Join(dir, "font.png"), font())
 	writePNG(filepath.Join(dir, "hero.png"), sheet(heroPalette))
@@ -201,6 +202,49 @@ var glyphs = map[rune][]string{
 	'y':  {".....", ".....", "#...#", "#...#", "#...#", ".####", "....#", ".###."},
 	'z':  {".....", ".....", "#####", "...#.", "..#..", ".#...", "#####"},
 	127:  {".....", ".....", "#####", ".###.", "..#.."},
+}
+
+// bed is a 64x64 texture in three bands: a quilt of checks for the top
+// of a bed, a pillow, and planks for its sides.
+func bed() image.Image {
+	pal := color.Palette{
+		color.NRGBA{60, 80, 170, 255},
+		color.NRGBA{200, 205, 235, 255},
+		color.NRGBA{40, 50, 110, 255},
+		color.NRGBA{240, 240, 245, 255},
+		color.NRGBA{190, 190, 200, 255},
+		color.NRGBA{120, 80, 40, 255},
+		color.NRGBA{80, 50, 25, 255},
+		color.NRGBA{150, 105, 55, 255},
+	}
+	img := image.NewPaletted(image.Rect(0, 0, 64, 64), pal)
+	for y := range 64 {
+		for x := range 64 {
+			var c uint8
+			switch {
+			case y < 32:
+				c = uint8((x/8 + y/8) % 2)
+				if x%8 == 0 || y%8 == 0 {
+					c = 2
+				}
+			case y < 48:
+				c = 3
+				if x < 3 || x > 60 || y < 34 || y > 45 {
+					c = 4
+				}
+			default:
+				c = 5
+				switch {
+				case y%8 == 0 || (x+y/8*20)%32 == 0:
+					c = 6
+				case y%8 == 1:
+					c = 7
+				}
+			}
+			img.SetColorIndex(x, y, c)
+		}
+	}
+	return img
 }
 
 // logs is a 64x64 log wall: four logs, each rounded, lit along its top

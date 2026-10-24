@@ -1,0 +1,29 @@
+{
+  "room": {
+    "floor": 0,
+    "wall": 1,
+    "tint": [160, 130, 100],
+    "cells": [
+      "###3####",
+      "#......#",
+      "#......#",
+      "#....bp#",
+      "#......#",
+      "########"
+    ],
+    "background": [0, 0, 0],
+    "links": [
+      {
+        "door": 3,
+        "scene": "ASSETS/MEADOW.DAT"
+      }
+    ],
+    "markers": [
+      {
+        "name": "villager",
+        "cell": [2, 2],
+        "fields": [4, 0]
+      }
+    ]
+  }
+}

@@ -248,9 +248,10 @@ func TestQuestChest(t *testing.T) {
 
 // TestQuestMeadow walks Hero straight down out of the hall's doorway,
 // below where they start, into the meadow, just inside the doorway in its
-// far side, still walking down, for a picture of the grass and the
-// house; then down to the villager's row and right until the villager
-// stops them, and has the villager say their line.
+// far edge, still walking down, for a picture of the grass and the house;
+// then across to the house's doorway, in its far side, and down through
+// it into the room inside, for a picture of the villager and the bed, and
+// on to the villager, who says their line.
 func TestQuestMeadow(t *testing.T) {
 	m := bootExample(t, "quest")
 	m.RunUntilCount("main.screen", 60, frameBudget)
@@ -268,14 +269,28 @@ func TestQuestMeadow(t *testing.T) {
 	m.RunFrames(20)
 	m.Golden("quest-meadow.png")
 
-	// The villager stands at x 256, z 0: 234 frames down is z 2, their
-	// row, and right stops Hero a footprint either side short of them,
-	// at x 228, facing them, close enough to speak to.
-	m.Hold(1, emu.ButtonDown|emu.ButtonRight, 234)
-	assert.Equal(t, int32(2<<4), int32(m.Read32(j.pz)), "Hero should stand in the villager's row")
-	m.Hold(1, emu.ButtonUp|emu.ButtonRight, 100)
-	assert.Equal(t, int32(228<<4), int32(m.Read32(j.px)), "the villager should stop Hero")
-	assert.Equal(t, uint32(2), m.Read32(j.facing), "Hero should face the villager")
+	// The house's doorway is the 23rd column, x 416 to 480, of the ninth
+	// row, z 224 to 288: 149 frames right put Hero at x 447, in its
+	// column, and down takes them through it on the 139th frame, into the
+	// house, the fourth column of its second row, x -32, z 96, just
+	// inside its doorway.
+	m.Hold(1, emu.ButtonUp|emu.ButtonRight, 149)
+	assert.Equal(t, int32(447<<4), int32(m.Read32(j.px)), "Hero should stand in the house's doorway's column")
+	m.Hold(1, emu.ButtonDown|emu.ButtonRight, 145)
+	assert.Equal(t, uint32(2), m.Read32(j.cur), "the house's doorway should lead inside it")
+	assert.Equal(t, int32(-32<<4), int32(m.Read32(j.px)), "Hero should stand in the column of the house's doorway")
+	assert.Equal(t, int32(96<<4), int32(m.Read32(j.pz)), "Hero should stand in the cell inside the house's doorway")
+	m.RunFrames(20)
+	m.Golden("quest-house.png")
+
+	// The villager stands at x -96, z 32: 21 frames down is z 33, their
+	// row, and left stops Hero a footprint either side short of them, at
+	// x -68, facing them, close enough to speak to.
+	m.Hold(1, emu.ButtonDown|emu.ButtonRight, 21)
+	assert.Equal(t, int32(33<<4), int32(m.Read32(j.pz)), "Hero should stand in the villager's row")
+	m.Hold(1, emu.ButtonDown|emu.ButtonLeft, 30)
+	assert.Equal(t, int32(-68<<4), int32(m.Read32(j.px)), "the villager should stop Hero")
+	assert.Equal(t, uint32(6), m.Read32(j.facing), "Hero should face the villager")
 	m.Hold(1, emu.ButtonCross, 2)
 	assert.Equal(t, uint32(1), m.Read32(j.talking)&0xff, "Cross facing the villager should put their line up")
 	m.RunFrames(80)
