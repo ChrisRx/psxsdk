@@ -15,7 +15,7 @@ Each page here takes one thing nearly every game needs and explains how the Play
 | [CD audio](cd-audio.md) | Music recorded on the disc as audio tracks, played by the drive | [cdda](../examples/cdda.md) |
 | [Timing](timing.md) | The root counters, a clock, and how much of a frame the work takes | [timers](../examples/timers.md) |
 | [Scrolling backgrounds](backgrounds.md) | A tile map bigger than the screen, drawn by the library | [tiles](../examples/tiles.md) |
-| [Enemies](enemies.md) | Chasing, fleeing, patterns and states | [ai](../examples/ai.md) |
+| [Enemies](enemies.md) | Chasing, fleeing, patterns and states | its own, on the page |
 | [Split screens](split-screen.md) | Two players, two cameras, two ordering tables | [split](../examples/split.md) |
 
 The [guide](../guide/index.md) covers what every program has, the frame, the disc and the data, and the [tutorial](../tutorial/index.md) writes one from nothing. These pages assume the tutorial's program, or one like it.

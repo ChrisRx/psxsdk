@@ -717,36 +717,6 @@ func TestTilesScreenshot(t *testing.T) {
 	assert.Equal(t, [2]int16{40*16 - 320, 32*16 - 240}, [2]int16{int16(scroll), int16(scroll >> 16)}, "scrolled to the far corner")
 }
 
-// TestAIScreenshot checks that the enemy closes on the player while circle
-// is held and draws away when it is let go, that in the random states it
-// changes state, and shows the random states.
-func TestAIScreenshot(t *testing.T) {
-	m := bootExample(t, "ai")
-	m.RunUntilCount("main.screen", 30, frameBudget)
-	dist := m.Sym("main.distance")
-	far := int32(m.Read32(dist))
-	m.Pad(1).Press(emu.ButtonCircle)
-	m.RunFrames(60)
-	near := int32(m.Read32(dist))
-	m.Pad(1).Release(emu.ButtonCircle)
-	m.RunFrames(60)
-	away := int32(m.Read32(dist))
-	t.Logf("distance %d, %d attacking, %d evading", far, near, away)
-	assert.Equal(t, true, near < far-50, "attack closes in")
-	assert.Equal(t, true, away > near+20, "evade draws away")
-
-	for range 5 {
-		m.Hold(1, emu.ButtonR1, 6)
-		m.RunFrames(4)
-	}
-	assert.Equal(t, uint32(5), m.Read32(m.Sym("main.mode")), "the random states")
-	st := m.Sym("main.state")
-	first := m.Read32(st)
-	m.RunUntil(func() bool { return m.Read32(st) != first }, 60*emutest.Second, "a change of state")
-	m.RunFrames(40)
-	m.Golden("ai.png")
-}
-
 // The layout of yaroze.Object on the console: a GsDOBJ2 of 16 bytes and a
 // GsCOORDINATE2 of 80, then Position, then Rotation and Scale.
 const (

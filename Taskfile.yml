@@ -26,16 +26,17 @@ tasks:
 
   # Builds every example's disc, each onto .build/NAME/NAME.cue: every
   # directory under examples with a main.go, since examples/internal holds
-  # what they share and is not one. The tutorial's disc goes first, on its
-  # own, so that the compiler is unpacked and compiled for the runtime
-  # once, rather than by every build at the same time; the rest then run
-  # in parallel, as many at once as task -C allows, which CI limits to the
-  # runner's cores.
+  # what they share and is not one, and the cookbook's programs. The
+  # tutorial's disc goes first, on its own, so that the compiler is
+  # unpacked and compiled for the runtime once, rather than by every build
+  # at the same time; the rest then run in parallel, as many at once as
+  # task -C allows, which CI limits to the runner's cores.
   build:discs:
     deps:
       - build:disc:tutorial
     cmds:
       - task: build:discs:examples
+      - task: build:disc:cookbook
 
   build:discs:examples:
     internal: true
@@ -114,6 +115,14 @@ tasks:
     cmds:
       - task: build:disc
         vars: { NAME: hello, DIR: docs/tutorial/hello }
+
+  # Builds the cookbook's programs, which live beside their pages rather
+  # than among the examples, onto .build/NAME/NAME.cue, so that they run on
+  # their pages and in the emulator tests.
+  build:disc:cookbook:
+    cmds:
+      - task: build:disc
+        vars: { NAME: enemies, DIR: docs/cookbook/enemies }
 
   # Builds the program in DIR, examples/NAME unless told otherwise, onto a
   # disc and runs it in a window with yaroze run, booting OpenBIOS. Flags
@@ -196,14 +205,15 @@ tasks:
       EXAMPLES:
         # Every directory under examples with a main.go; examples/internal
         # holds what they share, and is not one. The tutorial's first
-        # program joins them.
-        sh: for f in examples/*/main.go; do basename "$(dirname "$f")"; done; echo hello
+        # program and the cookbook's programs join them.
+        sh: for f in examples/*/main.go docs/cookbook/*/main.go; do basename "$(dirname "$f")"; done; echo hello
     sources:
       - 'emu/openbios/*'
       - '.build/*/*.cue'
       - '.build/*/*.bin'
       - 'examples/*/assets/**/*'
       - 'docs/tutorial/*/assets/**/*'
+      - 'docs/cookbook/*/assets/**/*'
     generates:
       - '{{.PLAY}}/examples.json'
       - '{{.PLAY}}/openbios.bin'
@@ -214,7 +224,7 @@ tasks:
         cmd: |
           mkdir -p {{.PLAY}}/examples/{{.ITEM}}
           cp .build/{{.ITEM}}/{{.ITEM}}.cue .build/{{.ITEM}}/{{.ITEM}}.bin {{.PLAY}}/examples/{{.ITEM}}/
-          src=examples/{{.ITEM}}; [ -d "$src" ] || src=docs/tutorial/{{.ITEM}}
+          src=examples/{{.ITEM}}; [ -d "$src" ] || src=docs/tutorial/{{.ITEM}}; [ -d "$src" ] || src=docs/cookbook/{{.ITEM}}
           rm -rf {{.PLAY}}/examples/{{.ITEM}}/data {{.PLAY}}/examples/{{.ITEM}}/assets
           if [ -d "$src/assets" ]; then cp -R "$src/assets" {{.PLAY}}/examples/{{.ITEM}}/; fi
       - |
@@ -222,7 +232,7 @@ tasks:
           printf '['
           sep=''
           for name in {{.EXAMPLES | splitLines | join " "}}; do
-            src=examples/$name; [ -d "$src" ] || src=docs/tutorial/$name
+            src=examples/$name; [ -d "$src" ] || src=docs/tutorial/$name; [ -d "$src" ] || src=docs/cookbook/$name
             assets=
             if [ -d "$src/assets" ]; then assets=$(cd "$src" && find assets -type f | LC_ALL=C sort | sed 's/.*/"&"/' | paste -sd, - | sed 's/,/, /g'); fi
             printf '%s\n  {"name": "%s", "cue": "examples/%s/%s.cue", "assets": [%s]}' "$sep" "$name" "$name" "$name" "$assets"
