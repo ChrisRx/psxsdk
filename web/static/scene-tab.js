@@ -1,12 +1,19 @@
-// The Scene tab: the project's scenes under scenes/, edited by placing
-// things. The viewport draws it at 320 by 240 the way the console does
-// (preview.js), through the scene's own camera, projection and lights,
-// with the models textured from the project's TIMs; an object is picked
-// by clicking it, moved by dragging it across the view, or into it with
-// Shift, and placed exactly in the inspector under the picture; the
-// camera orbits what it looks at when the empty picture is dragged, and
-// the wheel brings it closer. Every change goes into the scene's file and
-// mkscene cooks its data file from it (convert.js), so Run shows it.
+// The scene editor: the project's scenes under scenes/, edited by placing
+// things, in the Scenes layout (layout.js). The viewport draws a scene at
+// 320 by 240 the way the console does (preview.js), at as many times that
+// as there is room for, through the scene's own camera, projection and
+// lights, with the models textured from the project's TIMs. An object is
+// picked by clicking it, in the picture or in the sidebar, where what the
+// scene holds is listed under it; it is moved by dragging it across the
+// view, or into it with Shift, and placed exactly in the inspector in the
+// right column, which shows the camera, the lights, a tile layer or the
+// room when their rows are picked instead. The camera looks around with
+// the right button, orbits with Alt and comes closer with the wheel. The
+// toolbar over the picture holds what applies to what is being edited:
+// the gizmo's modes for a scene of objects, the room's tools for a room
+// (room-edit.js), a tile layer's while its cells are being laid, when its
+// map takes the picture's place. Every change goes into the scene's file
+// and mkscene cooks its data file from it (convert.js), so Run shows it.
 //
 // The units are the console's: positions in world units, rotations with
 // 4096 a whole turn, scales with 4096 as 1.0, sprites in pixels from the
@@ -25,9 +32,7 @@ const sceneTab = (() => {
   const cameraForm = $("scene-camera");
   const lightsForm = $("scene-lights");
   const status = $("scene-status");
-  const addModel = $("scene-add-model");
-  const addSprite = $("scene-add-sprite");
-  const outline = $("scene-outline");
+  const counts = $("scene-counts");
   const snapButton = $("scene-snap");
   let snap = false; // positions to 16 units and turns to 64ths while dragging
   let gizmoMode = "move"; // move, rotate or scale: W, E and R
@@ -38,6 +43,9 @@ const sceneTab = (() => {
   let consoleTimer = 0;
   let search = "";        // the outline's filter
   const problems = new Map(); // object index to what is wrong with it
+  let panel = null;       // what the inspector shows: object, camera, lights, tiles or room
+  let layerIndex = 0;     // the tile layer the tiles panel edits; a scene opens on its nearest
+  const layer = () => doc?.layers[layerIndex] ?? null;
 
   const W = preview.W;
   const H = preview.H;
@@ -104,22 +112,42 @@ const sceneTab = (() => {
         models: d.models ?? [],
         objects: (d.objects ?? []).map((o) => ({ name: o.name ?? "", model: o.model ?? "", index: o.index ?? 0, position: o.position ?? [0, 0, 0], rotation: o.rotation ?? [0, 0, 0], scale: o.scale ?? [0, 0, 0], fields: o.fields ?? [0, 0], hidden: !!o.hidden })),
         sprites: (d.sprites ?? []).map((s) => ({ attribute: 0, x: 0, y: 0, w: 0, h: 0, tpage: 0, u: 0, v: 0, cx: 0, cy: 0, r: 128, g: 128, b: 128, mx: 0, my: 0, scalex: 0, scaley: 0, rotate: 0, ...s })),
-        background: null,
+        layers: readLayers(d),
+        // A room of cells, for package stage, edited by room-edit.js.
+        room: roomEdit.normalize(d.room),
       };
-      if (d.background?.texture) {
-        const bg = d.background;
-        const width = Math.max(1, Math.min(64, bg.width | 0 || 20));
-        const height = Math.max(1, Math.min(64, bg.height | 0 || 15));
-        const map = new Array(width * height).fill(0);
-        for (let i = 0; i < map.length && i < (bg.map?.length ?? 0); i++) map[i] = bg.map[i];
-        doc.background = { texture: bg.texture, cell: 16, width, height, map, scroll: bg.scroll ?? [0, 0], window: bg.window ?? [0, 0, 0, 0], brightness: bg.brightness ?? [128, 128, 128] };
-      }
+      if (layerIndex >= doc.layers.length) layerIndex = Math.max(0, doc.layers.length - 1);
       error = "";
     } catch (e) {
       doc = null;
       error = `${path} does not parse: ${e.message}`;
     }
-    if (selected && !(selected.kind === "object" ? doc?.objects[selected.index] : doc?.sprites[selected.index])) selected = null;
+    if (selected && !(selected.kind === "object" ? doc?.objects[selected.index] : selected.kind === "marker" ? doc?.room?.markers[selected.index] : doc?.sprites[selected.index])) selected = null;
+  }
+
+  // The most a scene has of layers and of cells in a layer's map, as
+  // format/scene has them, and a cell no texture's.
+  const MAX_LAYERS = 3;
+  const MAX_MAP_CELLS = 4096;
+  const EMPTY = 0xffff;
+
+  // readLayers is a scene's tile layers, an older file's background as the
+  // first, named "background", moving with the scroll.
+  function readLayers(d) {
+    const list = Array.isArray(d.layers) ? d.layers : d.background?.texture ? [{ ...d.background, name: "background", speed: 100 }] : [];
+    return list.filter((l) => l?.texture).slice(0, MAX_LAYERS).map((l, k) => {
+      const width = Math.max(1, Math.min(MAX_MAP_CELLS, l.width | 0 || 20));
+      const height = Math.max(1, Math.min(Math.floor(MAX_MAP_CELLS / width), l.height | 0 || 15));
+      const map = new Array(width * height).fill(EMPTY);
+      for (let i = 0; i < map.length && i < (l.map?.length ?? 0); i++) map[i] = l.map[i];
+      return {
+        name: String(l.name ?? `layer ${k + 1}`).slice(0, 15),
+        texture: l.texture, cell: 16, width, height, map,
+        scroll: l.scroll ?? [0, 0], window: l.window ?? [0, 0, 0, 0], brightness: l.brightness ?? [128, 128, 128],
+        speed: Number.isFinite(l.speed) ? l.speed : 100,
+        flags: (Array.isArray(l.flags) ? l.flags : []).slice(0, 256).map((f) => f & 255),
+      };
+    });
   }
 
   // The project's TIMs and TMDs, by the paths the disc knows them by.
@@ -166,7 +194,7 @@ const sceneTab = (() => {
   function lists() {
     const models = [...new Set(doc.objects.map((o) => o.model).filter(Boolean))];
     const textures = new Set(doc.sprites.map((s) => s.texture).filter(Boolean));
-    if (doc.background?.texture) textures.add(doc.background.texture);
+    for (const l of doc.layers) textures.add(l.texture);
     const pages = new Set();
     for (const m of models) {
       const tmd = tmdFor(m);
@@ -251,21 +279,45 @@ const sceneTab = (() => {
       return r;
     });
     if (!doc.camera.twist) out.camera = { from: doc.camera.from, at: doc.camera.at };
-    if (!doc.background) delete out.background;
+    if (!doc.room) delete out.room;
     else {
-      const bg = doc.background;
-      out.background = { texture: bg.texture, cell: 16, width: bg.width, height: bg.height, scroll: bg.scroll, brightness: bg.brightness, map: "\0map" };
-      if (bg.window.some((c) => c)) out.background.window = bg.window;
+      out.room = roomEdit.out(doc.room);
+      // A room alone is written alone: with no camera in the file, the
+      // program's own camera draws it (scene's setup leaves the camera,
+      // the projection and the lights when the file's camera is zero).
+      if (!doc.objects.length && !doc.sprites.length && !doc.layers.length) {
+        for (const k of Object.keys(out)) if (k !== "room") delete out[k];
+      }
     }
-    // The map goes a row to a line, which is readable where one number a
-    // line is not.
+    delete out.background;
+    // A layer's flags go on one line, without the zeros at their end, and
+    // its map a row to a line, which is readable where one number a line
+    // is not; both are put in after the rest is written.
+    const flagsOf = (l) => {
+      const f = l.flags.slice();
+      while (f.length && !f.at(-1)) f.pop();
+      return f;
+    };
+    if (!doc.layers.length) delete out.layers;
+    else {
+      out.layers = doc.layers.map((l, k) => {
+        const o = { name: l.name, texture: l.texture, cell: 16, width: l.width, height: l.height, scroll: l.scroll, brightness: l.brightness, speed: l.speed };
+        if (l.window.some((c) => c)) o.window = l.window;
+        if (flagsOf(l).length) o.flags = `\0flags${k}`;
+        o.map = `\0map${k}`;
+        return o;
+      });
+    }
     let text = JSON.stringify(out, null, 2);
-    if (doc.background) {
-      const bg = doc.background;
+    // Short arrays of numbers, a position, a color or a cell, go on one
+    // line.
+    text = text.replace(/\[\s+((?:-?\d+,\s+){0,3}-?\d+)\s+\]/g, (m, inner) => `[${inner.replace(/,\s+/g, ", ")}]`);
+    doc.layers.forEach((l, k) => {
       const rows = [];
-      for (let y = 0; y < bg.height; y++) rows.push("      " + bg.map.slice(y * bg.width, (y + 1) * bg.width).join(", "));
-      text = text.replace('"\\u0000map"', "[\n" + rows.join(",\n") + "\n    ]");
-    }
+      for (let y = 0; y < l.height; y++) rows.push("        " + l.map.slice(y * l.width, (y + 1) * l.width).join(", "));
+      text = text.replace(`"\\u0000map${k}"`, "[\n" + rows.join(",\n") + "\n      ]");
+      text = text.replace(`"\\u0000flags${k}"`, `[${flagsOf(l).join(", ")}]`);
+    });
     project().set(current, text + "\n", "scene");
     cookSoon();
   }
@@ -319,9 +371,53 @@ const sceneTab = (() => {
     liveStatus.textContent = "";
   }
 
+  // teleport asks the running program to put its figure on a cell of
+  // this room: the room's disc path, the cell, column and row in a word,
+  // and a flag go after the scene's name in the live record, which the
+  // program's scene.Teleport takes, loading the room first when it is
+  // showing another; once it shows this one, the room as edited here is
+  // written over it.
+  async function teleport(i, j) {
+    const p = project();
+    if (!p || !state.running || state.current?.id !== p.id) {
+      liveStatus.textContent = "Run the project to play from here.";
+      return;
+    }
+    const { address } = await call("symbol", { name: LIVE });
+    if (!(address >= 0)) {
+      liveStatus.textContent = "The running program does not read a scene.";
+      return;
+    }
+    const loadedName = async () => {
+      const head = await call("peek", { address, length: 48 });
+      if (!head.data) return "";
+      return new TextDecoder().decode(head.data.subarray(16, 48)).replace(/\0[^]*$/, "").replace(/^.*\//, "").toUpperCase();
+    };
+    const want = discPath(datPath());
+    const name = want.replace(/^.*\//, "");
+    const same = (await loadedName()) === name;
+    const path = new Uint8Array(32);
+    if (!same) path.set(new TextEncoder().encode(want.slice(0, 31)));
+    await call("poke", { address: address + 56, data: path });
+    await call("poke", { address: address + 48, data: new Uint8Array([i & 255, i >> 8, j & 255, j >> 8]) });
+    await call("poke", { address: address + 52, data: new Uint8Array([1, 0, 0, 0]) });
+    if (!same) {
+      // The program loads the room from its disc copy; the room as it
+      // is here goes over that once it is showing.
+      for (let n = 0; n < 20 && (await loadedName()) !== name; n++) await new Promise((r) => setTimeout(r, 100));
+      if ((await loadedName()) !== name) {
+        liveStatus.textContent = `The program did not go to ${name}: it may not know that room.`;
+        return;
+      }
+    }
+    await poke();
+    liveStatus.textContent = `Playing from cell ${i}, ${j} of ${name}.`;
+  }
+
   // The camera: the basis of the view, from where it is and what it looks
   // at, with the console's axes, Y down and Z away.
   function camera() {
+    if (doc.room) return roomEdit.camera();
     const [fx, fy, fz] = doc.camera.from;
     const [ax, ay, az] = doc.camera.at;
     let f = [ax - fx, ay - fy, az - fz];
@@ -402,6 +498,7 @@ const sceneTab = (() => {
     if (!doc) {
       ctx.putImageData(img, 0, 0);
       status.textContent = error || "No scene.";
+      counts.textContent = "";
       return;
     }
     const cam = camera();
@@ -409,9 +506,12 @@ const sceneTab = (() => {
     const v = vram();
 
     // The ground, a grid on the plane of the camera's target, for the
-    // sense of where things stand; a tile map covers it.
-    if (doc.background) {
-      drawBackground(out, v);
+    // sense of where things stand; tile layers cover it, and a room is
+    // drawn in its place.
+    if (doc.room) {
+      roomEdit.draw(out, ids, cam, v);
+    } else if (doc.layers.length) {
+      for (const l of doc.layers) drawLayer(out, v, l);
     } else {
       const gy = doc.camera.at[1];
       for (let k = -8; k <= 8; k++) {
@@ -510,16 +610,47 @@ const sceneTab = (() => {
       ctx.putImageData(img, 0, 0);
     }
     drawGizmo(cam);
+    if (doc.room) {
+      roomEdit.overlay(ctx, cam);
+      roomEdit.renderGrid();
+      renderHint();
+      return;
+    }
     const n = doc.objects.length, ns = doc.sprites.length;
     const notes = [];
     if (missing) notes.push(`${missing} without a model`);
     if (untextured.size) notes.push(`${untextured.size} without a texture`);
-    const first = [...problems.values()][0];
-    status.textContent = typing ? typingStatus() : `${n} object${n === 1 ? "" : "s"}, ${ns} sprite${ns === 1 ? "" : "s"}, ${polygons} polygon${polygons === 1 ? "" : "s"} a frame${notes.length ? ", " + notes.join(", ") : ""}.${first ? ` ${first[0].toUpperCase()}${first.slice(1)}.` : ""} ${modeHelp()}`;
+    sceneCounts = `${n} object${n === 1 ? "" : "s"} · ${ns} sprite${ns === 1 ? "" : "s"} · ${polygons} polygon${polygons === 1 ? "" : "s"}${notes.length ? " · " + notes.join(", ") : ""}`;
+    renderHint();
+  }
+  let sceneCounts = "";
+
+  // renderHint says on one line under the picture what the tool in hand
+  // does, or what is wrong with what is picked, with the counts beside
+  // it; the sheet of keys has the rest.
+  function renderHint() {
+    if (!doc) return;
+    let text, warn = false;
+    if (doc.room) {
+      [text, counts.textContent] = roomEdit.status();
+    } else if (panel === "tiles" && layer()) {
+      const bg = layer();
+      text = tool === "erase" ? "The eraser empties the cells you click or drag over." : tool === "fill" ? "The fill floods the cells like the one clicked." : tool === "rect" ? "The rectangle fills what you drag over." : "The pen lays the picked cells where you click or drag; Shift draws a line.";
+      text = `${bg.name}: ${text} Alt-click takes a cell; Escape goes back to the picture.`;
+      counts.textContent = `${bg.width} × ${bg.height} cells · ${brush.cells.length === 1 ? `cell ${brush.cells[0]}` : `a stamp of ${brush.w} × ${brush.h}`}`;
+    } else {
+      const problem = selected?.kind === "object" ? problems.get(selected.index) : [...problems.values()][0];
+      warn = !typing && !!problem;
+      text = typing ? typingStatus() : problem ? `${problem[0].toUpperCase()}${problem.slice(1)}.` : modeHelp();
+      counts.textContent = sceneCounts;
+    }
+    status.textContent = text;
+    status.classList.toggle("warn", warn);
   }
   function modeHelp() {
-    const m = gizmoMode === "move" ? "Drag an axis or a square to move, elsewhere to move freely, with Shift for depth" : gizmoMode === "rotate" ? "Drag a ring to turn about its axis" : "Drag a cube to scale along its axis, the middle to scale all";
-    return `${m}; W, E, R pick move, rotate, scale; G then a number types a move (R or S for a turn or a scale, X, Y, Z for an axis); right drag looks around with WASD, Alt drag orbits, middle or Ctrl drag pans, wheel approaches, F frames what is picked.`;
+    if (selected?.kind === "sprite") return "Drag the sprite to move it; the arrows nudge it a pixel, eight with Shift.";
+    if (selected?.kind !== "object") return "Click a model or a sprite to pick it; right drag looks around.";
+    return gizmoMode === "move" ? "Drag an arrow to move along it, a square across its plane, elsewhere freely; Shift moves in depth." : gizmoMode === "rotate" ? "Drag a ring to turn about its axis." : "Drag a cube to scale along its axis, the middle to scale it all.";
   }
 
   // The checker a model shows where its texture should be.
@@ -569,9 +700,10 @@ const sceneTab = (() => {
     return has;
   }
 
-  // The tile map, as GsSortFixBg16 draws it: the window on the screen,
+  // A tile layer, as GsSortFixBg16 draws it: the window on the screen,
   // the map scrolled within it and repeating past its edge, each cell cut
-  // from the texture in reading order.
+  // from the texture in reading order. The picture draws every layer,
+  // the first farthest.
   function tileCells(bg) {
     const tim = timFor(bg.texture);
     if (!tim) return null;
@@ -580,8 +712,7 @@ const sceneTab = (() => {
     const count = Math.min(256, across * Math.floor(tim.height / 16));
     return { tim, u0, v0, across, count, tpage: preview.tpage(tim), cba: preview.cba(tim) };
   }
-  function drawBackground(out, v) {
-    const bg = doc.background;
+  function drawLayer(out, v, bg) {
     const cells = tileCells(bg);
     if (!cells) return;
     const win = bg.window.some((c) => c) ? bg.window : [-160, -120, 320, 240];
@@ -609,64 +740,239 @@ const sceneTab = (() => {
     }
   }
 
-  // The tile map's panel: its texture and size, the cells to paint with,
-  // and the map itself, painted by clicking and dragging; Shift empties a
-  // cell. The window the screen shows is outlined on the map.
+  // The tiles panel edits one layer, the one picked in the sidebar: its
+  // name and texture, the cells to paint with and what each is to the
+  // program, its flags, in the inspector, then its map's size, how it
+  // scrolls and how bright it is; its map is in the picture's place,
+  // painted with the tile tools in the toolbar, the window the screen
+  // shows outlined on it and the cells' flags marked.
+  const tilesHead = $("scene-tiles-head");
   const tilesForm = $("scene-tiles");
   const palette = $("scene-tile-palette");
+  const flagSet = $("scene-tile-flagset");
   const mapCanvas = $("scene-tile-map");
   const tilesInfo = $("scene-tiles-info");
   const tileTools = $("scene-tile-tools");
+  const flagsButton = $("scene-tile-flags");
   let brush = { w: 1, h: 1, cells: [0] }; // the stamp: cells laid together
+  let brushOf = null;  // the texture the brush's cells are of
   let lastLaid = null; // the last cell the pen laid, for Shift lines
   let tool = "pen"; // pen, fill, rect or erase
   let ghost = null; // the map cell under the pointer, or the rectangle being drawn
-  for (const b of tileTools.querySelectorAll("button")) b.addEventListener("click", () => setTool(b.dataset.tool));
+  let showFlags = true; // the flags marked on the map
+  let mapZoom = 0; // how many times its size the map shows, or 0 for as large as fits
+  for (const b of tileTools.querySelectorAll("button[data-tool]")) b.addEventListener("click", () => setTool(b.dataset.tool));
+  flagsButton.addEventListener("click", () => {
+    showFlags = !showFlags;
+    flagsButton.setAttribute("aria-pressed", String(showFlags));
+    renderMap();
+  });
+
+  // The flags a cell can have: the four package scene names, then four
+  // of the program's own, each with the color it is marked in.
+  const FLAGS = [
+    ["Solid", "Nothing passes through it: scene.Solid", "#f26670"],
+    ["One way", "Stood on from above, passed through from below: scene.OneWay", "#80a0f5"],
+    ["Hurts", "Hurts what touches it: scene.Hurts", "#f0a050"],
+    ["Pickup", "Taken by what touches it: scene.Pickup", "#e8d060"],
+    ["4", "A flag of the program's own, 1<<4", "#c2a6ff"],
+    ["5", "A flag of the program's own, 1<<5", "#9ad48c"],
+    ["6", "A flag of the program's own, 1<<6", "#6ccbe0"],
+    ["7", "A flag of the program's own, 1<<7", "#e48ad8"],
+  ];
+
   function renderTiles() {
+    tilesHead.replaceChildren();
     tilesForm.replaceChildren();
-    if (!doc) {
-      palette.hidden = mapCanvas.hidden = true;
+    const bg = layer();
+    palette.hidden = mapCanvas.hidden = flagSet.hidden = !bg;
+    if (!doc || !bg) {
+      tilesInfo.textContent = "A tile layer is a picture cut into 16 by 16 cells, laid out in a map and scrolled behind the scene. Add, Tile layer starts one.";
       return;
     }
-    const bg = doc.background;
-    const tims = dataFiles(/\.tim$/i).map(discPath);
-    tilesForm.append(field("Cells from", bg?.texture ?? "", (v) => {
-      if (!v) doc.background = null;
-      else if (!bg) doc.background = { texture: v, cell: 16, width: 20, height: 15, map: new Array(300).fill(0), scroll: [0, 0], window: [0, 0, 0, 0], brightness: [128, 128, 128] };
-      else bg.texture = v;
+    if (brushOf !== bg.texture) {
       brush = { w: 1, h: 1, cells: [0] };
-      changed(true);
-      renderTiles();
-    }, { options: [["", "no tile map"], ...tims.map((p) => [p, p.replace(/^ASSETS\//, "")])], title: "The TIM whose 16 by 16 cells the map is made of; GsSortFixBg16 draws it behind everything" }));
-    if (!bg) {
-      palette.hidden = mapCanvas.hidden = true;
-      tileTools.hidden = true;
-      tilesInfo.textContent = "A tile map is a picture cut into 16 by 16 cells, laid out in a grid and scrolled behind the scene, as the tiles example does. Pick the picture to start one.";
-      return;
+      brushOf = bg.texture;
     }
+    const tims = dataFiles(/\.tim$/i).map(discPath);
+    if (!tims.includes(bg.texture)) tims.push(bg.texture);
+    tilesHead.append(
+      field("Name", bg.name, (v) => {
+        bg.name = uniqueLayerName(v.trim().slice(0, 15) || bg.name, bg);
+        changed();
+        renderHead();
+      }, { type: "text", title: "Up to 15 characters. The program finds the layer by it with world.Layer(name)" }),
+      field("Cells from", bg.texture, (v) => {
+        bg.texture = v;
+        changed(true);
+        renderTiles();
+      }, { options: tims.map((p) => [p, p.replace(/^ASSETS\//, "")]), title: "The TIM whose 16 by 16 cells the map is made of, in reading order" }),
+    );
+    // The map's size, at most MAX_MAP_CELLS in all: a long strip as well
+    // as a square.
     const resize = (w, h) => {
-      const map = new Array(w * h).fill(0);
+      const map = new Array(w * h).fill(EMPTY);
       for (let y = 0; y < Math.min(h, bg.height); y++) for (let x = 0; x < Math.min(w, bg.width); x++) map[y * w + x] = bg.map[y * bg.width + x];
       bg.width = w;
       bg.height = h;
       bg.map = map;
+      changed(true);
+      renderTiles();
+      renderOutline();
     };
+    const most = (other) => Math.max(1, Math.floor(MAX_MAP_CELLS / other));
     tilesForm.append(group("Map", [
-      field("Across", bg.width, (v) => { resize(Math.max(1, Math.min(64, Math.round(v))), bg.height); changed(true); renderTiles(); }, { title: "Cells across, up to 64, with the map at most 4096 cells" }),
-      field("Down", bg.height, (v) => { resize(bg.width, Math.max(1, Math.min(64, Math.round(v)))); changed(true); renderTiles(); }, { title: "Cells down" }),
+      field("Across", bg.width, (v) => resize(Math.max(1, Math.min(most(bg.height), Math.round(v))), bg.height), { title: `Cells across. The map holds at most ${MAX_MAP_CELLS} cells, so at most ${most(bg.height)} across while it is ${bg.height} down` }),
+      field("Down", bg.height, (v) => resize(bg.width, Math.max(1, Math.min(most(bg.width), Math.round(v)))), { title: `Cells down, at most ${most(bg.width)} while it is ${bg.width} across` }),
     ]));
-    tilesForm.append(group("Scroll", ["X", "Y"].map((l, i) => field(l, bg.scroll[i], (v) => { bg.scroll[i] = Math.round(v); changed(); renderMap(); }, { title: "How far the map is scrolled within the window, in pixels; the program changes it as it likes", step: 16 }))));
+    tilesForm.append(group("Scroll", ["X", "Y"].map((l, i) => field(l, bg.scroll[i], (v) => { bg.scroll[i] = Math.round(v); changed(); renderMap(); }, { title: "Where the map is scrolled within the window, in pixels, before the program scrolls the scene", step: 16 }))));
+    tilesForm.append(field("Speed %", bg.speed, (v) => {
+      bg.speed = Math.max(0, Math.min(1000, Math.round(v)));
+      changed();
+      renderOutline();
+    }, { title: "The percent of the scene's scroll, world.Scroll, the layer moves: 100 with it, less for one farther off, 0 not at all", step: 5 }));
     tilesForm.append(group("Brightness", ["R", "G", "B"].map((l, i) => field(l, bg.brightness[i], (v) => { bg.brightness[i] = Math.max(0, Math.min(255, Math.round(v))); changed(); renderMap(); }, { title: "128 shows the cells as they are" }))));
-    palette.hidden = mapCanvas.hidden = false;
-    tileTools.hidden = false;
+    // Its place among the layers, and taking it out.
+    const order = document.createElement("div");
+    order.className = "tile-order";
+    const button = (label, title, fn, disabled = false, danger = false) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = `small-button${danger ? " danger-text" : ""}`;
+      b.textContent = label;
+      b.title = title;
+      b.disabled = disabled;
+      b.addEventListener("click", fn);
+      order.append(b);
+    };
+    const move = (to) => {
+      const [moved] = doc.layers.splice(layerIndex, 1);
+      doc.layers.splice(to, 0, moved);
+      layerIndex = to;
+      changed(true);
+      renderTiles();
+      renderOutline();
+    };
+    button("Farther", "Draw this layer behind the one before it", () => move(layerIndex - 1), layerIndex === 0);
+    button("Nearer", "Draw this layer in front of the one after it", () => move(layerIndex + 1), layerIndex === doc.layers.length - 1);
+    button("Remove layer", "Take the layer out of the scene. Undo puts it back", () => {
+      doc.layers.splice(layerIndex, 1);
+      layerIndex = Math.max(0, layerIndex - 1);
+      changed(true);
+      showPanel(defaultPanel());
+    }, false, true);
+    tilesForm.append(order);
     renderPalette();
     renderMap();
   }
+
+  // renderFlags shows the flags of the cells picked to paint with, a box
+  // for each, which sets or clears that flag on all of them.
+  function renderFlags() {
+    const bg = layer();
+    flagSet.replaceChildren();
+    if (!bg) return;
+    const label = document.createElement("div");
+    label.className = "insp-label";
+    label.textContent = brush.cells.length === 1 ? `Cell ${brush.cells[0]} is` : `The ${brush.cells.length} cells picked are`;
+    const grid = document.createElement("div");
+    grid.className = "tile-flag-grid";
+    FLAGS.forEach(([name, title, color], bit) => {
+      const has = brush.cells.map((c) => ((bg.flags[c] ?? 0) >> bit) & 1);
+      const wrap = document.createElement("label");
+      wrap.title = title;
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = has.every(Boolean);
+      box.indeterminate = !box.checked && has.some(Boolean);
+      const swatch = document.createElement("i");
+      swatch.style.background = color;
+      const text = document.createElement("span");
+      text.textContent = name;
+      box.addEventListener("change", () => {
+        for (const c of brush.cells) {
+          while (bg.flags.length <= c) bg.flags.push(0);
+          bg.flags[c] = box.checked ? bg.flags[c] | (1 << bit) : bg.flags[c] & ~(1 << bit);
+        }
+        changed(true);
+        renderPalette();
+        renderMap();
+      });
+      wrap.append(box, swatch, text);
+      grid.append(wrap);
+    });
+    flagSet.append(label, grid);
+  }
+
+  // markFlags draws a cell's flags at x, y of a canvas, small: a strip
+  // along its foot, a stretch of each flag's color.
+  function markFlags(c2d, x, y, flags) {
+    const set = FLAGS.filter((_, bit) => (flags >> bit) & 1);
+    if (!set.length) return;
+    const w = 16 / set.length;
+    set.forEach(([, , color], k) => {
+      c2d.fillStyle = color;
+      c2d.fillRect(x + k * w, y + 13, w, 3);
+    });
+  }
+
+  // markMap marks the flags of a layer's cells on its map: a line round
+  // the edges of what is solid, along the top of what is one way, a cross
+  // through what hurts, a square in the corner of what is picked up, and a
+  // dot for each of the program's own flags.
+  function markMap(c2d, bg) {
+    const flagsAt = (x, y) => {
+      if (x < 0 || y < 0 || x >= bg.width || y >= bg.height) return -1; // the map's edge: no line
+      const c = bg.map[y * bg.width + x];
+      return c === EMPTY ? 0 : bg.flags[c] ?? 0;
+    };
+    const open = (x, y) => (flagsAt(x, y) & 1) === 0; // not solid, and not past the edge
+    const [solid, oneWay, hurts, pickup] = FLAGS.map((f) => f[2]);
+    for (let y = 0; y < bg.height; y++) {
+      for (let x = 0; x < bg.width; x++) {
+        const f = flagsAt(x, y);
+        if (!f) continue;
+        const px = x * 16, py = y * 16;
+        if (f & 1) {
+          c2d.fillStyle = solid;
+          if (open(x, y - 1)) c2d.fillRect(px, py, 16, 2);
+          if (open(x, y + 1)) c2d.fillRect(px, py + 14, 16, 2);
+          if (open(x - 1, y)) c2d.fillRect(px, py, 2, 16);
+          if (open(x + 1, y)) c2d.fillRect(px + 14, py, 2, 16);
+        }
+        if (f & 2) {
+          c2d.fillStyle = oneWay;
+          c2d.fillRect(px, py, 16, 2);
+        }
+        if (f & 4) {
+          c2d.strokeStyle = hurts;
+          c2d.lineWidth = 1.5;
+          c2d.beginPath();
+          c2d.moveTo(px + 3, py + 3);
+          c2d.lineTo(px + 13, py + 13);
+          c2d.moveTo(px + 13, py + 3);
+          c2d.lineTo(px + 3, py + 13);
+          c2d.stroke();
+        }
+        if (f & 8) {
+          c2d.fillStyle = pickup;
+          c2d.fillRect(px + 1, py + 1, 4, 4);
+        }
+        for (let bit = 4; bit < 8; bit++) {
+          if (!((f >> bit) & 1)) continue;
+          c2d.fillStyle = FLAGS[bit][2];
+          c2d.fillRect(px + 12 - (bit - 4) * 4, py + 1, 3, 3);
+        }
+      }
+    }
+  }
+
   function renderPalette() {
-    const bg = doc?.background;
+    const bg = layer();
     const cells = bg && tileCells(bg);
     if (!cells) {
       palette.hidden = true;
+      flagSet.replaceChildren();
       return;
     }
     const v = vram();
@@ -690,16 +996,18 @@ const sceneTab = (() => {
     pctx.strokeStyle = "rgba(255,255,255,0.25)";
     for (let x = 16; x < palette.width; x += 16) { pctx.beginPath(); pctx.moveTo(x + 0.5, 0); pctx.lineTo(x + 0.5, palette.height); pctx.stroke(); }
     for (let y = 16; y < palette.height; y += 16) { pctx.beginPath(); pctx.moveTo(0, y + 0.5); pctx.lineTo(palette.width, y + 0.5); pctx.stroke(); }
+    for (let c = 0; c < Math.min(cells.count, bg.flags.length); c++) markFlags(pctx, (c % cells.across) * 16, Math.floor(c / cells.across) * 16, bg.flags[c]);
     pctx.strokeStyle = themeColor("--accent");
     pctx.lineWidth = 2;
     pctx.strokeRect((brush.cells[0] % cells.across) * 16 + 1, Math.floor(brush.cells[0] / cells.across) * 16 + 1, brush.w * 16 - 2, brush.h * 16 - 2);
-    // Doubled while it stays short; a tall picture of cells at its own size.
-    palette.style.width = `${palette.width * (palette.height <= 128 ? 2 : 1)}px`;
-    const stamp = brush.cells.length === 1 ? `Cell ${brush.cells[0]}` : `A stamp of ${brush.w} by ${brush.h} cells`;
-    tilesInfo.textContent = `${cells.count} cells from ${bg.texture.replace(/^ASSETS\//, "")}, ${cells.across} across. ${stamp} is picked; drag across several to pick a stamp. The pen (B) lays it where you click or drag, with Shift a line from the last cell laid; the fill (F) floods cells like the one clicked; the rectangle (R) fills what you drag over; the eraser (E) empties cells. Alt picks the cell under the pointer. The box is the window the screen shows.`;
+    // As wide as the column while that is no more than twice its size.
+    palette.style.width = `${Math.min(palette.width * 2, 256)}px`;
+    tilesInfo.textContent = `${cells.count} cells, ${cells.across} across; drag across several to paint with a stamp of them.`;
+    renderFlags();
+    renderHint();
   }
   function renderMap() {
-    const bg = doc?.background;
+    const bg = layer();
     const cells = bg && tileCells(bg);
     if (!cells) return;
     const v = vram();
@@ -712,8 +1020,8 @@ const sceneTab = (() => {
       for (let x = 0; x < mapCanvas.width; x++) {
         const cell = bg.map[(y >> 4) * bg.width + (x >> 4)];
         const i = (y * mapCanvas.width + x) * 4;
-        if (cell === 0xffff || cell >= cells.count) {
-          // An empty cell shows the screen's clear colour, dimmed.
+        if (cell === EMPTY || cell >= cells.count) {
+          // An empty cell shows the screen's clear color, dimmed.
           img.data[i] = 20; img.data[i + 1] = 30; img.data[i + 2] = 50; img.data[i + 3] = 255;
           continue;
         }
@@ -726,6 +1034,7 @@ const sceneTab = (() => {
       }
     }
     mctx.putImageData(img, 0, 0);
+    if (showFlags && bg.flags.some(Boolean)) markMap(mctx, bg);
     const win = bg.window.some((c) => c) ? bg.window : [-160, -120, 320, 240];
     mctx.strokeStyle = themeColor("--accent");
     mctx.lineWidth = 2;
@@ -749,8 +1058,15 @@ const sceneTab = (() => {
         mctx.strokeRect(ghost.x * 16 + 0.5, ghost.y * 16 + 0.5, ghost.value.w * 16 - 1, ghost.value.h * 16 - 1);
       }
     }
-    mapCanvas.style.width = `${mapCanvas.width}px`;
+    sizeMap();
   }
+  // The wheel over the map zooms it by whole steps, from as large as fits.
+  mapCanvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const now = mapZoom || Math.max(1, Math.round(mapCanvas.getBoundingClientRect().width / Math.max(1, mapCanvas.width)));
+    mapZoom = Math.max(1, Math.min(8, now + (e.deltaY < 0 ? 1 : -1)));
+    sizeMap();
+  }, { passive: false });
   // drawCell paints one cell of the map canvas with a cell index, or the
   // empty color.
   const cellCanvas = document.createElement("canvas");
@@ -788,7 +1104,7 @@ const sceneTab = (() => {
   }
   // A click picks a cell; a drag picks a stamp of several.
   palette.addEventListener("pointerdown", (e) => {
-    const bg = doc?.background;
+    const bg = layer();
     const cells = bg && tileCells(bg);
     if (!cells) return;
     e.preventDefault();
@@ -814,9 +1130,11 @@ const sceneTab = (() => {
   });
   function setTool(t) {
     tool = t;
-    for (const other of tileTools.querySelectorAll("button")) other.setAttribute("aria-pressed", String(other.dataset.tool === t));
+    for (const other of tileTools.querySelectorAll("button[data-tool]")) other.setAttribute("aria-pressed", String(other.dataset.tool === t));
+    renderHint();
   }
-  mapCanvas.addEventListener("keydown", (e) => {
+  mapCanvas.addEventListener("keydown", tileKeys);
+  function tileKeys(e) {
     const k = e.key.toLowerCase();
     if (e.ctrlKey || e.metaKey) {
       if (k === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); }
@@ -827,13 +1145,14 @@ const sceneTab = (() => {
     else if (k === "f") setTool("fill");
     else if (k === "r") setTool("rect");
     else if (k === "e") setTool("erase");
-  });
+    else if (e.key === "Escape") showPanel(defaultPanel());
+  }
   function mapCell(ev) {
     const r = mapCanvas.getBoundingClientRect();
     return [Math.floor((ev.clientX - r.left) * mapCanvas.width / r.width / 16), Math.floor((ev.clientY - r.top) * mapCanvas.height / r.height / 16)];
   }
   mapCanvas.addEventListener("pointermove", (e) => {
-    const bg = doc?.background;
+    const bg = layer();
     if (!bg || mapDragging) return;
     const [x, y] = mapCell(e);
     const inside = x >= 0 && y >= 0 && x < bg.width && y < bg.height;
@@ -850,7 +1169,7 @@ const sceneTab = (() => {
   });
   let mapDragging = false;
   mapCanvas.addEventListener("pointerdown", (e) => {
-    const bg = doc?.background;
+    const bg = layer();
     if (!bg) return;
     e.preventDefault();
     const [sx, sy] = mapCell(e);
@@ -1122,9 +1441,16 @@ const sceneTab = (() => {
   }
   let dragging = null; // {mode, handle, ...} while the pointer is down
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  canvas.addEventListener("pointerleave", () => {
+    if (doc?.room && !dragging && roomEdit.pointerLeave()) render();
+  });
   canvas.addEventListener("pointermove", (e) => {
     if (!doc || dragging) return;
     const [x, y] = canvasPoint(e);
+    if (doc.room) {
+      if (roomEdit.pointerHover(x, y, ids)) render();
+      return;
+    }
     const h = handleAt(x, y, gizmoGeometry(camera()));
     if (!sameHandle(h, hovered)) {
       hovered = h;
@@ -1136,6 +1462,10 @@ const sceneTab = (() => {
     if (!doc) return;
     e.preventDefault();
     const [x, y] = canvasPoint(e);
+    if (doc.room) {
+      roomPointer(e, x, y);
+      return;
+    }
     const cam = camera();
     // The camera: the right button looks around, with WASD to move while
     // it is held; Alt orbits what the camera looks at; the middle button
@@ -1183,6 +1513,42 @@ const sceneTab = (() => {
     canvas.addEventListener("pointermove", move);
     canvas.addEventListener("pointerup", up);
   });
+
+  // roomPointer is the pointer on a room: the left button paints, picks
+  // and places with the room's tool, Alt drag turns the camera an eighth
+  // at a time, the middle or right button, or Ctrl, pans it.
+  function roomPointer(e, x, y) {
+    const mode = e.button === 1 || e.button === 2 || e.ctrlKey ? "pan" : e.altKey ? "turn" : "tool";
+    const handlers = mode === "tool" ? roomEdit.pointerDown(x, y, e, ids) : null;
+    if (mode === "tool" && !handlers) return;
+    canvas.setPointerCapture(e.pointerId);
+    canvas.focus({ preventScroll: true });
+    beginEdit();
+    const scale = canvas.getBoundingClientRect().width / W;
+    dragging = { mode, last: [e.clientX, e.clientY], turned: 0 };
+    const move = (ev) => {
+      const dx = (ev.clientX - dragging.last[0]) / scale;
+      const dy = (ev.clientY - dragging.last[1]) / scale;
+      dragging.last = [ev.clientX, ev.clientY];
+      const [cx, cy] = canvasPoint(ev);
+      if (mode === "pan") roomEdit.pan(dx, dy);
+      else if (mode === "turn") {
+        dragging.turned += dx;
+        while (dragging.turned > 40) { roomEdit.turn(-1); dragging.turned -= 40; }
+        while (dragging.turned < -40) { roomEdit.turn(1); dragging.turned += 40; }
+      } else handlers.move(cx, cy, ev);
+    };
+    const up = () => {
+      canvas.removeEventListener("pointermove", move);
+      canvas.removeEventListener("pointerup", up);
+      if (handlers) handlers.up();
+      dragging = null;
+      endEdit();
+      render();
+    };
+    canvas.addEventListener("pointermove", move);
+    canvas.addEventListener("pointerup", up);
+  }
 
   // snapped rounds a position to the grid when snapping is on.
   const snapped = (v) => (snap ? Math.round(v / 16) * 16 : Math.round(v));
@@ -1336,6 +1702,7 @@ const sceneTab = (() => {
   // frame turns the camera on what is picked, or the origin, and stands
   // back far enough to see a model whole.
   function frame() {
+    if (doc.room) return;
     let target = [0, 0, 0];
     let radius = 200;
     if (selected?.kind === "object") {
@@ -1369,6 +1736,10 @@ const sceneTab = (() => {
   canvas.addEventListener("wheel", (e) => {
     if (!doc) return;
     e.preventDefault();
+    if (doc.room) {
+      roomEdit.zoom(Math.pow(1.1, e.deltaY / 100));
+      return;
+    }
     const { from, at } = doc.camera;
     const k = Math.pow(1.1, e.deltaY / 100);
     doc.camera.from = [0, 1, 2].map((i) => Math.round(at[i] + (from[i] - at[i]) * k));
@@ -1397,6 +1768,7 @@ const sceneTab = (() => {
         return;
       }
     }
+    if (doc.room && roomEdit.keys(e)) return;
     if (!mod && !e.altKey) {
       const k = e.key.toLowerCase();
       if (k === "w" || k === "e" || k === "r") {
@@ -1467,7 +1839,18 @@ const sceneTab = (() => {
     renderInspector();
   }
   canvas.addEventListener("keydown", onKeys);
-  outline.addEventListener("keydown", (e) => { if (!e.target.closest("input")) onKeys(e); });
+  // The keys reach the editor from anywhere in the Scenes layout but a
+  // field, a dialog, a menu and the game's picture, which takes them as
+  // the pad: after a click on a toolbar's button or in the inspector, W
+  // still picks a mode and Delete still removes.
+  addEventListener("keydown", (e) => {
+    if (!shown || e.defaultPrevented || layout.get() !== "scenes") return;
+    const t = e.target;
+    if (t === canvas || t === mapCanvas || t.id === "scene-room-grid") return;
+    if (t.closest?.("#scene-list, input, textarea, select, [contenteditable], dialog, .screen, .pg-popup, .pg-project")) return;
+    if (panel === "tiles" && layer() && !doc.room) tileKeys(e);
+    else onKeys(e);
+  });
 
   // A typed transform: G starts a move; R or S then make it a turn or a
   // scale; X, Y or Z picks the axis; digits, a minus and a point give the
@@ -1534,13 +1917,15 @@ const sceneTab = (() => {
   $("scene-undo").addEventListener("click", undo);
   $("scene-redo").addEventListener("click", redo);
   $("scene-look").addEventListener("click", frame);
-  $("scene-console").addEventListener("click", () => setConsole(!showConsole));
+  const showButtons = [...document.querySelectorAll("#scene-show button")];
+  for (const b of showButtons) b.addEventListener("click", () => setConsole(b.dataset.show === "game"));
 
-  // The console's own picture in the viewport, while this project runs,
-  // fetched from the emulator's worker a few times a second.
+  // The console's own picture in the viewport in place of the editor's,
+  // while this project runs, fetched from the emulator's worker a few
+  // times a second.
   function setConsole(on) {
     showConsole = on;
-    $("scene-console").setAttribute("aria-pressed", String(on));
+    for (const b of showButtons) b.setAttribute("aria-pressed", String((b.dataset.show === "game") === on));
     clearInterval(consoleTimer);
     consoleTimer = 0;
     if (on) consoleTimer = setInterval(fetchFrame, 120);
@@ -1569,97 +1954,136 @@ const sceneTab = (() => {
   function renderLive() {
     const live = liveNow();
     $("scene-view").classList.toggle("live", live);
-    $("scene-console").disabled = !state.current?.id || state.current.id !== project()?.id;
+    const game = showButtons.find((b) => b.dataset.show === "game");
+    game.disabled = !state.current?.id || state.current.id !== project()?.id;
+    if (game.disabled && showConsole) setConsole(false);
     if (!live && consoleFrame) {
       consoleFrame = null;
       render();
     }
   }
   projectEvents.addEventListener("live", renderLive);
-  for (const which of ["front", "top", "side"]) $(`scene-view-${which}`).addEventListener("click", () => preset(which));
 
   function select(sel) {
     selected = sel;
     hovered = null;
     render();
     renderInspector();
-    renderOutline();
     if (sel) showPanel("object");
-  }
-
-  // The outline: everything in the scene, to pick from.
-  function renderOutline() {
-    if (!doc) {
-      outline.replaceChildren();
-      return;
+    else if (panel === "object") showPanel(defaultPanel());
+    else {
+      renderHead();
+      renderOutline();
     }
+  }
+  roomEdit.attach({
+    doc: () => doc, changed, beginEdit, endEdit, field, group, vram, timFor, dataFiles, discPath, themeColor, select, selected: () => selected, render, undo, redo,
+    sceneDats: () => (project()?.sceneFiles() ?? []).map((p) => discPath(datPath(p))),
+    teleport,
+    sizeInset: () => sizeInset(),
+    W, H,
+  });
+
+  // The outline: everything in the scene, which the sidebar lists under it
+  // (sidebar.js asks for the rows), to be picked there as in the picture.
+  // A room keeps the program's own camera and lights, and has no rows for
+  // them.
+  let outlineRows = [];
+  function renderOutline() {
+    outlineRows = doc && shown ? outline() : [];
+    sidebar.renderScenes();
+  }
+  function outline() {
     const items = [];
-    const row = (label, meta, { kind, index, panel, cls = "" }) => {
+    const row = (label, meta, { kind, index, panel: to, layer: k, icon, cls = "" }) => {
       const li = document.createElement("li");
-      li.setAttribute("role", "option");
-      const on = kind && selected?.kind === kind && selected.index === index;
+      li.setAttribute("role", "treeitem");
+      const on = kind ? selected?.kind === kind && selected.index === index : !selected && panel === to && (to !== "tiles" || k === layerIndex);
       li.setAttribute("aria-selected", String(!!on));
-      li.className = `outline-row ${cls}`;
+      li.className = `files-row outline-row${cls ? " " + cls : ""}`;
       li.tabIndex = on ? 0 : -1;
+      const guide = document.createElement("span");
+      guide.className = "tree-guide";
+      const arrow = document.createElement("span");
+      arrow.className = "tree-arrow none";
+      const ic = document.createElement("span");
+      ic.className = `tree-icon icon-${icon}`;
+      ic.innerHTML = `<svg class="i"><use href="#i-${icon}"/></svg>`;
       const name = document.createElement("span");
-      name.className = "outline-name";
+      name.className = "files-name";
       name.textContent = label;
       const m = document.createElement("span");
-      m.className = "muted outline-meta";
+      m.className = "muted files-meta";
       m.textContent = meta;
-      li.append(name, m);
-      li.addEventListener("click", () => {
+      m.title = meta;
+      li.append(guide, arrow, ic, name, m);
+      const pick = () => {
         if (kind) select({ kind, index });
         else select(null);
-        if (panel) showPanel(panel);
-      });
-      li.addEventListener("dblclick", () => {
-        if (kind) inspector.querySelector('input[type="text"]')?.focus();
-      });
+        if (to) showPanel(to, k);
+      };
+      li.addEventListener("click", pick);
+      li.addEventListener("dblclick", () => { if (kind) inspector.querySelector('input[type="text"]')?.focus(); });
       li.addEventListener("contextmenu", (e) => {
         e.preventDefault();
         if (!kind) return;
         select({ kind, index });
-        files.popupMenu([
-          ["Rename", "Give it another name", () => inspector.querySelector('input[type="text"]')?.focus()],
-          ["Duplicate", "A copy beside it (Ctrl+D)", duplicate],
-          ["Frame", "Turn the camera on it (F)", frame],
-          [kind === "object" && doc.objects[index].hidden ? "Show" : "Hide in the editor", "The console still draws it", () => { if (kind === "object") { doc.objects[index].hidden = !doc.objects[index].hidden; changed(true); } }, kind !== "object"],
-          ["Remove", "Take it out of the scene (Delete)", remove],
-        ], e);
+        moreMenu(e);
+      });
+      li.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          pick();
+        } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          const rows = [...li.parentElement.querySelectorAll("[role=treeitem]")];
+          const i = rows.indexOf(li) + (e.key === "ArrowDown" ? 1 : -1);
+          rows[(i + rows.length) % rows.length]?.focus();
+        } else if (!/^(ArrowLeft|ArrowRight|PageUp|PageDown)$/.test(e.key)) {
+          onKeys(e);
+        }
       });
       items.push(li);
+      return li;
     };
     const head = (label) => {
       const li = document.createElement("li");
-      li.className = "outline-group";
+      li.className = "files-group outline-group";
       li.setAttribute("role", "presentation");
       li.textContent = label;
       items.push(li);
     };
     const matches = (name) => !search || name.toLowerCase().includes(search);
-    if (matches("camera")) row("Camera", `${doc.camera.from.join(", ")}`, { panel: "camera" });
-    doc.lights.forEach((l, i) => { if (matches(`light ${i + 1}`)) row(`Light ${i + 1}`, `${l.direction.join(", ")}`, { panel: "lights" }); });
-    if (matches("tile map")) row("Tile map", doc.background ? `${doc.background.width} by ${doc.background.height}` : "none", { panel: "tiles" });
-    head(`Objects (${doc.objects.length})`);
+    if (!doc.room) {
+      // A scene of layers and sprites alone is a 2D one, where the camera
+      // and the lights do nothing.
+      if (!flat()) {
+        if (matches("camera")) row("Camera", doc.camera.from.join(", "), { panel: "camera", icon: "camera" });
+        doc.lights.forEach((l, i) => { if (matches(`light ${i + 1}`)) row(`Light ${i + 1}`, l.direction.join(", "), { panel: "lights", icon: "light" }); });
+      }
+      if (doc.layers.length) head(`Layers (${doc.layers.length})`);
+      doc.layers.forEach((l, k) => { if (matches(l.name)) row(l.name, `${l.width} × ${l.height} · ${l.speed}%`, { panel: "tiles", layer: k, icon: "tiles" }); });
+    }
+    roomEdit.outlineRows(row, head, matches);
+    if (doc.objects.length || !doc.room) head(`Objects (${doc.objects.length})`);
     doc.objects.forEach((o, i) => {
       if (!matches(o.name || `object ${i}`)) return;
-      row(o.name || `object ${i}`, o.model.replace(/^ASSETS\//, ""), { kind: "object", index: i, cls: o.hidden ? "hidden-row" : "" });
-      const li = items.at(-1);
+      const li = row(o.name || `object ${i}`, o.model.replace(/^ASSETS\//, ""), { kind: "object", index: i, icon: "model", cls: o.hidden ? "hidden-row" : "" });
       if (problems.has(i)) {
         const warn = document.createElement("span");
         warn.className = "outline-warn";
         warn.textContent = "!";
         warn.title = problems.get(i);
-        li.insertBefore(warn, li.firstChild);
+        li.insertBefore(warn, li.querySelector(".files-name"));
       }
       const eye = document.createElement("button");
       eye.type = "button";
       eye.className = "outline-eye";
+      eye.tabIndex = -1;
       eye.setAttribute("aria-pressed", String(!o.hidden));
       eye.setAttribute("aria-label", o.hidden ? `Show ${o.name}` : `Hide ${o.name} in the editor`);
       eye.title = o.hidden ? "Hidden in the editor; the console still draws it" : "Hide in the editor; the console still draws it";
-      eye.textContent = o.hidden ? "○" : "●";
+      eye.innerHTML = '<svg class="i"><use href="#i-eye"/></svg>';
       eye.addEventListener("click", (e) => {
         e.stopPropagation();
         o.hidden = !o.hidden;
@@ -1667,54 +2091,167 @@ const sceneTab = (() => {
       });
       li.append(eye);
     });
-    head(`Sprites (${doc.sprites.length})`);
-    doc.sprites.forEach((sp, i) => { if (matches(sp.name || `sprite ${i}`)) row(sp.name || `sprite ${i}`, sp.texture.replace(/^ASSETS\//, ""), { kind: "sprite", index: i }); });
-    outline.replaceChildren(...items);
+    if (doc.sprites.length || !doc.room) head(`Sprites (${doc.sprites.length})`);
+    doc.sprites.forEach((sp, i) => { if (matches(sp.name || `sprite ${i}`)) row(sp.name || `sprite ${i}`, sp.texture.replace(/^ASSETS\//, ""), { kind: "sprite", index: i, icon: "image" }); });
+    return items;
   }
   $("scene-search").addEventListener("input", (e) => {
     search = e.target.value.trim().toLowerCase();
     renderOutline();
   });
 
-  // The panels under the picture, one at a time.
-  const PANELS = ["object", "camera", "lights", "tiles"];
-  function showPanel(name) {
-    for (const p of PANELS) {
-      $(`spanel-${p}`).hidden = p !== name;
-      const tab = $(`stab-${p}`);
-      tab.setAttribute("aria-selected", String(p === name));
-      tab.tabIndex = p === name ? 0 : -1;
-    }
+  // The inspector shows one thing at a time, as the sidebar's rows and the
+  // picture pick it: what is picked, the camera, the lights, a tile layer
+  // or the room; with nothing picked, the room, the first layer of a 2D
+  // scene, or the camera.
+  const PANELS = ["object", "camera", "lights", "tiles", "room"];
+  // flat is whether the scene is 2D: layers and no models.
+  const flat = () => !!doc && !doc.room && !doc.objects.length && doc.layers.length > 0;
+  function defaultPanel() { return doc?.room ? "room" : flat() ? "tiles" : "camera"; }
+  function panelFits(p) {
+    if (p === "object") return true;
+    if (doc?.room) return p === "room";
+    if (p === "tiles") return !!doc?.layers.length;
+    return p !== "room";
   }
-  for (const p of PANELS) $(`stab-${p}`).addEventListener("click", () => showPanel(p));
+  // showPanel shows a panel, and for the tiles panel layer k, or the one
+  // it showed.
+  function showPanel(name, k) {
+    if (k !== undefined) layerIndex = Math.max(0, Math.min(k, (doc?.layers.length ?? 1) - 1));
+    panel = panelFits(name) ? name : defaultPanel();
+    for (const p of PANELS) $(`spanel-${p}`).hidden = p !== panel;
+    if (panel === "tiles") renderTiles();
+    renderHead();
+    renderBar();
+    renderHint();
+    renderOutline();
+  }
 
-  // The toolbar.
-  function fillLists() {
-    const tmds = dataFiles(/\.tmd$/i).map(discPath);
-    addModel.replaceChildren(new Option("Add model…", ""), ...tmds.map((p) => new Option(p.replace(/^ASSETS\//, ""), p)));
-    addModel.disabled = !tmds.length;
-    const tims = dataFiles(/\.tim$/i).map(discPath);
-    addSprite.replaceChildren(new Option("Add sprite…", ""), ...tims.map((p) => new Option(p.replace(/^ASSETS\//, ""), p)));
-    addSprite.disabled = !tims.length;
+  // The inspector's head: what it shows, and for what is picked, a menu
+  // of what can be done to it.
+  function renderHead() {
+    let name, kind = "", icon;
+    if (panel === "object" && selected && doc) {
+      const list = selected.kind === "object" ? doc.objects : selected.kind === "marker" ? doc.room?.markers ?? [] : doc.sprites;
+      name = list[selected.index]?.name || `${selected.kind} ${selected.index}`;
+      kind = { object: "Object", sprite: "Sprite", marker: "Marker" }[selected.kind];
+      icon = { object: "model", sprite: "image", marker: "marker" }[selected.kind];
+    } else if (panel === "object") {
+      name = "Nothing picked";
+      icon = "model";
+    } else {
+      name = { camera: "Camera", lights: "Lights", tiles: layer()?.name ?? "Tile layer", room: current ? stemOf(current) : "Room" }[panel];
+      kind = panel === "room" ? "Room" : panel === "tiles" ? "Layer" : "";
+      icon = { camera: "camera", lights: "light", tiles: "tiles", room: "room" }[panel];
+    }
+    const el = $("insp-icon");
+    el.className = `insp-icon tree-icon icon-${icon}`;
+    el.innerHTML = `<svg class="i"><use href="#i-${icon}"/></svg>`;
+    $("insp-title").textContent = name;
+    $("insp-kind").textContent = kind;
+    $("insp-more").hidden = !(panel === "object" && selected);
   }
+  $("insp-more").addEventListener("click", (e) => moreMenu(e.currentTarget));
+  // moreMenu is what can be done to what is picked.
+  function moreMenu(at) {
+    if (!selected || !doc) return;
+    const o = selected.kind === "object" ? doc.objects[selected.index] : null;
+    files.popupMenu([
+      ["Rename", "Give it another name", () => inspector.querySelector('input[type="text"]')?.focus()],
+      ["Duplicate", "A copy beside it (Ctrl+D)", duplicate],
+      ["Frame", "Turn the camera on it (F)", frame, !o],
+      [o?.hidden ? "Show in the editor" : "Hide in the editor", "The console still draws it", () => { o.hidden = !o.hidden; changed(true); }, !o],
+      ["Remove", "Take it out of the scene (Delete)", remove],
+    ], at);
+  }
+
+  // The toolbar holds what applies: the room's tools for a room, the tile
+  // map's while its map is shown in the picture's place, the gizmo's and
+  // the camera's otherwise.
+  function renderBar() {
+    const room = !!doc?.room;
+    const tiles = !room && panel === "tiles" && !!layer();
+    $("scene-modes").hidden = room || tiles;
+    $("scene-view-tools").hidden = room || tiles;
+    $("scene-room-tools").hidden = !room;
+    $("scene-tile-tools").hidden = !tiles;
+    $("scene-view-menu").hidden = tiles;
+    $("scene-view-menu").setAttribute("aria-pressed", String(room && roomEdit.tool() === "look"));
+    $("scene-play").hidden = !room;
+    $("scene-turn").hidden = !room;
+    $("scene-inset").hidden = !room;
+    $("scene-frame").hidden = tiles;
+    $("scene-map-stage").hidden = !tiles;
+    fitView();
+  }
+
+  // The picture at as many times the console's size as the middle has
+  // room for, a whole number of times once it fits, so that its pixels
+  // stay square; a room's map in its corner, and a tile layer's map in
+  // its place, as large as they fit.
+  const viewStage = $("scene-view");
+  function fitView() {
+    if (!shown) return;
+    const w = viewStage.clientWidth - 12, h = viewStage.clientHeight - 12;
+    if (w <= 0 || h <= 0) return;
+    // A whole number of times while that keeps most of the room; as large
+    // as fits when it would waste too much.
+    const most = Math.min(w / W, h / H);
+    let k = most;
+    if (most >= 1 && Math.floor(most) >= most * 0.75) k = Math.floor(most);
+    canvas.style.width = `${Math.round(W * k)}px`;
+    canvas.style.height = `${Math.round(H * k)}px`;
+    sizeInset();
+    sizeMap();
+  }
+  new ResizeObserver(fitView).observe(viewStage);
+  const inset = $("scene-inset");
+  const insetGrid = $("scene-room-grid");
+  function sizeInset() {
+    if (inset.hidden || insetGrid.width < 2) return;
+    const big = inset.classList.contains("big");
+    const box = canvas.getBoundingClientRect();
+    const maxW = big ? box.width * 0.62 : Math.min(240, box.width * 0.36);
+    const maxH = big ? box.height * 0.7 : Math.min(180, box.height * 0.4);
+    const k = Math.min(maxW / insetGrid.width, maxH / insetGrid.height);
+    insetGrid.style.width = `${Math.round(insetGrid.width * k)}px`;
+    insetGrid.style.height = `${Math.round(insetGrid.height * k)}px`;
+  }
+  $("scene-inset-size").addEventListener("click", (e) => {
+    const big = !inset.classList.contains("big");
+    inset.classList.toggle("big", big);
+    const b = e.currentTarget;
+    b.setAttribute("aria-pressed", String(big));
+    b.title = big ? "Smaller" : "Larger";
+    b.setAttribute("aria-label", b.title);
+    b.querySelector("use").setAttribute("href", big ? "#i-shrink" : "#i-expand");
+    sizeInset();
+  });
+  function sizeMap() {
+    const stage = $("scene-map-stage");
+    if (stage.hidden || mapCanvas.width < 2) return;
+    const w = stage.clientWidth - 24, h = stage.clientHeight - 24;
+    let k = Math.min(w / mapCanvas.width, h / mapCanvas.height);
+    k = mapZoom || (k >= 1 ? Math.floor(k) : 1);
+    mapCanvas.style.width = `${mapCanvas.width * k}px`;
+    mapCanvas.style.height = `${mapCanvas.height * k}px`;
+  }
+
+  // Adding, from the toolbar's menu: a model or a sprite from the files on
+  // the disc, a light, a tile layer cut from a TIM, or a room, which makes
+  // the scene one; in a room, a marker.
   function uniqueName(base, list) {
     const taken = new Set(list.map((o) => o.name));
     if (!taken.has(base)) return base;
     for (let n = 2; ; n++) if (!taken.has(`${base} ${n}`)) return `${base} ${n}`;
   }
-  addModel.addEventListener("change", () => {
-    const model = addModel.value;
-    addModel.value = "";
-    if (!model || !doc) return;
+  function addModel(model) {
     const base = model.replace(/^ASSETS\//, "").replace(/\.TMD$/, "").toLowerCase().slice(0, 12);
-    doc.objects.push({ name: uniqueName(base, doc.objects), model, index: 0, position: [0, 0, 0], rotation: [0, 0, 0], scale: [0, 0, 0] });
+    doc.objects.push({ name: uniqueName(base, doc.objects), model, index: 0, position: [0, 0, 0], rotation: [0, 0, 0], scale: [0, 0, 0], fields: [0, 0], hidden: false });
     select({ kind: "object", index: doc.objects.length - 1 });
     changed(true);
-  });
-  addSprite.addEventListener("change", () => {
-    const texture = addSprite.value;
-    addSprite.value = "";
-    if (!texture || !doc) return;
+  }
+  function addSprite(texture) {
     const tim = timFor(texture);
     if (!tim) return;
     const [u, v] = preview.uv(tim);
@@ -1726,27 +2263,107 @@ const sceneTab = (() => {
     });
     select({ kind: "sprite", index: doc.sprites.length - 1 });
     changed(true);
+  }
+  function addLight() {
+    if (doc.lights.length >= 3) return;
+    doc.lights.push({ direction: [doc.lights.length ? -1 : 1, 1, 1], color: [128, 128, 128] });
+    changed(true);
+    renderLights();
+    select(null);
+    showPanel("lights");
+  }
+  // addLayer adds a tile layer cut from texture, nearest of the layers, its
+  // map the size of the one before it, or a screen's: the first filled with
+  // the texture's first cell, others empty to be painted over.
+  function addLayer(texture) {
+    if (doc.layers.length >= MAX_LAYERS) return;
+    const like = doc.layers.at(-1);
+    const width = like?.width ?? 20, height = like?.height ?? 15;
+    doc.layers.push({
+      name: uniqueLayerName("layer 1"), texture, cell: 16, width, height,
+      map: new Array(width * height).fill(doc.layers.length ? EMPTY : 0),
+      scroll: [0, 0], window: [0, 0, 0, 0], brightness: [128, 128, 128], speed: 100, flags: [],
+    });
+    changed(true);
+    select(null);
+    showPanel("tiles", doc.layers.length - 1);
+  }
+  // uniqueLayerName is base, or base with another number, unlike every
+  // layer's name but except's.
+  function uniqueLayerName(base, except = null) {
+    const taken = new Set(doc.layers.filter((l) => l !== except).map((l) => l.name));
+    if (!taken.has(base)) return base;
+    const stem = base.replace(/ \d+$/, "");
+    for (let n = 2; ; n++) if (!taken.has(`${stem} ${n}`)) return `${stem} ${n}`;
+  }
+  $("scene-add-menu").addEventListener("click", (e) => addMenu(e.currentTarget));
+  function addMenu(at) {
+    if (!doc) return;
+    const tmds = dataFiles(/\.tmd$/i).map(discPath);
+    const tims = dataFiles(/\.tim$/i).map(discPath);
+    const short = (p) => p.replace(/^ASSETS\//, "");
+    const items = [
+      ["Model ▸", tmds.length ? "A TMD on the disc, placed at the middle of the scene" : "No model on the disc yet: add a TMD, or an OBJ to convert", () => files.popupMenu(tmds.map((m) => [short(m), "Place it at the middle of the scene", () => addModel(m)]), at), !tmds.length],
+      ["Sprite ▸", tims.length ? "A TIM on the disc, drawn flat over the scene" : "No picture on the disc yet: add a TIM, or a PNG to convert", () => files.popupMenu(tims.map((t) => [short(t), "Draw it over the scene", () => addSprite(t)]), at), !tims.length],
+    ];
+    if (doc.room) {
+      items.push(["Marker", "A marker on the cell the camera looks at; the marker tool (M) puts one where you click", () => roomEdit.addMarker()]);
+    } else {
+      items.push(["Light", doc.lights.length < 3 ? "Another light shining on the models" : "A scene has three lights at most", addLight, doc.lights.length >= 3]);
+      const full = doc.layers.length >= MAX_LAYERS;
+      items.push(["Tile layer ▸", full ? `A scene has ${MAX_LAYERS} layers at most` : tims.length ? "Cells cut from a TIM, laid out in a map behind the scene and scrolled at a speed of its own" : "No picture on the disc yet: add a TIM, or a PNG to convert", () => files.popupMenu(tims.map((t) => [short(t), "Cut the layer's cells from it", () => addLayer(t)]), at), full || !tims.length]);
+      items.push(["Room", "Make the scene a room: a map of cells with heights, which package stage draws in place of the scene's camera and lights", () => {
+        roomEdit.start();
+        selected = null;
+        panel = "room";
+        renderAll();
+      }]);
+    }
+    files.popupMenu(items, at);
+  }
+
+  // The view menu: where the camera looks from.
+  $("scene-view-menu").addEventListener("click", (e) => {
+    if (!doc) return;
+    const at = e.currentTarget;
+    if (doc.room) {
+      files.popupMenu([
+        ["Turn left", "An eighth of a turn ([)", () => roomEdit.turn(1)],
+        ["Turn right", "An eighth of a turn (])", () => roomEdit.turn(-1)],
+        ["Look at a cell", "The look tool: click a cell to turn the camera on it (L)", () => roomEdit.setTool("look")],
+        ["As the game starts", "The camera where the game first puts it", () => roomEdit.resetView()],
+      ], at);
+      return;
+    }
+    files.popupMenu([
+      ["Front", "From in front of what the camera looks at", () => preset("front")],
+      ["Top", "From above what it looks at", () => preset("top")],
+      ["Side", "From the side of what it looks at", () => preset("side")],
+      ["Frame what is picked", "Turn on it and stand back to see it whole (F)", frame],
+    ], at);
   });
+  for (const b of document.querySelectorAll("#scene-turn button")) b.addEventListener("click", () => roomEdit.turn(Number(b.dataset.turn)));
+  $("scene-play").addEventListener("click", () => roomEdit.playHere());
+
   function remove() {
     if (!selected || !doc) return;
-    const list = selected.kind === "object" ? doc.objects : doc.sprites;
+    const list = selected.kind === "object" ? doc.objects : selected.kind === "marker" ? doc.room.markers : doc.sprites;
     list.splice(selected.index, 1);
     select(null);
     changed(true);
   }
   function duplicate() {
     if (!selected || !doc) return;
-    const list = selected.kind === "object" ? doc.objects : doc.sprites;
+    const list = selected.kind === "object" ? doc.objects : selected.kind === "marker" ? doc.room.markers : doc.sprites;
     const copy = JSON.parse(JSON.stringify(list[selected.index]));
     copy.name = uniqueName(copy.name.replace(/ \d+$/, ""), list);
     if (selected.kind === "object") copy.position = [copy.position[0] + 64, copy.position[1], copy.position[2]];
+    else if (selected.kind === "marker") copy.cell = [copy.cell[0] + 1, copy.cell[1]];
     else copy.x += 16;
     list.push(copy);
     select({ kind: selected.kind, index: list.length - 1 });
     changed(true);
   }
-  $("scene-remove").addEventListener("click", remove);
-  $("scene-duplicate").addEventListener("click", duplicate);
 
   // The inspector: the selection's fields, in the console's units.
   // field makes a labelled input. A number's label scrubs: dragging on it
@@ -1757,6 +2374,7 @@ const sceneTab = (() => {
     wrap.title = title;
     const span = document.createElement("span");
     span.textContent = unit === "deg" ? `${label}°` : label;
+    if (/^[A-Z]$/.test(label)) span.dataset.badge = label;
     let input;
     const toShow = (v) => (unit === "deg" ? Math.round(v * 360 / 4096 * 10) / 10 : v);
     const fromShow = (v) => (unit === "deg" ? Math.round(v * 4096 / 360) : v);
@@ -1817,7 +2435,7 @@ const sceneTab = (() => {
       // Only the numbers change while dragging.
       for (const input of inspector.querySelectorAll("input[data-live]")) {
         const [kind, i] = input.dataset.live.split(":");
-        const item = selected.kind === "object" ? doc.objects[selected.index] : doc.sprites[selected.index];
+        const item = selected.kind === "object" ? doc.objects[selected.index] : selected.kind === "marker" ? doc.room.markers[selected.index] : doc.sprites[selected.index];
         let value = kind === "position" ? item.position[Number(i)] : kind === "rotation" ? item.rotation[Number(i)] : item[kind];
         if (input.dataset.unit === "deg") value = Math.round(value * 360 / 4096 * 10) / 10;
         if (document.activeElement !== input) input.value = value;
@@ -1831,6 +2449,10 @@ const sceneTab = (() => {
       p.className = "muted";
       p.textContent = "Nothing picked. Click an object or a sprite in the picture, or add one.";
       inspector.append(p);
+      return;
+    }
+    if (selected.kind === "marker") {
+      roomEdit.renderMarker(inspector, selected.index);
       return;
     }
     if (selected.kind === "object") {
@@ -1977,14 +2599,19 @@ const sceneTab = (() => {
   function renderAll() {
     inspectorFor = null;
     cameraForm.replaceChildren();
-    fillLists();
+    if (!panel || !panelFits(panel) || (panel === "object" && !selected)) panel = selected ? "object" : defaultPanel();
+    for (const p of PANELS) $(`spanel-${p}`).hidden = p !== panel;
     render();
     renderInspector();
     renderOutline();
     renderCamera();
     renderLights();
     renderTiles();
+    roomEdit.renderPanel();
     renderHistory();
+    renderHead();
+    renderBar();
+    renderHint();
   }
   function show() {
     shown = true;
@@ -1998,37 +2625,59 @@ const sceneTab = (() => {
     if (path) convert.ensureLine("mkscene", ["-o", datPath(path), path], path);
   }
   function hide() {
+    const was = shown;
     shown = false;
     pane.hidden = true;
     clearInterval(consoleTimer);
     consoleTimer = 0;
+    outlineRows = [];
+    if (was) sidebar.renderScenes();
   }
 
   // create asks for a name and gives the project a scene so called, with
-  // its line, picking it; it returns the scene's path, or null.
-  function create() {
+  // its line, picking it; it resolves to the scene's path, or null.
+  async function create(kind = "scene") {
     const p = project();
     if (!p) return null;
     const taken = new Set(p.sceneFiles().map(stemOf));
-    let suggested = "scene";
-    for (let n = 2; taken.has(suggested); n++) suggested = `scene${n}`;
-    const name = prompt("Name of the new scene", suggested);
-    if (name === null) return null;
-    const stem = sceneStem(name) || suggested;
+    let suggested = kind;
+    for (let n = 2; taken.has(suggested); n++) suggested = `${kind}${n}`;
+    const answer = await dialogs.ask({
+      title: kind === "room" ? "New room" : "New scene",
+      text: kind === "room"
+        ? "A map of cells with heights under scenes/, painted here and cooked into a data file the program loads with package scene."
+        : "Models, sprites, lights and a camera under scenes/, placed here and cooked into a data file the program loads with package scene.",
+      value: suggested,
+      ok: "Create",
+      check: (v) => {
+        const stem = sceneStem(v);
+        if (!stem) return "A name is letters, digits and underscores.";
+        if (p.has(`scenes/${stem}.json`)) return `There is already a scene ${stem}.`;
+        const dat = convert.outputFor(`scenes/${stem}.json`, "mkscene");
+        if (convert.lineForOutput(dat)) return `It would be cooked into ${dat}, which another line already makes: the first eight letters need to differ.`;
+        return "";
+      },
+    });
+    if (!answer) return null;
+    const stem = sceneStem(answer);
     const path = `scenes/${stem}.json`;
-    if (p.has(path)) {
-      alert(`There is already a scene ${stem}.`);
-      return null;
-    }
     const dat = convert.outputFor(path, "mkscene");
-    if (convert.lineForOutput(dat)) {
-      alert(`The scene would be cooked into ${dat}, which another line already makes; a name different in its first eight letters is needed.`);
-      return null;
-    }
     p.set(path, JSON.stringify(blank(), null, 2) + "\n", "scene");
     convert.ensureLine("mkscene", ["-o", dat, path], path);
     convert.run();
     pick(path);
+    return path;
+  }
+
+  // createRoom is create with the scene a room: a hall with a doorway.
+  async function createRoom() {
+    const path = await create("room");
+    if (!path) return null;
+    const p = project();
+    p.set(path, JSON.stringify({ room: roomEdit.template() }, null, 2) + "\n", "scene");
+    read();
+    if (shown) renderAll();
+    convert.run();
     return path;
   }
 
@@ -2037,6 +2686,9 @@ const sceneTab = (() => {
     if (path === current) return;
     current = path;
     selected = null;
+    panel = null;
+    layerIndex = MAX_LAYERS - 1; // read makes it the last, the nearest
+    roomEdit.reset();
     history.undo.length = history.redo.length = 0;
     if (shown) {
       read();
@@ -2046,6 +2698,9 @@ const sceneTab = (() => {
   projectEvents.addEventListener("open", () => {
     selected = null;
     current = null;
+    panel = null;
+    layerIndex = MAX_LAYERS - 1;
+    roomEdit.reset();
     history.undo.length = history.redo.length = 0;
     cache.clear();
     vramCache = { keys: "", vram: null };
@@ -2057,7 +2712,6 @@ const sceneTab = (() => {
       read();
       renderAll();
     } else if (path.startsWith("assets/") || path.startsWith("pack/")) {
-      fillLists();
       render();
       renderOutline(); // the badges follow what the picture found
       if (/\.tim$/i.test(path)) renderTiles();
@@ -2074,14 +2728,21 @@ const sceneTab = (() => {
       // The scene being edited was renamed or removed: the first one then.
       current = null;
       selected = null;
+      panel = null;
       history.undo.length = history.redo.length = 0;
       read();
       renderAll();
       return;
     }
-    fillLists();
     render();
   });
 
-  return { show, hide, create, pick, current: () => scenePath(), shown: () => shown, undo, redo, remove };
+  return {
+    show, hide, create, createRoom, pick, current: () => scenePath(), shown: () => shown, undo, redo, remove,
+    // outlineItems is the rows of what the open scene holds, for the
+    // sidebar to list under it.
+    outlineItems: () => outlineRows,
+    // keysSection names the part of the sheet of keys for what is edited.
+    keysSection: () => (doc?.room ? "room" : panel === "tiles" && layer() ? "tiles" : "scene"),
+  };
 })();

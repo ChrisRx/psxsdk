@@ -1,17 +1,18 @@
-// The viewer in the main panel: one TIM through its palette, with a
-// button to its place on the map of video memory; one TMD turning as the
-// console would draw it; a source under assets/ with its converter's options;
-// an archive's table, or what else is known of a file. Video memory, with
-// every TIM in the project where its header puts it, is drawn small in the
-// sidebar and large in a dialog, where a block is dragged into place.
-// preview.js reads and draws; this is the panel.
+// The viewer in the middle of the Assets layout: one TIM through its
+// palette, with a button to its place on the map of video memory; one TMD
+// turning as the console would draw it; a source under assets/, with its
+// converter's options in the column on the right; an archive's table, or
+// what else is known of a file, said in that column too. Video memory,
+// with every TIM in the project where its header puts it, is drawn small
+// in the sidebar and large in the middle, where a block is dragged into
+// place. preview.js reads and draws; this is the panel.
 "use strict";
 
 const inspect = (() => {
   const canvas = $("preview-canvas");
   const ctx = canvas.getContext("2d");
   const inVRAM = $("preview-in-vram");
-  const dialog = $("vram-dialog");
+  const vramPane = $("vram-pane");
   const vramCanvas = $("vram-canvas");
   const vramInfo = $("vram-info");
   const thumb = $("vram-thumb");
@@ -77,6 +78,7 @@ const inspect = (() => {
       if (!data) return;
       title.textContent = path;
       canvas.hidden = form.hidden = inVRAM.hidden = true;
+      $("source-head").hidden = true;
       objectSelect.hidden = rowSelect.hidden = true;
       const ext = path.replace(/^.*\./, "").toUpperCase();
       const what = { SEQ: "a score for the sound library, played through a bank", VH: "the header of a sound bank, loaded with its VB", VB: "the samples of a sound bank, loaded with its VH", VAB: "a sound bank, header and samples together", VAG: "one sound, for a bank", DAT: "a data file the program reads as it likes", GO: "Go source", JSON: "JSON", ARC: "an archive, read with package archive" }[ext];
@@ -91,6 +93,7 @@ const inspect = (() => {
     rowSelect.hidden = true;
     canvas.className = kind;
     form.hidden = kind !== "source";
+    $("source-head").hidden = form.hidden;
     canvas.hidden = false;
     inVRAM.hidden = kind !== "tim";
     selectedPath = kind === "tim" ? path : null;
@@ -101,6 +104,7 @@ const inspect = (() => {
     shown = null;
     cancelAnimationFrame(frame);
     frame = 0;
+    vramPane.hidden = true;
   }
 
   function render() {
@@ -264,7 +268,7 @@ const inspect = (() => {
     }
   });
   // The TIM shown stays marked on the map.
-  inVRAM.addEventListener("click", showVRAM);
+  inVRAM.addEventListener("click", () => files.open("vram"));
 
   // Video memory: 1024 by 512 units, each a pixel here, with the display
   // buffers a 320 by 240 program uses marked, and every block of every TIM
@@ -322,20 +326,20 @@ const inspect = (() => {
   let selectedPath = null;
   let hovered = null;
 
-  // renderMap draws the map small in the sidebar, and large in the dialog
-  // while that is open.
+  // renderMap draws the map small in the sidebar, and large in the middle
+  // while that shows it.
   function renderMap() {
     renderVRAM(thumb);
-    if (dialog.open) renderVRAM(vramCanvas);
+    if (!vramPane.hidden) renderVRAM(vramCanvas);
   }
-  // showVRAM opens the dialog over the page.
+  // showVRAM shows the map large in the middle (files.js opens it as
+  // "vram").
   function showVRAM() {
-    if (!dialog.open) dialog.showModal();
+    vramPane.hidden = false;
     hovered = null;
     renderVRAM(vramCanvas);
   }
-  $("vram-open").addEventListener("click", showVRAM);
-  $("vram-close").addEventListener("click", () => dialog.close());
+  $("vram-open").addEventListener("click", () => files.open("vram"));
 
   function blockAt(e, target = vramCanvas) {
     const r = target.getBoundingClientRect();

@@ -1,12 +1,16 @@
 // The sidebar: the project's scenes above, its files below, each opened in
-// the main panel by a click (files.js). The files are the project's tree
-// as a directory listing shows it: assets/, what goes on the disc beside
-// the sources the go:generate lines convert it from (convert.js); pack/, a
-// directory for each archive mkarc packs; then the Go files at the root.
-// Folders fold, every file has the icon of its kind, and a data file
-// dragged onto an archive goes into it, or back onto assets/ to come out.
-// Each section's + adds to it, and a row's right-click menu holds what
-// else can be done with it. Under them video memory is drawn small
+// the middle by a click (files.js), in its layout (layout.js), which also
+// folds the sections it has less use for. The scene open in the Scenes
+// layout unfolds into what it holds, its camera, lights, tile map, room,
+// markers, objects and sprites, picked from here as from the picture
+// (scene-tab.js). The files are the project's tree as a directory listing
+// shows it: assets/, what goes on the disc beside the sources the
+// go:generate lines convert it from (convert.js); pack/, a directory for
+// each archive mkarc packs; then the Go files at the root. Folders fold,
+// every file has the icon of its kind, and a data file dragged onto an
+// archive goes into it, or back onto assets/ to come out. Each section's +
+// adds to it, and a row's right-click menu holds what else can be done
+// with it. In the Assets layout video memory is drawn small under them
 // (inspect.js), opening large when clicked.
 //
 // exampleFiles fetches an example's data as project files, for the program
@@ -48,13 +52,16 @@ const sidebar = (() => {
   const status = $("asset-status");
   const picker = $("asset-files");
 
-  const HINT = "Files dropped on the page go under assets/; pictures, models and sounds are converted there. Drag a file onto an archive to pack it.";
+  const HINT = "Drop files on the page to add them; drag one onto an archive to pack it.";
   let selected = null; // the path shown in the main panel
 
   function project() { return projects.current; }
 
+  // say puts a line at the foot of the sidebar, under every section; the
+  // hint about dropping files shows only where the files do.
   function say(text) {
     status.textContent = text;
+    $("side-foot").classList.toggle("hint", text === HINT);
   }
 
   // declaration is what a program writes to read the file at path, as the
@@ -95,6 +102,7 @@ const sidebar = (() => {
     data: '<svg viewBox="0 0 16 16"><path d="M4 1.5h5l3.5 3.5v9.5h-8.5z"/><path d="M9 1.5V5h3.5M6 8h4M6 10.5h4"/></svg>',
     json: '<svg viewBox="0 0 16 16"><path d="M6 2.5c-1.5 0-2 .5-2 2v2c0 1-.5 1.5-1.5 1.5 1 0 1.5.5 1.5 1.5v2c0 1.5.5 2 2 2M10 2.5c1.5 0 2 .5 2 2v2c0 1 .5 1.5 1.5 1.5-1 0-1.5.5-1.5 1.5v2c0 1.5-.5 2-2 2"/></svg>',
     scene: '<svg viewBox="0 0 16 16"><path d="M2 6.5h12V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/><path d="m2 6.5 1.2-3.3 10.6 1.4-.8 1.9M5.4 3.6 4.5 6.5M9.4 4.1 8.5 6.5"/></svg>',
+    room: '<svg viewBox="0 0 16 16"><use href="#i-room"/></svg>',
   };
   // iconFor names the icon and the color class for a file.
   function iconFor(path, kind) {
@@ -175,7 +183,8 @@ const sidebar = (() => {
       const d = JSON.parse(p.text(path));
       const parts = [];
       const n = d.objects?.length ?? 0, ns = d.sprites?.length ?? 0;
-      parts.push(`${n} object${n === 1 ? "" : "s"}`);
+      if (d.room?.cells?.length) parts.push(`a room of ${d.room.cells[0].length} by ${d.room.cells.length}`);
+      if (n || !parts.length) parts.push(`${n} object${n === 1 ? "" : "s"}`);
       if (ns) parts.push(`${ns} sprite${ns === 1 ? "" : "s"}`);
       if (d.background) parts.push("a tile map");
       return parts.join(", ");
@@ -202,14 +211,14 @@ const sidebar = (() => {
     if (r.path === "pack" || r.path === "assets") return inner;
     return false;
   }
-  function dropped(r, path) {
+  async function dropped(r, path) {
     const p = project();
     if (!p.has(path)) return;
     let why = "";
     if (r.path === "assets") {
       if (path.startsWith("pack/")) why = convert.takeOut(path);
     } else {
-      let name = r.kind === "pack" ? r.path.slice(5) : newArchiveName();
+      let name = r.kind === "pack" ? r.path.slice(5) : await newArchiveName();
       if (!name) return;
       if (path.startsWith(`pack/${name}/`)) return;
       if (path.startsWith("pack/")) why = convert.takeOut(path);
@@ -317,8 +326,13 @@ const sidebar = (() => {
     return li;
   }
 
-  // toggle folds or unfolds a folder, keeping the focus on it.
+  // toggle folds or unfolds a folder, keeping the focus on it; a scene's
+  // arrow opens it, unfolding what it holds.
   function toggle(r, focus = false) {
+    if (r.kind === "scene") {
+      if (!r.open) files.open(r.path);
+      return;
+    }
     if (closed.has(r.path)) closed.delete(r.path);
     else closed.add(r.path);
     render();
@@ -338,25 +352,44 @@ const sidebar = (() => {
     });
   }
 
+  // The scenes, the one open in the Scenes layout unfolded into what it
+  // holds, which the scene editor lists.
   function renderScenes(p) {
     const list = p ? p.sceneFiles() : [];
+    $("scenes-count").textContent = list.length ? String(list.length) : "";
     if (!list.length) {
       const li = document.createElement("li");
       li.className = "files-group";
       li.setAttribute("role", "presentation");
       li.textContent = "No scene yet; + makes one.";
-      scenes.replaceChildren(li);
+      scenes.replaceChildren(...(p ? [li] : []));
       return;
     }
-    scenes.replaceChildren(...list.map((path) => row(
-      { path, label: path.replace(/^scenes\//, "").replace(/\.json$/, ""), meta: sceneSummary(p, path), kind: "scene", icon: "scene" },
-      { role: "option", menu: sceneMenu, onDelete: (r) => removeScene(r.path) },
-    )));
+    const open = layout.get() === "scenes" && sceneTab.shown() ? sceneTab.current() : null;
+    const items = [];
+    for (const path of list) {
+      const room = /"room"\s*:/.test(p.text(path) ?? "");
+      items.push(row(
+        { path, label: path.replace(/^scenes\//, "").replace(/\.json$/, ""), meta: sceneSummary(p, path), kind: "scene", icon: room ? "room" : "scene", folder: true, open: path === open },
+        { role: "treeitem", menu: sceneMenu, onDelete: (r) => removeScene(r.path) },
+      ));
+      if (path === open) items.push(...sceneTab.outlineItems());
+    }
+    scenes.replaceChildren(...items);
     // One row can take focus even when none is shown.
-    if (!scenes.querySelector('[tabindex="0"]')) scenes.querySelector("[role=option]").tabIndex = 0;
+    if (!scenes.querySelector('[tabindex="0"]')) scenes.querySelector("[role=treeitem]").tabIndex = 0;
+  }
+  let scenesQueued = 0;
+  function renderScenesSoon() {
+    if (scenesQueued || renderQueued) return;
+    scenesQueued = requestAnimationFrame(() => {
+      scenesQueued = 0;
+      renderScenes(project());
+    });
   }
 
   function renderTree(p) {
+    $("files-count").textContent = p ? String(p.files.size) : "";
     for (const name of pending) if (p?.packFiles().some((f) => f.startsWith(`pack/${name}/`))) pending.delete(name);
     tree.replaceChildren(...rows().map((r) => row(r, {
       role: "treeitem",
@@ -389,31 +422,32 @@ const sidebar = (() => {
     files.open(r.path);
   }
 
-  // newArchiveName asks for the name of a new archive, cleaned up, or
-  // returns null.
-  function newArchiveName() {
+  // newArchiveName asks for the name of a new archive, and resolves to it
+  // cleaned up, or null.
+  async function newArchiveName() {
     const p = project();
     const taken = new Set([...p.packs(), ...pending]);
     let suggested = "level";
     for (let n = 2; taken.has(suggested); n++) suggested = `level${n}`;
-    const name = prompt("Name of the new archive, as pack/NAME and assets/NAME.ARC", suggested);
-    if (name === null) return null;
-    const clean = sceneStem(name);
-    if (!clean) return null;
-    if (taken.has(clean)) {
-      alert(`There is already an archive ${clean}.`);
-      return null;
-    }
-    if (convert.lineForOutput(convert.archiveOf(clean))) {
-      alert(`${convert.archiveOf(clean)} is already made by another line.`);
-      return null;
-    }
-    return clean;
+    const answer = await dialogs.ask({
+      title: "New archive",
+      text: "Its files go under pack/NAME, packed into assets/NAME.ARC, which the program opens with package archive.",
+      value: suggested,
+      ok: "Create",
+      check: (v) => {
+        const clean = sceneStem(v);
+        if (!clean) return "A name is letters, digits and underscores.";
+        if (taken.has(clean)) return `There is already an archive ${clean}.`;
+        if (convert.lineForOutput(convert.archiveOf(clean))) return `${convert.archiveOf(clean)} is already made by another line.`;
+        return "";
+      },
+    });
+    return answer ? sceneStem(answer) : null;
   }
   // newArchive makes an empty archive, which shows in the tree until a
   // file is dropped on it.
-  function newArchive() {
-    const name = newArchiveName();
+  async function newArchive() {
+    const name = await newArchiveName();
     if (!name) return;
     pending.add(name);
     closed.delete("pack");
@@ -434,6 +468,7 @@ const sidebar = (() => {
   // mark says what the main panel shows, so that its row stands out.
   function mark(path) {
     selected = path;
+    $("vram-open").classList.toggle("on", path === "vram");
     render();
   }
 
@@ -530,17 +565,19 @@ const sidebar = (() => {
     files.popupMenu(items, at);
   }
 
-  function rename(path) {
+  async function rename(path) {
     const p = project();
     const dir = path.includes("/") ? path.slice(0, path.lastIndexOf("/") + 1) : "";
-    const name = prompt(`Rename ${path} to`, path.slice(dir.length));
-    if (name === null) return;
-    const clean = name.trim().replace(/^.*[\\/]/, "").replace(/\s+/g, "_");
+    const cleaned = (name) => name.trim().replace(/^.*[\\/]/, "").replace(/\s+/g, "_");
+    const answer = await dialogs.ask({
+      title: `Rename ${path}`,
+      value: path.slice(dir.length),
+      ok: "Rename",
+      check: (v) => (cleaned(v) !== path.slice(dir.length) && p.has(dir + cleaned(v)) ? `There is already a ${dir + cleaned(v)}.` : ""),
+    });
+    if (!answer) return;
+    const clean = cleaned(answer);
     if (!clean || clean === path.slice(dir.length)) return;
-    if (p.has(dir + clean)) {
-      alert(`There is already a ${dir + clean}.`);
-      return;
-    }
     if (p.rename(path, dir + clean) && selected === path) files.open(dir + clean);
   }
 
@@ -548,7 +585,7 @@ const sidebar = (() => {
   // made; everything removed can be put back with Undo in the status
   // line, or Ctrl+Z, for a while.
   const removed = []; // [{files: [{path, data}], lines: [{file, text}]}]
-  function remove(path) {
+  async function remove(path) {
     const p = project();
     if (!p?.has(path)) return;
     const files = [{ path, data: p.get(path) }];
@@ -562,7 +599,8 @@ const sidebar = (() => {
       }
     }
     const what = files.map((f) => f.path).join(" and ") + (lines.length ? ", with its go:generate line" : "");
-    if (!confirm(`Remove ${what} from the project?`)) return;
+    const many = files.length > 1;
+    if (!(await dialogs.confirm({ title: `Remove ${path.replace(/^.*\//, "")}?`, text: `${what}${lines.length ? "," : ""} ${many ? "leave" : "leaves"} the project. Undo puts ${many ? "them" : "it"} back.`, ok: "Remove", danger: true }))) return;
     for (const { file, text } of lines) {
       const rows = p.text(file).split("\n");
       const i = rows.indexOf(text);
@@ -576,11 +614,11 @@ const sidebar = (() => {
     sayUndo(`Removed ${what}.`);
     if (path.startsWith("pack/")) convert.packChanged(path.split("/")[1]);
   }
-  function removePack(name) {
+  async function removePack(name) {
     const p = project();
     const members = p.packFiles().filter((f) => f.startsWith(`pack/${name}/`));
     const archive = convert.archiveOf(name);
-    if (!confirm(`Remove ${archive} and the ${members.length} file${members.length === 1 ? "" : "s"} packed in it from the project?`)) return;
+    if (!(await dialogs.confirm({ title: `Remove the archive ${name}?`, text: `${archive} and the ${members.length} file${members.length === 1 ? "" : "s"} packed in it leave the project, with its mkarc line. Undo puts them back.`, ok: "Remove", danger: true }))) return;
     const files = members.map((f) => ({ path: f, data: p.get(f) }));
     if (p.has(archive)) files.push({ path: archive, data: p.get(archive) });
     const lines = [];
@@ -605,12 +643,12 @@ const sidebar = (() => {
     const product = line ? (line.values.get("-o") ?? line.values.get("--output")) : null;
     return { line, product: product && p.has(product) ? product : null };
   }
-  function removeScene(path) {
+  async function removeScene(path) {
     const p = project();
     if (!p?.has(path)) return;
     const { line, product } = sceneParts(path);
     const what = path + (product ? ` and ${product}` : "") + (line ? ", with its mkscene line" : "");
-    if (!confirm(`Remove ${what} from the project? Code that loads the scene needs changing by hand.`)) return;
+    if (!(await dialogs.confirm({ title: `Remove the scene ${path.replace(/^scenes\//, "").replace(/\.json$/, "")}?`, text: `${what} leave the project. Code that loads the scene needs changing by hand; Undo puts it back.`, ok: "Remove", danger: true }))) return;
     const files = [{ path, data: p.get(path) }];
     if (product) files.push({ path: product, data: p.get(product) });
     const lines = [];
@@ -627,24 +665,30 @@ const sidebar = (() => {
     removed.push({ files, lines });
     sayUndo(`Removed ${what}.`);
   }
-  function renameScene(path) {
+  async function renameScene(path) {
     const p = project();
     const stem = path.replace(/^scenes\//, "").replace(/\.json$/, "");
-    const name = prompt("Rename the scene to", stem);
-    if (name === null) return;
-    const clean = sceneStem(name);
+    const { line, product } = sceneParts(path);
+    const answer = await dialogs.ask({
+      title: `Rename the scene ${stem}`,
+      text: "Its mkscene line and its data file follow; code that loads it by name needs changing by hand.",
+      value: stem,
+      ok: "Rename",
+      check: (v) => {
+        const clean = sceneStem(v);
+        if (!clean) return "A name is letters, digits and underscores.";
+        if (clean === stem) return "";
+        if (p.has(`scenes/${clean}.json`)) return `There is already a scene ${clean}.`;
+        const next = convert.outputFor(`scenes/${clean}.json`, "mkscene");
+        if (product && product !== next && p.has(next)) return `There is already a ${next}, which the renamed scene would be cooked into.`;
+        return "";
+      },
+    });
+    if (!answer) return;
+    const clean = sceneStem(answer);
     if (!clean || clean === stem) return;
     const to = `scenes/${clean}.json`;
-    if (p.has(to)) {
-      alert(`There is already a scene ${clean}.`);
-      return;
-    }
-    const { line, product } = sceneParts(path);
     const newProduct = convert.outputFor(to, "mkscene");
-    if (product && product !== newProduct && p.has(newProduct)) {
-      alert(`There is already a ${newProduct}, which the renamed scene would be cooked into.`);
-      return;
-    }
     if (line) {
       const rows = p.text(line.file).split("\n");
       if (rows[line.index] === line.text) {
@@ -679,6 +723,7 @@ const sidebar = (() => {
   }
   // sayUndo says what happened with an Undo beside it.
   function sayUndo(text) {
+    $("side-foot").classList.remove("hint");
     status.replaceChildren(document.createTextNode(text + " "));
     const b = document.createElement("button");
     b.type = "button";
@@ -694,12 +739,20 @@ const sidebar = (() => {
     }
   });
 
-  // Adding. A scene is made by the scene editor and opened; the files
-  // menu offers a Go file, files from this computer, which go in as
-  // dropped ones do (files.js), and an example's data.
-  $("scene-add").addEventListener("click", () => {
-    const path = sceneTab.create();
-    if (path) files.open(path);
+  // Adding. A scene or a room is made by the scene editor and opened; the
+  // files menu offers a Go file, a sprite, files from this computer, which
+  // go in as dropped ones do (files.js), an archive and an example's data.
+  $("scene-add").addEventListener("click", (e) => {
+    files.popupMenu([
+      ["New scene…", "Models, sprites and lights placed by hand in front of a camera, for package scene", async () => {
+        const path = await sceneTab.create();
+        if (path) files.open(path);
+      }],
+      ["New room…", "A map of cells with heights, painted, which package stage draws", async () => {
+        const path = await sceneTab.createRoom();
+        if (path) files.open(path);
+      }],
+    ], e.currentTarget);
   });
   $("file-add").addEventListener("click", (e) => addMenu(e.currentTarget));
   picker.addEventListener("change", async () => {
@@ -710,6 +763,7 @@ const sidebar = (() => {
   function addMenu(at) {
     files.popupMenu([
       ["New Go file", "A file beside main.go, in the same package", () => files.newFile()],
+      ["New sprite…", "A picture under assets/ drawn pixel by pixel here, converted to a TIM by a png2tim line", () => files.newSprite()],
       ["Add files from this computer…", "Go files go beside main.go; anything else under assets/, where pictures, models and sounds are converted", () => picker.click()],
       ["New archive…", "An archive under pack/, packed into assets/NAME.ARC by an mkarc line; files dropped on it go in", newArchive],
       ["Add an example's data…", "The pictures, models and sounds one of the site's examples uses", () => exampleMenu(at), !catalog.length],
@@ -725,7 +779,7 @@ const sidebar = (() => {
     try {
       const added = await exampleFiles(name);
       const replaced = added.filter((f) => p.has(f.path)).map((f) => f.path);
-      if (replaced.length && !confirm(`Replace ${replaced.join(", ")}?`)) {
+      if (replaced.length && !(await confirmReplace(replaced))) {
         say(HINT);
         return;
       }
@@ -736,48 +790,13 @@ const sidebar = (() => {
     }
   }
 
-  // The divider between the scenes and the files, dragged or moved with
-  // the arrow keys; where it sits is remembered.
-  const divider = $("side-split");
-  const SCENES = "playground-scenes";
-  function setScenes(px) {
-    const max = bar.clientHeight - 160;
-    const h = Math.round(Math.max(72, Math.min(px, max)));
-    bar.style.setProperty("--scenes", `${h}px`);
-    return h;
-  }
-  function keepScenes(h) {
-    try { localStorage.setItem(SCENES, String(h)); } catch { /* not kept */ }
-  }
-  try {
-    const saved = Number(localStorage.getItem(SCENES));
-    if (saved) setScenes(saved);
-  } catch { /* the default */ }
-  divider.addEventListener("pointerdown", (e) => {
-    divider.setPointerCapture(e.pointerId);
-    document.body.classList.add("resizing-rows");
-    const top = bar.getBoundingClientRect().top;
-    const move = (ev) => setScenes(ev.clientY - top - divider.offsetHeight / 2);
-    const up = (ev) => {
-      divider.removeEventListener("pointermove", move);
-      divider.removeEventListener("pointerup", up);
-      document.body.classList.remove("resizing-rows");
-      keepScenes(setScenes(ev.clientY - top - divider.offsetHeight / 2));
-    };
-    divider.addEventListener("pointermove", move);
-    divider.addEventListener("pointerup", up);
-  });
-  divider.addEventListener("keydown", (e) => {
-    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-    e.preventDefault();
-    keepScenes(setScenes($("side-scenes").offsetHeight + (e.key === "ArrowDown" ? 24 : -24)));
-  });
-
-  projectEvents.addEventListener("open", () => {
+  // With no project there is nothing to add to or to drop on.
+  projectEvents.addEventListener("open", ({ detail: { project: p } }) => {
     selected = null;
     closed.clear();
     pending.clear();
-    say(HINT);
+    $("scene-add").disabled = $("file-add").disabled = !p;
+    say(p ? HINT : "");
     render();
   });
   projectEvents.addEventListener("files", render);
@@ -787,5 +806,11 @@ const sidebar = (() => {
   projectEvents.addEventListener("status", ({ detail: { text } }) => say(text));
   say(HINT);
 
-  return { mark, say, remove, removeScene, renameScene, undoRemove, canUndo: () => removed.length > 0 };
+  return {
+    mark, say, remove, removeScene, renameScene, undoRemove, canUndo: () => removed.length > 0,
+    renderScenes: renderScenesSoon,
+    // iconFor names the icon of a file's kind, and icon draws it.
+    iconFor: (path) => iconFor(path),
+    icon: (path) => ICON[iconFor(path)],
+  };
 })();

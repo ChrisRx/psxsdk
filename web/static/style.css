@@ -406,14 +406,34 @@ body.resizing-rows { cursor: row-resize; user-select: none; -webkit-user-select:
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 10px;
-  padding: 10px 16px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--line);
 }
-.pg-top h1 { margin-right: 14px; font-size: 1.625rem; }
+.pg-top h1 { margin-right: 14px; font-size: 1.625rem; white-space: nowrap; }
 .pg-hot { display: inline-flex; align-items: center; gap: 4px; font-size: 0.875rem; color: var(--muted); cursor: pointer; }
 .pg-hot:has(:checked) { color: var(--ink); }
-.pg-hint { margin-left: 6px; font-size: 0.875rem; }
-.pg-hint kbd { min-width: 0; font-size: 0.75rem; }
+
+/* The icons the page draws from its sprite, at the size of the text. */
+.pg-icons { position: absolute; width: 0; height: 0; overflow: hidden; }
+svg.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+/* The switch between the layouts, Code, Scenes and Assets, and Run. */
+.pg-layouts { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); }
+.pg-layouts button { display: inline-flex; align-items: center; gap: 6px; min-height: 0; padding: 4px 12px; border: 0; border-radius: 5px; background: none; color: var(--muted); font-size: 0.9375rem; font-weight: 600; }
+.pg-layouts button:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.pg-layouts button[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line-strong); }
+/* The live pill by Run: lit while this project's program runs, whose
+   scenes then show on the console as they are edited. */
+.live-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border: 1px solid var(--line-strong); border-radius: 999px; color: var(--muted); font-size: 0.8125rem; font-weight: 500; }
+.live-pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }
+.live-pill.on { color: var(--ink); border-color: var(--triangle); }
+.live-pill.on::before { background: var(--triangle); }
+.live-pill[hidden] { display: none; }
+.pg-run { display: inline-flex; align-items: center; gap: 6px; padding-left: 12px; }
+.pg-run svg.i { width: 13px; height: 13px; }
+#keys-open { border: 0; background: none; color: var(--muted); }
+#keys-open svg.i { width: 20px; height: 20px; }
+#keys-open:hover:not(:disabled), #keys-open:focus-visible { background: var(--surface-2); color: var(--ink); }
 /* The links to the rest of the site, the GitHub mark and the theme
    switch, drawn as one row of quiet buttons. */
 .pg-links { display: flex; align-items: center; gap: 4px; margin-left: auto; }
@@ -433,9 +453,14 @@ body.resizing-rows { cursor: row-resize; user-select: none; -webkit-user-select:
 button.primary { border-color: var(--accent); background: var(--accent); color: var(--bg); }
 button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 86%, var(--ink)); }
 
+/* The page under the top bar, by layout: in Code the sidebar, the editor,
+   the divider and the emulator's column; in Scenes and Assets the
+   sidebar, the editor and the inspector's column, with the game docked
+   at its foot. */
 .pg {
   --side: min(520px, 42vw);
-  --bar: 272px;
+  --bar: 256px;
+  --insp: 296px;
   max-width: none;
   margin: 0;
   gap: 0;
@@ -444,7 +469,18 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   min-height: 0;
   display: grid;
   grid-template-columns: var(--bar) minmax(0, 1fr) 7px var(--side);
+  grid-template-areas: "bar main split side";
 }
+.pg-bar { grid-area: bar; }
+.pg-code { grid-area: main; }
+.pg-split { grid-area: split; }
+.pg-side { grid-area: side; }
+.pg-insp { grid-area: insp; display: none; }
+body:not([data-layout="code"]) .pg { --bar: 232px; --insp: 280px; grid-template-columns: var(--bar) minmax(0, 1fr) var(--insp); grid-template-areas: "bar main insp"; }
+body:not([data-layout="code"]) .pg-split, body:not([data-layout="code"]) .pg-side, body:not([data-layout="code"]) .pg-files { display: none; }
+body:not([data-layout="code"]) .pg-insp { display: flex; }
+.pg-files-end { display: flex; flex: none; align-items: center; gap: 10px; margin-left: auto; }
+.pg-files-end .status { margin: 0; }
 
 .pg-code { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--code-bg); }
 .pg-code.dropping { outline: 2px dashed var(--accent); outline-offset: -4px; }
@@ -475,8 +511,11 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
 .pg-editors { position: relative; flex: 1; min-height: 0; }
 .pg-editors .editor { position: absolute; inset: 0; }
 .pg-editors .editor[hidden] { display: none; }
-.pg-empty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 16px; text-align: center; }
+.pg-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; margin: 0; padding: 24px; text-align: center; background: var(--surface); }
 .pg-empty[hidden] { display: none; }
+.pg-empty p { max-width: 480px; margin: 0; }
+.pg-empty-actions { display: flex; gap: 8px; }
+.pg-empty-actions:empty { display: none; }
 
 /* A small menu of actions, under the button that opened it. */
 .pg-popup {
@@ -505,7 +544,7 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   text-align: left;
   font-weight: 400;
 }
-.pg-popup button:hover:not(:disabled), .pg-projects button:hover { background: var(--surface-2); }
+.pg-popup button:hover:not(:disabled) { background: var(--surface-2); }
 
 /* The project menu in the top bar: the open project's name, opening the
    list of those kept in this browser and what can be done with them. */
@@ -538,47 +577,74 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   transform: rotate(45deg);
 }
 .pg-project[open] summary::after { transform: translateY(2px) rotate(-135deg); }
+.pg-project[hidden] { display: none; }
+.pg-project-wrap { position: relative; display: flex; align-items: center; }
+/* The name being changed, in the place of the menu's button. */
+.pg-project-input {
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--code-bg);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 500;
+  outline: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.pg-project-input[hidden] { display: none; }
+/* The menu: labeled groups of rows, an icon and a name each, with the
+   steps that lose work last, in red. */
 .pg-menu {
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
   z-index: 20;
-  width: min(400px, calc(100vw - 32px));
+  width: min(320px, calc(100vw - 32px));
+  padding: 5px;
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--surface);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+  font-size: 0.875rem;
 }
-.pg-projects {
-  max-height: 40vh;
-  margin: 0;
-  padding: 4px;
-  overflow: auto;
-  list-style: none;
-  border-bottom: 1px solid var(--line);
-}
-.pg-projects button[aria-current] { background: color-mix(in srgb, var(--accent) 14%, transparent); font-weight: 500; }
-.pg-projects .muted { flex: none; font-size: 0.8125rem; font-weight: 400; }
-.pg-project-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.pg-menu-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; }
-.pg-menu-actions button { min-height: 0; padding: 4px 10px; font-size: 0.875rem; }
-.pg-menu-actions .danger { margin-left: auto; color: var(--error); }
+.pg-menu-label { padding: 6px 10px 3px; color: var(--muted); font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.pg-menu-sep { height: 1px; margin: 5px 4px; background: var(--line); }
+.pg-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 0; padding: 6px 10px; border: 0; border-radius: 5px; background: none; color: var(--ink); font-size: 0.875rem; font-weight: 500; text-align: left; }
+.pg-item:hover:not(:disabled), .pg-item:focus-visible { background: var(--surface-2); outline: none; }
+.pg-item svg.i { color: var(--muted); }
+.pg-item.danger, .pg-item.danger svg.i { color: var(--error); }
+.pg-item-blank { width: 16px; flex: none; }
+.pg-item-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pg-item-meta { flex: none; margin-left: auto; color: var(--muted); font-size: 0.75rem; font-weight: 400; }
+.pg-projects { max-height: 40vh; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.pg-projects .pg-item[aria-checked="true"] { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.pg-projects .pg-item[aria-checked="true"] svg.i { color: var(--accent); }
 
 /* The sidebar: the scenes above, the files below, with the divider between
    them dragged to share the height. */
 .pg-bar { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--line); background: var(--surface); }
 .pg-bar.dropping { outline: 2px dashed var(--accent); outline-offset: -4px; }
-.side-sect { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-#side-scenes { flex: none; height: var(--scenes, 28%); }
-#side-files { flex: 1; }
-.side-head { display: flex; flex: none; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.side-sect { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.side-sect[hidden] { display: none; }
+/* A section folded to its head, which unfolds it when clicked. */
+.side-sect.folded, #side-vram { flex: none; }
+.side-sect.folded .side-list, .side-sect.folded .side-filter, .side-sect.folded .vram-thumb { display: none; }
+#side-foot:has(.files-status:empty), body[data-layout="scenes"] #side-foot.hint { display: none; }
+.side-head { display: flex; flex: none; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--line); background: var(--surface-2); cursor: pointer; user-select: none; -webkit-user-select: none; }
+.side-fold { display: grid; flex: none; place-items: center; width: 16px; height: 16px; min-height: 0; margin: 0 -4px 0 -6px; padding: 0; border: 0; border-radius: 3px; background: none; color: var(--muted); }
+.side-fold:hover:not(:disabled) { background: none; color: var(--ink); }
+.side-fold svg.i { width: 11px; height: 11px; transition: transform 0.12s; }
+.side-fold[aria-expanded="true"] svg.i { transform: rotate(90deg); }
+.side-count { font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.side-filter { display: flex; flex: none; align-items: center; gap: 6px; margin: 6px 8px 2px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: 5px; background: var(--code-bg); color: var(--muted); }
+.side-filter input { flex: 1; min-width: 0; padding: 4px 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: 0.8125rem; outline: none; }
+.side-filter:focus-within { border-color: var(--accent); }
+body:not([data-layout="scenes"]) .side-filter { display: none; }
 .side-head h2 { display: flex; flex: 1; align-items: center; gap: 7px; margin: 0; color: var(--muted); font: 600 0.75rem/1.4 Barlow, system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; }
 .side-head svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .side-add { display: grid; place-items: center; width: 28px; height: 28px; min-height: 0; padding: 0; }
 .side-add svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .side-list { flex: 1; min-height: 0; margin: 0; padding: 4px 0; overflow-x: hidden; overflow-y: auto; list-style: none; font-size: 0.875rem; }
-.side-split { flex: none; height: 7px; border-top: 3px solid var(--surface); border-bottom: 3px solid var(--surface); background: var(--line); cursor: row-resize; touch-action: none; }
-.side-split:hover, .side-split:focus-visible, .resizing-rows .side-split { background: var(--accent); outline: none; }
 .side-foot { display: flex; flex: none; flex-direction: column; align-items: flex-start; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--line); }
 /* The rows of both lists, laid out as a code editor's explorer lays its
    tree: a guide line for each level, a chevron on a folder, the icon of
@@ -617,26 +683,15 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
 .vram-thumb { display: block; width: 100%; min-height: 0; margin: 0; padding: 8px 12px 10px; border: 0; border-radius: 0; background: none; }
 .vram-thumb:hover:not(:disabled) { background: var(--surface-2); }
 .vram-thumb canvas { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 4px; image-rendering: pixelated; }
-.vram-thumb:hover canvas, .vram-thumb:focus-visible canvas { border-color: var(--accent); }
-.vram-dialog {
-  width: min(1072px, calc(100vw - 32px));
-  max-width: none;
-  padding: 14px 20px 18px;
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.35);
-}
-.vram-dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
-.vram-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-.vram-head h2 { flex: 1; margin: 0; font: 600 1.125rem/1.3 Barlow, system-ui, sans-serif; }
-.vram-head button { display: grid; place-items: center; width: 36px; height: 36px; min-height: 0; padding: 0; border: 0; background: none; color: var(--muted); }
-.vram-head button:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
-.vram-head svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
-#vram-canvas { display: block; width: 100%; height: auto; border: 1px solid var(--line); background: var(--screen); image-rendering: pixelated; touch-action: none; }
-/* Two lines are kept for the text, so the dialog holds still as it changes. */
-.vram-dialog p { min-height: 2.8em; margin: 10px 0 0; font-size: 0.875rem; line-height: 1.4; }
+.vram-thumb:hover canvas, .vram-thumb:focus-visible canvas, .vram-thumb.on canvas { border-color: var(--accent); }
+/* Video memory large, in the middle of the Assets layout, with what the
+   colors of its blocks mean over it. */
+#vram-canvas { display: block; width: 100%; max-width: 1024px; height: auto; border: 1px solid var(--line); background: var(--screen); image-rendering: pixelated; touch-action: none; }
+.vram-legend { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-left: auto; font-size: 0.8125rem; font-weight: 400; }
+.vram-key { display: inline-block; width: 10px; height: 10px; margin-left: 6px; border: 2px solid; border-radius: 2px; }
+.vram-key.pic { border-color: #9ad48c; }
+.vram-key.clut { border-color: #c2a6ff; }
+.vram-key.over { border-color: #f26670; }
 
 /* The viewer: a file with something to show, or video memory. */
 .view { position: absolute; inset: 0; padding: 10px 14px 16px; overflow: auto; background: var(--surface); }
@@ -681,59 +736,97 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
 .pg-options .pg-line { flex-basis: 100%; overflow-wrap: anywhere; color: var(--muted); font-size: 0.75rem; }
 #preview-canvas[hidden] { display: none; }
 
-/* The Scene tab: the picture at the console's size, doubled where there is
-   room, with what is picked under it and the camera and lights folded
-   away below. */
-.scene { position: absolute; inset: 0; overflow: auto; padding: 10px 12px 16px; background: var(--surface); }
+/* The scene editor: the toolbar over the picture, the picture in the
+   middle at a whole number of times the console's size, with what shows
+   in it and a room's map over its corners, and a line under it saying
+   what the tool in hand does. */
+.scene { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--surface); }
 .scene[hidden] { display: none; }
-.scene-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
-.scene-bar select { padding: 4px 6px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface); color: var(--ink); font: inherit; }
-.scene-main { display: grid; grid-template-columns: minmax(160px, 200px) minmax(0, 1fr); gap: 12px; }
-.scene-outline { margin: 0; padding: 0; overflow: auto; max-height: 480px; list-style: none; border: 1px solid var(--line); border-radius: 6px; font-size: 0.8125rem; }
-.outline-group { padding: 8px 10px 2px; color: var(--muted); font-size: 0.75rem; }
-.outline-row { display: flex; align-items: baseline; gap: 6px; padding: 3px 10px; cursor: default; }
-.outline-row:hover { background: var(--surface-2); }
-.outline-row[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 14%, transparent); }
-.outline-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.outline-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.outline-meta { margin-left: auto; font-size: 0.6875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
-.scene-view { min-width: 0; }
-.scene-view.live #scene-canvas { border-color: var(--triangle); box-shadow: 0 0 0 2px color-mix(in srgb, var(--triangle) 35%, transparent); }
-.scene-side { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
-#scene-search { padding: 4px 8px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--code-bg); color: var(--ink); font: inherit; font-size: 0.8125rem; }
-.scene-modes { display: inline-flex; gap: 2px; }
-.scene-modes button[aria-pressed="true"], #scene-snap[aria-pressed="true"], #scene-console[aria-pressed="true"], .scene-presets button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
-.outline-warn { flex: none; width: 14px; height: 14px; border-radius: 50%; background: #e040c0; color: #fff; font-size: 0.6875rem; font-weight: 700; line-height: 14px; text-align: center; }
-.outline-eye { flex: none; margin-left: 4px; padding: 0 2px; border: 0; background: none; color: var(--muted); font-size: 0.75rem; line-height: 1; cursor: pointer; }
-.outline-eye[aria-pressed="false"] { color: var(--line-strong); }
-.outline-row.hidden-row .outline-name { color: var(--muted); text-decoration: line-through; }
-.scene-fov { align-self: center; font-size: 0.8125rem; }
-.scene-sep { width: 1px; height: 20px; background: var(--line); }
-.scene-fields .scrub { cursor: ew-resize; user-select: none; -webkit-user-select: none; }
-.scene-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-.scene-tabs { margin-top: 12px; padding: 0; }
-.scene-map-scroll { max-height: 440px; overflow: auto; }
-.live-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border: 1px solid var(--line-strong); border-radius: 999px; color: var(--muted); font-size: 0.8125rem; font-weight: 500; }
-.live-pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }
-.live-pill.on { color: var(--ink); border-color: var(--triangle); }
-.live-pill.on::before { background: var(--triangle); }
-.live-pill[hidden] { display: none; }
-#scene-canvas {
-  display: block;
-  width: min(100%, 640px);
-  height: auto;
-  border: 1px solid var(--line);
-  background: var(--screen);
-  image-rendering: pixelated;
-  touch-action: none;
-  cursor: crosshair;
+.scene-bar { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 3px; min-height: 42px; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+.scene-bar [hidden] { display: none; }
+.scene-bar select { padding: 3px 6px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface); color: var(--ink); font: inherit; font-size: 0.8125rem; }
+/* A toolbar's buttons: an icon and a word, with the key that picks the
+   tool beside it, and the tool in hand marked by a line under it. */
+.tb { display: inline-flex; align-items: center; gap: 5px; height: 30px; min-height: 0; padding: 0 8px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--ink); font-size: 0.8125rem; font-weight: 500; white-space: nowrap; }
+.tb:hover:not(:disabled) { background: var(--surface-2); }
+.tb.boxed { border-color: var(--line-strong); }
+.tb[aria-pressed="true"] { border-color: var(--line-strong); background: var(--surface-2); box-shadow: inset 0 -2px 0 var(--accent); }
+.tb kbd { min-width: 0; margin-left: 1px; padding: 0 4px; border: 1px solid var(--line-strong); border-radius: 3px; background: none; box-shadow: none; color: var(--muted); font: 600 0.6875rem/1.45 Barlow, system-ui, sans-serif; }
+.tb .chev { width: 12px; height: 12px; color: var(--muted); }
+.tb.only { justify-content: center; width: 30px; padding: 0; }
+.tb.go { border-color: color-mix(in srgb, var(--triangle) 60%, transparent); color: var(--triangle); }
+.tb.go:hover:not(:disabled) { background: color-mix(in srgb, var(--triangle) 12%, transparent); }
+.tb-sep { width: 1px; height: 22px; margin: 0 4px; background: var(--line); }
+.tb-gap { flex: 1; }
+.seg { display: inline-flex; align-items: center; gap: 2px; }
+/* Where the middle is narrow, the toolbars leave their keys to the
+   tooltips and the sheet of keys. */
+@container (max-width: 900px) {
+  .scene-bar .tb { padding: 0 7px; }
+  .scene-bar .tb kbd { display: none; }
+  .scene-bar .tb-sep { margin: 0 2px; }
 }
+
+.pg-editors { container-type: inline-size; }
+.scene-stage { position: relative; display: grid; flex: 1; min-height: 0; place-items: center; overflow: hidden; background: var(--code-bg); }
+.scene-frame { position: relative; }
+.scene-frame[hidden], .scene-map-stage[hidden], .scene-overlay[hidden], .scene-inset[hidden] { display: none; }
+#scene-canvas { display: block; width: 640px; height: 480px; border: 1px solid var(--line); background: var(--screen); image-rendering: pixelated; touch-action: none; cursor: crosshair; }
 #scene-canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-#scene-status { margin: 8px 0; font-size: 0.875rem; }
-.scene-fields { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 14px; font-size: 0.875rem; }
-.scene-fields label { display: inline-flex; flex-direction: column; gap: 2px; }
-.scene-fields label > span { color: var(--muted); font-size: 0.75rem; }
+#scene-view.live #scene-canvas { border-color: var(--triangle); box-shadow: 0 0 0 2px color-mix(in srgb, var(--triangle) 35%, transparent); }
+/* What sits over the picture's corners: which picture shows, the camera's
+   turns in a room, and a room's map from above. */
+.scene-overlay { position: absolute; display: inline-flex; gap: 2px; padding: 2px; border-radius: 6px; background: rgba(20, 20, 22, 0.78); backdrop-filter: blur(4px); }
+.scene-overlay.top-right { top: 8px; right: 8px; }
+.scene-overlay.bottom-right { right: 8px; bottom: 8px; }
+.scene-overlay button { display: inline-flex; align-items: center; gap: 5px; min-height: 0; padding: 3px 9px; border: 0; border-radius: 4px; background: none; color: #c9c9ce; font-size: 0.75rem; font-weight: 600; }
+.scene-overlay button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.scene-overlay button[aria-pressed="true"] { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.scene-overlay svg.i { width: 15px; height: 15px; }
+.scene-inset { position: absolute; left: 8px; bottom: 8px; padding: 4px; border-radius: 6px; background: rgba(20, 20, 22, 0.82); color: #c9c9ce; font-size: 0.6875rem; font-weight: 600; }
+.scene-inset-head { display: flex; align-items: center; gap: 6px; padding: 0 2px 4px; }
+.scene-inset-head span { flex: 1; letter-spacing: 0.04em; text-transform: uppercase; }
+.scene-inset-head button { display: grid; place-items: center; width: 20px; height: 20px; min-height: 0; padding: 0; border: 0; border-radius: 3px; background: none; color: #c9c9ce; }
+.scene-inset-head button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.scene-inset-head svg.i { width: 12px; height: 12px; }
+#scene-room-grid { display: block; width: 128px; height: 96px; border-radius: 3px; image-rendering: pixelated; touch-action: none; cursor: crosshair; }
+.scene-map-stage { position: absolute; inset: 0; display: grid; place-items: safe center; padding: 12px; overflow: auto; }
+.scene-hint { display: flex; flex: none; align-items: center; gap: 12px; min-height: 30px; padding: 0 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.8125rem; }
+.scene-hint-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.scene-hint-text.warn { color: var(--error); }
+.scene-hint-live { flex: none; color: var(--t-num); }
+.scene-hint-live:empty { display: none; }
+.scene-hint-keys, .link-button { min-height: 0; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-weight: inherit; cursor: pointer; }
+.scene-hint-keys { flex: none; color: var(--muted); }
+.scene-hint-keys:hover:not(:disabled), .link-button:hover:not(:disabled) { text-decoration: underline; background: none; }
+.scene-hint-keys kbd { min-width: 0; font-size: 0.6875rem; }
+.scene-hint-counts { flex: none; margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* What the open scene holds, listed under it in the sidebar. */
+#scene-list .outline-group { padding: 6px 10px 2px 52px; color: var(--muted); font-size: 0.6875rem; }
+#scene-list .kind-scene[aria-expanded="true"] { background: none; }
+.outline-row.hidden-row .files-name { color: var(--muted); text-decoration: line-through; }
+.outline-warn { flex: none; width: 14px; height: 14px; margin-right: 4px; border-radius: 50%; background: #e040c0; color: #fff; font-size: 0.6875rem; font-weight: 700; line-height: 14px; text-align: center; }
+.outline-eye { display: grid; flex: none; place-items: center; width: 20px; height: 20px; min-height: 0; margin-left: 2px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); opacity: 0; }
+.outline-row:hover .outline-eye, .outline-row:focus-within .outline-eye, .outline-eye[aria-pressed="false"] { opacity: 1; }
+.outline-eye:hover:not(:disabled) { background: var(--surface); color: var(--ink); }
+.outline-eye[aria-pressed="false"] { color: var(--line-strong); }
+.outline-eye svg.i { width: 14px; height: 14px; }
+.icon-camera, .icon-light { color: var(--t-num); }
+.icon-tiles, .icon-room { color: var(--t-str); }
+.icon-marker { color: var(--triangle); }
+.icon-vram { color: var(--muted); }
+
+/* The inspector's fields, a column of them: a label over each, numbers
+   along X, Y and Z side by side with the axis in the gizmo's color, and
+   any one letter in a badge, which is dragged to scrub the number. */
+.scene-fields { display: flex; flex-direction: column; gap: 10px; font-size: 0.875rem; }
+.scene-fields > label, .scene-fields fieldset > label { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.scene-fields label > span, .scene-fields legend { color: var(--muted); font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.scene-fields .scrub { cursor: ew-resize; user-select: none; -webkit-user-select: none; }
 .scene-fields input[type="text"], .scene-fields input[type="number"], .scene-fields select {
+  width: 100%;
+  min-width: 0;
   padding: 3px 6px;
   border: 1px solid var(--line-strong);
   border-radius: 4px;
@@ -742,23 +835,24 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   font: inherit;
   font-variant-numeric: tabular-nums;
 }
-.scene-fields input[type="number"] { width: 5.5em; }
-.scene-fields input[type="text"] { width: 9em; }
-.scene-fields input[type="color"] { width: 3em; height: 1.9em; padding: 0; border: 1px solid var(--line-strong); border-radius: 4px; background: none; }
-.scene-fields fieldset { display: flex; flex-wrap: wrap; gap: 6px 8px; margin: 0; padding: 4px 8px 6px; border: 1px solid var(--line); border-radius: 6px; }
-.scene-fields legend { padding: 0 4px; color: var(--muted); font-size: 0.75rem; }
-.scene-panel { padding-top: 10px; }
+.scene-fields input[type="color"] { width: 100%; height: 1.9em; padding: 0; border: 1px solid var(--line-strong); border-radius: 4px; background: none; }
+.scene-fields fieldset { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.scene-fields legend { float: left; flex-basis: 100%; width: 100%; margin-bottom: -2px; padding: 0; }
+.scene-fields fieldset > label { flex: 1 1 74px; }
+.scene-fields fieldset > label:has(> span[data-badge]) { flex-direction: row; gap: 0; overflow: hidden; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--code-bg); }
+.scene-fields fieldset > label > span[data-badge] { display: grid; flex: none; place-items: center; min-width: 18px; padding: 0 3px; color: var(--ink); background: var(--line-strong); letter-spacing: 0; }
+.scene-fields span[data-badge="X"] { background: var(--circle); color: #111; }
+.scene-fields span[data-badge="Y"] { background: var(--triangle); color: #111; }
+.scene-fields span[data-badge="Z"] { background: var(--cross); color: #111; }
+.scene-fields fieldset > label:has(> span[data-badge]) input { border: 0; border-radius: 0; background: none; }
+.scene-fields fieldset > button, .scene-fields > button { flex: none; align-self: flex-start; }
+.scene-fov { color: var(--muted); font-size: 0.8125rem; }
 .scene-panel[hidden] { display: none; }
 .scene-panel p { margin: 8px 0; font-size: 0.875rem; }
-@media (max-width: 899px) {
-  .scene-main { grid-template-columns: 1fr; }
-  .scene-outline { max-height: 160px; }
-}
 .scene-tiles {
   display: block;
   max-width: 100%;
   height: auto;
-  margin-bottom: 10px;
   border: 1px solid var(--line);
   background: repeating-conic-gradient(var(--surface-2) 0 25%, var(--surface) 0 50%) 0 0 / 16px 16px;
   image-rendering: pixelated;
@@ -766,6 +860,16 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   cursor: crosshair;
 }
 .scene-tiles[hidden] { display: none; }
+#scene-tile-map { max-width: none; }
+/* A tile layer's flags: a box for each, with the color it is marked in on
+   the palette and the map, and the layer's place among the others. */
+.tile-flags { margin-top: 10px; }
+.tile-flag-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 8px; font-size: 0.8125rem; }
+.tile-flag-grid label { display: inline-flex; align-items: center; gap: 5px; min-width: 0; white-space: nowrap; }
+.tile-flag-grid i { display: inline-block; flex: none; width: 10px; height: 4px; border-radius: 1px; }
+.tile-more { margin-top: 14px; }
+.tile-order { display: flex; flex-wrap: wrap; gap: 6px; }
+.danger-text { color: var(--error); }
 
 .pg-split {
   cursor: col-resize;
@@ -1011,4 +1115,153 @@ button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accen
   #side-files { border-right: 0; }
   #scene-list { max-height: 128px; }
   #file-tree { max-height: 40vh; }
+}
+
+/* The sprite editor: its toolbar over the picture, which takes the rest
+   of the middle; its palette and converter are in the right column. */
+.sprite { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--surface); }
+.sprite[hidden] { display: none; }
+.sprite-size, .sprite-zoom { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 2px; color: var(--muted); font-size: 0.8125rem; }
+.sprite-size input { width: 4.5em; padding: 3px 6px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--code-bg); color: var(--ink); font: inherit; }
+.sprite-stage { display: grid; flex: 1; min-height: 0; place-items: center; padding: 16px; overflow: auto; background: var(--code-bg); }
+.sprite-canvas-wrap { padding: 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+#sprite-canvas {
+  display: block;
+  image-rendering: pixelated;
+  touch-action: none;
+  cursor: crosshair;
+  background-color: light-dark(#e6e5e0, #2c2c30);
+  background-image: linear-gradient(45deg, light-dark(#cfceC8, #3a3a40) 25%, transparent 25%, transparent 75%, light-dark(#cfcec8, #3a3a40) 75%),
+    linear-gradient(45deg, light-dark(#cfcec8, #3a3a40) 25%, transparent 25%, transparent 75%, light-dark(#cfcec8, #3a3a40) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+}
+.sprite-palette { display: grid; grid-template-columns: repeat(8, 22px); gap: 3px; }
+.sprite-swatch { width: 22px; height: 22px; padding: 0; border: 1px solid var(--line-strong); border-radius: 3px; cursor: pointer; }
+.sprite-swatch[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sprite-swatch.transparent { background-image: linear-gradient(45deg, #999 25%, transparent 25%, transparent 75%, #999 75%), linear-gradient(45deg, #999 25%, transparent 25%, transparent 75%, #999 75%); background-size: 8px 8px; background-position: 0 0, 4px 4px; }
+.sprite-swatch.add { background: var(--surface); color: var(--ink); font: inherit; line-height: 1; }
+.sprite-color-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+/* The inspector's column, in the Scenes and Assets layouts: a head naming
+   what it shows, a body of its fields that scrolls, and the game docked
+   at its foot. */
+.pg-insp { flex-direction: column; min-width: 0; min-height: 0; border-left: 1px solid var(--line); background: var(--surface); }
+.insp { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.insp[hidden], .insp [hidden] { display: none; }
+.insp-head { display: flex; flex: none; align-items: center; gap: 8px; min-height: 46px; padding: 6px 10px 6px 12px; border-bottom: 1px solid var(--line); }
+.insp-head h2 { flex: 1; min-width: 0; margin: 0; overflow: hidden; font: 600 1rem/1.3 Barlow, system-ui, sans-serif; white-space: nowrap; text-overflow: ellipsis; }
+.insp-icon { margin: 0; }
+.insp-kind { flex: none; font-size: 0.75rem; }
+.insp-body { flex: 1; min-height: 0; padding: 12px 12px 16px; overflow-y: auto; }
+.insp-label { margin: 12px 0 5px; color: var(--muted); font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.insp-label:first-child { margin-top: 0; }
+.insp-note { margin: 8px 0 0; font-size: 0.8125rem; line-height: 1.45; }
+.insp-note:empty { display: none; }
+.insp .pg-options { flex-direction: column; align-items: stretch; gap: 8px; }
+.insp .pg-options label { display: flex; flex-direction: column; align-items: stretch; gap: 3px; color: var(--muted); font-size: 0.75rem; font-weight: 600; }
+.insp .pg-options input[type="text"], .insp .pg-options input[type="number"], .insp .pg-options select { width: 100%; background: var(--code-bg); font-size: 0.875rem; font-weight: 400; }
+.insp .sprite-palette { grid-template-columns: repeat(auto-fill, 22px); }
+.insp .pg-options label:has(input[type="checkbox"]) { flex-direction: row; justify-content: flex-start; align-items: center; gap: 8px; }
+
+/* A room's brushes: swatches in the colors its cells are drawn in, the
+   character the map file has for each in a corner, and the doorways as
+   digits, those the map has outlined. */
+.room-swatches { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.room-swatch { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: 0; padding: 5px 2px 3px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--ink); font-size: 0.6875rem; font-weight: 500; line-height: 1.15; }
+.room-swatch:hover:not(:disabled) { background: var(--surface-2); }
+.room-swatch i { display: block; width: 28px; height: 28px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35); }
+.room-swatch s { position: absolute; top: 2px; right: 4px; color: var(--muted); font: 600 0.625rem/1 ui-monospace, monospace; text-decoration: none; }
+.room-swatch[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.room-doors { display: flex; gap: 3px; }
+.room-door { flex: 1; height: 26px; min-height: 0; padding: 0; border: 1px solid var(--line-strong); border-radius: 4px; background: #3c3c46; color: #ddd; font: 600 0.75rem/1 ui-monospace, monospace; }
+.room-door:hover:not(:disabled) { background: #4a4a56; }
+.room-door.used { border-color: var(--t-const); color: var(--t-const); }
+.room-door[aria-pressed="true"] { border-color: var(--t-const); background: var(--t-const); color: #1b1b1e; }
+#scene-room { margin-top: 14px; }
+
+/* The game, docked at the foot of the inspector's column outside Code:
+   the emulator's own screen, moved here, under a head with its state and
+   its controls. */
+.dock { flex: none; padding: 0 6px 6px; border-top: 1px solid var(--line); background: var(--surface-2); }
+.dock[hidden] { display: none; }
+.dock-head { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 2px; font-size: 0.8125rem; font-weight: 600; }
+.dock-head .muted { font-size: 0.75rem; font-weight: 400; }
+.dock-gap { flex: 1; }
+.dock-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }
+.dock.on .dock-dot { background: var(--triangle); box-shadow: 0 0 0 3px color-mix(in srgb, var(--triangle) 25%, transparent); }
+.dock-head button { display: grid; place-items: center; width: 26px; height: 26px; min-height: 0; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); }
+.dock-head button:hover:not(:disabled) { background: var(--surface); color: var(--ink); }
+.dock-head svg.i { width: 15px; height: 15px; }
+.dock-screen .screen { border-radius: 4px; }
+.dock-screen .screen:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dock-screen .overlay { padding: 10px; font-size: 0.8125rem; }
+
+/* Dialogs in the page (dialog.js, and New project): a title, a line or
+   two, a field when a name is asked for, and the buttons along the
+   bottom, the one that goes on last. */
+.pg-dialog {
+  width: min(460px, calc(100vw - 32px));
+  max-width: none;
+  padding: 18px 20px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+}
+.pg-dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
+.pg-dialog h2 { margin: 0 0 6px; font: 600 1.125rem/1.3 Barlow, system-ui, sans-serif; }
+.pg-dialog-text { margin: 0 0 10px; color: var(--muted); font-size: 0.9375rem; line-height: 1.45; }
+.pg-dialog-text[hidden], .pg-dialog-field[hidden], .pg-dialog button[hidden] { display: none; }
+.pg-dialog-field { display: flex; flex-direction: column; gap: 4px; margin: 8px 0 0; font-size: 0.875rem; font-weight: 500; }
+.pg-dialog-field input { padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--code-bg); color: var(--ink); font: inherit; font-weight: 400; }
+.pg-dialog-field input:focus { border-color: var(--accent); outline: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); }
+.pg-dialog-error { margin: 6px 0 0; color: var(--error); font-size: 0.875rem; }
+.pg-dialog-error:empty { display: none; }
+.pg-dialog-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
+.pg-dialog-gap { flex: 1; }
+.pg-dialog-actions button { min-height: 0; padding: 6px 16px; }
+.danger-button { border-color: var(--error); background: var(--error); color: #fff; }
+.danger-button:hover:not(:disabled) { background: color-mix(in srgb, var(--error) 85%, var(--ink)); }
+
+/* New project: the name, then a card for each example to start from. */
+.np { width: min(1040px, calc(100vw - 32px)); }
+.np-name input { max-width: 320px; }
+.np-label { margin-top: 16px; }
+.np-starters { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.np-card { display: flex; flex-direction: column; gap: 7px; min-height: 0; padding: 8px 8px 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); text-align: left; font-weight: 400; }
+.np-card:hover:not(:disabled) { background: var(--surface-2); }
+.np-card[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.np-card img, .np-blank { display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: 5px; background: var(--screen); image-rendering: pixelated; }
+.np-card b { font-size: 1rem; font-weight: 600; }
+.np-card span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden; color: var(--muted); font-size: 0.8125rem; line-height: 1.35; }
+.np-bring { font-size: 0.875rem; }
+
+/* The sheet of keys: a group for each part of the playground, the one in
+   use marked. */
+.keys { width: min(760px, calc(100vw - 32px)); max-height: min(720px, calc(100dvh - 48px)); padding: 0; overflow: hidden; }
+.keys[open] { display: flex; flex-direction: column; }
+.keys-head { display: flex; flex: none; align-items: center; padding: 12px 12px 8px 20px; border-bottom: 1px solid var(--line); }
+.keys-head h2 { flex: 1; margin: 0; }
+.keys-head .pg-icon { display: grid; place-items: center; width: 34px; height: 34px; min-height: 0; padding: 0; border: 0; background: none; color: var(--muted); }
+.keys-head .pg-icon svg.i { width: 18px; height: 18px; }
+.keys-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 4px 24px; padding: 8px 20px 20px; overflow-y: auto; }
+.keys-groups section { padding: 8px 10px; border-radius: 8px; }
+.keys-groups section.here { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.keys-groups h3 { margin: 4px 0 8px; font: 600 0.9375rem/1.3 Barlow, system-ui, sans-serif; }
+.keys-groups p { margin: 0 0 8px; font-size: 0.8125rem; }
+.keys-groups dl { display: grid; grid-template-columns: minmax(96px, 0.85fr) minmax(0, 1.15fr); gap: 7px 12px; margin: 0; font-size: 0.8125rem; }
+.keys-groups dt { color: var(--muted); }
+.keys-groups dd { margin: 0; }
+.keys-groups kbd { min-width: 0; font-size: 0.6875rem; }
+
+/* On a narrow screen the layouts stack as the page does: the inspector's
+   column under the middle, the dock at its foot. */
+@media (max-width: 899px) {
+  .pg-layouts button span { display: none; }
+  body:not([data-layout="code"]) .pg { display: flex; }
+  .pg-insp { border: 1px solid var(--line); border-radius: 6px; }
+  .insp-body { max-height: 50vh; }
+  .scene-hint-counts { display: none; }
 }

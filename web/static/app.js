@@ -299,9 +299,19 @@ function inField(e) {
   return e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
 }
 
+// forPad says whether a key goes to the pad. In the playground the keys
+// are the pad's while the game's picture has the focus, or in the Code
+// layout while nothing does, so that the editors keep theirs.
+function forPad(e) {
+  const body = document.body;
+  if (!body.classList.contains("playground")) return true;
+  if (e.target.closest?.(".screen")) return true;
+  return (e.target === body || e.target === document.documentElement) && body.dataset.layout === "code";
+}
+
 addEventListener("keydown", (e) => {
   const bit = KEYS[e.code];
-  if (!bit || inField(e) || !state.current) return;
+  if (!bit || inField(e) || !state.current || !forPad(e)) return;
   state.keys |= bit;
   e.preventDefault();
   sendButtons();

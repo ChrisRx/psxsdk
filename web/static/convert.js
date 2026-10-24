@@ -433,6 +433,7 @@ const convert = (() => {
   // A project opened without what its lines make, a new one from a
   // starter or one brought in without its data, is converted at once.
   projectEvents.addEventListener("open", ({ detail: { project: p } }) => {
+    if (!p) return;
     const missing = lines().some((l) => {
       const out = l.values.get("-o") ?? l.values.get("--output");
       return out && !p.has(out) && l.positional.some((src) => p.has(src));

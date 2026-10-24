@@ -22,34 +22,101 @@
     })();
   </script>
 </head>
-<body class="playground">
+<body class="playground" data-layout="code">
+  <!-- The icons the page and its scripts draw, each used by its id. -->
+  <svg class="pg-icons" aria-hidden="true" width="0" height="0">
+    <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 16 16"><path d="m4 6 4 4 4-4"/></symbol>
+    <symbol id="i-chev-r" viewBox="0 0 16 16"><path d="m6 3.5 4.5 4.5L6 12.5"/></symbol>
+    <symbol id="i-code" viewBox="0 0 16 16"><path d="M5.5 4 1.5 8l4 4M10.5 4l4 4-4 4"/></symbol>
+    <symbol id="i-scene" viewBox="0 0 16 16"><path d="M2 6.5h12V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/><path d="m2 6.5 1.2-3.3 10.6 1.4-.8 1.9M5.4 3.6 4.5 6.5M9.4 4.1 8.5 6.5"/></symbol>
+    <symbol id="i-image" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><circle cx="5.5" cy="6" r="1.3" fill="currentColor" stroke="none"/><path d="m2.5 12.5 3.5-4 2.5 3 2-2 3 3"/></symbol>
+    <symbol id="i-play" viewBox="0 0 16 16"><path d="M4.5 2.5v11l9-5.5z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-help" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5"/><path d="M6.1 6.2a2 2 0 1 1 2.7 1.9c-.5.2-.8.6-.8 1.1v.5"/><circle cx="8" cy="11.7" r=".8" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3.5 3.5"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 16 16"><path d="M1.5 4a1 1 0 0 1 1-1h3.3l1.5 1.5h6.2a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/></symbol>
+    <symbol id="i-open" viewBox="0 0 16 16"><path d="M1.5 12V4a1 1 0 0 1 1-1h3.3l1.5 1.5h6.2a1 1 0 0 1 1 1V7"/><path d="M1.5 12.5 3.8 7h11.2l-2.3 5.5a1 1 0 0 1-.9.5H1.5z"/></symbol>
+    <symbol id="i-vram" viewBox="0 0 16 16"><rect x="1.5" y="3" width="13" height="10" rx="1"/><path d="M1.5 8h13M8 3v10"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 16 16"><rect x="1.5" y="4.5" width="9.5" height="7.5" rx="1"/><path d="m11 7 3.5-2v6.5L11 9.5"/></symbol>
+    <symbol id="i-light" viewBox="0 0 16 16"><path d="M8 1.8a4.2 4.2 0 0 0-2.6 7.5V11h5.2V9.3A4.2 4.2 0 0 0 8 1.8zM6 13h4M6.6 14.6h2.8"/></symbol>
+    <symbol id="i-tiles" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" rx="1"/><path d="M2 6h12M2 10h12M6 2v12M10 2v12"/></symbol>
+    <symbol id="i-model" viewBox="0 0 16 16"><path d="M8 1.8 2.5 4.9v6.2L8 14.2l5.5-3.1V4.9z"/><path d="M2.5 4.9 8 8l5.5-3.1M8 8v6.2"/></symbol>
+    <symbol id="i-room" viewBox="0 0 16 16"><path d="M2 10.5 8 14l6-3.5L8 7z"/><path d="M2 10.5V6l6-3.5L14 6v4.5M8 7V2.5"/></symbol>
+    <symbol id="i-marker" viewBox="0 0 16 16"><path d="M8 14.5s4.5-4.2 4.5-7.5a4.5 4.5 0 0 0-9 0c0 3.3 4.5 7.5 4.5 7.5z"/><circle cx="8" cy="7" r="1.6"/></symbol>
+    <symbol id="i-move" viewBox="0 0 16 16"><path d="M8 1.5v13M1.5 8h13M8 1.5 6.2 3.3M8 1.5l1.8 1.8M8 14.5l-1.8-1.8M8 14.5l1.8-1.8M1.5 8l1.8-1.8M1.5 8l1.8 1.8M14.5 8l-1.8-1.8M14.5 8l-1.8 1.8"/></symbol>
+    <symbol id="i-rotate" viewBox="0 0 16 16"><path d="M13.2 9.5A5.5 5.5 0 1 1 11.8 4"/><path d="M12.5 1.5V4.6H9.4"/></symbol>
+    <symbol id="i-scale" viewBox="0 0 16 16"><rect x="2" y="7" width="7" height="7" rx="1"/><path d="M8.5 7.5 14 2M10 2h4v4"/></symbol>
+    <symbol id="i-snap" viewBox="0 0 16 16"><path d="M3 2.5h3.2v5.3a1.8 1.8 0 0 0 3.6 0V2.5H13v5.3a5 5 0 0 1-10 0z"/><path d="M3 5.5h3.2M9.8 5.5H13"/></symbol>
+    <symbol id="i-frame" viewBox="0 0 16 16"><path d="M2.5 5.5v-3h3M10.5 2.5h3v3M13.5 10.5v3h-3M5.5 13.5h-3v-3"/><circle cx="8" cy="8" r="1.8"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 16 16"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 16 16"><path d="M5.5 3.5 2.5 6.5l3 3M2.5 6.5h7.2a3.3 3.3 0 0 1 0 6.6H7"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 16 16"><path d="m10.5 3.5 3 3-3 3M13.5 6.5H6.3a3.3 3.3 0 0 0 0 6.6H9"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 16 16"><path d="m11 2.5 2.5 2.5-8 8H3v-2.5zM9.5 4 12 6.5"/></symbol>
+    <symbol id="i-height" viewBox="0 0 16 16"><path d="M1.5 13.5h13M3 13.5V10h3V7h3V4h4v9.5"/></symbol>
+    <symbol id="i-fill" viewBox="0 0 16 16"><path d="M7.3 2.8 2.8 7.3a1.3 1.3 0 0 0 0 1.8l3.4 3.4a1.3 1.3 0 0 0 1.8 0l4.5-4.5zM2.8 8.2h9.7"/><path d="M13.7 10.5s1.3 1.6 1.3 2.5a1.3 1.3 0 0 1-2.6 0c0-.9 1.3-2.5 1.3-2.5z"/></symbol>
+    <symbol id="i-rect" viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="9" rx="1" stroke-dasharray="2.2 1.6"/></symbol>
+    <symbol id="i-erase" viewBox="0 0 16 16"><path d="M6 13.5h8M2.8 9.9 9.5 3.2a1.4 1.4 0 0 1 2 0l2.1 2.1a1.4 1.4 0 0 1 0 2L7.4 13.5H6.4L2.8 9.9zM5.3 7.4l4.1 4.1"/></symbol>
+    <symbol id="i-pick" viewBox="0 0 16 16"><path d="m9.5 3.5 3 3M2.5 13.5l1-3 6.3-6.3a1.4 1.4 0 0 1 2 0l1 1a1.4 1.4 0 0 1 0 2L6.5 13.5z"/></symbol>
+    <symbol id="i-look" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5"/><circle cx="8" cy="8" r="1.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2"/></symbol>
+    <symbol id="i-turn-l" viewBox="0 0 16 16"><path d="M3 8a5 5 0 1 0 1.5-3.6"/><path d="M4.5 1.5v3h3"/></symbol>
+    <symbol id="i-turn-r" viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.5-3.6"/><path d="M11.5 1.5v3h-3"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 16 16"><path d="M5.5 3.5v9M10.5 3.5v9" stroke-width="2.2"/></symbol>
+    <symbol id="i-restart" viewBox="0 0 16 16"><path d="M2.8 8a5.2 5.2 0 1 0 1.7-3.9"/><path d="M4.5 1.5v2.8h2.8"/></symbol>
+    <symbol id="i-sound" viewBox="0 0 16 16"><path d="M2 6h2.5L8 3v10L4.5 10H2zM10.5 5.5a3.5 3.5 0 0 1 0 5M12.5 3.5a6.3 6.3 0 0 1 0 9"/></symbol>
+    <symbol id="i-mute" viewBox="0 0 16 16"><path d="M2 6h2.5L8 3v10L4.5 10H2zM10.5 6l4 4M14.5 6l-4 4"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 16 16"><path d="M9.5 2.5h4v4M13.5 2.5 9 7M6.5 13.5h-4v-4M2.5 13.5 7 9"/></symbol>
+    <symbol id="i-shrink" viewBox="0 0 16 16"><path d="M13.5 6.5h-4v-4M9.5 6.5l4.5-4.5M2.5 9.5h4v4M6.5 9.5 2 14"/></symbol>
+    <symbol id="i-more" viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1.2" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r="1.2" fill="currentColor" stroke="none"/><circle cx="12.5" cy="8" r="1.2" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="m3 8.5 3 3 7-7"/></symbol>
+    <symbol id="i-zip" viewBox="0 0 16 16"><path d="M2 3h12v3H2zM3 6v6.5a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V6"/><path d="M6.5 9h3"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5" y="5" width="8.5" height="8.5" rx="1"/><path d="M3 10.5v-7a1 1 0 0 1 1-1h7"/></symbol>
+    <symbol id="i-download" viewBox="0 0 16 16"><path d="M8 2v8.5M4.5 7 8 10.5 11.5 7M2.5 13.5h11"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 16 16"><path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.7 9h6.6l.7-9M6.8 7v4.5M9.2 7v4.5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 16 16"><path d="m4 4 8 8m0-8-8 8"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 16 16"><path d="M3.5 14.5v-12M3.5 3h8.5l-2 3 2 3H3.5"/></symbol>
+  </svg>
+
   <header class="pg-top">
     <h1>psxsdk playground</h1>
-    <details id="project-menu" class="pg-project">
-      <summary title="This project. Open another, make a new one, or download this one."><span id="project-name"></span></summary>
-      <div class="pg-menu">
-        <ul id="project-list" class="pg-projects" aria-label="Projects kept in this browser"></ul>
-        <div class="pg-menu-actions">
-          <button id="project-new-scene" type="button" title="A new project from the scene example: cubes, a tile map and a badge placed by a scene file, with a picture converted from art/">New</button>
-          <button id="project-new" type="button" title="A new project from the square example, the tutorial's: a box, a cube and music, with no scene">New from square</button>
-          <button id="project-import" type="button" title="A project from a zip saved from here, or Go and data files to add to this one">Import…</button>
-          <input id="project-files" type="file" accept=".zip,.go,.tim,.tmd,.vab,.vh,.vb,.seq,.vag,.bin,.dat,.txt,application/zip,application/octet-stream" multiple hidden>
-          <button id="project-download" type="button" title="Save this project to this computer as a zip, laid out to run with go run">Download</button>
-          <button id="project-duplicate" type="button" title="A copy of this project">Duplicate</button>
-          <button id="project-rename" type="button">Rename</button>
-          <button id="project-start-over" type="button" title="Replace this project's files with the program the playground starts with">Start over</button>
-          <button id="project-delete" type="button" class="danger" title="Delete this project from this browser">Delete</button>
+    <div class="pg-project-wrap">
+      <details id="project-menu" class="pg-project">
+        <summary title="This project: open another, start or bring in a new one, or rename, copy, download or delete this one"><span id="project-name"></span></summary>
+        <div class="pg-menu" role="menu" aria-label="Projects">
+          <div id="project-kept" role="group" aria-label="Projects in this browser">
+            <div class="pg-menu-label">Projects in this browser</div>
+            <ul id="project-list" class="pg-projects" aria-label="Projects kept in this browser"></ul>
+            <div class="pg-menu-sep" role="separator"></div>
+          </div>
+          <button id="project-new" class="pg-item" type="button" role="menuitem" title="A project of its own, started from one of the examples"><svg class="i"><use href="#i-plus"/></svg>New project…</button>
+          <button id="project-open-folder" class="pg-item" type="button" role="menuitem" title="A project from a folder on this computer: its Go files and its assets/, scenes/ and pack/ directories, as a download from here lays them out"><svg class="i"><use href="#i-open"/></svg>Open folder…</button>
+          <button id="project-import" class="pg-item" type="button" role="menuitem" title="A project from a zip, as Download zip saves one"><svg class="i"><use href="#i-zip"/></svg>Import zip…</button>
+          <div id="project-this" role="group" aria-label="This project">
+            <div class="pg-menu-sep" role="separator"></div>
+            <div class="pg-menu-label">This project</div>
+            <button id="project-rename" class="pg-item" type="button" role="menuitem" title="Give this project another name; a double click on its name does too"><svg class="i"><use href="#i-pen"/></svg>Rename</button>
+            <button id="project-duplicate" class="pg-item" type="button" role="menuitem" title="A copy of this project, to try something on"><svg class="i"><use href="#i-copy"/></svg>Duplicate</button>
+            <button id="project-download" class="pg-item" type="button" role="menuitem" title="Save this project to this computer as a zip, laid out to run with go run and to come back in through Import zip"><svg class="i"><use href="#i-download"/></svg>Download zip</button>
+            <div class="pg-menu-sep" role="separator"></div>
+            <button id="project-start-over" class="pg-item danger" type="button" role="menuitem" title="Replace this project's files with those of the example it was started from"><svg class="i"><use href="#i-restart"/></svg>Start over…</button>
+            <button id="project-delete" class="pg-item danger" type="button" role="menuitem" title="Delete this project from this browser"><svg class="i"><use href="#i-trash"/></svg>Delete…</button>
+          </div>
         </div>
-      </div>
-    </details>
-    <button id="run" class="primary" type="button" title="Format, build and run (Ctrl+Enter)">Run</button>
-    <button id="format" type="button" title="Format the program with gofmt (Ctrl+Shift+F)">Format</button>
-    <label class="pg-hot" title="Hot reload: while this project runs, Run builds a patch of its main package and loads it into the running program between frames, keeping its variables, instead of starting over. Experimental: a change to a variable's type, to a type's layout or to another package needs a restart, which Run does when it cannot build a patch, and the game may misbehave if a running function's locals changed."><input type="checkbox" id="hot"> Hot</label>
+      </details>
+      <input id="project-rename-input" class="pg-project-input" type="text" aria-label="The project's name" autocomplete="off" spellcheck="false" hidden>
+      <input id="project-folder" type="file" webkitdirectory hidden>
+      <input id="project-files" type="file" accept=".zip,application/zip" hidden>
+    </div>
+    <div id="layouts" class="pg-layouts" role="group" aria-label="Layout">
+      <button type="button" data-layout="code" aria-pressed="true" title="The program's Go files, with the game and the compiler's output beside them"><svg class="i"><use href="#i-code"/></svg><span>Code</span></button>
+      <button type="button" data-layout="scenes" aria-pressed="false" title="The scenes and rooms: models, sprites and lights placed, cells painted"><svg class="i"><use href="#i-scene"/></svg><span>Scenes</span></button>
+      <button type="button" data-layout="assets" aria-pressed="false" title="The files on the disc: pictures and sprites, models, sounds, archives and video memory"><svg class="i"><use href="#i-image"/></svg><span>Assets</span></button>
+    </div>
+    <button id="run" class="primary pg-run" type="button" title="Format, build and run (Ctrl+Enter)"><svg class="i"><use href="#i-play"/></svg>Run</button>
     <span id="live-pill" class="live-pill" hidden title="This project is running: changes to its scene show on the console at once">Live</span>
-    <span class="pg-hint muted"><kbd>Ctrl</kbd> <kbd>Enter</kbd> runs, <kbd>Ctrl</kbd> <kbd>Space</kbd> completes</span>
     <nav class="pg-links" aria-label="Site">
       <a href="../examples/">Examples</a>
       <a href="../docs/">Docs</a>
+      <button id="keys-open" class="pg-icon" type="button" aria-label="Keys" title="Every key and mouse move (?)"><svg class="i"><use href="#i-help"/></svg></button>
       <a class="pg-icon" href="https://github.com/ChrisRx/psxsdk" aria-label="GitHub" title="The source on GitHub">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
       </a>
@@ -64,40 +131,52 @@
     <aside class="pg-bar" aria-label="Project">
       <section id="side-scenes" class="side-sect" aria-labelledby="scenes-head">
         <div class="side-head">
-          <h2 id="scenes-head"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg>Scenes</h2>
-          <button id="scene-add" class="side-add" type="button" title="A new scene under scenes/, placed by hand and cooked into a data file the program loads with package scene" aria-label="New scene"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></button>
+          <button class="side-fold" type="button" aria-expanded="true" aria-controls="scene-list" aria-label="Fold the scenes" data-section="scenes"><svg class="i"><use href="#i-chev-r"/></svg></button>
+          <h2 id="scenes-head"><svg class="i"><use href="#i-scene"/></svg>Scenes</h2>
+          <span id="scenes-count" class="side-count muted"></span>
+          <button id="scene-add" class="side-add" type="button" title="A new scene, of models placed by hand, or a new room, of cells painted" aria-label="New scene or room" aria-haspopup="menu"><svg viewBox="0 0 16 16"><use href="#i-plus"/></svg></button>
         </div>
-        <ul id="scene-list" class="side-list" role="listbox" aria-label="The project's scenes"></ul>
+        <label id="scene-filter" class="side-filter"><svg class="i"><use href="#i-search"/></svg><input id="scene-search" type="search" placeholder="Find in the scene" aria-label="Find in the scene"></label>
+        <ul id="scene-list" class="side-list" role="tree" aria-label="The project's scenes, and what the open one holds"></ul>
       </section>
-      <div id="side-split" class="side-split" role="separator" aria-orientation="horizontal" aria-label="Resize the scenes list" tabindex="0"></div>
       <section id="side-files" class="side-sect" aria-labelledby="files-head">
         <div class="side-head">
-          <h2 id="files-head"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2h9A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5v-11z"/></svg>Files</h2>
-          <button id="file-add" class="side-add" type="button" title="Add a Go file, files from this computer, or an example's data" aria-label="Add to the project"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></button>
+          <button class="side-fold" type="button" aria-expanded="true" aria-controls="file-tree" aria-label="Fold the files" data-section="files"><svg class="i"><use href="#i-chev-r"/></svg></button>
+          <h2 id="files-head"><svg class="i"><use href="#i-folder"/></svg>Files</h2>
+          <span id="files-count" class="side-count muted"></span>
+          <button id="file-add" class="side-add" type="button" title="Add a Go file, a sprite, files from this computer, an archive or an example's data" aria-label="Add to the project" aria-haspopup="menu"><svg viewBox="0 0 16 16"><use href="#i-plus"/></svg></button>
           <input id="asset-files" type="file" multiple hidden>
         </div>
         <ul id="file-tree" class="side-list" role="tree" aria-label="The project's files"></ul>
-        <div class="side-foot">
-          <p id="asset-status" class="muted files-status" aria-live="polite"></p>
-        </div>
       </section>
       <section id="side-vram" class="side-sect" aria-labelledby="vram-head">
         <div class="side-head">
-          <h2 id="vram-head"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 12h18M12 5v14"/></svg>Video memory</h2>
+          <button class="side-fold" type="button" aria-expanded="true" aria-controls="vram-open" aria-label="Fold video memory" data-section="vram"><svg class="i"><use href="#i-chev-r"/></svg></button>
+          <h2 id="vram-head"><svg class="i"><use href="#i-vram"/></svg>Video memory</h2>
         </div>
         <button id="vram-open" class="vram-thumb" type="button" title="Every TIM in the project, where its header puts it; open the map to move one">
           <canvas id="vram-thumb" width="1024" height="512" aria-hidden="true"></canvas>
         </button>
       </section>
+      <div id="side-foot" class="side-foot">
+        <p id="asset-status" class="muted files-status" aria-live="polite"></p>
+      </div>
     </aside>
 
-    <section class="pg-code" aria-label="Program">
+    <section class="pg-code" aria-label="Editor">
       <div class="tabs pg-files">
         <div id="file-tabs" role="tablist" aria-label="Open files"></div>
-        <span id="save-status" class="status" aria-live="polite"></span>
+        <div class="pg-files-end">
+          <span id="save-status" class="status" aria-live="polite"></span>
+          <button id="format" class="small-button" type="button" title="Format the program with gofmt (Ctrl+Shift+F)">Format</button>
+          <label class="pg-hot" title="Hot reload: while this project runs, Run builds a patch of its main package and loads it into the running program between frames, keeping its variables, instead of starting over. Experimental: a change to a variable's type, to a type's layout or to another package needs a restart, which Run does when it cannot build a patch, and the game may misbehave if a running function's locals changed."><input type="checkbox" id="hot"> Hot</label>
+        </div>
       </div>
       <div id="editors" class="pg-editors">
-        <p id="pg-empty" class="pg-empty muted" hidden>Open a scene or a file from the left.</p>
+        <div id="pg-empty" class="pg-empty" hidden>
+          <p id="pg-empty-text" class="muted">Open a file from the left.</p>
+          <div id="pg-empty-actions" class="pg-empty-actions"></div>
+        </div>
         <div id="view-pane" class="view" hidden>
           <div class="pg-preview-head">
             <span id="preview-title"></span>
@@ -106,75 +185,91 @@
             <button id="preview-in-vram" class="small-button" type="button" hidden title="The map of video memory, with this picture marked">Show in video memory</button>
           </div>
           <canvas id="preview-canvas" width="1" height="1"></canvas>
-          <form id="source-options" class="pg-options" hidden></form>
-          <p id="preview-info" class="muted"></p>
           <table id="preview-table" class="preview-table" hidden><thead><tr><th>Entry</th><th>Size</th><th>Held</th><th></th></tr></thead><tbody></tbody></table>
         </div>
-        <div id="scene-pane" class="scene" hidden>
-          <div class="scene-bar">
-            <select id="scene-add-model" aria-label="Add a model"><option value="">Add model…</option></select>
-            <select id="scene-add-sprite" aria-label="Add a sprite"><option value="">Add sprite…</option></select>
-            <button id="scene-duplicate" class="small-button" type="button" title="A copy of what is picked, beside it (Ctrl+D)">Duplicate</button>
-            <button id="scene-remove" class="small-button" type="button" title="Take what is picked out of the scene (Delete)">Remove</button>
-            <span class="scene-sep" aria-hidden="true"></span>
-            <button id="scene-undo" class="small-button" type="button" title="Undo (Ctrl+Z)" disabled>Undo</button>
-            <button id="scene-redo" class="small-button" type="button" title="Redo (Ctrl+Y)" disabled>Redo</button>
-            <span class="scene-sep" aria-hidden="true"></span>
-            <span id="scene-modes" class="scene-modes" role="group" aria-label="What dragging the gizmo does">
-              <button class="small-button" type="button" data-mode="move" aria-pressed="true" title="Move: drag an axis, a square for a plane, elsewhere freely (W)">Move</button>
-              <button class="small-button" type="button" data-mode="rotate" aria-pressed="false" title="Rotate: drag a ring to turn about its axis (E)">Rotate</button>
-              <button class="small-button" type="button" data-mode="scale" aria-pressed="false" title="Scale: drag a cube to scale along its axis, the middle for all (R)">Scale</button>
+        <div id="vram-pane" class="view vram-view" hidden>
+          <div class="pg-preview-head"><span>Video memory</span><span class="muted vram-legend"><i class="vram-key pic"></i>a picture <i class="vram-key clut"></i>its palette <i class="vram-key over"></i>over a display buffer</span></div>
+          <canvas id="vram-canvas" width="1024" height="512" aria-label="Video memory, with every TIM where its header puts it; drag a block to move it"></canvas>
+        </div>
+        <div id="sprite-pane" class="sprite" hidden>
+          <div class="scene-bar" role="toolbar" aria-label="The sprite's tools">
+            <span id="sprite-tools" class="seg" role="group" aria-label="Tool">
+              <button class="tb" type="button" data-tool="pencil" aria-pressed="true" title="Pencil: draw with the color picked; Shift draws a line from the last point (B)"><svg class="i"><use href="#i-pen"/></svg>Pencil<kbd>B</kbd></button>
+              <button class="tb" type="button" data-tool="eraser" aria-pressed="false" title="Eraser: make pixels transparent (E)"><svg class="i"><use href="#i-erase"/></svg>Eraser<kbd>E</kbd></button>
+              <button class="tb" type="button" data-tool="fill" aria-pressed="false" title="Fill: color the area clicked (G)"><svg class="i"><use href="#i-fill"/></svg>Fill<kbd>G</kbd></button>
+              <button class="tb" type="button" data-tool="pick" aria-pressed="false" title="Pick: take the color of the pixel clicked; the right button picks with any tool (I)"><svg class="i"><use href="#i-pick"/></svg>Pick<kbd>I</kbd></button>
             </span>
-            <button id="scene-snap" class="small-button" type="button" aria-pressed="false" title="Snap positions to 16 units and turns to a sixty-fourth while dragging (N)">Snap</button>
-            <button id="scene-look" class="small-button" type="button" title="Turn the camera on what is picked and stand back to see it whole (F)">Frame</button>
-            <button id="scene-console" class="small-button" type="button" aria-pressed="false" title="Show the running program's own picture here instead of the editor's drawing, while this project runs" disabled>Console</button>
-            <span id="scene-live" class="muted" aria-live="polite"></span>
+            <span class="tb-sep"></span>
+            <label class="sprite-zoom">Zoom <select id="sprite-zoom" aria-label="Zoom"><option>1</option><option>2</option><option>4</option><option>6</option><option>8</option><option>12</option><option>16</option><option>24</option></select></label>
+            <button id="sprite-grid" class="tb" type="button" aria-pressed="true" title="Lines between the pixels"><svg class="i"><use href="#i-tiles"/></svg>Grid</button>
+            <span class="tb-gap"></span>
+            <button id="sprite-undo" class="tb only" type="button" title="Undo (Ctrl+Z)" aria-label="Undo" disabled><svg class="i"><use href="#i-undo"/></svg></button>
+            <button id="sprite-redo" class="tb only" type="button" title="Redo (Ctrl+Y)" aria-label="Redo" disabled><svg class="i"><use href="#i-redo"/></svg></button>
           </div>
-          <div class="scene-main">
-            <div class="scene-side">
-              <input id="scene-search" type="search" placeholder="Find" aria-label="Find in the scene">
-              <ul id="scene-outline" class="scene-outline" role="listbox" aria-label="What the scene holds"></ul>
-            </div>
-            <div id="scene-view" class="scene-view">
+          <div class="sprite-stage">
+            <div class="sprite-canvas-wrap"><canvas id="sprite-canvas" width="1" height="1" aria-label="The picture; draw with the pointer"></canvas></div>
+          </div>
+        </div>
+        <div id="scene-pane" class="scene" hidden>
+          <div id="scene-bar" class="scene-bar" role="toolbar" aria-label="The scene's tools">
+            <button id="scene-add-menu" class="tb boxed" type="button" aria-haspopup="menu" title="Add a model, a sprite, a light, a tile map or a room"><svg class="i"><use href="#i-plus"/></svg>Add<svg class="i chev"><use href="#i-chev"/></svg></button>
+            <span class="tb-sep"></span>
+            <span id="scene-modes" class="seg" role="group" aria-label="What dragging the gizmo does">
+              <button class="tb" type="button" data-mode="move" aria-pressed="true" title="Move: drag an arrow along its axis, a square across its plane, elsewhere freely (W)"><svg class="i"><use href="#i-move"/></svg>Move<kbd>W</kbd></button>
+              <button class="tb" type="button" data-mode="rotate" aria-pressed="false" title="Rotate: drag a ring to turn about its axis (E)"><svg class="i"><use href="#i-rotate"/></svg>Rotate<kbd>E</kbd></button>
+              <button class="tb" type="button" data-mode="scale" aria-pressed="false" title="Scale: drag a cube to scale along its axis, the middle for all (R)"><svg class="i"><use href="#i-scale"/></svg>Scale<kbd>R</kbd></button>
+            </span>
+            <span id="scene-room-tools" class="seg" role="group" aria-label="The room's tools" hidden>
+              <button class="tb" type="button" data-tool="pen" aria-pressed="true" title="Pen: lay the brush where you click or drag; Shift draws a line from the last cell (B)"><svg class="i"><use href="#i-pen"/></svg>Pen<kbd>B</kbd></button>
+              <button class="tb" type="button" data-tool="height" aria-pressed="false" title="Height: raise the ground a level where you click or drag; Shift lowers it (H)"><svg class="i"><use href="#i-height"/></svg>Height<kbd>H</kbd></button>
+              <button class="tb" type="button" data-tool="fill" aria-pressed="false" title="Fill: flood the cells like the one clicked with the brush (F)"><svg class="i"><use href="#i-fill"/></svg>Fill<kbd>F</kbd></button>
+              <button class="tb" type="button" data-tool="rect" aria-pressed="false" title="Rectangle: fill what you drag over with the brush (R)"><svg class="i"><use href="#i-rect"/></svg>Rectangle<kbd>R</kbd></button>
+              <button class="tb" type="button" data-tool="marker" aria-pressed="false" title="Marker: put one on the cell clicked, or pick and drag one (M)"><svg class="i"><use href="#i-marker"/></svg>Marker<kbd>M</kbd></button>
+            </span>
+            <span id="scene-tile-tools" class="seg" role="group" aria-label="The tile map's tools" hidden>
+              <button class="tb" type="button" data-tool="pen" aria-pressed="true" title="Pen: lay the picked cells where you click or drag; Shift draws a line from the last (B)"><svg class="i"><use href="#i-pen"/></svg>Pen<kbd>B</kbd></button>
+              <button class="tb" type="button" data-tool="fill" aria-pressed="false" title="Fill: flood the cells like the one clicked (F)"><svg class="i"><use href="#i-fill"/></svg>Fill<kbd>F</kbd></button>
+              <button class="tb" type="button" data-tool="rect" aria-pressed="false" title="Rectangle: fill what you drag over (R)"><svg class="i"><use href="#i-rect"/></svg>Rectangle<kbd>R</kbd></button>
+              <button class="tb" type="button" data-tool="erase" aria-pressed="false" title="Eraser: empty the cells you click or drag over (E)"><svg class="i"><use href="#i-erase"/></svg>Eraser<kbd>E</kbd></button>
+              <span class="tb-sep"></span>
+              <button id="scene-tile-flags" class="tb" type="button" aria-pressed="true" title="Mark each cell's flags on the map: solid, one way, hurts, pickup and the program's own"><svg class="i"><use href="#i-flag"/></svg>Flags</button>
+            </span>
+            <span id="scene-view-tools" class="seg">
+              <span class="tb-sep"></span>
+              <button id="scene-snap" class="tb" type="button" aria-pressed="false" title="Snap positions to 16 units and turns to a sixty-fourth while dragging (N)"><svg class="i"><use href="#i-snap"/></svg>Snap<kbd>N</kbd></button>
+              <button id="scene-look" class="tb" type="button" title="Turn the camera on what is picked and stand back to see it whole (F)"><svg class="i"><use href="#i-frame"/></svg>Frame<kbd>F</kbd></button>
+            </span>
+            <button id="scene-view-menu" class="tb" type="button" aria-haspopup="menu" title="Where the camera looks from"><svg class="i"><use href="#i-eye"/></svg>View<svg class="i chev"><use href="#i-chev"/></svg></button>
+            <span class="tb-gap"></span>
+            <button id="scene-undo" class="tb only" type="button" title="Undo (Ctrl+Z)" aria-label="Undo" disabled><svg class="i"><use href="#i-undo"/></svg></button>
+            <button id="scene-redo" class="tb only" type="button" title="Redo (Ctrl+Y)" aria-label="Redo" disabled><svg class="i"><use href="#i-redo"/></svg></button>
+            <button id="scene-play" class="tb boxed go" type="button" hidden title="While this project runs, put the program's figure on the cell the camera looks at, going to this room first when it shows another (P)"><svg class="i"><use href="#i-play"/></svg>Play from here</button>
+          </div>
+          <div id="scene-view" class="scene-stage">
+            <div id="scene-frame" class="scene-frame">
               <canvas id="scene-canvas" width="320" height="240" tabindex="0" aria-label="The scene, drawn as the console draws it; click to pick, drag to move"></canvas>
-              <p id="scene-status" class="muted"></p>
+              <div id="scene-show" class="scene-overlay top-right" role="group" aria-label="What the picture shows">
+                <button type="button" data-show="editor" aria-pressed="true" title="The editor's own drawing, where things are picked and dragged">Editor</button>
+                <button type="button" data-show="game" aria-pressed="false" title="The running program's own picture, while this project runs" disabled>Game</button>
+              </div>
+              <div id="scene-turn" class="scene-overlay bottom-right" role="group" aria-label="Turn the camera" hidden>
+                <button type="button" data-turn="1" title="Turn the camera an eighth to the left ([)" aria-label="Turn left"><svg class="i"><use href="#i-turn-l"/></svg></button>
+                <button type="button" data-turn="-1" title="Turn the camera an eighth to the right (])" aria-label="Turn right"><svg class="i"><use href="#i-turn-r"/></svg></button>
+              </div>
+              <div id="scene-inset" class="scene-inset" hidden>
+                <div class="scene-inset-head"><span>Map</span><button id="scene-inset-size" type="button" title="Larger" aria-label="Larger" aria-pressed="false"><svg class="i"><use href="#i-expand"/></svg></button></div>
+                <canvas id="scene-room-grid" width="16" height="16" tabindex="0" aria-label="The room from above, row 0 at the top; click or drag to paint cells"></canvas>
+              </div>
+            </div>
+            <div id="scene-map-stage" class="scene-map-stage" hidden>
+              <canvas id="scene-tile-map" class="scene-tiles" width="16" height="16" tabindex="0" aria-label="The tile map; click or drag to lay the picked cells"></canvas>
             </div>
           </div>
-          <div class="tabs scene-tabs">
-            <div role="tablist" aria-label="The scene's panels">
-              <button id="stab-object" role="tab" type="button" aria-selected="true">Picked</button>
-              <button id="stab-camera" role="tab" type="button" aria-selected="false" tabindex="-1">Camera</button>
-              <button id="stab-lights" role="tab" type="button" aria-selected="false" tabindex="-1">Lights</button>
-              <button id="stab-tiles" role="tab" type="button" aria-selected="false" tabindex="-1">Tile map</button>
-            </div>
-          </div>
-          <div id="spanel-object" class="scene-panel" role="tabpanel">
-            <form id="scene-inspector" class="scene-fields" aria-label="What is picked"></form>
-          </div>
-          <div id="spanel-camera" class="scene-panel" role="tabpanel" hidden>
-            <div class="scene-presets">
-              <button id="scene-view-front" class="small-button" type="button" title="From in front of what it looks at">Front</button>
-              <button id="scene-view-top" class="small-button" type="button" title="From above what it looks at">Top</button>
-              <button id="scene-view-side" class="small-button" type="button" title="From the side of what it looks at">Side</button>
-            </div>
-            <form id="scene-camera" class="scene-fields"></form>
-          </div>
-          <div id="spanel-lights" class="scene-panel" role="tabpanel" hidden>
-            <form id="scene-lights" class="scene-fields"></form>
-          </div>
-          <div id="spanel-tiles" class="scene-panel" role="tabpanel" hidden>
-            <form id="scene-tiles" class="scene-fields"></form>
-            <div id="scene-tile-tools" class="scene-presets" hidden>
-              <button type="button" class="small-button" data-tool="pen" aria-pressed="true" title="Lay the picked cells where you click or drag; Shift draws a line from the last (B)">Pen</button>
-              <button type="button" class="small-button" data-tool="fill" aria-pressed="false" title="Flood the cells like the one you click (F)">Fill</button>
-              <button type="button" class="small-button" data-tool="rect" aria-pressed="false" title="Fill the rectangle you drag over (R)">Rectangle</button>
-              <button type="button" class="small-button" data-tool="erase" aria-pressed="false" title="Empty the cells you click or drag over (E)">Eraser</button>
-            </div>
-            <p id="scene-tiles-info" class="muted"></p>
-            <canvas id="scene-tile-palette" class="scene-tiles" width="16" height="16" aria-label="The cells; click one to pick it" hidden></canvas>
-            <div class="scene-map-scroll">
-              <canvas id="scene-tile-map" class="scene-tiles" width="16" height="16" tabindex="0" aria-label="The map; click or drag to lay the picked cell" hidden></canvas>
-            </div>
+          <div class="scene-hint">
+            <span id="scene-status" class="scene-hint-text"></span>
+            <span id="scene-live" class="scene-hint-live" aria-live="polite"></span>
+            <button class="scene-hint-keys" type="button" data-keys="scene" title="Every key and mouse move"><kbd>?</kbd> keys</button>
+            <span id="scene-counts" class="scene-hint-counts muted"></span>
           </div>
         </div>
       </div>
@@ -224,26 +319,191 @@
         <pre id="tty" class="log" role="tabpanel" aria-labelledby="tab-tty" hidden></pre>
       </section>
     </section>
+
+    <aside class="pg-insp" aria-label="Inspector">
+      <div id="insp-scene" class="insp" hidden>
+        <div class="insp-head">
+          <span id="insp-icon" class="insp-icon"></span>
+          <h2 id="insp-title"></h2>
+          <span id="insp-kind" class="insp-kind muted"></span>
+          <button id="insp-more" class="tb only" type="button" aria-label="More" aria-haspopup="menu" title="Duplicate, hide or remove" hidden><svg class="i"><use href="#i-more"/></svg></button>
+        </div>
+        <div class="insp-body">
+          <div id="spanel-object" class="scene-panel">
+            <form id="scene-inspector" class="scene-fields" aria-label="What is picked"></form>
+          </div>
+          <div id="spanel-camera" class="scene-panel" hidden>
+            <form id="scene-camera" class="scene-fields" aria-label="The camera"></form>
+          </div>
+          <div id="spanel-lights" class="scene-panel" hidden>
+            <form id="scene-lights" class="scene-fields" aria-label="The lights"></form>
+          </div>
+          <div id="spanel-tiles" class="scene-panel" hidden>
+            <form id="scene-tiles-head" class="scene-fields" aria-label="The layer"></form>
+            <div class="insp-label">Cells</div>
+            <canvas id="scene-tile-palette" class="scene-tiles" width="16" height="16" aria-label="The cells; click one to pick it, drag across several to pick a stamp" hidden></canvas>
+            <p id="scene-tiles-info" class="muted insp-note"></p>
+            <div id="scene-tile-flagset" class="tile-flags" role="group" aria-label="What the cells picked are to the program" hidden></div>
+            <form id="scene-tiles" class="scene-fields tile-more" aria-label="The layer's map"></form>
+          </div>
+          <div id="spanel-room" class="scene-panel" hidden>
+            <div id="scene-room-paint">
+              <div class="insp-label">Brush</div>
+              <div id="scene-room-brushes" class="room-swatches" role="group" aria-label="The cell the pen lays"></div>
+              <div class="insp-label">Doorways</div>
+              <div id="scene-room-doors" class="room-doors" role="group" aria-label="Doorway cells, each leading where the room's links say"></div>
+            </div>
+            <p id="scene-room-info" class="muted insp-note"></p>
+            <form id="scene-room" class="scene-fields" aria-label="The room"></form>
+          </div>
+        </div>
+      </div>
+      <div id="insp-asset" class="insp" hidden>
+        <div class="insp-head">
+          <span id="insp-asset-icon" class="insp-icon"></span>
+          <h2 id="insp-asset-title"></h2>
+        </div>
+        <div class="insp-body">
+          <div id="insp-view">
+            <p id="preview-info" class="muted insp-note"></p>
+            <div id="source-head" class="insp-label" hidden>Converter</div>
+            <form id="source-options" class="pg-options" hidden></form>
+          </div>
+          <div id="insp-sprite" hidden>
+            <div class="insp-label">Size</div>
+            <div class="sprite-size">
+              <input id="sprite-w" type="number" min="1" max="256" aria-label="Width"> × <input id="sprite-h" type="number" min="1" max="256" aria-label="Height">
+              <button id="sprite-resize" class="small-button" type="button" title="Cut or pad the picture to the size given, keeping its top left">Resize</button>
+              <button id="sprite-clear" class="small-button" type="button" title="Make the whole picture transparent">Clear</button>
+            </div>
+            <div class="insp-label">Palette</div>
+            <div id="sprite-palette" class="sprite-palette" role="group" aria-label="Palette: click a color to draw with it, double-click to change it"></div>
+            <input id="sprite-color" type="color" class="sprite-color-input" aria-label="The color of the palette entry being changed">
+            <p id="sprite-info" class="muted insp-note"></p>
+            <div class="insp-label">Converter</div>
+            <form id="sprite-options" class="pg-options"></form>
+            <p id="sprite-options-info" class="muted insp-note"></p>
+          </div>
+          <div id="insp-vram" hidden>
+            <p id="vram-info" class="muted insp-note"></p>
+          </div>
+        </div>
+      </div>
+      <section id="dock" class="dock" hidden aria-label="The game">
+        <div class="dock-head">
+          <span class="dock-dot" aria-hidden="true"></span>
+          <span class="dock-name">Game</span>
+          <span id="dock-state" class="muted"></span>
+          <span class="dock-gap"></span>
+          <button id="dock-pause" type="button" title="Pause" aria-label="Pause"><svg class="i"><use href="#i-pause"/></svg></button>
+          <button id="dock-reset" type="button" title="Start the game again" aria-label="Start again"><svg class="i"><use href="#i-restart"/></svg></button>
+          <button id="dock-sound" type="button" title="Sound" aria-label="Sound" aria-pressed="false"><svg class="i"><use href="#i-mute"/></svg></button>
+          <button id="dock-code" type="button" title="The game large, with the code and the compiler's output: the Code layout" aria-label="Open in the Code layout"><svg class="i"><use href="#i-expand"/></svg></button>
+        </div>
+        <div id="dock-screen" class="dock-screen"></div>
+      </section>
+    </aside>
   </main>
 
-  <dialog id="vram-dialog" class="vram-dialog" aria-labelledby="vram-title">
-    <div class="vram-head">
-      <h2 id="vram-title">Video memory</h2>
-      <button id="vram-close" type="button" aria-label="Close" title="Close (Escape)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12m0-12L6 18"/></svg></button>
+  <dialog id="new-project" class="pg-dialog np" aria-labelledby="np-title">
+    <form id="np-form" method="dialog">
+      <h2 id="np-title">New project</h2>
+      <label class="pg-dialog-field np-name"><span>Name</span><input id="np-name" type="text" autocomplete="off" spellcheck="false"></label>
+      <div class="insp-label np-label">Start from</div>
+      <div id="np-starters" class="np-starters" role="radiogroup" aria-label="Start from"></div>
+      <p id="np-error" class="pg-dialog-error" aria-live="polite"></p>
+      <div class="pg-dialog-actions">
+        <span class="muted np-bring">Or bring one in: <button id="np-folder" class="link-button" type="button">Open folder…</button> · <button id="np-zip" class="link-button" type="button">Import zip…</button></span>
+        <span class="pg-dialog-gap"></span>
+        <button id="np-cancel" type="button">Cancel</button>
+        <button id="np-create" class="primary" type="submit">Create</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="keys-dialog" class="pg-dialog keys" aria-labelledby="keys-title">
+    <div class="keys-head">
+      <h2 id="keys-title">Keys</h2>
+      <button id="keys-close" class="pg-icon" type="button" aria-label="Close" title="Close (Escape)"><svg class="i"><use href="#i-x"/></svg></button>
     </div>
-    <canvas id="vram-canvas" width="1024" height="512" aria-label="Video memory, with every TIM where its header puts it; drag a block to move it"></canvas>
-    <p id="vram-info" class="muted"></p>
+    <div class="keys-groups">
+      <section data-keys="everywhere">
+        <h3>Everywhere</h3>
+        <dl>
+          <dt><kbd>Ctrl</kbd> <kbd>Enter</kbd></dt><dd>Format, build and run</dd>
+          <dt><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd></dt><dd>Format the Go files</dd>
+          <dt><kbd>Ctrl</kbd> <kbd>Space</kbd></dt><dd>Complete a name in the editor</dd>
+          <dt><kbd>Ctrl</kbd> <kbd>Z</kbd> <kbd>Ctrl</kbd> <kbd>Y</kbd></dt><dd>Undo and redo in the editor shown; in the files, put back what was removed</dd>
+          <dt><kbd>?</kbd></dt><dd>These keys</dd>
+        </dl>
+      </section>
+      <section data-keys="game">
+        <h3>The game</h3>
+        <p class="muted">With the game's picture clicked, the keyboard is the pad.</p>
+        <dl>
+          <dt><kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd></dt><dd>The directions</dd>
+          <dt><kbd>Z</kbd> <kbd>X</kbd> <kbd>A</kbd> <kbd>S</kbd></dt><dd>Cross, circle, square, triangle</dd>
+          <dt><kbd>Q</kbd> <kbd>W</kbd> <kbd>1</kbd> <kbd>2</kbd></dt><dd>L1, R1, L2, R2</dd>
+          <dt><kbd>Enter</kbd> <kbd>Backspace</kbd></dt><dd>Start, Select</dd>
+        </dl>
+      </section>
+      <section data-keys="scene">
+        <h3>A scene</h3>
+        <dl>
+          <dt>Click, drag</dt><dd>Pick, then move what is picked, by an arrow, a square or freely; <kbd>Shift</kbd> moves it in depth</dd>
+          <dt><kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd></dt><dd>The gizmo moves, rotates or scales</dd>
+          <dt><kbd>G</kbd> then a number</dt><dd>Type a move; <kbd>R</kbd> or <kbd>S</kbd> makes it a turn or a scale, <kbd>X</kbd> <kbd>Y</kbd> <kbd>Z</kbd> picks the axis, <kbd>Enter</kbd> applies</dd>
+          <dt>Arrows, <kbd>PgUp</kbd> <kbd>PgDn</kbd></dt><dd>Nudge what is picked, further with <kbd>Shift</kbd></dd>
+          <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Turn what is picked</dd>
+          <dt><kbd>N</kbd> · <kbd>F</kbd></dt><dd>Snap while dragging · frame what is picked</dd>
+          <dt><kbd>Ctrl</kbd> <kbd>D</kbd> · <kbd>Delete</kbd> · <kbd>Esc</kbd></dt><dd>Duplicate · remove · unpick</dd>
+          <dt>Right drag</dt><dd>Look around; <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> <kbd>Q</kbd> <kbd>E</kbd> fly while it is held</dd>
+          <dt><kbd>Alt</kbd> drag · middle or <kbd>Ctrl</kbd> drag · wheel</dt><dd>Orbit · pan · come closer</dd>
+        </dl>
+      </section>
+      <section data-keys="room">
+        <h3>A room</h3>
+        <dl>
+          <dt><kbd>B</kbd> <kbd>H</kbd> <kbd>F</kbd> <kbd>R</kbd> <kbd>M</kbd> <kbd>L</kbd></dt><dd>Pen, height, fill, rectangle, marker, look</dd>
+          <dt><kbd>Shift</kbd></dt><dd>With the pen, a line from the last cell; with heights, lower</dd>
+          <dt><kbd>Alt</kbd> click</dt><dd>Take the brush from a cell</dd>
+          <dt><kbd>P</kbd></dt><dd>Play from the cell the camera looks at</dd>
+          <dt><kbd>[</kbd> <kbd>]</kbd> · arrows · wheel</dt><dd>Turn the camera · move it, or the marker picked · come closer</dd>
+          <dt><kbd>Alt</kbd> drag · <kbd>Ctrl</kbd> or right drag</dt><dd>Turn · pan</dd>
+        </dl>
+      </section>
+      <section data-keys="tiles">
+        <h3>A tile map</h3>
+        <dl>
+          <dt><kbd>B</kbd> <kbd>F</kbd> <kbd>R</kbd> <kbd>E</kbd></dt><dd>Pen, fill, rectangle, eraser</dd>
+          <dt><kbd>Shift</kbd> · <kbd>Alt</kbd> click</dt><dd>A line from the last cell · take the cell under the pointer</dd>
+          <dt>Drag across the cells</dt><dd>Pick a stamp of several</dd>
+        </dl>
+      </section>
+      <section data-keys="sprite">
+        <h3>A sprite</h3>
+        <dl>
+          <dt><kbd>B</kbd> <kbd>E</kbd> <kbd>G</kbd> <kbd>I</kbd></dt><dd>Pencil, eraser, fill, pick</dd>
+          <dt><kbd>Shift</kbd> · right click</dt><dd>A line from the last point · pick a color with any tool</dd>
+          <dt>Double click a color</dt><dd>Change it</dd>
+        </dl>
+      </section>
+    </div>
   </dialog>
 
   <script src="theme.js"></script>
   <script src="app.js"></script>
+  <script src="dialog.js"></script>
   <script src="editor.js"></script>
   <script src="project.js"></script>
   <script src="preview.js"></script>
   <script src="inspect.js"></script>
   <script src="convert.js"></script>
+  <script src="sprite.js"></script>
+  <script src="room-edit.js"></script>
   <script src="scene-tab.js"></script>
   <script src="sidebar.js"></script>
+  <script src="layout.js"></script>
   <script src="files.js"></script>
   <script src="playground.js"></script>
 </body>

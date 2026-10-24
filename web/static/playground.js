@@ -365,6 +365,7 @@ async function buildAndRun() {
     if (await patchRunning(project)) return;
   }
   building = true;
+  layout.building(true);
   $("run").disabled = true;
   showTab("build");
   buildLog.textContent = "";
@@ -374,8 +375,10 @@ async function buildAndRun() {
   showOverlay("Building…");
   if (!(await format())) {
     building = false;
+    layout.building(false);
     $("run").disabled = false;
     showOverlay("The program does not parse; the compiler's tab says why.");
+    showFailure();
     return;
   }
   buildStatus.textContent = "Building…";
@@ -394,12 +397,14 @@ async function buildAndRun() {
     });
   }
   building = false;
+  layout.building(false);
   $("run").disabled = false;
   if (!result.ok) {
     const errors = showErrors(log);
     buildStatus.textContent = errors.length ? `${errors.length} error${errors.length > 1 ? "s" : ""}` : (result.error ?? "The build failed.");
     buildLog.scrollTop = 0;
     showOverlay("The build failed; the compiler's tab says why.");
+    showFailure();
     return;
   }
   files.markErrors([]);
@@ -417,6 +422,12 @@ async function buildAndRun() {
   } catch (e) {
     showOverlay(`Could not start ${project.name}: ${e.message}`);
   }
+}
+
+// showFailure goes to the Code layout when a build fails elsewhere, where
+// the compiler's output says why and its errors link to their lines.
+function showFailure() {
+  if (layout.get() !== "code") files.openLayout("code");
 }
 
 $("run").addEventListener("click", () => buildAndRun());
@@ -466,9 +477,19 @@ function updateLivePill() {
   setRunning = function (running) {
     base(running);
     updateLivePill();
+    layout.renderDock();
   };
 }
 projectEvents.addEventListener("open", updateLivePill);
+// With no project there is nothing to build or format, and the screen's
+// hint, while it shows one, says what comes first.
+const SCREEN_HINT = { run: "Run the program to build it and start it here.", none: "Make a project, then Run builds it and starts it here." };
+projectEvents.addEventListener("open", ({ detail: { project: p } }) => {
+  $("run").disabled = building || !p;
+  $("format").disabled = !p;
+  const overlay = $("overlay");
+  if (!overlay.hidden && Object.values(SCREEN_HINT).includes(overlay.textContent)) showOverlay(p ? SCREEN_HINT.run : SCREEN_HINT.none);
+});
 
 // The divider between the editor and the emulator: dragged, or moved with
 // the arrow keys, it sets how wide the emulator's side is.
@@ -516,6 +537,6 @@ for (const type of ["focusin", "pointerdown"]) {
   $("editors").addEventListener(type, warm, { once: true });
 }
 
-projects.start(startingFiles).catch((e) => {
-  buildStatus.textContent = `Could not load the starting program: ${e.message}`;
+projects.start().catch((e) => {
+  buildStatus.textContent = `Could not open the project: ${e.message}`;
 });

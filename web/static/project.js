@@ -21,7 +21,9 @@
 "use strict";
 
 // projectEvents tells the page what changed:
-//   open    {project}: a project was opened, replacing the one shown
+//   open    {project}: a project was opened, replacing the one shown,
+//           or project is null: none is open, as when the browser keeps
+//           none yet or the last was deleted
 //   files   {project}: files were added, removed or renamed
 //   change  {project, path, source}: a file's content changed; source
 //           says by whom, so the editor that made the change ignores it
@@ -36,12 +38,15 @@ function emit(type, detail) {
 const utf8 = { enc: new TextEncoder(), dec: new TextDecoder() };
 
 class Project {
-  // record: {id, name, created, modified} with files, a list of {path, data}.
+  // record: {id, name, created, modified, starter} with files, a list of
+  // {path, data}; starter names the example New project made it from, for
+  // Start over, or is empty.
   constructor(record, files = []) {
     this.id = record.id;
     this.name = record.name;
     this.created = record.created;
     this.modified = record.modified;
+    this.starter = record.starter ?? "";
     this.files = new Map(files.map((f) => [f.path, typeof f.data === "string" ? utf8.enc.encode(f.data) : f.data]));
   }
 
@@ -49,7 +54,7 @@ class Project {
   meta() {
     let size = 0;
     for (const data of this.files.values()) size += data.length;
-    return { id: this.id, name: this.name, created: this.created, modified: this.modified, size, count: this.files.size };
+    return { id: this.id, name: this.name, created: this.created, modified: this.modified, starter: this.starter, size, count: this.files.size };
   }
 
   list() {
@@ -280,11 +285,12 @@ const projects = (() => {
       if (p) await self.save(p);
     },
 
-    // create makes a project of files, {path, data}, and saves it.
-    async create(name, files) {
+    // create makes a project of files, {path, data}, and saves it, with
+    // the example it was started from, if any.
+    async create(name, files, starter = "") {
       const now = Date.now();
       const id = (crypto.randomUUID?.() ?? `${now}-${Math.random().toString(36).slice(2)}`);
-      const project = new Project({ id, name, created: now, modified: now }, files);
+      const project = new Project({ id, name, created: now, modified: now, starter }, files);
       await self.save(project);
       return project;
     },
@@ -309,6 +315,14 @@ const projects = (() => {
       emit("open", { project });
     },
 
+    // close leaves no project open, until one is made or brought in.
+    async close() {
+      await self.flush();
+      self.current = null;
+      try { localStorage.removeItem(CURRENT); } catch { /* not kept */ }
+      emit("open", { project: null });
+    },
+
     // uniqueName returns name, or name with a number after it, unlike any
     // project's.
     async uniqueName(name) {
@@ -318,9 +332,9 @@ const projects = (() => {
     },
 
     // start opens the project last open, or the most recently changed, or
-    // makes the first from what version 1 kept, or from fallback(), the
-    // starting program's files.
-    async start(fallback) {
+    // makes the first from what version 1 kept. A browser that keeps none
+    // starts with none open, for New project to make the first.
+    async start() {
       let id = null;
       try { id = localStorage.getItem(CURRENT); } catch { /* none */ }
       let project = id ? await self.load(id) : null;
@@ -330,13 +344,14 @@ const projects = (() => {
       }
       if (!project) {
         const files = await self.migrate();
-        project = await self.create("Untitled", files ?? await fallback());
         if (files) {
+          project = await self.create("Untitled", files);
           await run("readwrite", ["assets"], (s) => s.clear());
           try { localStorage.removeItem(DRAFT); } catch { /* none */ }
         }
       }
-      await self.open(project);
+      if (project) await self.open(project);
+      else await self.close();
       return project;
     },
 
