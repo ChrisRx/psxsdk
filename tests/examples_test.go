@@ -424,6 +424,82 @@ func TestSceneLive(t *testing.T) {
 	m.Golden("scene-live.png")
 }
 
+// TestJumpcube plays jumpcube: a run and a jump through the first coins,
+// the cube turning through the jump and finishing its quarter turn on
+// landing, a jump from under the one-way planks up through them onto
+// their top, a fall into spikes, which puts the cube back on the ground
+// before them, and the flag, which ends the level until Start plays it
+// again with its coins back. The cube is put where each part of the
+// level is by writing its position between frames.
+func TestJumpcube(t *testing.T) {
+	m := bootExample(t, "jumpcube")
+	m.RunUntilCount("main.screen", 60, frameBudget)
+	get := func(name string) int { return int(int32(m.Read32(m.Sym(name)))) }
+	set := func(name string, v int) { m.Bus.Write32(m.Sym(name), uint32(int32(v))) }
+	is := func(name string) bool { return m.Bus.Read8(m.Sym(name)) != 0 }
+	put := func(x, y int) {
+		set("main.heroX", x)
+		set("main.heroY", y)
+		set("main.speedX", 0)
+		set("main.speedY", 0)
+	}
+	assert.Equal(t, 40, get("main.heroX"), "the hero should start where the scene's sprite is")
+	assert.Equal(t, 192, get("main.heroY"))
+	assert.Equal(t, 35, get("main.total"), "the level's coins")
+
+	// Running into the row of three coins and jumping through it, and on
+	// into the crates.
+	pad := m.Pad(1)
+	pad.Press(emu.ButtonRight)
+	m.RunFrames(60)
+	pad.Press(emu.ButtonCross)
+	m.RunFrames(8)
+	assert.Equal(t, true, get("main.spin") > 0, "the cube should be turning, clockwise, as it jumps to the right")
+	m.Golden("jumpcube.png")
+	pad.Release(emu.ButtonCross)
+	m.RunFrames(40)
+	pad.Release(emu.ButtonRight)
+	m.RunFrames(20)
+	assert.Equal(t, 3, get("main.coins"), "the jump should have taken the three coins")
+	assert.Equal(t, 235, get("main.heroX"), "the blocks should have stopped the cube")
+	assert.Equal(t, true, is("main.standing"))
+	assert.Equal(t, 0, get("main.spin")%(90*4096), "the cube should have landed on a side")
+
+	// From under the planks a jump goes up through them, taking the coin
+	// over them, and comes down on their top.
+	put(33*16+8, 192)
+	m.RunFrames(2)
+	m.Hold(1, emu.ButtonCross, 30)
+	assert.Equal(t, 144, get("main.heroY"), "the hero should stand on the planks")
+	assert.Equal(t, true, is("main.standing"))
+	assert.Equal(t, 4, get("main.coins"))
+
+	// Down into the spikes at the foot of the pit, and back to the ground
+	// before it.
+	set("main.safeX", 700)
+	set("main.safeY", 192)
+	put(47*16+8, 160)
+	m.RunFrames(30)
+	assert.Equal(t, 700, get("main.heroX"), "the spikes should have sent the hero back")
+	assert.Equal(t, 192, get("main.heroY"))
+
+	// To the flag, which ends the level, then Start, which plays it again
+	// with every coin back.
+	put(150*16, 192)
+	pad.Press(emu.ButtonRight)
+	m.RunFrames(60)
+	pad.Release(emu.ButtonRight)
+	m.RunFrames(10)
+	assert.Equal(t, true, is("main.won"), "the flag should end the level")
+	assert.Equal(t, 2240, get("main.camX"), "the scroll should stop at the level's end")
+	m.Golden("jumpcube-won.png")
+	m.Hold(1, emu.ButtonStart, 2)
+	assert.Equal(t, false, is("main.won"))
+	assert.Equal(t, 40, get("main.heroX"))
+	assert.Equal(t, 0, get("main.coins"))
+	assert.Equal(t, 35, get("main.total"), "the coins taken should be back")
+}
+
 // TestSquareScreenshot checks the box after it is moved up and to the right
 // over the turning cube, with left and right held together for a while to
 // show that they cancel, and that the music plays, stops while Start has
