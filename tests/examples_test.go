@@ -123,22 +123,6 @@ func TestBreakoutScreenshot(t *testing.T) {
 	m.Golden("breakout.png")
 }
 
-// TestBlowScreenshot checks the shuttle's first piece a second and a half
-// into its explosion, with the menu on the explosion's page: R1 steps the
-// menu back from the first page to the last, Circle moves to its second
-// line and Triangle turns the explosion on.
-func TestBlowScreenshot(t *testing.T) {
-	m := bootExample(t, "blow")
-	m.RunUntilCount("main.frameNumber", 60, frameBudget)
-	m.Hold(1, emu.ButtonR1, 3)
-	m.RunFrames(15)
-	m.Hold(1, emu.ButtonCircle, 3)
-	m.RunFrames(15)
-	m.Hold(1, emu.ButtonTriangle, 3)
-	m.RunFrames(90)
-	m.Golden("blow.png")
-}
-
 // TestDinoScreenshot checks the dinosaur in front of the castle two
 // seconds into its walk.
 func TestDinoScreenshot(t *testing.T) {

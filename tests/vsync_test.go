@@ -16,7 +16,7 @@ import (
 // comes while the program waits: the CPU, the clocks, the display and the
 // sound, and every tenth frame all of RAM, where the wait counts down.
 func TestVSyncSkipChangesNothing(t *testing.T) {
-	for _, name := range []string{"dino", "check", "chrome"} {
+	for _, name := range []string{"dino", "check", "morph"} {
 		t.Run(name, func(t *testing.T) {
 			cue := disc(t, name)
 			boot := func(skip bool) *emutest.Machine {
