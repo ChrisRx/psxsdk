@@ -147,7 +147,7 @@ func main() {
 
 	makeFlat()
 	pvert := makeBigTMDTexQuad(pictureTMD, pictureTIM)
-	initialiseTMD(pictureTMD, 0, &pictureOBJ)
+	initializeTMD(pictureTMD, 0, &pictureOBJ)
 
 	var angle int32 // amount of rotation
 	var state int32 // where in the cycle of shapes
@@ -217,9 +217,9 @@ func makeFlat() {
 	}
 }
 
-// initialiseTMD ties a handle to an object of the TMD, giving it a
+// initializeTMD ties a handle to an object of the TMD, giving it a
 // coordinate system of its own.
-func initialiseTMD(tmd yaroze.TMD, objNum int32, obj *yaroze.GsDOBJ2) {
+func initializeTMD(tmd yaroze.TMD, objNum int32, obj *yaroze.GsDOBJ2) {
 	tmd.Map()
 	tmd.Link(obj, objNum)
 	pictureCoord.Init(yaroze.WORLD)

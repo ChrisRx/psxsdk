@@ -39,14 +39,14 @@ beside its picture with the extension .TIM unless -o names the one output.
 
 An indexed picture (a PNG or GIF with a palette, or a BMP of 8 bits or
 fewer) keeps its palette in order and becomes a 4-bit TIM when it uses at
-most 16 colours and an 8-bit one otherwise. Any other picture becomes 4- or
-8-bit when it has that few colours and 16-bit when it has more; --bits
-chooses, reducing the colours by median cut for an indexed mode.
+most 16 colors and an 8-bit one otherwise. Any other picture becomes 4- or
+8-bit when it has that few colors and 16-bit when it has more; --bits
+chooses, reducing the colors by median cut for an indexed mode.
 
 A pixel with alpha under half is transparent, 0x0000, which the GPU does not
 draw. Opaque black becomes 0x8000, black that is drawn, unless --black
 transparent asks for the Net Yaroze convention of black as the transparent
-colour. --semi sets STP on every other colour, so that the image blends
+color. --semi sets STP on every other color, so that the image blends
 where a sprite or polygon turns semitransparency on.
 
 --at and --clut place the pixels and the palette in video memory, which is
@@ -62,7 +62,7 @@ and the CLUT's x must be a multiple of 16.`,
 	f.StringVar(&opts.At, "at", "640,0", "x,y of the pixels in video memory")
 	f.StringVar(&opts.CLUT, "clut", "0,480", "x,y of the CLUT in video memory")
 	f.StringVar(&opts.Black, "black", "opaque", "what opaque black becomes: opaque or transparent")
-	f.BoolVar(&opts.Semi, "semi", false, "set STP on every drawn colour")
+	f.BoolVar(&opts.Semi, "semi", false, "set STP on every drawn color")
 
 	if err := cmd.Execute(); err != nil {
 		log.Fatal(err)

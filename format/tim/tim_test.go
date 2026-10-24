@@ -58,7 +58,7 @@ func TestBlackTransparent(t *testing.T) {
 }
 
 func TestQuantize(t *testing.T) {
-	// A gradient of 64 greys reduced to 16 colours keeps its ends and
+	// A gradient of 64 grays reduced to 16 colors keeps its ends and
 	// keeps the order of what it reduces.
 	img := image.NewNRGBA(image.Rect(0, 0, 64, 1))
 	for x := range 64 {
@@ -81,7 +81,7 @@ func TestQuantize(t *testing.T) {
 }
 
 // TestArchive encodes the BMPs in the Net Yaroze websites' archive that sit
-// beside a TIM of the same name and compares the colours, pixel by pixel,
+// beside a TIM of the same name and compares the colors, pixel by pixel,
 // with the TIM the member made from it with Sony's tools, which narrowed
 // each component to 5 bits by dropping the low 3 as Encode does. Many BMPs
 // were edited after their TIM was made, or were not its source at all, so
@@ -151,11 +151,11 @@ func TestArchive(t *testing.T) {
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
-	t.Logf("%d of %d BMPs encode to their TIM's colours", same, pairs)
+	t.Logf("%d of %d BMPs encode to their TIM's colors", same, pairs)
 	// 56 is how many agree: the rest are SCEE tutorial and demo images
-	// whose BMPs are not what their TIMs were made from, as the colours
+	// whose BMPs are not what their TIMs were made from, as the colors
 	// show, and a few that were edited afterwards.
 	if same < 56 {
-		t.Errorf("only %d of %d BMPs encode to their TIM's colours", same, pairs)
+		t.Errorf("only %d of %d BMPs encode to their TIM's colors", same, pairs)
 	}
 }

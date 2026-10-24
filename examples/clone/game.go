@@ -93,7 +93,7 @@ func collisionZ(position, increment yaroze.VECTOR) bool {
 	return false
 }
 
-// clearFake removes a fake block, and the walls it gave its neighbours.
+// clearFake removes a fake block, and the walls it gave its neighbors.
 func clearFake(r, c int32) {
 	world[r][c] &^= fake
 	if r-1 >= 0 {
@@ -832,11 +832,11 @@ func animateBadGuys() {
 
 // wallFor is which wall a square shows: the exit's, a fake block's if the
 // square beyond is one, or plain.
-func wallFor(m uint16, neighbourFake bool) *yaroze.GsDOBJ2 {
+func wallFor(m uint16, neighborFake bool) *yaroze.GsDOBJ2 {
 	switch {
 	case m&exit != 0:
 		return &ewallOBJ
-	case neighbourFake:
+	case neighborFake:
 		return &fwallOBJ
 	}
 	return &wallOBJ

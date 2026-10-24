@@ -15,7 +15,7 @@ The translation was made in 2026 by Chris Marshall, and differs from the
 original in more than language:
 
 - It lists the image, or extracts its files to a directory, in place of
-  writing the XML project file and licence file the original produces for
+  writing the XML project file and license file the original produces for
   mkpsxiso to rebuild the image from.
 - It reads through this repository's `format/iso9660`, `format/psxdisc`
   and `format/cdrom` packages, which are independent implementations of

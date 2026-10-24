@@ -65,9 +65,9 @@ var (
 	mainView   yaroze.GsVIEW2
 )
 
-// initialiseTMD maps a TMD's offsets to addresses and ties a handle to one
+// initializeTMD maps a TMD's offsets to addresses and ties a handle to one
 // of its objects, with a coordinate system of its own.
-func initialiseTMD(tmd yaroze.TMD, objNum int32, obj *yaroze.GsDOBJ2, coord *yaroze.GsCOORDINATE2) {
+func initializeTMD(tmd yaroze.TMD, objNum int32, obj *yaroze.GsDOBJ2, coord *yaroze.GsCOORDINATE2) {
 	tmd.Map()
 	tmd.Link(obj, objNum)
 	coord.Init(yaroze.WORLD)
@@ -169,7 +169,7 @@ func main() {
 	}
 
 	textureTIM.Load()
-	initialiseTMD(torusTMD, 0, &torusOBJ, &torusCoord)
+	initializeTMD(torusTMD, 0, &torusOBJ, &torusCoord)
 
 	// One white light from above, as all three, and half ambient.
 	light := yaroze.GsF_LIGHT{Vx: 0, Vy: yaroze.ONE, Vz: 0, R: 128, G: 128, B: 128}

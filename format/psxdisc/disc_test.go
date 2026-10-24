@@ -133,7 +133,7 @@ func TestSystemArea(t *testing.T) {
 	if got := string(area[at : at+len(identificationString)]); got != identificationString {
 		t.Errorf("identification string at sector %d = %q", LicenseStringSector, got)
 	}
-	// It is the only thing in there; the licence data proper is the user's
+	// It is the only thing in there; the license data proper is the user's
 	// to supply.
 	if n := bytes.Count(area, []byte("Sony")); n != 1 {
 		t.Errorf("the string appears %d times", n)

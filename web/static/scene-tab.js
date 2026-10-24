@@ -430,7 +430,7 @@ const sceneTab = (() => {
       const tmd = tmdFor(o.model);
       const obj = tmd?.objects[o.index];
       if (!obj) {
-        // No model to draw: a box of its own colour marks the place.
+        // No model to draw: a box of its own color marks the place.
         missing++;
         problems.set(i, tmd ? `${o.model.replace(/^ASSETS\//, "")} has no object ${o.index}` : `${o.model.replace(/^ASSETS\//, "")} is not in assets/`);
         drawBox(cam, o.position, 48, i + 1, [255, 64, 255]);
@@ -538,7 +538,7 @@ const sceneTab = (() => {
   }
 
   // drawLights draws each light as an arrow flying in at the camera's
-  // target, in the light's colour.
+  // target, in the light's color.
   function drawLights(cam) {
     const at = doc.camera.at;
     doc.lights.forEach((l) => {
@@ -752,7 +752,7 @@ const sceneTab = (() => {
     mapCanvas.style.width = `${mapCanvas.width}px`;
   }
   // drawCell paints one cell of the map canvas with a cell index, or the
-  // empty colour.
+  // empty color.
   const cellCanvas = document.createElement("canvas");
   function drawCell(mctx, cells, v, x, y, value) {
     cellCanvas.width = cellCanvas.height = 16;
@@ -974,10 +974,10 @@ const sceneTab = (() => {
     preview.drawLine(img.data, null, 0, sa[0], sa[1], sb[0], sb[1], [60, 82, 124], [60, 82, 124]);
   }
 
-  // The gizmo: the selected object's axes in the pad's colours, X circle
+  // The gizmo: the selected object's axes in the pad's colors, X circle
   // red, Y triangle green (downward, as the console's Y goes), Z cross
   // blue; a selected sprite's outline.
-  // themeColor resolves one of the page's colour tokens, which hold a
+  // themeColor resolves one of the page's color tokens, which hold a
   // light and a dark value, to the one in force.
   const swatch = document.createElement("span");
   swatch.hidden = true;
@@ -1011,8 +1011,8 @@ const sceneTab = (() => {
       for (const [a, b] of [[0, 1], [0, 2], [1, 2]]) {
         const t = AXIS_LEN / 3;
         const corners = [[t, 0], [t, t], [0, t]].map(([ka, kb]) => P(unit[a][0] * ka + unit[b][0] * kb, unit[a][1] * ka + unit[b][1] * kb, unit[a][2] * ka + unit[b][2] * kb));
-        const centre = P(unit[a][0] * t / 2 + unit[b][0] * t / 2, unit[a][1] * t / 2 + unit[b][1] * t / 2, unit[a][2] * t / 2 + unit[b][2] * t / 2);
-        if (corners.every(Boolean) && centre) handles.push({ kind: "plane", axes: [a, b], poly: [origin, ...corners], point: centre });
+        const center = P(unit[a][0] * t / 2 + unit[b][0] * t / 2, unit[a][1] * t / 2 + unit[b][1] * t / 2, unit[a][2] * t / 2 + unit[b][2] * t / 2);
+        if (corners.every(Boolean) && center) handles.push({ kind: "plane", axes: [a, b], poly: [origin, ...corners], point: center });
       }
     }
     if (gizmoMode === "rotate") {
@@ -1939,7 +1939,7 @@ const sceneTab = (() => {
       const dir = ["X", "Y", "Z"].map((l, k) => field(l, light.direction[k], (v) => { light.direction[k] = Math.round(v); changed(); }, { title: "The direction the light shines in" }));
       const color = document.createElement("label");
       const span = document.createElement("span");
-      span.textContent = "Colour";
+      span.textContent = "Color";
       const input = document.createElement("input");
       input.type = "color";
       input.value = "#" + light.color.map((c) => c.toString(16).padStart(2, "0")).join("");

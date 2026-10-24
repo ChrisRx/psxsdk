@@ -324,9 +324,9 @@ document.addEventListener("visibilitychange", () => { if (document.hidden) relea
 // Touch controls. Each half of the pad is one touch area: a finger
 // presses whichever button is under it as it moves, so it can roll from
 // one button to the next. A finger that lands on the D-pad steers it by
-// its direction from the centre until lifted, wherever it strays, with a
+// its direction from the center until lifted, wherever it strays, with a
 // diagonal pressing two directions.
-const DPAD_DEAD = 0.2;   // of the D-pad's radius, from its centre
+const DPAD_DEAD = 0.2;   // of the D-pad's radius, from its center
 const DPAD_AXIS = 0.38;  // about sin(22.5°): beyond it, a direction is pressed
 
 function dpadButtons(dpad, x, y) {

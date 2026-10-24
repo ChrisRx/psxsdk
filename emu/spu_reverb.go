@@ -65,7 +65,7 @@ func (s *spu) reverb(inl, inr int16) (int16, int16) {
 	k := pos >> 1
 	if pos&1 == 0 {
 		// Between the reverb's samples, the output is the one ten back,
-		// which is where the filter's window is centred.
+		// which is where the filter's window is centered.
 		w := (k - 19) & 31
 		return r.out[0][w+9], r.out[1][w+9]
 	}

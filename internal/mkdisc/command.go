@@ -85,7 +85,7 @@ cannot finish reading. --padding sets how many, and 0 leaves none.`,
 	f.BoolVar(&opts.FileTimes, "file-times", false, "record each file's own modification time rather than the volume date")
 	f.BoolVar(&opts.NoXA, "no-xa", false, "leave out the CD-XA extension, for comparison with a plain ISO 9660 writer")
 	f.Uint32Var(&opts.Padding, "padding", opts.Padding, "empty sectors after the last file")
-	f.StringVar(&opts.License, "license", "", "a file of licence data for the first 32KB, which only unmodified hardware needs")
+	f.StringVar(&opts.License, "license", "", "a file of license data for the first 32KB, which only unmodified hardware needs")
 	f.BoolVarP(&opts.Verbose, "verbose", "v", false, "list what was placed where")
 	cmd.MarkFlagRequired("output")
 	return cmd

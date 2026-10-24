@@ -80,7 +80,7 @@ const sidebar = (() => {
     return name;
   }
 
-  // The icons, one for each kind of file, drawn in the colour the editor
+  // The icons, one for each kind of file, drawn in the color the editor
   // gives the kind's tokens.
   const ICON = {
     folder: '<svg viewBox="0 0 16 16"><path d="M1.5 4a1 1 0 0 1 1-1h3.3l1.5 1.5h6.2a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/></svg>',
@@ -96,7 +96,7 @@ const sidebar = (() => {
     json: '<svg viewBox="0 0 16 16"><path d="M6 2.5c-1.5 0-2 .5-2 2v2c0 1-.5 1.5-1.5 1.5 1 0 1.5.5 1.5 1.5v2c0 1.5.5 2 2 2M10 2.5c1.5 0 2 .5 2 2v2c0 1 .5 1.5 1.5 1.5-1 0-1.5.5-1.5 1.5v2c0 1.5-.5 2-2 2"/></svg>',
     scene: '<svg viewBox="0 0 16 16"><path d="M2 6.5h12V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/><path d="m2 6.5 1.2-3.3 10.6 1.4-.8 1.9M5.4 3.6 4.5 6.5M9.4 4.1 8.5 6.5"/></svg>',
   };
-  // iconFor names the icon and the colour class for a file.
+  // iconFor names the icon and the color class for a file.
   function iconFor(path, kind) {
     if (kind === "scene") return "scene";
     const ext = path.replace(/^.*\./, "").toLowerCase();

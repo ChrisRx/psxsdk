@@ -11,7 +11,7 @@ func (c *CPU) imm() uint32   { return c.Opcode & 0xffff }
 func (c *CPU) simm() uint32  { return uint32(int32(int16(c.Opcode))) }
 
 // execute runs an instruction Step does not run itself, and returns what it
-// cost. ok is false for an instruction psxe does not recognise, which Step
+// cost. ok is false for an instruction psxe does not recognize, which Step
 // turns into a reserved instruction exception.
 //
 // Step runs the frequent instructions, shifts, ALU operations, branches,

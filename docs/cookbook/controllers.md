@@ -13,7 +13,7 @@ A buffer starts with a byte that is 0 while something is connected and 0xff whil
 
 ## Sticks and dead zones
 
-An analog stick reads 0 at one end of its travel and 255 at the other, but at rest it is near 128 rather than on it, and a different near on every controller. A program that moved by the raw value would drift. `Stick` centres an axis on zero and calls anything within a dead zone of the middle no movement:
+An analog stick reads 0 at one end of its travel and 255 at the other, but at rest it is near 128 rather than on it, and a different near on every controller. A program that moved by the raw value would drift. `Stick` centers an axis on zero and calls anything within a dead zone of the middle no movement:
 
 ```go src=../../yaroze/controller.go#Controller.Stick
 ```

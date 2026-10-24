@@ -32,7 +32,7 @@ func dataTrack(t *testing.T, files int) *iso9660.Writer {
 	return w
 }
 
-// samples is a recognisable run of 16-bit stereo frames.
+// samples is a recognizable run of 16-bit stereo frames.
 func samples(frames int) []byte {
 	b := make([]byte, frames*audioBytesPerSample)
 	for i := range frames {

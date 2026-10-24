@@ -26,7 +26,7 @@
 //     them from the seconds of the time it was compiled.
 //   - Quitting returns to the BIOS. The original first saves the screen to
 //     RAM for the serial console to fetch, and calls exit.
-//   - The direction a shot is fired in is normalised in integers, exactly;
+//   - The direction a shot is fired in is normalized in integers, exactly;
 //     the original uses floating point.
 //   - What the original prints to the serial console is left out, and so
 //     are its assertions.
@@ -116,7 +116,7 @@ var (
 )
 
 func main() {
-	if !initialiseAll() {
+	if !initializeAll() {
 		return
 	}
 	flyingSequence()
@@ -307,14 +307,14 @@ func dealWithControllerPad() {
 	}
 }
 
-func initialiseAll() bool {
+func initializeAll() bool {
 	yaroze.PadInit()
 
 	// The squares' scaling, for smoother walls; set and never used.
 	scalingVector = yaroze.VECTOR{Vx: 7659, Vy: 7059, Vz: 7779}
 
 	precompileCircularPositions()
-	initialiseDelayedActionList()
+	initializeDelayedActionList()
 
 	yaroze.GsInitGraph(screenW, screenH, yaroze.GsINTER|yaroze.GsOFSGPU, 1, 0)
 	yaroze.GsDefDispBuff(0, 0, 0, screenH)
@@ -335,21 +335,21 @@ func initialiseAll() bool {
 		return false
 	}
 
-	initialiseSound()
+	initializeSound()
 	yaroze.Srand(randomSeed)
 
-	initialiseView()
-	initialiseLighting()
+	initializeView()
+	initializeLighting()
 
-	lpge.ProperInitialiseTexture(mainTIM, &mainTexture)
-	lpge.ProperInitialiseTexture(fireTIM, &fireTexture)
-	lpge.ProperInitialiseTexture(multipleTIM, &multipleTexture)
-	lpge.ProperInitialiseTexture(mascotsTIM, &mascotsTexture)
-	lpge.ProperInitialiseTexture(asciiTIM, &asciiTexture)
+	lpge.ProperInitializeTexture(mainTIM, &mainTexture)
+	lpge.ProperInitializeTexture(fireTIM, &fireTexture)
+	lpge.ProperInitializeTexture(multipleTIM, &multipleTexture)
+	lpge.ProperInitializeTexture(mascotsTIM, &mascotsTexture)
+	lpge.ProperInitializeTexture(asciiTIM, &asciiTexture)
 
-	initialiseTextStrings()
-	initialiseObjects()
-	initialiseTunnel()
+	initializeTextStrings()
+	initializeObjects()
+	initializeTunnel()
 	return true
 }
 
@@ -360,7 +360,7 @@ const randomSeed = '0' + '0'
 // rand is the C library's rand, as an int32.
 func rand() int32 { return yaroze.Rand() }
 
-func initialiseView() {
+func initializeView() {
 	projection = 192
 	yaroze.GsSetProjection(projection)
 	viewpointX, viewpointY, viewpointZ = 0, 0, -220
@@ -368,7 +368,7 @@ func initialiseView() {
 	yaroze.GsSetRefView2(&view)
 }
 
-func initialiseLighting() {
+func initializeLighting() {
 	sortTheFlatLights()
 	yaroze.GsSetAmbient(yaroze.ONE/4, yaroze.ONE/4, yaroze.ONE/4)
 	fogging = yaroze.GsFOGPARAM{Dqa: -960, Dqb: 5120 * 5120, Bfc: 4}
@@ -505,7 +505,7 @@ var (
 	number    yaroze.Buffer
 )
 
-func initialiseTextStrings() {
+func initializeTextStrings() {
 	for i := range letterSprites {
 		s := &letterSprites[i]
 		lpge.LinkSpriteToImageInfo(s, &asciiTexture)

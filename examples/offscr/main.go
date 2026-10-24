@@ -126,7 +126,7 @@ var (
 
 func main() {
 	line.Init(lineBuf[:])
-	if !initialiseAll() {
+	if !initializeAll() {
 		return
 	}
 
@@ -287,7 +287,7 @@ func dealWithControllerPad() bool {
 	return true
 }
 
-func initialiseAll() bool {
+func initializeAll() bool {
 	yaroze.PadInit()
 	yaroze.GsInitGraph(screenW, screenH, yaroze.GsINTER|yaroze.GsOFSGPU, 1, 0)
 	yaroze.GsDefDispBuff(0, 0, 0, screenH)
@@ -325,26 +325,26 @@ func initialiseAll() bool {
 		return false
 	}
 
-	lpge.ProperInitialiseTexture(waveTIM, &waveTexture)
-	lpge.ProperInitialiseTexture(fireTIM, &fireTexture)
-	lpge.ProperInitialiseTexture(tileTIM, &tileTexture)
-	lpge.ProperInitialiseTexture(tile2TIM, &tile2Texture)
-	lpge.ProperInitialiseTexture(dongleTIM, &dongleTexture)
+	lpge.ProperInitializeTexture(waveTIM, &waveTexture)
+	lpge.ProperInitializeTexture(fireTIM, &fireTexture)
+	lpge.ProperInitializeTexture(tileTIM, &tileTexture)
+	lpge.ProperInitializeTexture(tile2TIM, &tile2Texture)
+	lpge.ProperInitializeTexture(dongleTIM, &dongleTexture)
 
 	lpge.LinkSpriteToImageInfo(&theSprite, &fireTexture)
 	theSprite.Mx = int16(theSprite.W / 2)
 	theSprite.My = int16(theSprite.H / 2)
 	theSprite.X, theSprite.Y = 80, 70
 
-	initialiseView()
-	initialiseLighting()
-	initialiseObjects()
+	initializeView()
+	initializeLighting()
+	initializeObjects()
 	createTheFloor()
 	return true
 }
 
-func initialiseObjects() {
-	lpge.InitialiseObjectClass()
+func initializeObjects() {
+	lpge.InitializeObjectClass()
 
 	theShip.Init()
 	theShip.BringToLife(ship, sphereModel, 0, lpge.None)
@@ -470,7 +470,7 @@ func moveObjectRelative(twist *yaroze.VECTOR, position, velocity *yaroze.VECTOR,
 	c.Flg = 0
 }
 
-func initialiseView() {
+func initializeView() {
 	yaroze.GsSetProjection(projection)
 	view = yaroze.GsRVIEW2{
 		Vrx: squareSize * 2, Vry: 0, Vrz: squareSize * 2,
@@ -480,9 +480,9 @@ func initialiseView() {
 	yaroze.GsSetRefView2(&view)
 }
 
-// initialiseLighting sets the ambient light and the fog, which is off. The
+// initializeLighting sets the ambient light and the fog, which is off. The
 // original sets no flat lights.
-func initialiseLighting() {
+func initializeLighting() {
 	yaroze.GsSetAmbient(yaroze.ONE/4, yaroze.ONE/4, yaroze.ONE/4)
 	fogging = yaroze.GsFOGPARAM{}
 	yaroze.GsSetFogParam(&fogging)

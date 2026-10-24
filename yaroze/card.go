@@ -61,7 +61,7 @@ type SaveHeader struct {
 	// full-width characters. SetTitle makes one from ASCII.
 	Title [64]byte
 
-	// CLUT is the icon's palette, sixteen colours as a TIM's.
+	// CLUT is the icon's palette, sixteen colors as a TIM's.
 	CLUT [16]uint16
 }
 

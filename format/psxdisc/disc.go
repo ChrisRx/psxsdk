@@ -119,13 +119,13 @@ const LicenseStringSector = 4
 // This is disc format identification and nothing more. An unmodified console
 // does not read it to decide whether to boot: that check is on the wobble
 // encoded in a pressed disc's lead-in groove, which is a physical property no
-// file can reproduce. Booting on real hardware additionally wants the licence
+// file can reproduce. Booting on real hardware additionally wants the license
 // data proper, which holds the logo shown at startup, is Sony's, and has to
 // be supplied by whoever owns a copy.
 const identificationString = "          Licensed  by          Sony Computer Entertainment Inc."
 
 // SystemArea returns the 32KB that precedes the filesystem, carrying the
-// identification string so that emulators recognise the image.
+// identification string so that emulators recognize the image.
 func SystemArea() []byte {
 	area := make([]byte, iso9660.SystemAreaSectors*iso9660.LogicalBlockSize)
 	copy(area[LicenseStringSector*iso9660.LogicalBlockSize:], identificationString)

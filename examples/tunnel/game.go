@@ -310,7 +310,7 @@ type delayedAction struct {
 
 var actionList [maxDelayedActions]delayedAction
 
-func initialiseDelayedActionList() {
+func initializeDelayedActionList() {
 	for i := range actionList {
 		actionList[i] = delayedAction{frameToStart: -1, typ: -1}
 	}
@@ -495,7 +495,7 @@ var (
 	theVoices [maxVoices]voiceChannel
 )
 
-func initialiseSound() {
+func initializeSound() {
 	vab0 = yaroze.SsVabTransfer(vh.Bytes(), vb.Bytes(), -1, 1)
 	if vab0 < 0 {
 		return

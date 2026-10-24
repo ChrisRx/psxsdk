@@ -42,7 +42,7 @@ A 3D model's polygons are sorted by their distance from the camera, which the li
 
 The GPU draws textures from texture pages, rectangles of video memory 64 units wide and 256 lines tall, and a sprite or polygon names its texture by its page, its U and V inside the page, and its palette's position. A 4-bit image fits four pixels in a unit, so a page holds an image 256 pixels wide, an 8-bit one 128 and a 16-bit one 64. No sprite is bigger than 256 by 256 ([sizes](../manuals/faq.md#what-are-the-minimummaximum-sizes-for-sprites)).
 
-A texel of 0x0000 is not drawn at all, which is how sprites have holes in them. Any other colour is drawn, black included as 0x8000. The top bit of a colour, STP, marks it as one that blends with what is behind it when the sprite or polygon turns semitransparency on, at one of four rates. The GPU keeps the last 2 KB of texture it read in a cache, so small 4-bit textures draw fastest ([the cache](../manuals/faq.md#what-is-the-gpu-cache)).
+A texel of 0x0000 is not drawn at all, which is how sprites have holes in them. Any other color is drawn, black included as 0x8000. The top bit of a color, STP, marks it as one that blends with what is behind it when the sprite or polygon turns semitransparency on, at one of four rates. The GPU keeps the last 2 KB of texture it read in a cache, so small 4-bit textures draw fastest ([the cache](../manuals/faq.md#what-is-the-gpu-cache)).
 
 A sprite's R, G and B scale its image: 128 draws it as it is, 255 twice as bright, 0 black. `TIM.Load().Sprite()` makes a sprite of a whole image at 128 with its middle as its position, and `Sort` draws it turned and scaled about that middle, its rotation in 4096ths of a degree. `SortFast` draws it unturned from its top left corner, faster, with an even U and width ([stray lines](../manuals/faq.md#why-do-i-get-weird-extra-vertical-lines-in-some-of-my-sprites)).
 
@@ -58,7 +58,7 @@ A polygon is drawn from the side its corners go round clockwise on the screen. T
 
 The SPU plays 24 voices at once from samples in sound RAM, each a VAG of the SPU's ADPCM. A bank, a VAB, groups the samples into programs, instruments of up to 16 tones, each tone a sample over a range of notes with its own envelope. A sequence, a SEQ, is a MIDI score that plays the bank's programs. A sound effect is a note played by hand with `SsUtKeyOn`.
 
-`OpenBank` sends a bank to the SPU and `Sequence` opens a score on it. `SsSetMVol` has to be called before anything sounds. A tone plays its sample at the sample's own rate at its centre note, and faster for higher notes. The boot disc's General MIDI bank plays any General MIDI score, but takes most of sound RAM, so a game with effects of its own usually makes a bank of only the instruments it needs ([MIDI on the PlayStation](../manuals/faq.md#whats-the-deal-with-midi-on-the-psx)). [Making data](data.md) says how.
+`OpenBank` sends a bank to the SPU and `Sequence` opens a score on it. `SsSetMVol` has to be called before anything sounds. A tone plays its sample at the sample's own rate at its center note, and faster for higher notes. The boot disc's General MIDI bank plays any General MIDI score, but takes most of sound RAM, so a game with effects of its own usually makes a bank of only the instruments it needs ([MIDI on the PlayStation](../manuals/faq.md#whats-the-deal-with-midi-on-the-psx)). [Making data](data.md) says how.
 
 ## Controllers
 

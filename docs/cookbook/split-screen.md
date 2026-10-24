@@ -13,7 +13,7 @@ A split screen is two pictures in one frame, each from its own camera. On the Pl
 
 ## Drawing each half
 
-Each half is drawn with its own drawing offset, the point on the screen the camera's centre lands on, the middle of the half, and its own clip, the rectangle drawing is kept inside. `GsSetOffset` and `GsSetClip` set both for the buffer being drawn, and the next `GsSwapDispBuff` puts them back:
+Each half is drawn with its own drawing offset, the point on the screen the camera's center lands on, the middle of the half, and its own clip, the rectangle drawing is kept inside. `GsSetOffset` and `GsSetClip` set both for the buffer being drawn, and the next `GsSwapDispBuff` puts them back:
 
 ```go src=../../examples/split/main.go#draw
 ```

@@ -14,6 +14,6 @@ The SPU plays blocks of 16 bytes, each 28 samples of 4 bits with a shift and one
 
 A loop the file marks is kept: a WAV's `smpl` chunk or an AIFF's sustain loop. The sound plays to the loop's end and then repeats from its start, a whole block at a time, so a loop sounds right when its ends are multiples of 28 samples. `-1` leaves the loop out and `-L` loops the whole sound. The blocks are flagged as aiff2vag flagged them, which the tests check against Sony's for every looped sound in the archive.
 
-The rate in the header is the file's. A tone in a VAB plays the sample at that rate at its centre note, and higher or lower notes faster or slower; `SsUtKeyOn` plays a sound effect at any note. A lower rate takes less of the SPU's 512 KB.
+The rate in the header is the file's. A tone in a VAB plays the sample at that rate at its center note, and higher or lower notes faster or slower; `SsUtKeyOn` plays a sound effect at any note. A lower rate takes less of the SPU's 512 KB.
 
 `-R` reads headerless 16-bit samples at a given rate, little-endian unless `-E`.

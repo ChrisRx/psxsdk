@@ -11,7 +11,7 @@ import (
 )
 
 func TestEncodeFlat(t *testing.T) {
-	// A flat grey 16x16 picture is one macroblock: two chroma blocks of
+	// A flat gray 16x16 picture is one macroblock: two chroma blocks of
 	// nothing, and four Y blocks of only their DC term, each as a header
 	// code and the end of the block.
 	img := image.NewUniform(color.Gray{Y: 128 + 64})

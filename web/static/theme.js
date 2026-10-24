@@ -1,5 +1,5 @@
 // The theme switch in the header of the documentation and the playground:
-// light, the grey PlayStation, or dark, the black Net Yaroze. The choice is
+// light, the gray PlayStation, or dark, the black Net Yaroze. The choice is
 // kept under one key, so that the two share it, and each page's head sets
 // data-theme from it before the first paint. Until the visitor chooses, the
 // documentation follows the system's color scheme and the playground's head
@@ -17,7 +17,7 @@
   function show() {
     const d = dark();
     button.setAttribute("aria-pressed", String(d));
-    button.title = d ? "Switch to the grey PlayStation" : "Switch to the black Net Yaroze";
+    button.title = d ? "Switch to the gray PlayStation" : "Switch to the black Net Yaroze";
     for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
       meta.content = d ? "#1b1b1e" : "#e3e2dd";
       meta.removeAttribute("media");

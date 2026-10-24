@@ -171,7 +171,7 @@ var (
 
 func main() {
 	text.Init(textBuf[:])
-	if !initialiseAll() {
+	if !initializeAll() {
 		return
 	}
 
@@ -362,7 +362,7 @@ func dealWithNewScore(last *score, table []score) int {
 	return highest
 }
 
-func initialiseAll() bool {
+func initializeAll() bool {
 	yaroze.GsInitGraph(320, 240, 4, 0, 0)
 	yaroze.GsDefDispBuff(0, 0, 0, 240)
 
@@ -385,8 +385,8 @@ func initialiseAll() bool {
 		return false
 	}
 
-	initialiseObjects()
-	initialiseTexturesAndSprites()
+	initializeObjects()
+	initializeTexturesAndSprites()
 	clearBackground()
 
 	level = 1
@@ -421,7 +421,7 @@ func initGsSprite(s *yaroze.GsSPRITE) {
 	*s = yaroze.GsSPRITE{R: 0x80, G: 0x80, B: 0x80, Scalex: yaroze.ONE, Scaley: yaroze.ONE}
 }
 
-func initialiseObjects() {
+func initializeObjects() {
 	playersMovement = movement{w: 44, h: 24}
 	initGsSprite(&playersSprite)
 
@@ -516,12 +516,12 @@ const (
 	semiTransparent2 = 1 << 30
 )
 
-// initialiseTexturesAndSprites loads the three TIMs into video memory,
+// initializeTexturesAndSprites loads the three TIMs into video memory,
 // where the demo chose to put them, and sets the sprites up to show them:
 // the ship and the invaders are 8-bit and so twice as wide in the sprite
 // as in the TIM, the shot 4-bit and four times, and the invaders and the
 // shots are then scaled down to size.
-func initialiseTexturesAndSprites() {
+func initializeTexturesAndSprites() {
 	var image1, image2, image3 yaroze.GsIMAGE
 
 	// The player's ship.

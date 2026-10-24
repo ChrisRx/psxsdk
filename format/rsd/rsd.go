@@ -14,9 +14,9 @@
 //	     material: the polygons it is for ("5", "0-3", "2,4,6"), a hex
 //	     flag (bit 0 not lit, bit 1 double-sided, bit 2 semitransparent,
 //	     bits 3-5 its rate), F or G for flat or gouraud shading, and a
-//	     type with its values: C r g b, G and a colour per vertex, T tex
-//	     and a U and V per vertex, D as T then a colour, H as T then a
-//	     colour per vertex
+//	     type with its values: C r g b, G and a color per vertex, T tex
+//	     and a U and V per vertex, D as T then a color, H as T then a
+//	     color per vertex
 //	GRP  @GRP940102, names for groups of polygons, which the TMD does not
 //	     keep
 //

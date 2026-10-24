@@ -8,21 +8,21 @@ import (
 // Mode bits of a polygon.
 const (
 	modePolygon = 0x20
-	modeGouraud = 0x10 // IIP: shaded or coloured per vertex
+	modeGouraud = 0x10 // IIP: shaded or colored per vertex
 	modeQuad    = 0x08
 	modeTexture = 0x04 // TME
 	modeSemi    = 0x02 // ABE
-	modeUnlit   = 0x01 // TGE: colours, or the texture, as they are
+	modeUnlit   = 0x01 // TGE: colors, or the texture, as they are
 )
 
 // Flag bits of a primitive.
 const (
 	FlagUnlit       = 0x01 // LGT: not lit by the library
 	FlagDoubleSided = 0x02 // FCE: drawn from both sides
-	FlagGradation   = 0x04 // GRD: a lit polygon with a colour per vertex
+	FlagGradation   = 0x04 // GRD: a lit polygon with a color per vertex
 )
 
-// RGB is a colour, 128 being the texture's own brightness.
+// RGB is a color, 128 being the texture's own brightness.
 type RGB struct{ R, G, B uint8 }
 
 // A Texture is how a polygon is textured: the texture page and CLUT, as a
@@ -42,11 +42,11 @@ type Polygon struct {
 	Vertices []uint16
 
 	// Normals light the polygon: one for flat shading, one per vertex
-	// for gouraud. With none it is not lit, and drawn in its colours, or
+	// for gouraud. With none it is not lit, and drawn in its colors, or
 	// its texture as it is.
 	Normals []uint16
 
-	// Colors are one colour, or one per vertex for a gradation. A lit
+	// Colors are one color, or one per vertex for a gradation. A lit
 	// textured polygon has none; an unlit one needs them.
 	Colors []RGB
 
@@ -72,14 +72,14 @@ func (p Polygon) Primitive() (Primitive, error) {
 		return Primitive{}, fmt.Errorf("tmd: %d normals for %d vertices", len(p.Normals), n)
 	}
 	if len(p.Colors) != 0 && len(p.Colors) != 1 && len(p.Colors) != n {
-		return Primitive{}, fmt.Errorf("tmd: %d colours for %d vertices", len(p.Colors), n)
+		return Primitive{}, fmt.Errorf("tmd: %d colors for %d vertices", len(p.Colors), n)
 	}
 	textured := p.Texture != nil
 	if lit && textured && len(p.Colors) > 0 {
-		return Primitive{}, errors.New("tmd: a lit textured polygon takes no colours")
+		return Primitive{}, errors.New("tmd: a lit textured polygon takes no colors")
 	}
 	if (!textured || !lit) && len(p.Colors) == 0 {
-		return Primitive{}, errors.New("tmd: an untextured or unlit polygon needs a colour")
+		return Primitive{}, errors.New("tmd: an untextured or unlit polygon needs a color")
 	}
 	gradation := len(p.Colors) > 1
 
@@ -164,7 +164,7 @@ func (p Polygon) Primitive() (Primitive, error) {
 	return Primitive{Mode: mode, Flag: flag, Olen: olen, Packet: w}, nil
 }
 
-// A Line is a line between two vertices, in one colour or shaded between
+// A Line is a line between two vertices, in one color or shaded between
 // two. Sony's FAQ warns that the Net Yaroze library does not draw lines in
 // a TMD, so a thin polygon is the safer choice.
 type Line struct {
@@ -176,7 +176,7 @@ type Line struct {
 // Primitive returns the line's packet.
 func (l Line) Primitive() (Primitive, error) {
 	if len(l.Colors) != 1 && len(l.Colors) != 2 {
-		return Primitive{}, fmt.Errorf("tmd: a line of %d colours", len(l.Colors))
+		return Primitive{}, fmt.Errorf("tmd: a line of %d colors", len(l.Colors))
 	}
 	mode := byte(0x40)
 	if len(l.Colors) == 2 {

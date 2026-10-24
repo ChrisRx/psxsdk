@@ -8,7 +8,7 @@ A memory card holds 128 KB, as 15 blocks of 8 KB and a directory. The BIOS keeps
 
 ## A save file
 
-A save that other games, and the console's own card screen, can show follows a convention Sony set out ([the save file format](../manuals/savefile.md)). Its name starts with the region and the game's product code, `BA` and a code for an American game, then a name of the game's own. Its first sector is a header: `SC`, how many frames its icon has, how many blocks the file takes, a title in full-width Shift-JIS, and the icon's 16 colours. The icon's frames come next, 16 by 16 pixels of 4 bits, a sector each, and then the game's data. `yaroze.SaveHeader` makes the header:
+A save that other games, and the console's own card screen, can show follows a convention Sony set out ([the save file format](../manuals/savefile.md)). Its name starts with the region and the game's product code, `BA` and a code for an American game, then a name of the game's own. Its first sector is a header: `SC`, how many frames its icon has, how many blocks the file takes, a title in full-width Shift-JIS, and the icon's 16 colors. The icon's frames come next, 16 by 16 pixels of 4 bits, a sector each, and then the game's data. `yaroze.SaveHeader` makes the header:
 
 ```go src=../../yaroze/card.go#SaveHeader
 ```

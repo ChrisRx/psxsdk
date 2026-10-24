@@ -65,7 +65,7 @@ across directly. The one departure is that a C name beginning with a
 lowercase letter is capitalised, since Go would otherwise put it out of reach
 of every other package; `//export` carries the real symbol either way.
 
-Anything the type mapping does not recognise is reported rather than guessed
+Anything the type mapping does not recognize is reported rather than guessed
 at, and the report names what has to be bound by hand:
 
 ```

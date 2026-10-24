@@ -1,7 +1,7 @@
 // Package bmp decodes Windows BMP files, which is how most Net Yaroze art
 // was kept, so that the asset tools can read it with image.Decode. A file of
 // 1, 4 or 8 bits a pixel decodes to an *image.Paletted, keeping its palette
-// in order, since a program may name colours by their index; 16, 24 and
+// in order, since a program may name colors by their index; 16, 24 and
 // 32-bit files decode to an *image.NRGBA. Run-length compressed files are
 // not supported.
 package bmp
@@ -107,7 +107,7 @@ func (h header) palette(b []byte) (color.Palette, error) {
 	return p, nil
 }
 
-// DecodeConfig returns a BMP file's size and colour model.
+// DecodeConfig returns a BMP file's size and color model.
 func DecodeConfig(r io.Reader) (image.Config, error) {
 	b, err := io.ReadAll(r)
 	if err != nil {

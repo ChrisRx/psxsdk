@@ -7,7 +7,7 @@
 // ordering tables a frame, one for each half. Each half's models are sorted
 // into its own table, with the GTE set to that half's camera, and when the
 // frame is drawn each table is drawn with its own drawing offset, the
-// screen position the camera's centre lands on, and its own clip, the half
+// screen position the camera's center lands on, and its own clip, the half
 // of the screen it may draw in. GsSetOffset and GsSetClip change both, for
 // the buffer being drawn, and the next GsSwapDispBuff puts them back.
 //
@@ -22,7 +22,7 @@
 // smaller, or drew less far, to make up for it. Here it is ten cubes.
 //
 // The models and the texture are the tutorial's own: CUBE.TMD, a cube of
-// coloured, lit triangles, for the players, and CUBETEX.TMD with
+// colored, lit triangles, for the players, and CUBETEX.TMD with
 // STONE02.TIM for the pillars.
 //
 // Differences from the tutorial: there each half showed one of two cubes,
@@ -257,7 +257,7 @@ func draw(first, second *yaroze.GsOT, font int32) {
 	}
 	for i, t := range [2]*yaroze.GsOT{first, second} {
 		r := &halves[i]
-		// The camera's centre goes to the middle of its half.
+		// The camera's center goes to the middle of its half.
 		yaroze.GsSetOffset(int32(r.X)+int32(r.W)/2, int32(r.Y)+int32(r.H)/2)
 		yaroze.GsSetClip(r)
 		yaroze.GsDrawOt(t)

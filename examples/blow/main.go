@@ -111,7 +111,7 @@ var (
 
 func main() {
 	text.Init(textBuf[:])
-	initialiseAll()
+	initializeAll()
 
 	if missing := demo.Load(files, nil); missing != "" {
 		fail("could not read ", missing)
@@ -212,7 +212,7 @@ func delay(d int32) {
 	}
 }
 
-func initialiseAll() {
+func initializeAll() {
 	yaroze.ResetGraph(0)
 	padStatus = 0
 
@@ -385,10 +385,10 @@ func controlsScaling() {
 	adjust3(&scale.Vx, &scale.Vy, &scale.Vz, 4)
 }
 
-// printColourDetails prints a color with one component highlighted in
+// printColorDetails prints a color with one component highlighted in
 // green, or none.
-func printColourDetails(r, g, b int32, highlight int8) {
-	text.WriteString("Colour ")
+func printColorDetails(r, g, b int32, highlight int8) {
+	text.WriteString("Color ")
 	switch highlight {
 	case 0:
 		text.WriteString("~c0f0R ").WriteInt(r).WriteString(" ~cfffG ").WriteInt(g).WriteString(" B ").WriteInt(b).WriteString("\n")
@@ -438,7 +438,7 @@ func controlsLighting(light int) {
 	l := &lightSource[light]
 	text.WriteString("Direction X ").WriteInt(l.Vx).WriteString("\n          Y ").WriteInt(l.Vy).
 		WriteString("\n          Z ").WriteInt(l.Vz).WriteString("\n")
-	printColourDetails(int32(l.R), int32(l.G), int32(l.B), lightRGB)
+	printColorDetails(int32(l.R), int32(l.G), int32(l.B), lightRGB)
 
 	adjust3(&l.Vx, &l.Vy, &l.Vz, 8)
 	chooseRGB(&lightRGB)
@@ -455,7 +455,7 @@ func controlsLighting(light int) {
 var ambientRGB int8
 
 func controlsAmbient() {
-	printColourDetails(int32(ambientRed), int32(ambientGreen), int32(ambientBlue), ambientRGB)
+	printColorDetails(int32(ambientRed), int32(ambientGreen), int32(ambientBlue), ambientRGB)
 	chooseRGB(&ambientRGB)
 	switch ambientRGB {
 	case 0:
@@ -492,7 +492,7 @@ func controlsFogging() {
 	if fogOption >= 3 {
 		highlight = fogOption - 3
 	}
-	printColourDetails(int32(fogging.Rfc), int32(fogging.Gfc), int32(fogging.Bfc), highlight)
+	printColorDetails(int32(fogging.Rfc), int32(fogging.Gfc), int32(fogging.Bfc), highlight)
 
 	if padStatus&yaroze.PADRright != 0 {
 		fogOption++

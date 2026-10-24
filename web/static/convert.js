@@ -248,12 +248,12 @@ const convert = (() => {
       { flag: "--clut", label: "Palette at", type: "text", hint: "x,y in video memory, x a multiple of 16" },
       { flag: "--bits", label: "Bits", type: "select", options: [["0", "as the picture"], ["4", "4"], ["8", "8"], ["16", "16"], ["24", "24"]] },
       { flag: "--black", label: "Black", type: "select", options: [["opaque", "drawn"], ["transparent", "transparent"]] },
-      { flag: "--semi", label: "Semitransparent", type: "bool", hint: "STP on every drawn colour" },
+      { flag: "--semi", label: "Semitransparent", type: "bool", hint: "STP on every drawn color" },
     ],
     obj2tmd: [
       { flag: "--scale", label: "Scale", type: "number", hint: "coordinates are multiplied by this and rounded to integers" },
       { flag: "--smooth", label: "Smooth", type: "bool", hint: "gouraud shading with the vertex normals" },
-      { flag: "--unlit", label: "Unlit", type: "bool", hint: "colours and textures as they are" },
+      { flag: "--unlit", label: "Unlit", type: "bool", hint: "colors and textures as they are" },
       { flag: "--both", label: "Both sides", type: "bool", hint: "a second face back to back with each" },
     ],
     wav2vag: [

@@ -442,16 +442,16 @@ func message(text string) {
 	yaroze.FntFlush(-1)
 }
 
-// initialiseTMD ties a handle to one of a built TMD's objects.
-func initialiseTMD(tmd yaroze.TMD, objNum int32, obj *yaroze.GsDOBJ2) {
+// initializeTMD ties a handle to one of a built TMD's objects.
+func initializeTMD(tmd yaroze.TMD, objNum int32, obj *yaroze.GsDOBJ2) {
 	tmd.Link(obj, objNum)
 	obj.Coord2 = &objectCoord
 }
 
-// initialiseSprite loads a TIM and sets up a sprite to show it, as the
+// initializeSprite loads a TIM and sets up a sprite to show it, as the
 // demo does, quirks included: it takes the texture's u from the low five
 // bits of its x.
-func initialiseSprite(tim yaroze.TIM, sprite *yaroze.GsSPRITE) {
+func initializeSprite(tim yaroze.TIM, sprite *yaroze.GsSPRITE) {
 	image := tim.Load()
 	pmode := image.Pmode & 3
 	sprite.Attribute |= pmode << 24
@@ -473,14 +473,14 @@ func setupTexturesAndTMDs() {
 	} {
 		tim.Load()
 	}
-	initialiseSprite(statusTIM, &status)
+	initializeSprite(statusTIM, &status)
 	status.X = int16(-int32(status.W) >> 1)
 	if yaroze.GetVideoMode() == yaroze.MODE_NTSC {
 		status.Y = 88
 	} else {
 		status.Y = 96
 	}
-	initialiseSprite(faceTIM, &face)
+	initializeSprite(faceTIM, &face)
 	face.X = status.X + 16
 	face.Y = status.Y + 4
 
@@ -492,59 +492,59 @@ func setupTexturesAndTMDs() {
 	nm := norm(0, yaroze.ONE, 0)
 	v := [4]demo.TMD_VERT{vert(-512, 0, -512), vert(-512, 0, 512), vert(512, 0, -512), vert(512, 0, 512)}
 	makeSplitTMD_G_4T(floorTMD, floorTIM, square(63), nm, v, -1)
-	initialiseTMD(floorTMD, 0, &floorOBJ)
+	initializeTMD(floorTMD, 0, &floorOBJ)
 	makeSplitTMD_G_4T(efloorTMD, efloorTIM, square(63), nm, v, -1)
-	initialiseTMD(efloorTMD, 0, &efloorOBJ)
+	initializeTMD(efloorTMD, 0, &efloorOBJ)
 
 	// Roofs.
 	nm = norm(0, -yaroze.ONE, 0)
 	v = [4]demo.TMD_VERT{vert(-512, 0, -512), vert(512, 0, -512), vert(-512, 0, 512), vert(512, 0, 512)}
 	makeSplitTMD_G_4T(roofTMD, roofTIM, square(63), nm, v, -1)
-	initialiseTMD(roofTMD, 0, &roofOBJ)
+	initializeTMD(roofTMD, 0, &roofOBJ)
 	makeSplitTMD_G_4T(eroofTMD, eroofTIM, square(63), nm, v, -1)
-	initialiseTMD(eroofTMD, 0, &eroofOBJ)
+	initializeTMD(eroofTMD, 0, &eroofOBJ)
 
 	// Walls.
 	nm = norm(0, 0, -yaroze.ONE)
 	v = [4]demo.TMD_VERT{vert(-512, -512, 0), vert(512, -512, 0), vert(-512, 512, 0), vert(512, 512, 0)}
 	makeSplitTMD_G_4T(wallTMD, wallTIM, square(63), nm, v, -1)
-	initialiseTMD(wallTMD, 0, &wallOBJ)
+	initializeTMD(wallTMD, 0, &wallOBJ)
 	makeSplitTMD_G_4T(ewallTMD, ewallTIM, square(63), nm, v, -1)
-	initialiseTMD(ewallTMD, 0, &ewallOBJ)
+	initializeTMD(ewallTMD, 0, &ewallOBJ)
 	makeSplitTMD_G_4T(fwallTMD, fwallTIM, square(63), nm, v, -1)
-	initialiseTMD(fwallTMD, 0, &fwallOBJ)
+	initializeTMD(fwallTMD, 0, &fwallOBJ)
 
 	// The monster, the same quad for both frames of its walk.
 	nm = norm(0, 0, -yaroze.ONE)
 	v = [4]demo.TMD_VERT{vert(-384, -768, 0), vert(384, -768, 0), vert(-384, 0, 0), vert(384, 0, 0)}
 	makeTMD_G_4T(monster1TMD, man1TIM, square(127), nm, v, -1)
-	initialiseTMD(monster1TMD, 0, &monster1OBJ)
+	initializeTMD(monster1TMD, 0, &monster1OBJ)
 	makeTMD_G_4T(monster2TMD, man2TIM, square(127), nm, v, -1)
-	initialiseTMD(monster2TMD, 0, &monster2OBJ)
+	initializeTMD(monster2TMD, 0, &monster2OBJ)
 
 	// A dead monster, lying down.
 	nm = norm(0, yaroze.ONE, 0)
 	v = [4]demo.TMD_VERT{vert(-384, -50, -384), vert(-384, -50, 384), vert(384, -50, -384), vert(384, -50, 384)}
 	makeTMD_G_4T(deadTMD, deadmanTIM, square(127), nm, v, -1)
-	initialiseTMD(deadTMD, 0, &deadOBJ)
+	initializeTMD(deadTMD, 0, &deadOBJ)
 
 	// Shots, blood and ricochets: the same quad, textured differently.
 	nm = norm(0, 0, -yaroze.ONE)
 	v = [4]demo.TMD_VERT{vert(-48, -432, 0), vert(48, -432, 0), vert(-48, -336, 0), vert(48, -336, 0)}
 	makeTMD_G_4T(bulletTMD, bulletTIM, square(15), nm, v, 1)
-	initialiseTMD(bulletTMD, 0, &bulletOBJ)
+	initializeTMD(bulletTMD, 0, &bulletOBJ)
 	makeTMD_G_4T(bullet2TMD, bullet2TIM, square(15), nm, v, 1)
-	initialiseTMD(bullet2TMD, 0, &bullet2OBJ)
+	initializeTMD(bullet2TMD, 0, &bullet2OBJ)
 	makeTMD_G_4T(bloodTMD, bloodTIM, square(15), nm, v, -1)
-	initialiseTMD(bloodTMD, 0, &bloodOBJ)
+	initializeTMD(bloodTMD, 0, &bloodOBJ)
 	makeTMD_G_4T(ricochetTMD, ricochetTIM, square(15), nm, v, 1)
-	initialiseTMD(ricochetTMD, 0, &ricochetOBJ)
+	initializeTMD(ricochetTMD, 0, &ricochetOBJ)
 
 	// A first aid box.
 	nm = norm(0, 0, -yaroze.ONE)
 	v = [4]demo.TMD_VERT{vert(-192, -384, 0), vert(192, -384, 0), vert(-192, 0, 0), vert(192, 0, 0)}
 	makeTMD_G_4T(healthTMD, healthTIM, square(63), nm, v, -1)
-	initialiseTMD(healthTMD, 0, &healthOBJ)
+	initializeTMD(healthTMD, 0, &healthOBJ)
 }
 
 // The exit's palettes: where they are in video memory, read back every

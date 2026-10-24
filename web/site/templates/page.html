@@ -132,7 +132,7 @@
         {{- end}}
       </article>
       {{- with prevnext $page}}
-      <nav class="prevnext" aria-label="Neighbouring pages">
+      <nav class="prevnext" aria-label="Neighboring pages">
         {{with .Prev}}<a class="prev" href="{{$root}}{{.URL}}"><small>Previous</small>{{.Title}}</a>{{else}}<span></span>{{end}}
         {{with .Next}}<a class="next" href="{{$root}}{{.URL}}"><small>Next</small>{{.Title}}</a>{{end}}
       </nav>

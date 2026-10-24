@@ -123,8 +123,8 @@ type Handler struct {
 // Objects is ObjectArray, every object in the game by ID.
 var Objects [MaxObjects]*Handler
 
-// InitialiseObjectClass empties Objects.
-func InitialiseObjectClass() {
+// InitializeObjectClass empties Objects.
+func InitializeObjectClass() {
 	for i := range Objects {
 		Objects[i] = nil
 	}
@@ -376,8 +376,8 @@ func LinkObjectHandlerToTmdObject(h *yaroze.GsDOBJ2, which int32, tmd yaroze.TMD
 	tmd.Link(h, which)
 }
 
-// ProperInitialiseTexture loads a TIM into VRAM, with its palette if it has
+// ProperInitializeTexture loads a TIM into VRAM, with its palette if it has
 // one, and describes it in img.
-func ProperInitialiseTexture(tim yaroze.TIM, img *yaroze.GsIMAGE) {
+func ProperInitializeTexture(tim yaroze.TIM, img *yaroze.GsIMAGE) {
 	*img = tim.Load()
 }

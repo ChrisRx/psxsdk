@@ -31,7 +31,7 @@
 // the documentation an editor shows is kept apart from what the generator
 // derives.
 //
-// Anything the type mapping does not recognise is an error rather than a
+// Anything the type mapping does not recognize is an error rather than a
 // guess. A binding that is quietly wrong is worse than one that is missing.
 package main
 

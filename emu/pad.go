@@ -71,7 +71,7 @@ type Pad struct {
 }
 
 // NewPad returns a controller of the given kind, its buttons up, its sticks
-// centred, unmoved and aimed at nothing.
+// centered, unmoved and aimed at nothing.
 func NewPad(kind PadKind) *Pad {
 	return &Pad{Kind: kind, buttons: 0xffff, axes: [4]uint8{0x80, 0x80, 0x80, 0x80}, tx: 0xff, ready: true}
 }
@@ -83,7 +83,7 @@ func (p *Pad) Press(buttons uint16) { p.buttons &^= buttons }
 func (p *Pad) Release(buttons uint16) { p.buttons |= buttons }
 
 // SetAxes sets the four bytes after the buttons: an analog controller's or a
-// joystick's right X, right Y, left X and left Y, 0x80 centred, or a
+// joystick's right X, right Y, left X and left Y, 0x80 centered, or a
 // neGcon's twist, I, II and L.
 func (p *Pad) SetAxes(a, b, c, d uint8) { p.axes = [4]uint8{a, b, c, d} }
 

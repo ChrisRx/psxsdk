@@ -51,7 +51,7 @@ type Options struct {
 	FileTimes   bool      // record each file's modification time instead of the volume date
 	Boot        string    // the executable to boot, written into a generated SYSTEM.CNF
 	Stack       uint32    // the stack pointer for that SYSTEM.CNF; 0 for defaultStack
-	License     string    // a file of licence data for the first 32KB
+	License     string    // a file of license data for the first 32KB
 	Padding     uint32    // empty sectors after the last file
 	Audio       []string  // files to record as CD audio tracks
 	Raw         []string  // more patterns for files of whole Mode 2 sectors
@@ -201,7 +201,7 @@ audio or streamed tracks but can be read by ordinary ISO 9660 tools.`,
 	f.BoolVar(&opts.FileTimes, "file-times", false, "record each file's modification time instead of the volume date")
 	f.StringVar(&opts.Boot, "boot", "", "executable to boot, written into a generated SYSTEM.CNF")
 	f.Var(&stack, "stack", "initial stack pointer written into a generated SYSTEM.CNF; values above the default grow over the BIOS's frame, which breaks returning from main")
-	f.StringVar(&opts.License, "license", "", "licence data for the first 32KB, needed only by unmodified hardware")
+	f.StringVar(&opts.License, "license", "", "license data for the first 32KB, needed only by unmodified hardware")
 	f.Uint32Var(&opts.Padding, "padding", psxdisc.StandardPadding, "empty sectors to leave after the last file, so that reading it does not run into the lead-out; 0 for none")
 	f.StringArrayVar(&opts.Audio, "audio", nil, "WAV or raw 44.1kHz 16-bit stereo file to record as a CD audio track; may be repeated")
 	f.StringArrayVar(&opts.Raw, "raw", nil, "also treat files matching this pattern as whole Mode 2 sectors; may be repeated")
@@ -366,16 +366,16 @@ func Build(opts Options) error {
 		OmitXA:      opts.NoXA,
 		Padding:     opts.Padding,
 		// The identification string alone is enough for an emulator to
-		// recognise the image as a PlayStation disc.
+		// recognize the image as a PlayStation disc.
 		SystemArea: psxdisc.SystemArea(),
 	}
 	if opts.License != "" {
-		// Booting real hardware also wants the licence data, which holds
+		// Booting real hardware also wants the license data, which holds
 		// the startup logo. It is Sony's and cannot be redistributed, so
 		// it comes from a file the user supplies.
 		data, err := os.ReadFile(opts.License)
 		if err != nil {
-			return fmt.Errorf("reading licence: %w", err)
+			return fmt.Errorf("reading license: %w", err)
 		}
 		isoOpts.SystemArea = data
 	}

@@ -10,7 +10,7 @@
 //	    020h  128 programs, 16 bytes each: tones, volume, priority, mode,
 //	          pan, attributes
 //	    820h  16 tones, 32 bytes each, for each program that has tones, in
-//	          program order: priority, mode, volume, pan, centre note and
+//	          program order: priority, mode, volume, pan, center note and
 //	          fine tune, the notes it plays, vibrato and portamento, pitch
 //	          bend range, the two ADSR words, its program and its VAG
 //	    ...   256 16-bit sizes of the VAGs, each divided by 8, the first 0
@@ -58,7 +58,7 @@ type Tone struct {
 	Volume       uint8
 	Pan          uint8
 	Center       uint8 // the note the sample sounds at its own rate
-	Shift        uint8 // fine tuning of the centre note, in 128ths of a semitone
+	Shift        uint8 // fine tuning of the center note, in 128ths of a semitone
 	Min, Max     uint8 // the notes the tone plays
 	VibW, VibT   uint8
 	PorW, PorT   uint8

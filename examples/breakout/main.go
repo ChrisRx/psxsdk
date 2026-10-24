@@ -164,7 +164,7 @@ var (
 
 func main() {
 	text.Init(textBuf[:])
-	if !initialiseAll() {
+	if !initializeAll() {
 		return
 	}
 
@@ -358,7 +358,7 @@ func dealWithNewScore(last *score, table []score) int {
 	return highest
 }
 
-func initialiseAll() bool {
+func initializeAll() bool {
 	yaroze.GsInitGraph(320, 240, 4, 0, 0)
 	yaroze.GsDefDispBuff(0, 0, 0, 240)
 
@@ -381,8 +381,8 @@ func initialiseAll() bool {
 		return false
 	}
 
-	initialiseObjects()
-	initialiseTexturesAndSprites()
+	initializeObjects()
+	initializeTexturesAndSprites()
 	clearBackground()
 
 	level = 1
@@ -417,7 +417,7 @@ func initGsSprite(s *yaroze.GsSPRITE) {
 	*s = yaroze.GsSPRITE{R: 0x80, G: 0x80, B: 0x80, Scalex: yaroze.ONE, Scaley: yaroze.ONE}
 }
 
-func initialiseObjects() {
+func initializeObjects() {
 	playersMovement = movement{w: 40, h: 8}
 	initGsSprite(&playersSprite)
 	playerSpeed = 3
@@ -501,12 +501,12 @@ const (
 	semiTransparent2  = 1 << 30
 )
 
-// initialiseTexturesAndSprites loads the textures into video memory, where
+// initializeTexturesAndSprites loads the textures into video memory, where
 // the demo chose to put them, and sets the sprites up to show them: the bat
 // is 8-bit and so twice as wide in the sprite as in the TIM; the brick is
 // 16-bit, drawn at a quarter of its size; and the ball is the 4-bit pattern
 // from the table, with the fifth of its palettes, drawn at half size.
-func initialiseTexturesAndSprites() {
+func initializeTexturesAndSprites() {
 	var image1, image2 yaroze.GsIMAGE
 
 	// The bat.

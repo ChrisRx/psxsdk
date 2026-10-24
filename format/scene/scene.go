@@ -17,7 +17,7 @@
 //	010h  the ambient light, R, G and B, 4096 as full, for GsSetAmbient
 //	01Ch  the camera: viewpoint X, Y, Z, reference point X, Y, Z, and the
 //	      twist, as GsRVIEW2 holds them
-//	038h  three lights, each direction X, Y, Z and a colour word R, G<<8,
+//	038h  three lights, each direction X, Y, Z and a color word R, G<<8,
 //	      B<<16, as GsF_LIGHT holds them; those past the count are zero
 //	068h  the textures, 32 bytes each: the TIM's path on the disc, as the
 //	      program registered it, NUL-padded
@@ -96,7 +96,7 @@ type Camera struct {
 	Twist int32    `json:"twist,omitempty"`
 }
 
-// A Light is a parallel light: the direction it shines in and its colour.
+// A Light is a parallel light: the direction it shines in and its color.
 type Light struct {
 	Direction [3]int32 `json:"direction"`
 	Color     [3]uint8 `json:"color"`

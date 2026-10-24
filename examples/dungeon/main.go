@@ -148,7 +148,7 @@ var ship struct {
 
 func main() {
 	text.Init(textBuf[:])
-	if !initialiseAll() {
+	if !initializeAll() {
 		return
 	}
 
@@ -466,7 +466,7 @@ func addFace(n int, px, py int32, face int, y int32, attribute uint32) int {
 	return n + 1
 }
 
-func initialiseAll() bool {
+func initializeAll() bool {
 	yaroze.PadInit()
 
 	yaroze.GsInitGraph(screenW, screenH, yaroze.GsINTER|yaroze.GsOFSGPU, 1, 0)
@@ -489,8 +489,8 @@ func initialiseAll() bool {
 		return false
 	}
 
-	initialiseView()
-	initialiseLighting()
+	initializeView()
+	initializeLighting()
 
 	stoneTIM.Load()
 	faces[backWall] = modelInit(wall0Data[:])
@@ -504,7 +504,7 @@ func initialiseAll() bool {
 	clearViewPoint()
 	nModels = calcWorldData()
 
-	initialiseTheShip()
+	initializeTheShip()
 	mainMode = moveView
 	return true
 }
@@ -528,7 +528,7 @@ func fail(what, detail string) {
 	yaroze.ResetGraph(3)
 }
 
-func initialiseTheShip() {
+func initializeTheShip() {
 	yaroze.GsInitCoordinate2(nil, &ship.coord)
 	ship.position = yaroze.VECTOR{Vx: 4000, Vy: 0, Vz: 4000} // near the start
 	ship.velocity = yaroze.VECTOR{}
@@ -584,7 +584,7 @@ func updateObjectCoordinates(twist, position, velocity *yaroze.VECTOR, c *yaroze
 	c.Flg = 0
 }
 
-func initialiseView() {
+func initializeView() {
 	yaroze.GsSetProjection(192)
 	pvect = yaroze.SVECTOR{}
 	view = yaroze.GsRVIEW2{
@@ -595,7 +595,7 @@ func initialiseView() {
 	yaroze.GsSetRefView2(&view)
 }
 
-func initialiseLighting() {
+func initializeLighting() {
 	lights[0] = yaroze.GsF_LIGHT{Vx: 1, Vy: 1, Vz: 1, R: 0x80, G: 0x80, B: 0x80}
 	yaroze.GsSetFlatLight(0, &lights[0])
 	lights[1] = yaroze.GsF_LIGHT{Vx: -1, Vy: -1, Vz: 1, R: 0x80, G: 0x80, B: 0x80}

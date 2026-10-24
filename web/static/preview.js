@@ -62,7 +62,7 @@ const preview = (() => {
   // uv is where the pixels start inside their page, in texels.
   function uv(tim) { return [(tim.pixels.x % 64) * 16 / tim.bits, tim.pixels.y % 256]; }
 
-  // rgba puts a 16-bit colour into out at i: 0x0000 is not drawn.
+  // rgba puts a 16-bit color into out at i: 0x0000 is not drawn.
   function rgba(c, out, i) {
     if (c === 0) {
       out[i + 3] = 0;
@@ -168,7 +168,7 @@ const preview = (() => {
 
   // polygons reads an object's packets into what the drawing needs: for
   // each polygon or line its vertex indices, its normal indices or none
-  // when it is not lit, a colour per vertex, and its texture.
+  // when it is not lit, a color per vertex, and its texture.
   function polygons(o) {
     const out = [];
     const lo = (w) => w & 0xffff;
@@ -257,7 +257,7 @@ const preview = (() => {
       }
     }
 
-    // texel returns the 16-bit colour at u, v of a texture page, through
+    // texel returns the 16-bit color at u, v of a texture page, through
     // its palette for the indexed modes.
     texel(tpage, cba, u, v) {
       const mode = tpage >> 7 & 3;
@@ -359,7 +359,7 @@ const preview = (() => {
   }
 
   // fillTriangle rasterizes one triangle into out, an ImageData's bytes,
-  // with its corners' colours, shades (a factor per channel, from the
+  // with its corners' colors, shades (a factor per channel, from the
   // lights) and texture coordinates interpolated across it, the texture
   // read from vram; ids, when given, gets id at each pixel drawn, for
   // picking.

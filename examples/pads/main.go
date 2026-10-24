@@ -11,7 +11,7 @@
 //
 // The standard controller and the analog controller move the cursor with
 // the direction buttons, and an analog controller or joystick with its left
-// stick too, past a dead zone, since a stick at rest is near its centre
+// stick too, past a dead zone, since a stick at rest is near its center
 // rather than on it. A mouse moves it by what it reports moving each frame.
 // A neGcon steers it with its twist, and I and II move it up and down. A
 // GunCon puts it where the gun points, scaled from the gun's units, the

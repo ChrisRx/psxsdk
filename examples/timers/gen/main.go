@@ -1,5 +1,5 @@
 // Command gen draws the timers example's sprite, a 16 by 16 ball in sixteen
-// colours, which png2tim turns into a 4-bit TIM.
+// colors, which png2tim turns into a 4-bit TIM.
 package main
 
 import (

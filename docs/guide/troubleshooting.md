@@ -58,7 +58,7 @@ A Go panic on the console prints its message and stops, and the picture freezes.
 - **`SsSetMVol` was never called.** Nothing sounds without it.
 - **The bank did not open.** `OpenBank` reports it. A bank too big for the SPU's 512 KB with another one open, or a VH and VB swapped, will not open.
 - **The music plays silence or the wrong instruments.** A sequence plays the bank's programs by the numbers its MIDI file used, so the bank needs programs with those numbers.
-- **A sound is off key.** A tone plays its sample as recorded at its centre note. Give the note the sample was recorded at, middle C being 60. A very short sample sounds off key whatever the note ([the FAQ](../manuals/faq.md#my-sample-seems-off-key)).
+- **A sound is off key.** A tone plays its sample as recorded at its center note. Give the note the sample was recorded at, middle C being 60. A very short sample sounds off key whatever the note ([the FAQ](../manuals/faq.md#my-sample-seems-off-key)).
 
 ## The controller
 

@@ -201,7 +201,7 @@ func (f *discFlags) register(cmd *cobra.Command) {
 	fl.StringVar(&f.volumeID, "volume-id", "", "the disc label, the package directory's name with .exe if not given")
 	fl.StringArrayVar(&f.files, "file", nil, "DISC=HOST: also place a host file at a path on the disc; may be repeated")
 	fl.StringArrayVar(&f.audio, "audio", nil, "a WAV or raw 44.1kHz 16-bit stereo file to record as a CD audio track; may be repeated")
-	fl.StringVar(&f.license, "license", "", "licence data for the first 32KB, which only unmodified hardware needs")
+	fl.StringVar(&f.license, "license", "", "license data for the first 32KB, which only unmodified hardware needs")
 	fl.StringVar(&f.elf, "elf", "", "also write the ELF, for its symbols")
 }
 

@@ -55,7 +55,7 @@ type Controller struct {
 
 	// Axes are the four bytes after the buttons. An analog controller's or
 	// joystick's are its right stick's X and Y and its left stick's X and Y,
-	// 0 to 255 and about 128 when centred, X growing to the right and Y
+	// 0 to 255 and about 128 when centered, X growing to the right and Y
 	// downwards. A neGcon's are its twist, about 128 when straight, and how
 	// far I, II and L are pressed.
 	Axes [4]uint8
@@ -102,7 +102,7 @@ func ReadController(port int) Controller {
 
 // Stick returns an analog controller's or joystick's left (0) or right (1)
 // stick as -128 to 127 across and down, with a dead zone of dead either
-// side of the centre reported as 0, as Sony's checklist asks of a game:
+// side of the center reported as 0, as Sony's checklist asks of a game:
 // the sticks rest near 128, not on it.
 func (c Controller) Stick(n, dead int) (x, y int) {
 	i := 0

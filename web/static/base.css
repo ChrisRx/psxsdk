@@ -1,7 +1,7 @@
 /* What the playground, the player and the documentation share: Barlow,
-   served from fonts/ under the OFL, the colour tokens, and the theme
+   served from fonts/ under the OFL, the color tokens, and the theme
    switch. The pages are drawn after the hardware the programs were written
-   for: the grey PlayStation in light mode, the black Net Yaroze in dark. */
+   for: the gray PlayStation in light mode, the black Net Yaroze in dark. */
 
 @font-face { font-family: Barlow; font-weight: 400; font-display: swap; src: url(fonts/barlow-400.woff2) format("woff2"); }
 @font-face { font-family: Barlow; font-weight: 500; font-display: swap; src: url(fonts/barlow-500.woff2) format("woff2"); }

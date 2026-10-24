@@ -33,7 +33,7 @@ func main() {
 beside its sound with the extension .VAG unless -o names the one output.
 Stereo is mixed down to mono, since a voice plays one channel. The rate is
 the file's: the SPU plays a VAG at any rate, set by the tone's pitch, but a
-VAB plays it at its own rate only at the tone's centre note.
+VAB plays it at its own rate only at the tone's center note.
 
 Each block of 28 samples is encoded with the filter and shift that decode
 closest to it, worked out with the SPU's own arithmetic, which comes out a

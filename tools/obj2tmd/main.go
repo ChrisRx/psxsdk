@@ -44,7 +44,7 @@ projection.
 
 Faces are lit by the library, flat with a normal worked out from each face,
 or with --smooth gouraud with the file's vertex normals. --unlit draws the
-colours, or the textures, as they are. A material's Kd is the colour of an
+colors, or the textures, as they are. A material's Kd is the color of an
 untextured face. A material with map_Kd is textured from a TIM made with
 png2tim: the map's name with the extension .TIM beside the MTL file, or in
 the directory --textures names, such as the program's data, under the map's
@@ -62,7 +62,7 @@ says; --both makes two faces of each, back to back, instead.`,
 	f.StringVarP(&opts.Output, "output", "o", "", "where to write the TMD")
 	f.Float64VarP(&opts.Scale, "scale", "s", 100, "multiply coordinates by this")
 	f.BoolVar(&opts.Smooth, "smooth", false, "gouraud shading with the vertex normals")
-	f.BoolVar(&opts.Unlit, "unlit", false, "draw colours and textures as they are, unlit")
+	f.BoolVar(&opts.Unlit, "unlit", false, "draw colors and textures as they are, unlit")
 	f.BoolVar(&opts.Both, "both", false, "make every face two-sided, with a second face back to back")
 	f.StringVar(&opts.Textures, "textures", "", "a directory to look for the maps' TIMs in, after the MTL file's")
 

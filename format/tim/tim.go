@@ -13,9 +13,9 @@
 //	        width in 16-bit units, height (16 bits each)
 //	        the 16-bit units, a row at a time
 //
-// A 16-bit colour is 5 bits each of red, green and blue from the low bit,
+// A 16-bit color is 5 bits each of red, green and blue from the low bit,
 // and STP in bit 15. The GPU skips a texel of 0x0000 entirely, which is how
-// sprites and textures are transparent; STP on any other colour makes the
+// sprites and textures are transparent; STP on any other color makes the
 // texel semitransparent when the primitive asks for it, so 0x8000 is a
 // black that is drawn.
 package tim
@@ -35,10 +35,10 @@ const ID = 0x10
 type Mode int
 
 const (
-	Mode4  Mode = 0 // 4-bit indices into a 16-colour CLUT, four to a unit
-	Mode8  Mode = 1 // 8-bit indices into a 256-colour CLUT, two to a unit
-	Mode16 Mode = 2 // 16-bit colours, one to a unit
-	Mode24 Mode = 3 // 24-bit colours, two in three units, for display only
+	Mode4  Mode = 0 // 4-bit indices into a 16-color CLUT, four to a unit
+	Mode8  Mode = 1 // 8-bit indices into a 256-color CLUT, two to a unit
+	Mode16 Mode = 2 // 16-bit colors, one to a unit
+	Mode24 Mode = 3 // 24-bit colors, two in three units, for display only
 )
 
 // Bits returns the bits per pixel.
@@ -47,7 +47,7 @@ func (m Mode) Bits() int { return [...]int{4, 8, 16, 24}[m] }
 // Indexed reports whether the pixels index a CLUT.
 func (m Mode) Indexed() bool { return m == Mode4 || m == Mode8 }
 
-// Colors returns how many colours one CLUT holds, 0 for a direct mode.
+// Colors returns how many colors one CLUT holds, 0 for a direct mode.
 func (m Mode) Colors() int {
 	switch m {
 	case Mode4:
@@ -224,12 +224,12 @@ func (t *TIM) Index(x, y int) int {
 	case Mode8:
 		return int(unit>>(8*(x%2))) & 255
 	}
-	panic("tim: Index of a direct colour image")
+	panic("tim: Index of a direct color image")
 }
 
-// Color returns the 16-bit colour of the pixel at (x, y), looked up in the
+// Color returns the 16-bit color of the pixel at (x, y), looked up in the
 // palette on row pal of the CLUT for an indexed image. A 24-bit image has
-// none, and its colour is narrowed to 15 bits with STP clear.
+// none, and its color is narrowed to 15 bits with STP clear.
 func (t *TIM) Color(x, y, pal int) uint16 {
 	switch t.Mode {
 	case Mode16:
@@ -246,7 +246,7 @@ func (t *TIM) Color(x, y, pal int) uint16 {
 
 // Image returns the image as Go sees it, with the palette on row pal of the
 // CLUT for an indexed one: an *image.Paletted for an indexed image, an
-// *image.NRGBA otherwise. A colour of 0x0000 is transparent, as the GPU
+// *image.NRGBA otherwise. A color of 0x0000 is transparent, as the GPU
 // draws it.
 func (t *TIM) Image(pal int) image.Image {
 	r := image.Rect(0, 0, t.Width(), t.Height())
@@ -276,7 +276,7 @@ func (t *TIM) Image(pal int) image.Image {
 	return img
 }
 
-// RGBA returns the colour a 16-bit PlayStation colour is, widening each
+// RGBA returns the color a 16-bit PlayStation color is, widening each
 // 5-bit component to 8 bits. 0x0000 is transparent.
 func RGBA(c uint16) color.NRGBA {
 	if c == 0 {

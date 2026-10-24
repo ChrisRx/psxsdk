@@ -26,12 +26,12 @@ Flies move a random small amount every frame, which reads as buzzing, and a wave
 
 ## States
 
-A game puts behaviours like these behind a state, which the enemy changes when something happens: it sees the player, it is hit, a timer runs out. Here the state changes at random every few seconds, the start of every game's state machine:
+A game puts behaviors like these behind a state, which the enemy changes when something happens: it sees the player, it is hit, a timer runs out. Here the state changes at random every few seconds, the start of every game's state machine:
 
 ```go src=../../examples/ai/main.go#changeStates
 ```
 
-The enemy's state is one variable, and each frame does what that state says. Adding a behaviour is adding a state, and the conditions for leaving it.
+The enemy's state is one variable, and each frame does what that state says. Adding a behavior is adding a state, and the conditions for leaving it.
 
 <!-- player ai -->
 

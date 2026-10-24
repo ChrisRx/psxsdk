@@ -63,7 +63,7 @@ func parseCommand(args []string) (command, error) {
 // edited are the TMDs whose sources changed after they were linked, by the
 // last two directories and the name.
 var edited = map[string]string{
-	"3DRA/MAP/TREE.TMD": "its MAT colours polygon 14 red, where the TMD has it green",
+	"3DRA/MAP/TREE.TMD": "its MAT colors polygon 14 red, where the TMD has it green",
 }
 
 // TestArchive links the RSD models in the Net Yaroze websites' archive

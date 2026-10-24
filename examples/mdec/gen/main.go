@@ -38,7 +38,7 @@ func cross(a, b vec) vec {
 }
 
 type sphere struct {
-	centre vec
+	center vec
 	radius float64
 	color  vec
 }
@@ -50,7 +50,7 @@ var light = norm(vec{-0.5, 1, -0.6})
 func hit(o, d vec, spheres []sphere) (float64, int) {
 	t, which := math.Inf(1), -1
 	for i, s := range spheres {
-		oc := sub(o, s.centre)
+		oc := sub(o, s.center)
 		b := dot(oc, d)
 		h := b*b - dot(oc, oc) + s.radius*s.radius
 		if h <= 0 {
@@ -89,7 +89,7 @@ func trace(o, d vec, spheres []sphere, depth int) vec {
 
 	s := spheres[which]
 	p := add(o, mul(d, t))
-	n := norm(sub(p, s.centre))
+	n := norm(sub(p, s.center))
 	diffuse := math.Max(dot(n, light), 0)
 	specular := math.Pow(math.Max(dot(n, norm(sub(light, d))), 0), 40)
 	c := add(mul(s.color, 0.15+0.75*diffuse), vec{specular, specular, specular})

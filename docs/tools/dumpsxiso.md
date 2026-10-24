@@ -19,7 +19,7 @@ volume MYGAME, 789 blocks
   \DATA\SOUND\SAMPLE1.SEQ;1                   5000 bytes  LBA 636
 ```
 
-With `--output` the tree is extracted to a directory, and what comes out can be handed straight back to `mkdisc`. A `.bin` of raw sectors and a `.iso` of 2048-byte blocks are both accepted; which one it is follows from the image itself. Streamed files come out as the 2336-byte sectors they went in as, recognised by their CD-XA attributes rather than their names.
+With `--output` the tree is extracted to a directory, and what comes out can be handed straight back to `mkdisc`. A `.bin` of raw sectors and a `.iso` of 2048-byte blocks are both accepted; which one it is follows from the image itself. Streamed files come out as the 2336-byte sectors they went in as, recognized by their CD-XA attributes rather than their names.
 
 Reading a raw image checks every sector's error detection, so a damaged image is reported rather than quietly extracted. A sector of a filesystem is the kind that is meant to be read correctly or not at all, and a file recovered from a failing one is a file the console itself would refuse.
 

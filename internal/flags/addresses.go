@@ -7,7 +7,7 @@ import (
 )
 
 // Addresses is a repeatable flag of memory addresses, each written as
-// Address is: in hexadecimal with 0x, or in any base strconv recognises.
+// Address is: in hexadecimal with 0x, or in any base strconv recognizes.
 type Addresses []uint32
 
 func (a *Addresses) String() string {

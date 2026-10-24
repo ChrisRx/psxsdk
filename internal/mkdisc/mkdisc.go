@@ -110,7 +110,7 @@ type Options struct {
 	// Padding is the run-out after the last file, in sectors.
 	Padding uint32
 
-	// License is a file of licence data for the system area, the first 32KB
+	// License is a file of license data for the system area, the first 32KB
 	// of the disc, in place of the identification string alone.
 	License string
 

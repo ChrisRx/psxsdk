@@ -89,7 +89,7 @@ type Options struct {
 	Padding uint32
 
 	// SystemArea is written to the first 32KB. On a real PlayStation this
-	// is where the licence data goes; an emulator does not need it.
+	// is where the license data goes; an emulator does not need it.
 	SystemArea []byte
 }
 

@@ -1,5 +1,5 @@
 // Command gen draws the card example's save icon: 16 by 16 pixels in
-// sixteen colours, which png2tim turns into a 4-bit TIM whose pixels and
+// sixteen colors, which png2tim turns into a 4-bit TIM whose pixels and
 // palette are the icon's, as the card's header wants them.
 package main
 

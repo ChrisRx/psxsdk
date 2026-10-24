@@ -19,7 +19,7 @@ The [tiles](../examples/tiles.md) example cuts sixteen cells from the SCEE tutor
 
 ## Tiles in video memory
 
-A cell is 16 by 16 pixels within one texture page, 256 by 256, so a page holds 256 of them. Cells of 8 bits each use a palette of 256 colours, and of 4 bits each one of 16, half the memory again. The tutorial's tiles are 8-bit, at 320, 0 in video memory beside the display buffers, with the palette at 320, 509 below them. [Making data](../guide/data.md) plans where images go.
+A cell is 16 by 16 pixels within one texture page, 256 by 256, so a page holds 256 of them. Cells of 8 bits each use a palette of 256 colors, and of 4 bits each one of 16, half the memory again. The tutorial's tiles are 8-bit, at 320, 0 in video memory beside the display buffers, with the palette at 320, 509 below them. [Making data](../guide/data.md) plans where images go.
 
 A 0xffff in the map leaves a cell empty, so a background over another shows through it. Two backgrounds scrolled at different speeds, a near one over a far one, are the parallax of many 2D games.
 

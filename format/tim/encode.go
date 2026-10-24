@@ -21,8 +21,8 @@ const (
 // Options says how Encode lays an image out.
 type Options struct {
 	// Mode is the pixel mode, or Auto to choose: an indexed picture with
-	// at most 16 colours is 4-bit, one with at most 256 is 8-bit, and any
-	// other picture with that few colours is the same; the rest are 16-bit.
+	// at most 16 colors is 4-bit, one with at most 256 is 8-bit, and any
+	// other picture with that few colors is the same; the rest are 16-bit.
 	Mode Mode
 
 	// X, Y is where the pixels go in video memory. A texture page is 64
@@ -37,7 +37,7 @@ type Options struct {
 	// under half is transparent, 0x0000, whatever this says.
 	Black Black
 
-	// Semi sets STP on every colour that is drawn, so that the whole image
+	// Semi sets STP on every color that is drawn, so that the whole image
 	// blends when a sprite or a polygon turns semitransparency on.
 	Semi bool
 }
@@ -47,7 +47,7 @@ const Auto Mode = -1
 
 // Encode makes a TIM of img. An *image.Paletted keeps its palette and its
 // indices, so that an image drawn for a palette keeps the order the program
-// may depend on; any other image is reduced to the mode's colours by median
+// may depend on; any other image is reduced to the mode's colors by median
 // cut when it has more. Widths are padded to a whole number of 16-bit
 // units, four pixels for 4-bit and two for 8-bit, with index 0.
 func Encode(img image.Image, o Options) (*TIM, error) {
@@ -65,7 +65,7 @@ func Encode(img image.Image, o Options) (*TIM, error) {
 
 	var idx []uint8     // indices, row by row, for an indexed result
 	var pal []uint16    // the palette they index
-	var direct []uint16 // colours, row by row, for a 16-bit result
+	var direct []uint16 // colors, row by row, for a 16-bit result
 
 	if p, ok := img.(*image.Paletted); ok {
 		used := 0
@@ -160,7 +160,7 @@ func (o Options) direct24(img image.Image) *TIM {
 	return &TIM{Mode: Mode24, Pixels: Block{X: o.X, Y: o.Y, W: units, H: h, Data: data}}
 }
 
-// color is c as a 16-bit colour, with the options' rules for transparency.
+// color is c as a 16-bit color, with the options' rules for transparency.
 func (o Options) color(c color.Color) uint16 {
 	n := color.NRGBAModel.Convert(c).(color.NRGBA)
 	if n.A < 128 {
@@ -194,7 +194,7 @@ func (o Options) indexed(mode Mode, w, h int, idx []uint8, pal []uint16) (*TIM, 
 	}, nil
 }
 
-// distinct returns the colours in cs, each once, in the order first seen.
+// distinct returns the colors in cs, each once, in the order first seen.
 func distinct(cs []uint16) []uint16 {
 	seen := map[uint16]bool{}
 	var out []uint16
@@ -207,9 +207,9 @@ func distinct(cs []uint16) []uint16 {
 	return out
 }
 
-// quantize returns at most n colours for cs: the colours themselves when
+// quantize returns at most n colors for cs: the colors themselves when
 // there are few enough, or else the averages of the boxes a median cut of
-// their colour space makes. Transparency, 0x0000, keeps an entry of its own,
+// their color space makes. Transparency, 0x0000, keeps an entry of its own,
 // index 0, so that it stays exact.
 func quantize(cs []uint16, n int) []uint16 {
 	d := distinct(cs)
@@ -306,7 +306,7 @@ func quantize(cs []uint16, n int) []uint16 {
 	return out
 }
 
-// nearest returns the index of the colour in pal closest to c. Only
+// nearest returns the index of the color in pal closest to c. Only
 // transparency matches transparency.
 func nearest(pal []uint16, c uint16) uint8 {
 	best, dist := 0, 1<<30

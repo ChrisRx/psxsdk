@@ -21,7 +21,7 @@ const (
 	LogicalBlockSize = 2048
 
 	// SystemAreaSectors is the 32KB reserved before the first volume
-	// descriptor. On a PlayStation disc this holds the licence data.
+	// descriptor. On a PlayStation disc this holds the license data.
 	SystemAreaSectors = 16
 
 	// PVDSector is where the primary volume descriptor lives, immediately

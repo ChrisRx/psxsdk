@@ -39,7 +39,7 @@ that packs its images into one file.`,
 	}
 	f := cmd.Flags()
 	f.StringVarP(&opts.Output, "output", "o", "", "where to write the PNG, for one TIM")
-	f.IntVarP(&opts.Palette, "palette", "p", 0, "the CLUT row to colour an indexed image with")
+	f.IntVarP(&opts.Palette, "palette", "p", 0, "the CLUT row to color an indexed image with")
 	f.IntVar(&opts.Offset, "offset", 0, "where in the file the TIM starts, in bytes")
 
 	if err := cmd.Execute(); err != nil {

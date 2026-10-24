@@ -130,7 +130,7 @@ func main() {
 
 	makeColorMap()
 	makeBigTMDGouraudQuad(lightTMD)
-	initialiseTMD(lightTMD, 0, &lightOBJ)
+	initializeTMD(lightTMD, 0, &lightOBJ)
 	sheetAddr := uintptr(unsafe.Pointer(&sheetData[0]))
 
 	mainViewMatrix = yaroze.IDMATRIX
@@ -193,9 +193,9 @@ func makeColorMap() {
 	}
 }
 
-// initialiseTMD ties a handle to an object of the TMD, giving it a
+// initializeTMD ties a handle to an object of the TMD, giving it a
 // coordinate system of its own.
-func initialiseTMD(tmd yaroze.TMD, objNum int32, obj *yaroze.GsDOBJ2) {
+func initializeTMD(tmd yaroze.TMD, objNum int32, obj *yaroze.GsDOBJ2) {
 	tmd.Map()
 	tmd.Link(obj, objNum)
 	lightCoord.Init(yaroze.WORLD)

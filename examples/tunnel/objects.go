@@ -144,9 +144,9 @@ var (
 	numberPositions        int32
 )
 
-func initialiseObjects() {
-	lpge.InitialiseObjectClass()
-	initialiseEnemyMovementGlobals()
+func initializeObjects() {
+	lpge.InitializeObjectClass()
+	initializeEnemyMovementGlobals()
 	playersLives = initialNumberOfLives
 	levelNumber = 1
 	playerInteractive = true
@@ -305,7 +305,7 @@ func initialiseObjects() {
 	for i := range specialObjects {
 		o := &specialObjects[i]
 		o.Alive = false
-		// One mascot each from the texture. The original centres them
+		// One mascot each from the texture. The original centers them
 		// on the cubes' middles, not their own.
 		o.Sprite.W, o.Sprite.H = 34, 60
 		o.Sprite.U += uint8(i * 34)
@@ -317,7 +317,7 @@ func initialiseObjects() {
 	theRobot.Alive = false
 }
 
-func initialiseEnemyMovementGlobals() {
+func initializeEnemyMovementGlobals() {
 	enemyWaveFrequency = 200
 	robotFrequency = 2000
 	tieFighterMovementSpeed = 5
@@ -337,7 +337,7 @@ func initialiseEnemyMovementGlobals() {
 	robotFiringPeriod = 80
 }
 
-func initialiseTunnel() {
+func initializeTunnel() {
 	sectionLength = squareSize
 	tunnelWidth = squareSize * 3 / 2
 	tunnelHeight = squareSize
@@ -931,7 +931,7 @@ func handleObjectContinuousFiring(o *lpge.Handler, dir *yaroze.VECTOR) {
 // towards dir.
 func objectFiresAShot(o *lpge.Handler, dir *yaroze.VECTOR) {
 	d := *dir
-	normaliseVector(&d)
+	normalizeVector(&d)
 
 	var p *lpge.Handler
 	switch o.ShotType {
@@ -959,10 +959,10 @@ func objectFiresAShot(o *lpge.Handler, dir *yaroze.VECTOR) {
 	turnOnSound(1, 0, 60, 1, 10, 48, 48)
 }
 
-// normaliseVector scales a vector to a length of ONE, each component
+// normalizeVector scales a vector to a length of ONE, each component
 // truncated towards zero as the original's floating point does: the
 // magnitude of v·ONE/|v| is the integer square root of v²·ONE²/|v|².
-func normaliseVector(v *yaroze.VECTOR) {
+func normalizeVector(v *yaroze.VECTOR) {
 	sum := uint64(int64(v.Vx)*int64(v.Vx) + int64(v.Vy)*int64(v.Vy) + int64(v.Vz)*int64(v.Vz))
 	if sum == 0 {
 		return

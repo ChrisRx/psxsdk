@@ -34,7 +34,7 @@ type face struct {
 
 type corner struct{ v, vt, vn int }
 
-// A material is what a face takes from an MTL file: its diffuse colour and
+// A material is what a face takes from an MTL file: its diffuse color and
 // texture.
 type material struct {
 	color   [3]float64
