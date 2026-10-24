@@ -1,5 +1,7 @@
 package yaroze
 
+import "unsafe"
+
 // A TMD is a model file in memory, as the drive delivers it: the words of
 // the file, which after Map hold the addresses of each object's vertices,
 // normals and primitives. A program reads one with package disc and links
@@ -36,3 +38,17 @@ func (t TMD) Link(obj *GsDOBJ2, n int32) { GsLinkObject4(&t[3], obj, n) }
 //
 //go:inline
 func (t TMD) Table() *uint32 { return &t[3] }
+
+// Vertices returns the nth model's vertices, in the file's own memory,
+// after Map: a program that moves a model's vertices, as the dino example
+// does with the GTE's interpolation, changes them in place. The object
+// table holds seven words a model: the vertices' address and count, the
+// normals', the primitives', and the scale.
+func (t TMD) Vertices(n int) []SVECTOR {
+	return unsafe.Slice((*SVECTOR)(Pointer(uintptr(t[3+7*n]))), t[4+7*n])
+}
+
+// Normals returns the nth model's normals, as Vertices does.
+func (t TMD) Normals(n int) []SVECTOR {
+	return unsafe.Slice((*SVECTOR)(Pointer(uintptr(t[5+7*n]))), t[6+7*n])
+}

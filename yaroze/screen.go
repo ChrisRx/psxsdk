@@ -75,7 +75,23 @@ type Screen struct {
 	// flushes it.
 	font int32
 	text bool
+
+	// fields is how many fields the last frame took, and lastField the
+	// count of fields at its end, from VSync(-1).
+	fields    int
+	lastField int32
 }
+
+// Fields is how many fields, vertical blanks, the last frame took: 1 when
+// it was drawn within one, 2 when its work ran past the blank and End
+// waited for the next, which halves the frame rate while it lasts. A
+// game that moves things a fixed amount a frame can move them that many
+// times, so that the game's speed holds whatever is on the screen:
+//
+//	for range min(screen.Fields(), 2) {
+//		player.step()
+//	}
+func (s *Screen) Fields() int { return max(s.fields, 1) }
 
 // Open sets up the display and the screen. It puts the console in its own
 // video mode, NativeVideoMode, sixty frames a second or fifty, and fills in
@@ -216,6 +232,9 @@ func (s *Screen) End() int32 {
 	} else {
 		n = VSync(0)
 	}
+	f := VSync(-1)
+	s.fields = int(f - s.lastField)
+	s.lastField = f
 	GsSwapDispBuff()
 	GsSortClear(s.Background.R, s.Background.G, s.Background.B, ot)
 	GsDrawOt(ot)

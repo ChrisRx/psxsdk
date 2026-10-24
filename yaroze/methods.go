@@ -236,6 +236,47 @@ func (im GsIMAGE) Sprite() GsSPRITE {
 	}
 }
 
+// A Texture is an image in video memory as a textured polygon's packet
+// names it: the corner of its texture page its pixels are at, the page,
+// and its palette. Texture cuts one from an image, and the methods give
+// the words a packet's corners take.
+type Texture struct {
+	U, V  uint8
+	Tpage uint16
+	Clut  uint16
+}
+
+// Texture returns how a packet names the image, once it is in video
+// memory, as Sprite does for a sprite.
+func (im GsIMAGE) Texture() Texture {
+	s := im.Sprite()
+	return Texture{U: s.U, V: s.V, Tpage: s.Tpage, Clut: uint16(s.Cy)<<6 | uint16(s.Cx)>>4}
+}
+
+// WithClut is the word of a textured polygon's first corner: the texel at
+// u, v from the texture's corner, with the palette.
+//
+//go:inline
+func (t Texture) WithClut(u, v uint8) uint32 {
+	return uint32(t.U+u) | uint32(t.V+v)<<8 | uint32(t.Clut)<<16
+}
+
+// WithPage is the word of a textured polygon's second corner: the texel
+// with the texture page.
+//
+//go:inline
+func (t Texture) WithPage(u, v uint8) uint32 {
+	return uint32(t.U+u) | uint32(t.V+v)<<8 | uint32(t.Tpage)<<16
+}
+
+// Texel is the word of a textured polygon's other corners: the texel
+// alone.
+//
+//go:inline
+func (t Texture) Texel(u, v uint8) uint32 {
+	return uint32(t.U+u) | uint32(t.V+v)<<8
+}
+
 // Load is LoadImage: it copies pixels from memory at p into the rectangle.
 //
 //go:inline
