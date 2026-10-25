@@ -2,16 +2,6 @@ module go.chrisrx.dev/psx
 
 go 1.27
 
-tool (
-	go.chrisrx.dev/psx/tools/discgen
-	go.chrisrx.dev/psx/tools/dumpsxiso
-	go.chrisrx.dev/psx/tools/eco2exe
-	go.chrisrx.dev/psx/tools/elf2exe
-	go.chrisrx.dev/psx/tools/mips1fix
-	go.chrisrx.dev/psx/tools/mkdisc
-	go.chrisrx.dev/psx/tools/mkpsxiso
-)
-
 require (
 	github.com/ChrisRx/wazero v0.0.0-20261022122953-787716494703
 	github.com/alecthomas/chroma/v2 v2.27.0
