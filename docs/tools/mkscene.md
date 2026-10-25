@@ -5,6 +5,8 @@ weight: 21
 
 `mkscene` cooks a scene, written as JSON by the playground's scene editor or by hand, into a DAT, the file a program reads off its disc and draws with [`scene`](scene), laid out as [`format/scene`](format/scene) describes.
 
+[`yaroze`](yaroze.md) has it as `yaroze scene`, with the same flags.
+
 ```bash
 $ mkscene -o assets/CUBES.DAT scenes/cubes.json
 created "assets/CUBES.DAT": 232 bytes, 1 object, 0 sprites, 1 light, camera at 0,0,-1000 looking at 0,0,0

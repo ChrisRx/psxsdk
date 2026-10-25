@@ -5,6 +5,8 @@ weight: 20
 
 `obj2tmd` converts a Wavefront OBJ model, which Blender and most 3D programs export, into a TMD, the model format `GsSortObject4` draws, laid out as [`format/tmd`](format/tmd) describes.
 
+[`yaroze`](yaroze.md) has it as `yaroze tmd`, with the same flags.
+
 ```bash
 $ png2tim --at 640,0 --clut 0,480 stone.png
 $ obj2tmd --scale 64 cube.obj

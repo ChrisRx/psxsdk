@@ -5,6 +5,8 @@ weight: 18
 
 `smf2seq` converts Standard MIDI Files into SEQ files, the scores the sound library plays with `SsSeqOpen` and `SsSeqPlay` on a VAB's programs, as Sony's smf2seq did.
 
+[`yaroze`](yaroze.md) has it as `yaroze seq`, with the same flags.
+
 ```bash
 $ smf2seq -V test.mid
 created "test.SEQ": 75 events, 120 ticks a quarter note, 120.0 beats a minute

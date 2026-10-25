@@ -5,6 +5,8 @@ weight: 17
 
 `mkvab` builds a VAB, a bank of sounds the SPU plays, from a definition file and VAG files made with [`wav2vag`](wav2vag.md), as Sony's mkvab did, and `vabsplit` splits a bank into the two halves a program loads: the VH, the bank's header, which stays in main memory, and the VB, the samples, which go to the SPU's memory. `--split` writes the two directly.
 
+[`yaroze`](yaroze.md) has it as `yaroze vab`, with the same flags.
+
 ```bash
 $ mkvab -f waves.def -o WAVES.VAB --split sine.VAG square.VAG triangle.VAG
 created "WAVES.VH" and "WAVES.VB": 3 programs, 3 VAGs, 42048 bytes

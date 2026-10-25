@@ -11,4 +11,6 @@ The linux version of siocons, found on the [psxdev.net forums](http://www.psxdev
 $ sioload --exec main-ecoff
 ```
 
+[`yaroze`](yaroze.md) has it as `yaroze sio`, with the same flags.
+
 It has been reliable at every baud rate tested, using a Net Yaroze DTL-H3050 serial cable through a [TRENDnet USB to Serial converter](https://www.amazon.com/dp/B0007T27H8/ref=cm_sw_em_r_mt_dp_U_FHmgEbZAAPNX5).

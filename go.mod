@@ -11,12 +11,11 @@ require (
 	github.com/spf13/pflag v1.0.9
 	github.com/yuin/goldmark v1.8.6
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
-	go.bug.st/serial v1.0.0
+	go.bug.st/serial v1.8.0
 	go.chrisrx.dev/x v0.0.0-20261015142902-ad113d4a3a98
 )
 
 require (
-	github.com/creack/goselect v0.1.1 // indirect
 	github.com/dlclark/regexp2/v2 v2.2.1 // indirect
 	github.com/ebitengine/gomobile v0.0.0-20260820040257-d11f821a26a6 // indirect
 	github.com/ebitengine/hideconsole v1.0.0 // indirect

@@ -1,4 +1,4 @@
-package main
+package obj2tmd
 
 import (
 	"fmt"
@@ -64,9 +64,8 @@ func TestCube(t *testing.T) {
 	path := filepath.Join(dir, "cube.obj")
 	assert.NoError(t, os.WriteFile(path, []byte(obj.String()), 0o644))
 
-	opts.Scale, opts.Output = 1, filepath.Join(dir, "out.TMD")
-	defer func() { opts.Scale, opts.Output = 100, "" }()
-	if !assert.NoError(t, run(nil, []string{path})) {
+	opts := &options{Scale: 1, Output: filepath.Join(dir, "out.TMD")}
+	if !assert.NoError(t, run(opts, []string{path})) {
 		t.FailNow()
 	}
 	b, err = os.ReadFile(opts.Output)

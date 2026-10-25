@@ -5,6 +5,8 @@ weight: 16
 
 `wav2vag` encodes sounds into VAG files, the SPU's ADPCM, which a program plays as a sound effect or puts in a VAB as an instrument with [`mkvab`](mkvab.md). It does what Sony's aiff2vag did, and reads WAV and AIFF files of 8 or 16 bits, mixing stereo down to mono.
 
+[`yaroze`](yaroze.md) has it as `yaroze vag`, with the same flags.
+
 ```bash
 $ wav2vag MYU.AIF
 created "MYU.VAG": 4518 samples at 22254 Hz, 2624 bytes

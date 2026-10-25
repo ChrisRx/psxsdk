@@ -11,7 +11,15 @@ import (
 	"github.com/spf13/pflag"
 
 	"go.chrisrx.dev/psx/internal/discgen"
+	"go.chrisrx.dev/psx/internal/mkarc"
 	"go.chrisrx.dev/psx/internal/mkdisc"
+	"go.chrisrx.dev/psx/internal/mkscene"
+	"go.chrisrx.dev/psx/internal/mkvab"
+	"go.chrisrx.dev/psx/internal/obj2tmd"
+	"go.chrisrx.dev/psx/internal/png2tim"
+	"go.chrisrx.dev/psx/internal/sioload"
+	"go.chrisrx.dev/psx/internal/smf2seq"
+	"go.chrisrx.dev/psx/internal/wav2vag"
 )
 
 // runtimeFlag adds the --runtime flag, defaulting to YAROZE_RUNTIME.
@@ -39,6 +47,14 @@ runs it under the wasmtime command when there is one, which is quicker.`,
 		envCommand(),
 		discgen.Command("generate"),
 		mkdisc.Command("iso"),
+		png2tim.Command("tim"),
+		obj2tmd.Command("tmd"),
+		wav2vag.Command("vag"),
+		mkvab.Command("vab"),
+		smf2seq.Command("seq"),
+		mkscene.Command("scene"),
+		mkarc.Command("arc"),
+		sioload.Command("sio"),
 	)
 	if err := root.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "%s: %v\n", name, err)
