@@ -33,4 +33,4 @@ order: yaroze
 | [ecoff2asm](ecoff2asm.md) | Convert ECOFF objects to GNU as source, for relinking the Net Yaroze library as ELF |
 | [ecoffcmp](ecoff2asm.md) | Check ecoff2asm output against the original objects |
 
-`tools/mkpsxiso` holds the disc tool the repository began with, a translation of Lameguy64's mkpsxiso under the GPL-2.0, which [mkdisc](mkdisc.md) replaces; [dumpsxiso](dumpsxiso.md) is a translation from the same project, under the same license.
+[dumpsxiso](dumpsxiso.md) is a translation of the dumpsxiso in Lameguy64's mkpsxiso, and is under the GPL-2.0 as that project is.

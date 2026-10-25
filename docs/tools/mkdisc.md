@@ -104,4 +104,4 @@ Booting on real hardware additionally wants Sony's license data, which holds the
 
 ## Origins
 
-The repository began with a translation into Go of Lameguy64's [mkpsxiso](https://github.com/Lameguy64/mkpsxiso), which is under the GPL-2.0 and so is the translation. It is kept as it was in `tools/mkpsxiso`, under that license and with its own notice, and still runs as `go tool mkpsxiso`. `mkdisc` was written in its place from the ISO 9660 and CD-ROM XA standards and the `format` packages, takes the same flags, and is under the MIT license like the rest; the two lay a disc out the same way, and differ only in how `SYSTEM.CNF` is written.
+The repository began with a translation into Go of Lameguy64's [mkpsxiso](https://github.com/Lameguy64/mkpsxiso), which is under the GPL-2.0 and so was the translation. `mkdisc` was written in its place from the ISO 9660 and CD-ROM XA standards and the `format` packages, took over its flags, and is under the MIT license like the rest. The translation has since been removed.

@@ -9,12 +9,13 @@ mkpsxiso
   Copyright Lameguy64 and the mkpsxiso contributors
   Licensed under the GNU General Public License, version 2
   The repository began with translations of mkpsxiso and its dumpsxiso
-  into Go, which are kept in tools/mkpsxiso and tools/dumpsxiso under the
-  same license, each with its own notice, and are not used by anything
-  else. mkdisc, in internal/mkdisc and tools/mkdisc, was written in
-  mkpsxiso's place from the ISO 9660 and CD-ROM XA standards and the
-  format packages. mkpsxiso remains the reference for what a PlayStation
-  disc image has to hold.
+  into Go. The dumpsxiso translation is kept in tools/dumpsxiso under the
+  same license, with its own notice, and is not used by anything else.
+  mkdisc, in internal/mkdisc and tools/mkdisc, was written in mkpsxiso's
+  place from the ISO 9660 and CD-ROM XA standards and the format packages,
+  and the mkpsxiso translation, which was kept in tools/mkpsxiso, has been
+  removed. mkpsxiso remains the reference for what a PlayStation disc
+  image has to hold.
 
   Commits before the one that added this file carried the translations
   without their notices, under internal/mkpsxiso, tools/mkpsxiso and
