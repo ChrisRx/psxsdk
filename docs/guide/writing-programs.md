@@ -3,19 +3,34 @@ title: Writing programs in Go
 weight: 1
 ---
 
-A program imports [`yaroze`](yaroze), the Net Yaroze library, and [`disc`](disc) for its files:
+A program imports [`yaroze`](yaroze), the Net Yaroze library, and, when it reads files, [`disc`](#files-from-the-disc). This one moves a box with the controller:
 
 ```go
+package main
+
 import "go.chrisrx.dev/psx/yaroze"
 
-yaroze.ResetGraph(0)
-yaroze.GsInitGraph(320, 240, 4, 0, 0)
-yaroze.FntLoad(960, 256)
+var (
+	screen = yaroze.Screen{Background: yaroze.CVECTOR{R: 40, G: 60, B: 100}}
+	pad    yaroze.Pad
+	box    = yaroze.GsBOXF{W: 40, H: 40, R: 255, G: 160, B: 32}
+)
+
+func main() {
+	screen.Open()
+	b := screen.Bounds()
+	for ot := range screen.Frames() {
+		pad.Update()
+		dx, dy := pad.Dir()
+		box.X, box.Y = b.Clamp(box.X+int16(dx*2), box.Y+int16(dy*2), box.W, box.H)
+		box.Sort(ot, 0)
+	}
+}
 ```
 
 ## The library
 
-The `yaroze` package binds the Net Yaroze library for TinyGo, with the names as Sony's `libps.h` spells them, so Sony's [manuals](../manuals/index.md) read across directly.
+The `yaroze` package binds the Net Yaroze library for TinyGo. Functions, types and constants keep the exact names from Sony's `libps.h`, so Sony's [manuals](../manuals/index.md) apply to the Go code unchanged.
 
 - **On the console**, under the `yaroze` build tag the `playstation-yaroze` target sets, each function is a bodyless declaration the linker resolves against the resident library's fixed addresses, exactly as a C program's calls are.
 - **In every other build**, each is a stub that panics, naming itself and saying where the real one is. A program still compiles and type-checks on the host: an editor shows the library's documentation, `go vet` runs, and a call into the library fails at run time rather than at the build.
@@ -66,7 +81,7 @@ The [`disc`](disc) package declares a program's files. A registration names the 
 - `Load` reads a file and `Wait` waits for it. `Load` allocates the file's memory the first time, as many sectors as the build recorded.
 - `LoadAll` reads a list of files.
 - A `Loader` reads them a step a frame, while the frames go on.
-- With `Into`, a registration names memory of the program's own instead, and the build checks the file fits it. That suits a program that wants to know a file's size, or to share one buffer between files.
+- With `Into`, a registration names memory of the program's own instead, and the build checks the file fits it. Use it when a program needs to know a file's size at build time, or to share one buffer between files.
 
 [`discgen`](../tools/discgen.md), also `yaroze generate`, writes the registrations for every file under a directory from `go:generate`, which the playground runs too.
 
@@ -74,4 +89,4 @@ The [`disc`](disc) package declares a program's files. A registration names the 
 
 A program's data lives in its own memory, as everything else does. The program loads at 0x80090000, where Sony's memory map starts the application area, just above the resident library, and has the rest of the console's two megabytes, less the stack, to itself.
 
-The [examples](../examples/index.md) are ports of Sony's Net Yaroze samples and demos, each putting a different part of the machine to work, and the [tutorial](../tutorial/index.md) starts from nothing.
+The [examples](../examples/index.md) are ports of Sony's Net Yaroze samples and demos, each using a different part of the machine, and the [tutorial](../tutorial/index.md) starts from nothing.

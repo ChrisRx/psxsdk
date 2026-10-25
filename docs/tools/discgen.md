@@ -38,7 +38,7 @@ if f := disc.LoadAll(300, files...); f != nil {
 yaroze.TIM(cubeTIM.Data()).Load()
 ```
 
-With `--into` it declares the memory as well, for a program that wants to see its size at build time or keep it out of the heap: an array per file, sized to the whole 2048-byte sectors the drive delivers, given to the file with `Into`, and a `yaroze.TIM` or `yaroze.TMD` over the array for an image or a model.
+With `--into` it declares the memory as well, for a program that needs to know its size at build time or keep it out of the heap: an array per file, sized to the whole 2048-byte sectors the drive delivers, given to the file with `Into`, and a `yaroze.TIM` or `yaroze.TMD` over the array for an image or a model.
 
 ```go
 var (

@@ -8,7 +8,7 @@ description: The Net Yaroze manuals, Sony's supplements to them, the programming
 
 These are the documents Sony gave Net Yaroze members, from the printed manuals that came in the box to the supplements, FAQs and tutorials the members' websites carried until the program closed. They are reproduced as Sony published them. The pages here are the websites' HTML and Word files with their layout turned into the site's, and the words left alone: links into the members' home pages, which are long gone, point at the Wayback Machine, and the button symbols Word drew with its Symbol and Wingdings fonts are drawn as the symbols they were.
 
-The [`yaroze`](yaroze) package keeps the library's names as Sony spelled them, so what these documents say about `GsSortSprite` or `SsVabTransfer` is about the function of the same name in Go. They were written for C, for a Net Yaroze connected to a PC by its serial cable, and for the hardware of 1998: where they talk about uploading files with SIOCONS or about discs that the console will not boot, the toolchain here puts the files on a disc that boots in the emulator instead.
+The [`yaroze`](yaroze) package keeps the library's names exactly as Sony wrote them, so what these documents say about `GsSortSprite` or `SsVabTransfer` is about the function of the same name in Go. They were written for C, for a Net Yaroze connected to a PC by its serial cable, and for the hardware of 1998: where they talk about uploading files with SIOCONS or about discs that the console will not boot, the toolchain here puts the files on a disc that boots in the emulator instead.
 
 ## The manuals
 

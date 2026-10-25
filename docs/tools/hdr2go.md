@@ -60,9 +60,9 @@ matches nothing generated is reported, which is how a mistyped name shows
 up. The library's is `yaroze/libps.txt`, condensed from Sony's library
 reference.
 
-Names stay as the header spells them, so the library's documentation reads
-across directly. The one departure is that a C name beginning with a
-lowercase letter is capitalised, since Go would otherwise put it out of reach
+Names stay exactly as the header writes them, so the library's documentation
+applies unchanged. The one exception is that a C name beginning with a
+lowercase letter is capitalized, since Go would otherwise put it out of reach
 of every other package; `//export` carries the real symbol either way.
 
 Anything the type mapping does not recognize is reported rather than guessed
