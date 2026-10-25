@@ -141,30 +141,6 @@
           pkgs = import nixpkgs { inherit system; };
         in
         rec {
-          default = psxsdk;
-
-          psxsdk = (pkgs.buildGoModule.override { go = pkgs.go_1_27; }) {
-            pname = "psxsdk";
-            version = "0.2.0";
-            src = ./.;
-
-            vendorHash = "sha256-99KMvyc+Sqd1N+xvs12mpaHkyy+NxF5+dxr4RV9shbI=";
-
-            # Matches the Makefile, which trims the build directory out of
-            # recorded paths.
-            ldflags = [
-              "-s"
-              "-w"
-            ];
-
-            meta = {
-              description = "Tools and libraries for PlayStation 1 development";
-              homepage = "https://github.com/ChrisRx/psxsdk";
-              license = pkgs.lib.licenses.mit;
-              mainProgram = "eco2exe";
-            };
-          };
-
           # psxe, a PlayStation emulator.
           #
           # The Makefile asks git for the version and commit, which a fetched
