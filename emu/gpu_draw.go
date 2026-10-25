@@ -222,9 +222,20 @@ func edge(a, b, c vertex) int {
 // where the function is at least min. That is 0, or 1 where psxe's top-left
 // rule excludes the edge itself, which it decides by the edge's direction so
 // that two triangles sharing an edge do not both draw it.
+//
+// It also walks down the rows of a triangle, from where start puts it: e is
+// the function at the start of the current row, and q and rem are e-min
+// divided by d, rounded down, and the remainder, where d is |dx|, or 1 for
+// an edge with no dx. So of the row's pixels, counted from its start, the
+// edge lets in those from -q on where dx is positive, those up to q where
+// it is negative, and where there is no dx, all of them if q is not
+// negative and none if it is. A row down adds qd and rd to q and rem, dy
+// divided the same way, so that no row takes a division.
 type edgeStep struct {
 	a           vertex
 	dx, dy, min int
+
+	e, d, q, rem, qd, rd int
 }
 
 func newEdgeStep(a, b vertex) edgeStep {
@@ -240,18 +251,41 @@ func (s edgeStep) at(x, y int) int {
 	return s.dy*(y-int(s.a.y)) + s.dx*(x-int(s.a.x))
 }
 
-// clip narrows a span of pixels, offsets lo to hi from where the function is
-// e, to those it draws.
-func (s edgeStep) clip(e, lo, hi int) (int, int) {
+// start starts the walk at (x, y).
+func (s *edgeStep) start(x, y int) {
+	s.e = s.at(x, y)
+	s.d = max(s.dx, -s.dx, 1)
+	s.q = floorDiv(s.e-s.min, s.d)
+	s.rem = s.e - s.min - s.q*s.d
+	s.qd = floorDiv(s.dy, s.d)
+	s.rd = s.dy - s.qd*s.d
+}
+
+// clip narrows a span of pixels, offsets lo to hi from the start of the
+// current row, to those the edge lets in.
+func (s *edgeStep) clip(lo, hi int) (int, int) {
 	switch {
 	case s.dx > 0:
-		lo = max(lo, -floorDiv(e-s.min, s.dx))
+		lo = max(lo, -s.q)
 	case s.dx < 0:
-		hi = min(hi, floorDiv(e-s.min, -s.dx))
-	case e < s.min:
+		hi = min(hi, s.q)
+	case s.q < 0:
 		return 0, -1
 	}
 	return lo, hi
+}
+
+// next returns the edge function lo pixels into the current row, and moves
+// the walk a row down.
+func (s *edgeStep) next(lo int) int {
+	e := s.e + s.dx*lo
+	s.e += s.dy
+	s.q += s.qd
+	if s.rem += s.rd; s.rem >= s.d {
+		s.rem -= s.d
+		s.q++
+	}
+	return e
 }
 
 // floorDiv divides, rounding down, by a positive divisor.
@@ -320,6 +354,10 @@ func (g *gpu) triangle(v0, v1, v2 vertex, d polyData) {
 	y0 := max(ymin, int(g.drawY1))
 	y1 := min(ymax-1, int(g.drawY2))
 	edges := [3]edgeStep{newEdgeStep(b, c), newEdgeStep(c, a), newEdgeStep(a, b)}
+	for i := range edges {
+		edges[i].start(x0, y0)
+	}
+	ea, eb, ec := &edges[0], &edges[1], &edges[2]
 
 	// A flat, opaque, untextured triangle draws one color over each span.
 	flat := d.attrib&(attrShaded|attrTextured|attrTransp) == 0
@@ -328,12 +366,8 @@ func (g *gpu) triangle(v0, v1, v2 vertex, d polyData) {
 	for y := y0; y <= y1; y++ {
 		// Each edge function is linear along the row, so the pixels that
 		// pass all three are one span, found without testing each.
-		lo, hi := 0, x1-x0
-		var e [3]int
-		for i := range edges {
-			e[i] = edges[i].at(x0, y)
-			lo, hi = edges[i].clip(e[i], lo, hi)
-		}
+		lo, hi := ec.clip(eb.clip(ea.clip(0, x1-x0)))
+		e0, e1, e2 := ea.next(lo), eb.next(lo), ec.next(lo)
 		if flat {
 			// The span is within the drawing area, so within a row of
 			// VRAM.
@@ -343,12 +377,9 @@ func (g *gpu) triangle(v0, v1, v2 vertex, d polyData) {
 			}
 			continue
 		}
-		for i := range e {
-			e[i] += edges[i].dx * lo
-		}
 
-		for x := x0 + lo; x <= x0+hi; x, e[0], e[1], e[2] = x+1, e[0]+edges[0].dx, e[1]+edges[1].dx, e[2]+edges[2].dx {
-			z0, z1, z2 := float32(e[0]), float32(e[1]), float32(e[2])
+		for x := x0 + lo; x <= x0+hi; x, e0, e1, e2 = x+1, e0+ea.dx, e1+eb.dx, e2+ec.dx {
+			z0, z1, z2 := float32(e0), float32(e1), float32(e2)
 
 			var mod uint32
 			if d.attrib&attrShaded != 0 {
