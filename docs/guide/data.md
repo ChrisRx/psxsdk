@@ -51,7 +51,7 @@ y:0  +----------+----------+------------------------+
 511  +-----------------------------------------------+
 ```
 
-That is the default `Screen`, 320 by 240 with its two buffers one above the other. `SideBySide` puts them both at the top, which frees the rows below for images. A texture lies inside one texture page, 64 units wide and 256 lines tall, which is 256 pixels of a 4-bit image, 128 of an 8-bit one and 64 of a 16-bit one, and several small images can share a page. `Screen.Font` puts the font at the corner it is given, with its palette 128 lines below. Two images must not overlap, and `png2tim` and `tim2png` print where each one goes.
+That is the default `Screen`, 320 by 240 with its two buffers one above the other. `SideBySide` puts them both at the top, which frees the rows below for images. A texture lies inside one texture page, 64 units wide and 256 lines tall, which is 256 pixels of a 4-bit image, 128 of an 8-bit one and 64 of a 16-bit one, and several small images can share a page. `Screen.Font` puts the font at the corner it is given, with its palette 128 lines below. Two images must not overlap, and `png2tim` prints where each one goes, with `-r` for a TIM already made.
 
 A model's TMD names its textures by where they are, so the TIM a model's material names is converted first, and the program loads that same TIM before it draws the model.
 
@@ -61,4 +61,4 @@ A bank's samples go to the SPU's 512 KB. A second of sound at 22050 Hz is about 
 
 ## Older data
 
-[`tim2png`](../tools/png2tim.md) turns any TIM into a PNG, `mkvab -r` reads any bank and [`rsdlink`](../tools/rsdlink.md) links any of Sony's RSD models, so the art and sound of the Net Yaroze samples, and of games whose files are on their discs, can be looked at, changed and put back.
+[`png2tim -r`](../tools/png2tim.md) turns any TIM into a PNG, `mkvab -r` reads any bank and [`rsdlink`](../tools/rsdlink.md) links any of Sony's RSD models, so the art and sound of the Net Yaroze samples, and of games whose files are on their discs, can be looked at, changed and put back.

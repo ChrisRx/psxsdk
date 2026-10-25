@@ -1,7 +1,7 @@
 // Package mkvab builds a VAB sound bank from a definition file and VAG
-// files, or reads a bank back into a definition file: what Sony's mkvab did,
-// with vabsplit's work as an option. It is the mkvab tool and yaroze's vab
-// command.
+// files, reads a bank back into a definition file, or splits a bank into
+// its VH and VB: what Sony's mkvab and vabsplit did. It is the mkvab tool
+// and yaroze's vab command.
 package mkvab
 
 import (
@@ -28,13 +28,13 @@ type options struct {
 func Command(use string) *cobra.Command {
 	var opts options
 	cmd := &cobra.Command{
-		Use:   use + " [flags] <vag>...",
+		Use:   use + " [flags] <vag or bank>...",
 		Short: "build a VAB sound bank from a definition file and VAGs",
 		Long: use + ` builds a sound bank from a definition file, which gives the bank's
 programs and their tones, and VAG files, which tone definitions name as vag
 1, 2 and so on in the order given. -o names the bank, a .VAB of the VH and
-the VB together; --split writes OUT.VH and OUT.VB instead, as vabsplit
-would, which is what a program loads.
+the VB together; --split writes OUT.VH and OUT.VB instead, which is what a
+program loads.
 
 The definition file is Sony's: a VabHdr section, a ProgAtr P section for
 each program, and a VagAtr P T (or ToneAtr P T) section for each tone, of
@@ -63,7 +63,10 @@ is there. A tone's envelope is given as Sony's rates, ar 0-127, dr 0-15, sr
           vag = 1
 
 -r reads a bank, a .VAB or a .VH (with its .VB beside it, for the sizes),
-and prints its definition file, or writes it to -o.`,
+and prints its definition file, or writes it to -o.
+
+--split with no -f splits each bank given, a .VAB, into a .VH and a .VB
+beside it, as Sony's vabsplit did.`,
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return run(&opts, args)
@@ -74,13 +77,16 @@ and prints its definition file, or writes it to -o.`,
 	f.StringVarP(&opts.Def, "def", "f", "", "the definition file")
 	f.StringVarP(&opts.Output, "output", "o", "", "the bank to write, or with -r the definition file")
 	f.StringVarP(&opts.Reverse, "reverse", "r", "", "read this bank and write its definition file")
-	f.BoolVar(&opts.Split, "split", false, "write OUT.VH and OUT.VB rather than OUT.VAB")
+	f.BoolVar(&opts.Split, "split", false, "write OUT.VH and OUT.VB rather than OUT.VAB, or with no -f split the banks given")
 	return cmd
 }
 
 func run(opts *options, args []string) error {
 	if opts.Reverse != "" {
 		return reverse(opts)
+	}
+	if opts.Split && opts.Def == "" {
+		return split(args)
 	}
 	if opts.Def == "" || opts.Output == "" || len(args) == 0 {
 		return fmt.Errorf("give a definition file with -f, the bank with -o and the VAG files")
@@ -170,4 +176,37 @@ func reverse(opts *options) error {
 		return nil
 	}
 	return os.WriteFile(opts.Output, []byte(v.Def()), 0o644)
+}
+
+// split writes each bank's header and body beside it, as .VH and .VB.
+func split(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("give the banks to split")
+	}
+	for _, path := range args {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		n, err := vab.HeaderLen(b)
+		if err != nil {
+			return fmt.Errorf("%s: %w", path, err)
+		}
+		if n > len(b) {
+			return fmt.Errorf("%s: the header should be %d bytes, but the file is %d", path, n, len(b))
+		}
+		v, err := vab.Decode(b[:n], b[n:])
+		if err != nil {
+			return fmt.Errorf("%s: %w", path, err)
+		}
+		stem := strings.TrimSuffix(path, filepath.Ext(path))
+		if err := os.WriteFile(stem+".VH", b[:n], 0o644); err != nil {
+			return err
+		}
+		if err := os.WriteFile(stem+".VB", b[n:], 0o644); err != nil {
+			return err
+		}
+		fmt.Printf("created %q and %q: %s\n", stem+".VH", stem+".VB", summary(v))
+	}
+	return nil
 }

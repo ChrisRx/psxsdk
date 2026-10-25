@@ -3,14 +3,14 @@ title: png2tim
 weight: 15
 ---
 
-`png2tim` converts pictures into TIM files, the format a program loads into video memory for its sprites and textures, which Sony's TIMUTIL made on Windows. It reads PNG, BMP, GIF and JPEG, laid out as [`format/tim`](format/tim) describes, and `tim2png` turns a TIM back into a PNG, to look at a game's images or to edit them.
+`png2tim` converts pictures into TIM files, the format a program loads into video memory for its sprites and textures, which Sony's TIMUTIL made on Windows. It reads PNG, BMP, GIF and JPEG, laid out as [`format/tim`](format/tim) describes, and with `-r` it turns a TIM back into a PNG, to look at a game's images or to edit them. `-r` takes `--palette` for the CLUT row to color an indexed image with and `--offset` for a TIM packed inside a bigger file.
 
 [`yaroze`](yaroze.md) has it as `yaroze tim`, with the same flags.
 
 ```bash
 $ png2tim --at 640,0 --clut 0,480 cube.png
 created "cube.TIM": 64x64 4-bit at (640,0), tpage 0x000a, u,v 0,0, CLUT at (0,480), cba 0x7800
-$ tim2png CUBE.TIM
+$ png2tim -r CUBE.TIM
 created "CUBE.png": 64x64 4-bit at (640,0), CLUT of 1 row(s) at (0,480)
 ```
 

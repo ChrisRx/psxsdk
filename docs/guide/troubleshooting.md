@@ -16,7 +16,7 @@ Most of what goes wrong in a PlayStation program goes wrong in one of a few ways
 
 Sony's answer to [why a sprite cannot be seen](../manuals/faq.md#why-cant-i-see-my-sprite-on-screen) is the checklist, and with this toolchain:
 
-- **Its image is not in video memory, or something drew over it.** `TIM.Load` has to run before the sprite is drawn. Two TIMs at overlapping places overwrite each other, as does an image under the font or inside the display buffers. `tim2png` and `png2tim` print where each one goes, and `psxemu --vram` dumps video memory to look at.
+- **Its image is not in video memory, or something drew over it.** `TIM.Load` has to run before the sprite is drawn. Two TIMs at overlapping places overwrite each other, as does an image under the font or inside the display buffers. `png2tim` prints where each one goes, with `-r` for a TIM already made, and `psxemu --vram` dumps video memory to look at.
 - **Its palette was wiped.** A 256-line screen on a PAL console reaches row 511, and its clear each frame wipes palettes kept at row 480. `Screen` uses 240 lines unless asked for more for this reason.
 - **It is somewhere else.** With `GsInit3D` the origin is the middle of the screen for 2D as well, so a sprite at 0, 0 is in the middle and one at 320, 240 is off the screen. Place things from `Screen.Bounds`.
 - **It is black or invisible.** R, G and B of 0 draw nothing. 128 is the image as it is.

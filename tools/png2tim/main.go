@@ -1,7 +1,7 @@
 // Command png2tim converts pictures into TIM files, the PlayStation's image
 // format, which a program loads into video memory as sprites and textures:
-// what Sony's TIMUTIL did for BMP and PICT files on Windows. It is also
-// yaroze's tim command.
+// what Sony's TIMUTIL did for BMP and PICT files on Windows. With -r it
+// reads TIM files back into PNG pictures. It is also yaroze's tim command.
 package main
 
 import (
