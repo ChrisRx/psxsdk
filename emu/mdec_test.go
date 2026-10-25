@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/color"
 	"math"
+	"math/rand/v2"
 	"os"
 	"os/exec"
 	"strings"
@@ -255,4 +256,31 @@ func TestDisplay24(t *testing.T) {
 	assert.Equal(t, [2]int{320, 240}, [2]int{img.Rect.Dx(), img.Rect.Dy()})
 	assert.Equal(t, color.RGBA{R: 0xff, A: 0xff}, img.RGBAAt(0, 0))
 	assert.Equal(t, color.RGBA{B: 0xff, A: 0xff}, img.RGBAAt(1, 0))
+}
+
+// TestIDCT checks that idct, which may use SIMD, transforms random blocks
+// with random scale tables as idctScalar does, extremes included.
+func TestIDCT(t *testing.T) {
+	r := rand.New(rand.NewPCG(7, 8))
+	for trial := range 2000 {
+		var blk, scale [64]int16
+		for i := range blk {
+			blk[i] = int16(r.Uint32())
+			scale[i] = int16(r.Uint32())
+			if trial%4 == 0 {
+				blk[i] = int16(r.IntN(0x800) - 0x400) // as decodeBlock leaves them
+			}
+		}
+		if trial == 0 {
+			for i := range blk {
+				blk[i], scale[i] = -0x8000, -0x8000
+			}
+		}
+		got, want := blk, blk
+		idct(&got, &scale)
+		idctScalar(&want, &scale)
+		if got != want {
+			t.Fatalf("trial %d: block %v, scale %v: got %v, want %v", trial, blk, scale, got, want)
+		}
+	}
 }

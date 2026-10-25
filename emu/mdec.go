@@ -327,9 +327,9 @@ func (m *mdec) decodeBlock(blk *[64]int16, in *rlInput, quant *[64]uint8) {
 	idct(blk, &m.scale)
 }
 
-// idct is psxe's real_idct: the inverse DCT as two passes of a matrix
-// product with the scale table, in integers.
-func idct(blk *[64]int16, scale *[64]int16) {
+// idctScalar is psxe's real_idct: the inverse DCT as two passes of a
+// matrix product with the scale table, in integers.
+func idctScalar(blk *[64]int16, scale *[64]int16) {
 	var buf [64]int16
 	src, dst := blk, &buf
 	for range 2 {
