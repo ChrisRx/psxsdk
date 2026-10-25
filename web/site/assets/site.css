@@ -264,6 +264,45 @@ article p, article ul, article ol { margin: 0 0 1em; }
 article li { margin: 0.25em 0; }
 article hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
 article img { max-width: 100%; height: auto; }
+
+/* A diagram drawn from a pikchr block, in the page's color, never wider
+   than it was drawn. Shrunk to a narrow column, it opens at its own size
+   when tapped (diagram.js). */
+article .diagram { margin: 0.5em 0 1.4em; color: var(--ink); }
+article .diagram svg { display: block; width: 100%; height: auto; }
+article .diagram.zoomable { cursor: zoom-in; }
+.diagram-zoom {
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--bg);
+  color: var(--ink);
+}
+.diagram-zoom::backdrop { background: var(--bg); }
+.diagram-zoom .scroll {
+  box-sizing: border-box;
+  height: 100%;
+  overflow: auto;
+  padding: 56px 16px 16px;
+}
+.diagram-zoom svg { display: block; max-width: none; height: auto; margin: 0 auto; }
+.diagram-zoom .close {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 400 22px/1 system-ui, sans-serif;
+  cursor: pointer;
+}
 article blockquote {
   margin: 1em 0;
   padding: 0.6em 1em;

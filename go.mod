@@ -5,6 +5,7 @@ go 1.27
 require (
 	github.com/ChrisRx/wazero v0.0.0-20261022122953-787716494703
 	github.com/alecthomas/chroma/v2 v2.27.0
+	github.com/gopikchr/gopikchr v0.0.0-20251102185413-ac35dc1606f8
 	github.com/hajimehoshi/ebiten/v2 v2.10.5
 	github.com/mewmew/mips v0.1.0
 	github.com/spf13/cobra v1.10.2

@@ -25,6 +25,9 @@
 //   - to anything else in the repository, by its path from the root there:
 //     "examples/check", the same on every page
 //
+// A fenced block in the pikchr language is drawn as a diagram when the page
+// is built (diagram.go), in the page's color so that it follows the theme.
+//
 // The playground starts a project from one of the examples, jumpcube or
 // quest, whose sources are copied under play/starters and listed in
 // play/starters.json, so that the program a newcomer first sees is one
@@ -71,6 +74,7 @@ import (
 	gast "github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	mdparser "github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/renderer/html"
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
@@ -608,6 +612,7 @@ func (s *Site) render(p *Page, body []byte) error {
 		return err
 	}
 	links := &linker{site: s, page: p}
+	figures := &diagrams{}
 	md := goldmark.New(
 		goldmark.WithExtensions(
 			extension.GFM,
@@ -617,13 +622,19 @@ func (s *Site) render(p *Page, body []byte) error {
 		),
 		goldmark.WithParserOptions(
 			mdparser.WithAutoHeadingID(),
-			mdparser.WithASTTransformers(util.Prioritized(links, 100)),
+			mdparser.WithASTTransformers(util.Prioritized(links, 100), util.Prioritized(figures, 100)),
 		),
-		goldmark.WithRendererOptions(html.WithUnsafe()),
+		goldmark.WithRendererOptions(
+			html.WithUnsafe(),
+			renderer.WithNodeRenderers(util.Prioritized(diagramRenderer{}, 100)),
+		),
 	)
 	doc := md.Parser().Parse(text.NewReader(body))
 	if links.err != nil {
 		return links.err
+	}
+	if figures.err != nil {
+		return figures.err
 	}
 
 	var plain strings.Builder

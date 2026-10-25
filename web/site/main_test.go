@@ -269,6 +269,26 @@ func TestExpand(t *testing.T) {
 	assert.Error(t, "including missing.go", err)
 }
 
+func TestDiagram(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "x/index.md", "---\ntitle: X\n---\n\n```pikchr\nbox \"main.go\"\narrow\nbox \"disc\"\n```\n")
+	s, err := load(dir, "")
+	assert.NoError(t, err)
+	content := string(page(s, "x/").Content)
+	// The diagram is drawn in the page's color, no wider than pikchr made it.
+	assert.Equal(t, true, strings.HasPrefix(content, `<figure class="diagram" style="max-width: `), content)
+	assert.Equal(t, true, strings.Contains(content, `<svg`), content)
+	assert.Equal(t, true, strings.Contains(content, `>main.go</text>`), content)
+	assert.Equal(t, true, strings.Contains(content, `currentColor`), content)
+	assert.Equal(t, false, strings.Contains(content, `rgb(0,0,0)`), content)
+	assert.Equal(t, false, strings.Contains(content, `<pre`), content)
+
+	// A diagram that does not draw fails the build.
+	write(t, dir, "x/index.md", "---\ntitle: X\n---\n\n```pikchr\nbox with nowhere\n```\n")
+	_, err = load(dir, "")
+	assert.Error(t, "pikchr:", err)
+}
+
 func TestDeclarations(t *testing.T) {
 	src := []byte(`package main
 

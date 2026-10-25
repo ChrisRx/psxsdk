@@ -38,17 +38,35 @@ The examples commit the generated files under `assets/` as well, beside their so
 
 Every image goes to a place in video memory that its TIM records, given to `png2tim` with `--at` for the pixels and `--clut` for the palette, and planning those places is the one part of the work no tool does. Video memory is 1024 by 512 units:
 
-```
-x:   0          320        640                     1023
-y:0  +----------+----------+------------------------+
-     | display  | free     | textures, in pages     |
-     | buffer 0 |          | 64 units wide: 640,    |
-240  +----------+          | 704, 768 ...           |
-     | display  |          |                        |
-     | buffer 1 |          |                        |
-480  +----------+----------+------------------------+
-     | palettes, a row each, x a multiple of 16      |
-511  +-----------------------------------------------+
+```pikchr
+# Video memory to scale, 1024 by 512 units, from its top left corner.
+$sx = 6.0 / 1024
+$sy = 3.6 / 512
+B0: box "display" "buffer 0" with nw at (0, 0) wid 320*$sx ht 240*$sy
+B1: box "display" "buffer 1" with nw at B0.sw wid 320*$sx ht 240*$sy
+FREE: box "free" with nw at B0.ne wid 320*$sx ht 480*$sy
+TEX: box with nw at FREE.ne wid 384*$sx ht 480*$sy
+PAL: box "palettes, a row each, x a multiple of 16" with nw at B1.sw wid 1024*$sx ht 32*$sy
+
+# Texture pages, 64 units wide and 256 lines tall, under their label.
+text "textures, in pages" ljust at (650*$sx, -22*$sy)
+text "64 units wide and 256 tall" italic small ljust at (650*$sx, -48*$sy)
+line dashed from (704*$sx, -70*$sy) to (704*$sx, -480*$sy)
+line dashed from (768*$sx, -70*$sy) to (768*$sx, -480*$sy)
+line dashed from (832*$sx, -70*$sy) to (832*$sx, -480*$sy)
+line dashed from (896*$sx, -70*$sy) to (896*$sx, -480*$sy)
+line dashed from (960*$sx, -70*$sy) to (960*$sx, -480*$sy)
+line dashed from (640*$sx, -256*$sy) to (1024*$sx, -256*$sy)
+
+# The coordinates along the top and down the left.
+text "0" above at (0, 0)
+text "320" above at (320*$sx, 0)
+text "640" above at (640*$sx, 0)
+text "1023" above at (1024*$sx, 0)
+text "0" rjust at (-0.06, 0)
+text "240" rjust at (-0.06, -240*$sy)
+text "480" rjust at (-0.06, -480*$sy)
+text "511" rjust at (-0.06, -512*$sy)
 ```
 
 That is the default `Screen`, 320 by 240 with its two buffers one above the other. `SideBySide` puts them both at the top, which frees the rows below for images. A texture lies inside one texture page, 64 units wide and 256 lines tall, which is 256 pixels of a 4-bit image, 128 of an 8-bit one and 64 of a 16-bit one, and several small images can share a page. `Screen.Font` puts the font at the corner it is given, with its palette 128 lines below. Two images must not overlap, and `png2tim` prints where each one goes, with `-r` for a TIM already made.
