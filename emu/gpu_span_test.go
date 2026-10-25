@@ -170,8 +170,9 @@ func topLeft(z float32, a, b vertex) bool {
 }
 
 // TestRectFills draws random rectangles, and fills random rectangles of
-// VRAM, and checks that the flat ones, drawn a row at a time, come out as
-// psxe's per-pixel loops draw them.
+// VRAM, and checks that they come out as psxe's per-pixel loops draw them:
+// flat ones drawn a row at a time, and with SIMD, the rest four pixels at a
+// time.
 func TestRectFills(t *testing.T) {
 	r := rand.New(rand.NewPCG(3, 4))
 	got, want := newGPU(nil, nil), newGPU(nil, nil)
@@ -187,16 +188,24 @@ func TestRectFills(t *testing.T) {
 			g.drawX2, g.drawY2 = uint32(r2.IntN(1024)), uint32(r2.IntN(512))
 			g.offX, g.offY = int32(r2.IntN(64)-32), int32(r2.IntN(64)-32)
 			g.gpustat = uint32(r2.IntN(4)) << 5
+			g.texpX, g.texpY, g.texpD = uint32(r2.IntN(16))<<6, uint32(r2.IntN(2))<<8, uint32(r2.IntN(4))
+			g.texwMX, g.texwMY = uint32(r2.IntN(4))<<3, uint32(r2.IntN(4))<<3
+			g.texwOX, g.texwOY = uint32(r2.IntN(256)), uint32(r2.IntN(256))
 		}
 
 		if trial%2 == 0 {
-			// Only the flat rectangles take the new path, but drawing the
-			// others as well checks they are left as they were.
 			d := rectData{
-				attrib: uint8(r.IntN(32)) &^ attrTextured,
-				v0:     vertex{x: int16(r.IntN(2400) - 1200), y: int16(r.IntN(1200) - 600), c: r.Uint32() & 0xffffff},
+				attrib: uint8(r.IntN(32)),
+				v0: vertex{
+					x: int16(r.IntN(2400) - 1200), y: int16(r.IntN(1200) - 600), c: r.Uint32() & 0xffffff,
+					tx: uint8(r.Uint32()), ty: uint8(r.Uint32()),
+				},
+				clut:   uint16(r.Uint32()),
 				width:  uint16(r.IntN(1100)),
 				height: uint16(r.IntN(600)),
+			}
+			if r.IntN(4) == 0 {
+				d.v0.c = 0x808080 // the neutral color, as for raw texture
 			}
 			got.drawRect(d)
 			want.drawRectRef(d)

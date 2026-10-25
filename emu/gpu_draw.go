@@ -305,18 +305,43 @@ type polyData struct {
 	texp   uint16
 }
 
+// raster is a triangle as its spans are drawn: its corners, wound so that
+// its area is positive and offset, the reciprocal of the area, its bounding
+// box and that box clipped to the drawing area, its edges, and where its
+// texture comes from and how it is blended.
+//
+// The rows are drawn from y0 down, each edge walking down with them. Each
+// edge function is linear along a row, so the pixels that pass all three
+// are one span, found without testing each, from x0+lo to x0+hi where
+//
+//	lo, hi := c.clip(b.clip(a.clip(0, x1-x0)))
+//
+// for the edges a, b and c, whose functions at x0+lo are then a.next(lo)
+// and so on. The span is within the drawing area, so within a row of VRAM.
+type raster struct {
+	d                      polyData
+	a, b, c                vertex
+	inv                    float32
+	xmin, ymin             int
+	x0, x1, y0, y1         int
+	edges                  [3]edgeStep
+	tpx, tpy, clutx, cluty uint32
+	depth, mode            uint32
+}
+
 func (g *gpu) triangle(v0, v1, v2 vertex, d polyData) {
-	tpx := uint32(d.texp&0xf) << 6
-	tpy := uint32(d.texp&0x10) << 4
-	clutx := uint32(d.clut&0x3f) << 4
-	cluty := uint32(d.clut>>6) & 0x1ff
-	depth := uint32(d.texp>>7) & 3
-	transp := d.attrib&attrTransp != 0
-	var mode uint32
+	r := raster{
+		d:     d,
+		tpx:   uint32(d.texp&0xf) << 6,
+		tpy:   uint32(d.texp&0x10) << 4,
+		clutx: uint32(d.clut&0x3f) << 4,
+		cluty: uint32(d.clut>>6) & 0x1ff,
+		depth: uint32(d.texp>>7) & 3,
+	}
 	if d.attrib&attrTextured != 0 {
-		mode = uint32(d.texp>>5) & 3
+		r.mode = uint32(d.texp>>5) & 3
 	} else {
-		mode = g.gpustat >> 5 & 3
+		r.mode = g.gpustat >> 5 & 3
 	}
 
 	a, b, c := v0, v1, v2
@@ -327,6 +352,7 @@ func (g *gpu) triangle(v0, v1, v2 vertex, d polyData) {
 		v.x = int16(int32(v.x) + g.offX)
 		v.y = int16(int32(v.y) + g.offY)
 	}
+	r.a, r.b, r.c = a, b, c
 
 	xmin := min(int(a.x), int(b.x), int(c.x))
 	ymin := min(int(a.y), int(b.y), int(c.y))
@@ -335,50 +361,58 @@ func (g *gpu) triangle(v0, v1, v2 vertex, d polyData) {
 	if xmax-xmin > 2048 || ymax-ymin > 1024 {
 		return
 	}
+	r.xmin, r.ymin = xmin, ymin
 
 	// psxe divides by the area, but it is built with -Ofast, which lets
 	// the compiler multiply by the reciprocal instead, and it does: that
 	// is what gives the same last bit, and so the same texel, as psxe.
 	area := float32(edge(a, b, c))
 	inv := float32(1 / area)
+	r.inv = inv
+
+	// The bounding box, clipped to the drawing area, which psxe compares
+	// unsigned, so negative coordinates are outside it.
+	r.x0 = max(xmin, int(g.drawX1))
+	r.x1 = min(xmax-1, int(g.drawX2))
+	r.y0 = max(ymin, int(g.drawY1))
+	r.y1 = min(ymax-1, int(g.drawY2))
+	r.edges = [3]edgeStep{newEdgeStep(b, c), newEdgeStep(c, a), newEdgeStep(a, b)}
+	for i := range r.edges {
+		r.edges[i].start(r.x0, r.y0)
+	}
+	ea, eb, ec := &r.edges[0], &r.edges[1], &r.edges[2]
+
+	// A flat, opaque, untextured triangle draws one color over each span.
+	if d.attrib&(attrShaded|attrTextured|attrTransp) == 0 {
+		color := bgr555(d.v[0].c)
+		for y := r.y0; y <= r.y1; y++ {
+			lo, hi := ec.clip(eb.clip(ea.clip(0, r.x1-r.x0)))
+			ea.next(lo)
+			eb.next(lo)
+			ec.next(lo)
+			if lo <= hi {
+				row := g.vramIndex(0, y)
+				fill16(g.vram[row+r.x0+lo:row+r.x0+hi+1], color)
+			}
+		}
+		return
+	}
+	// With SIMD, four pixels at a time where that draws the same.
+	if g.triangleVec(&r) {
+		return
+	}
+
+	tpx, tpy, clutx, cluty, depth, mode := r.tpx, r.tpy, r.clutx, r.cluty, r.depth, r.mode
+	transp := d.attrib&attrTransp != 0
 	interp := func(z0, z1, z2, ca, cb, cc float32) float32 {
 		s := float32(float32(z0*ca) + float32(z1*cb))
 		s = float32(s + float32(z2*cc))
 		return float32(s * inv)
 	}
-
-	// The bounding box, clipped to the drawing area, which psxe compares
-	// unsigned, so negative coordinates are outside it.
-	x0 := max(xmin, int(g.drawX1))
-	x1 := min(xmax-1, int(g.drawX2))
-	y0 := max(ymin, int(g.drawY1))
-	y1 := min(ymax-1, int(g.drawY2))
-	edges := [3]edgeStep{newEdgeStep(b, c), newEdgeStep(c, a), newEdgeStep(a, b)}
-	for i := range edges {
-		edges[i].start(x0, y0)
-	}
-	ea, eb, ec := &edges[0], &edges[1], &edges[2]
-
-	// A flat, opaque, untextured triangle draws one color over each span.
-	flat := d.attrib&(attrShaded|attrTextured|attrTransp) == 0
-	flatColor := bgr555(d.v[0].c)
-
-	for y := y0; y <= y1; y++ {
-		// Each edge function is linear along the row, so the pixels that
-		// pass all three are one span, found without testing each.
-		lo, hi := ec.clip(eb.clip(ea.clip(0, x1-x0)))
+	for y := r.y0; y <= r.y1; y++ {
+		lo, hi := ec.clip(eb.clip(ea.clip(0, r.x1-r.x0)))
 		e0, e1, e2 := ea.next(lo), eb.next(lo), ec.next(lo)
-		if flat {
-			// The span is within the drawing area, so within a row of
-			// VRAM.
-			if lo <= hi {
-				row := g.vramIndex(0, y)
-				fill16(g.vram[row+x0+lo:row+x0+hi+1], flatColor)
-			}
-			continue
-		}
-
-		for x := x0 + lo; x <= x0+hi; x, e0, e1, e2 = x+1, e0+ea.dx, e1+eb.dx, e2+ec.dx {
+		for x := r.x0 + lo; x <= r.x0+hi; x, e0, e1, e2 = x+1, e0+ea.dx, e1+eb.dx, e2+ec.dx {
 			z0, z1, z2 := float32(e0), float32(e1), float32(e2)
 
 			var mod uint32
@@ -474,6 +508,10 @@ func (g *gpu) drawRect(d rectData) {
 				fill16(g.vram[row+xl:row+xr+1], color)
 			}
 		}
+		return
+	}
+	// With SIMD, four pixels at a time where that draws the same.
+	if g.rectVec(d, int(x0), int(y0), xmax, ymax) {
 		return
 	}
 
