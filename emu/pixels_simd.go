@@ -40,6 +40,28 @@ func rgba15(dst []byte, src []uint16) {
 	rgba15Scalar(dst[4*i:], src[i:])
 }
 
+// rgb24Index moves the twelve bytes of four 24-bit pixels apart to the
+// first three of each four, zeroing the fourth for the alpha.
+var rgb24Index = [16]int8{0, 1, 2, -1, 3, 4, 5, -1, 6, 7, 8, -1, 9, 10, 11, -1}
+
+// rgb24 converts 24-bit pixels to RGBA as rgb24Scalar does, four at a time:
+// the twelve bytes of four pixels, read as eight halfwords, are moved apart
+// to a word each and given their alpha.
+func rgb24(dst []byte, src []uint16) int {
+	if !haveSIMD {
+		return rgb24Scalar(dst, src)
+	}
+	n := min(len(dst)/4, 2*len(src)/3)
+	index := archsimd.LoadInt8x16(rgb24Index[:])
+	alpha := archsimd.BroadcastUint32x4(0xff000000).ReshapeToUint8s()
+	x := 0
+	for ; x+4 <= n && 3*x/2+8 <= len(src); x += 4 {
+		v := archsimd.LoadUint16x8(src[3*x/2 : 3*x/2+8]).ReshapeToUint8s()
+		permute(v, index).Or(alpha).Store(dst[4*x : 4*x+16])
+	}
+	return x + rgb24Scalar(dst[4*x:4*n], src[3*x/2:])
+}
+
 // fill16 sets every pixel of dst to v, as fill16Scalar does, eight at a
 // time.
 func fill16(dst []uint16, v uint16) {

@@ -6,6 +6,8 @@ package emu
 
 func rgba15(dst []byte, src []uint16) { rgba15Scalar(dst, src) }
 
+func rgb24(dst []byte, src []uint16) int { return rgb24Scalar(dst, src) }
+
 func fill16(dst []uint16, v uint16) { fill16Scalar(dst, v) }
 
 // triangleVec and rectVec leave every triangle and rectangle to be drawn a

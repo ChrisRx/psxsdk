@@ -312,19 +312,18 @@ func (m *Machine) Shown() bool {
 // right of VRAM wraps to its left here, as in 15-bit mode.
 func (m *Machine) display24(img *image.RGBA, width, height int) {
 	g := m.gpu
-	var row [vramWidth * 2]byte
-	x0 := (int(g.dispX) & (vramWidth - 1)) * 2
+	x0 := int(g.dispX) & (vramWidth - 1)
 	for y := range height {
 		vy := (int(g.dispY) + y) & (vramHeight - 1)
-		for i, p := range g.vram[vy*vramWidth : (vy+1)*vramWidth] {
-			row[2*i], row[2*i+1] = byte(p), byte(p>>8)
-		}
-		dst := img.Pix[y*img.Stride:]
-		for x := range width {
-			s := x0 + 3*x
-			dst[4*x+0] = row[s%len(row)]
-			dst[4*x+1] = row[(s+1)%len(row)]
-			dst[4*x+2] = row[(s+2)%len(row)]
+		row := g.vram[vy*vramWidth : (vy+1)*vramWidth]
+		dst := img.Pix[y*img.Stride : y*img.Stride+4*width]
+		// The pixels short of the right of VRAM, then a byte at a time
+		// those that wrap to its left.
+		for x := rgb24(dst, row[x0:]); x < width; x++ {
+			for i := range 3 {
+				b := (2*x0 + 3*x + i) & (2*vramWidth - 1)
+				dst[4*x+i] = byte(row[b/2] >> (8 * (b & 1)))
+			}
 			dst[4*x+3] = 0xff
 		}
 	}
