@@ -2,6 +2,7 @@ package emu
 
 import (
 	"encoding/binary"
+	"math"
 
 	"go.chrisrx.dev/psx/emu/cpu"
 )
@@ -66,12 +67,17 @@ const spinNone = 1
 
 // spin is what the machine has learned of the loop: the cycles each step of
 // a pass costs, once a pass has been stepped through, and how far through
-// the pass it is while it steps.
+// the pass it is while it steps; and from the cycles, what a pass adds to
+// the clocks.
 type spin struct {
 	cycles   [len(vsyncWaitPath)]uint32
 	learned  bool
 	learning bool
 	pos      int
+
+	rate       float32
+	passCycles uint64
+	video      passClock
 }
 
 // spinAt reports whether the loop is in RAM.
@@ -131,45 +137,146 @@ func (m *Machine) skipSpin(k *cpu.Clock, budget uint64) uint64 {
 	}
 	// Where Run would stop: at a step that reaches a device's due cycle,
 	// the SPU's next sample, the timers' due step or the video's next edge.
-	due := min(*k.Due[0], *k.Due[1], c.TotalCycles+uint64(k.SampleCycles-*k.Sample))
-	stepsDue := min(*k.StepsDue-*k.Steps, budget)
-
 	// The clocks only go up, so a pass reaches none of those if its last
-	// step does not. The video's still has to be summed a step at a time,
-	// rounding as Run does.
-	var video [len(m.spin.cycles)]float32
-	var passCycles uint64
-	for i, cycles := range m.spin.cycles {
-		video[i] = float32(float32(cycles) * k.VideoRate)
-		passCycles += uint64(cycles)
+	// step does not, and a pass whose timeout reaches -1 leaves the loop,
+	// so the passes stop short of all of them.
+	s := &m.spin
+	if s.rate != k.VideoRate {
+		var steps [len(s.cycles)]float32
+		s.rate, s.passCycles = k.VideoRate, 0
+		for i, cycles := range s.cycles {
+			steps[i] = float32(float32(cycles) * k.VideoRate)
+			s.passCycles += uint64(cycles)
+		}
+		s.video = newPassClock(steps)
 	}
 	const passSteps = uint64(len(m.spin.cycles))
-
-	// A pass whose timeout reaches -1 leaves the loop, so the passes stop
-	// short of that.
 	timeout := int32(binary.LittleEndian.Uint32(slot))
-	total, v := c.TotalCycles, *k.Video
-	var steps uint64
-	var passes int32
-	for passes < timeout && total+passCycles < due && steps+passSteps < stepsDue {
-		next := v
-		for _, d := range video {
-			next = float32(next + d)
-		}
-		if next >= *k.VideoEdge {
-			break
-		}
-		total, v, steps = total+passCycles, next, steps+passSteps
-		passes++
+	n := int64(max(timeout, 0))
+	if due := min(*k.Due[0], *k.Due[1], c.TotalCycles+uint64(k.SampleCycles-*k.Sample)); due > c.TotalCycles {
+		n = min(n, int64((due-c.TotalCycles-1)/s.passCycles))
+	} else {
+		n = 0
 	}
+	n = min(n, int64((min(*k.StepsDue-*k.Steps, budget)-1)/passSteps))
+	passes, v := s.video.passes(*k.Video, *k.VideoEdge, n)
 	if passes == 0 {
 		return 0
 	}
 
-	*k.Sample += uint32(total - c.TotalCycles)
+	cycles, steps := uint64(passes)*s.passCycles, uint64(passes)*passSteps
+	*k.Sample += uint32(cycles)
 	*k.Steps += steps
 	*k.Video = v
-	c.TotalCycles = total
-	binary.LittleEndian.PutUint32(slot, uint32(timeout-passes))
+	c.TotalCycles += cycles
+	binary.LittleEndian.PutUint32(slot, uint32(timeout-int32(passes)))
 	return steps
+}
+
+// passClock is what a pass of the loop adds to the video clock, which Run
+// keeps as a float32, adding each step's increment and rounding: the
+// increments, and for each binade of the clock, the floats from a power of
+// two up to the next, what a whole pass adds there.
+//
+// Within a binade every float is a whole number of the binade's unit, 2^-23
+// of its bottom. Adding an increment to one rounds the increment to whole
+// units, to the nearest, the same wherever the clock is, unless it lies
+// halfway between two, when the clock's last bit decides. So while a pass
+// starts and ends within the binade and no increment is halfway, each pass
+// adds the same whole number of units, and the passes before the clock
+// leaves the binade or reaches an edge come to a division. The pass that
+// leaves it, and every pass in a binade where an increment is halfway, are
+// summed a step at a time.
+type passClock struct {
+	steps [len(vsyncWaitPath)]float32
+	adds  [passClockTop - passClockBottom + 1]int64 // in units, or 0 for a step at a time
+}
+
+// The binades a pass is worked out for, from 2^passClockBottom; below it the
+// clock is summed a step at a time, and it never reaches 2^(passClockTop+1),
+// being short of a scanline's 3413 cycles.
+const passClockBottom, passClockTop = -8, 11
+
+func newPassClock(steps [len(vsyncWaitPath)]float32) passClock {
+	p := passClock{steps: steps}
+	for i := range p.adds {
+		for _, d := range p.steps {
+			units, ok := roundUnits(d, passClockBottom+i-23)
+			if !ok {
+				p.adds[i] = 0
+				break
+			}
+			p.adds[i] += units
+		}
+	}
+	return p
+}
+
+// passes returns how many passes, up to n, take the clock from v to short of
+// edge, and where they leave it.
+func (p *passClock) passes(v, edge float32, n int64) (int64, float32) {
+	var done int64
+	for done < n && v < edge {
+		if add := p.add(v); add > 0 {
+			// In units of its binade, a clock there is its mantissa, with
+			// the leading one: the passes that end short of the binade's
+			// top, and of the edge if that is in the binade too, are those
+			// that keep it short of 1<<24, or of the edge's.
+			b, eb := math.Float32bits(v), math.Float32bits(edge)
+			at, top := int64(b&0x7fffff|0x800000), int64(1<<24)
+			if eb>>23 == b>>23 {
+				top = int64(eb&0x7fffff | 0x800000)
+			}
+			j := min((top-at-1)/add, n-done)
+			v = math.Float32frombits(b&^0x7fffff | uint32(at+j*add)&0x7fffff)
+			if done += j; done == n {
+				break
+			}
+		}
+		next := v
+		for _, d := range p.steps {
+			next = float32(next + d)
+		}
+		if next >= edge {
+			break
+		}
+		v, done = next, done+1
+	}
+	return done, v
+}
+
+// add returns what a pass adds to the clock at v, in units of v's binade,
+// or 0 where the pass is to be summed a step at a time.
+func (p *passClock) add(v float32) int64 {
+	// The binade, from the exponent, which a negative clock's sign bit puts
+	// out of range.
+	i := int(math.Float32bits(v)>>23) - 127 - passClockBottom
+	if uint(i) >= uint(len(p.adds)) {
+		return 0
+	}
+	return p.adds[i]
+}
+
+// roundUnits rounds d to a whole number of units of 2^u, to the nearest, and
+// reports false if it lies halfway between two.
+func roundUnits(d float32, u int) (int64, bool) {
+	// d is m units of 2^(e-23), for its exponent e, so m shifted right by s
+	// units of 2^u. Less than half a unit, which zero is, rounds to none.
+	b := math.Float32bits(d)
+	m := int64(b&0x7fffff | 0x800000)
+	s := u - (int(b>>23&0xff) - 127 - 23)
+	switch {
+	case s <= 0:
+		return m << -s, true
+	case s > 25:
+		return 0, true
+	}
+	q, r, half := m>>s, m&(1<<s-1), int64(1)<<(s-1)
+	if r == half {
+		return 0, false
+	}
+	if r > half {
+		q++
+	}
+	return q, true
 }
