@@ -1,7 +1,9 @@
 package emu
 
 import (
+	"archive/zip"
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"io/fs"
@@ -29,11 +31,12 @@ const (
 type Disc struct {
 	files  []*discFile
 	tracks []*discTrack
+	c      io.Closer // the archive the files are in, if any
 }
 
 type discFile struct {
 	r     io.ReaderAt
-	c     io.Closer
+	c     io.Closer // nil for a file in an archive
 	size  int64
 	start uint32
 }
@@ -66,10 +69,22 @@ type discTrack struct {
 // next track. And psxe ends the last track of a file at the file's length
 // in sectors, not counting from where the file starts, which cuts off its
 // last two seconds.
+//
+// A path ending in .zip is an archive holding the cue sheet and its files,
+// opened as OpenDiscZip does.
 func OpenDisc(path string) (*Disc, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
+	}
+	if strings.EqualFold(filepath.Ext(path), ".zip") {
+		d, err := openDiscZipFile(f)
+		if err != nil {
+			f.Close()
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
+		d.c = f
+		return d, nil
 	}
 	defer f.Close()
 
@@ -117,6 +132,74 @@ func OpenDiscFS(fsys fs.FS, name string) (*Disc, error) {
 		}
 		return &discFile{r: r, c: bin, size: info.Size()}, nil
 	})
+}
+
+// OpenDiscZip opens a disc packed in a zip archive of size bytes: one cue
+// sheet, anywhere in the archive, and the files it names relative to it. A
+// file stored as it is reads in place from r, which must stay open as long
+// as the disc does, and a compressed one is decompressed into memory as the
+// disc opens, so an archive meant for an emulator stores its tracks.
+func OpenDiscZip(r io.ReaderAt, size int64) (*Disc, error) {
+	zr, err := zip.NewReader(r, size)
+	if err != nil {
+		return nil, err
+	}
+	var cue *zip.File
+	files := make(map[string]*zip.File, len(zr.File))
+	for _, f := range zr.File {
+		if f.FileInfo().IsDir() {
+			continue
+		}
+		files[path.Clean(f.Name)] = f
+		if strings.EqualFold(path.Ext(f.Name), ".cue") {
+			if cue != nil {
+				return nil, fmt.Errorf("the archive holds two cue sheets, %s and %s", cue.Name, f.Name)
+			}
+			cue = f
+		}
+	}
+	if cue == nil {
+		return nil, fmt.Errorf("the archive holds no cue sheet")
+	}
+	rc, err := cue.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close()
+
+	return readDisc(rc, cue.Name, func(name string) (*discFile, error) {
+		f, ok := files[path.Join(path.Dir(cue.Name), name)]
+		if !ok {
+			return nil, fmt.Errorf("%s: %s: %w", cue.Name, name, fs.ErrNotExist)
+		}
+		size := int64(f.UncompressedSize64)
+		if f.Method == zip.Store {
+			off, err := f.DataOffset()
+			if err != nil {
+				return nil, err
+			}
+			return &discFile{r: io.NewSectionReader(r, off, size), size: size}, nil
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return nil, err
+		}
+		defer rc.Close()
+		data, err := io.ReadAll(rc)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", f.Name, err)
+		}
+		return &discFile{r: bytes.NewReader(data), size: int64(len(data))}, nil
+	})
+}
+
+// openDiscZipFile is OpenDiscZip for an open file.
+func openDiscZipFile(f *os.File) (*Disc, error) {
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	return OpenDiscZip(f, info.Size())
 }
 
 // readDisc parses a cue sheet, named name for errors, opening the files it
@@ -282,10 +365,15 @@ func parseMSF(s string) (uint32, error) {
 	return v[0]*4500 + v[1]*75 + v[2], nil
 }
 
-// Close closes the image's files.
+// Close closes the image's files, and the archive they are in.
 func (d *Disc) Close() error {
 	for _, f := range d.files {
-		f.c.Close()
+		if f.c != nil {
+			f.c.Close()
+		}
+	}
+	if d.c != nil {
+		d.c.Close()
 	}
 	return nil
 }

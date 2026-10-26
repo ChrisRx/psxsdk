@@ -193,6 +193,7 @@ type discFlags struct {
 	audio    []string
 	license  string
 	elf      string
+	deflate  bool
 }
 
 func (f *discFlags) register(cmd *cobra.Command) {
@@ -205,7 +206,8 @@ func (f *discFlags) register(cmd *cobra.Command) {
 	fl.StringVar(&f.elf, "elf", "", "also write the ELF, for its symbols")
 }
 
-// disc builds pkg onto a disc image at bin, a .bin with its .cue beside it.
+// disc builds pkg onto a disc image at bin, a .bin with its .cue beside it,
+// or a .zip holding the two.
 func (f *discFlags) disc(ctx context.Context, pkg, bin string, stdout io.Writer) error {
 	name, err := pkgName(pkg)
 	if err != nil {
@@ -224,6 +226,7 @@ func (f *discFlags) disc(ctx context.Context, pkg, bin string, stdout io.Writer)
 	start := time.Now()
 	opts := mkdisc.NewOptions()
 	opts.Output = bin
+	opts.Deflate = f.deflate
 	opts.VolumeID = f.volumeID
 	if opts.VolumeID == "" {
 		opts.VolumeID = name + ".exe"
@@ -266,7 +269,9 @@ their paths relative to the package directory, with the program's records
 of them filled in with where they were put.
 
 -o names the image, the package directory's name with .bin if not given;
-a name ending in .cue names the .bin beside it.`,
+a name ending in .cue names the .bin beside it, and one ending in .zip puts
+the .bin and .cue in one archive, stored as they are so that an emulator
+reads the sectors in place, or compressed with --deflate.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			defer f.close()
@@ -285,7 +290,8 @@ a name ending in .cue names the .bin beside it.`,
 			return f.disc(cmd.Context(), pkg, binName(out), cmd.OutOrStdout())
 		},
 	}
-	cmd.Flags().StringVarP(&f.out, "output", "o", "", "the image to write, a .bin, with its .cue beside it")
+	cmd.Flags().StringVarP(&f.out, "output", "o", "", "the image to write, a .bin, with its .cue beside it, or a .zip holding the two")
+	cmd.Flags().BoolVar(&f.deflate, "deflate", false, "compress the .bin and .cue in a .zip rather than storing them")
 	f.register(cmd)
 	return cmd
 }

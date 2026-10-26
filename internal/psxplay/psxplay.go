@@ -43,7 +43,7 @@ const sampleRate = 44100
 
 // Options say what to run and how.
 type Options struct {
-	Disc  string      // the cue sheet of a disc to put in the drive, or empty for none
+	Disc  string      // the cue sheet or .zip of a disc to put in the drive, or empty for none
 	BIOS  string      // a BIOS image to boot instead of the OpenBIOS built in
 	EXE   string      // a PSX-EXE to load when the BIOS reaches its shell
 	Card  string      // a memory card image for slot 1

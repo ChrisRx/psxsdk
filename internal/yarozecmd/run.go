@@ -20,12 +20,13 @@ func runCommand() *cobra.Command {
 	var f discFlags
 	var play psxplay.Options
 	cmd := &cobra.Command{
-		Use:   "run [flags] [package | disc.cue]",
+		Use:   "run [flags] [package | disc.cue | disc.zip]",
 		Short: "build a program onto a disc and run it in a window",
 		Long: `run builds the main package in the directory given, the current one if
 none is, onto a disc as disc does, in a temporary directory, and runs it in
 a window, booting OpenBIOS, or the BIOS given with --bios. Given a cue
-sheet instead, it runs that disc as it is, and with --exe it runs a PSX-EXE
+sheet instead, or a .zip holding one and its files, it runs that disc as
+it is, and with --exe it runs a PSX-EXE
 loaded when the BIOS reaches its shell, with the files --load names put in
 memory beside it, as siocons' local dload did. What the program prints goes
 to standard output.
@@ -46,16 +47,17 @@ built and started again, which run says when it cannot build a patch.
 				pkg = args[0]
 			}
 			// A disc or an executable as it is: nothing to build.
-			if cue := strings.EqualFold(filepath.Ext(pkg), ".cue"); cue || play.EXE != "" {
+			ext := filepath.Ext(pkg)
+			if image := strings.EqualFold(ext, ".cue") || strings.EqualFold(ext, ".zip"); image || play.EXE != "" {
 				if f.hot {
 					return errors.New("--hot needs a package to build")
 				}
 				switch {
-				case cue:
+				case image:
 					play.Disc = pkg
 					play.Title = "yaroze - " + filepath.Base(pkg)
 				case len(args) == 1:
-					return errors.New("--exe runs an executable in place of a package; give a cue sheet or nothing with it")
+					return errors.New("--exe runs an executable in place of a package; give a disc or nothing with it")
 				}
 				if play.EXE != "" {
 					play.Loads = f.loads

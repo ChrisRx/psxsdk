@@ -1,6 +1,8 @@
 package emu
 
 import (
+	"archive/zip"
+	"bytes"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -80,6 +82,65 @@ func TestOpenDiscFS(t *testing.T) {
 
 	_, err = OpenDiscFS(fstest.MapFS{"test.cue": fsys["discs/test.cue"]}, "test.cue")
 	assert.Error(t, fs.ErrNotExist, err, "the cue sheet's file is missing")
+}
+
+// TestOpenDiscZip opens a disc from a zip archive, with the track stored
+// as it is, read in place, and deflated, read into memory.
+func TestOpenDiscZip(t *testing.T) {
+	bin := make([]byte, 20*sectorSize)
+	bin[5*sectorSize+24] = 5
+	cue := []byte("FILE \"test.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n")
+	archive := func(method uint16, files map[string][]byte) []byte {
+		var buf bytes.Buffer
+		zw := zip.NewWriter(&buf)
+		for name, data := range files {
+			w, err := zw.CreateHeader(&zip.FileHeader{Name: name, Method: method})
+			if !assert.NoError(t, err) {
+				t.FailNow()
+			}
+			w.Write(data)
+		}
+		assert.NoError(t, zw.Close())
+		return buf.Bytes()
+	}
+
+	for _, method := range []uint16{zip.Store, zip.Deflate} {
+		data := archive(method, map[string][]byte{"disc/test.cue": cue, "disc/test.bin": bin})
+		d, err := OpenDiscZip(bytes.NewReader(data), int64(len(data)))
+		if !assert.NoError(t, err) {
+			t.FailNow()
+		}
+		assert.Equal(t, uint32(170), d.trackLBA(0), "the track runs from 00:02:00 for 20 sectors")
+		var buf [sectorSize]byte
+		assert.Equal(t, sectorData, d.read(155, buf[:]))
+		assert.Equal(t, byte(5), buf[24], "method %d", method)
+		d.Close()
+	}
+
+	data := archive(zip.Store, map[string][]byte{"test.cue": cue})
+	_, err := OpenDiscZip(bytes.NewReader(data), int64(len(data)))
+	assert.Error(t, fs.ErrNotExist, err, "the cue sheet's file is missing")
+
+	data = archive(zip.Store, map[string][]byte{"test.bin": bin})
+	_, err = OpenDiscZip(bytes.NewReader(data), int64(len(data)))
+	assert.Error(t, "no cue sheet", err)
+
+	data = archive(zip.Store, map[string][]byte{"a.cue": cue, "b.cue": cue, "test.bin": bin})
+	_, err = OpenDiscZip(bytes.NewReader(data), int64(len(data)))
+	assert.Error(t, "two cue sheets", err)
+
+	// OpenDisc takes a .zip by its name.
+	path := filepath.Join(t.TempDir(), "test.zip")
+	data = archive(zip.Store, map[string][]byte{"test.cue": cue, "test.bin": bin})
+	if !assert.NoError(t, os.WriteFile(path, data, 0o644)) {
+		t.FailNow()
+	}
+	d, err := OpenDisc(path)
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	assert.Equal(t, uint32(170), d.trackLBA(0))
+	assert.NoError(t, d.Close())
 }
 
 // cdCommand sends a CD-ROM command, runs until each of its responses

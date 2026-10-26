@@ -1,5 +1,5 @@
 // Package mkdisc builds a PlayStation disc image: a .bin of raw sectors with
-// a .cue naming its tracks, or plain 2048-byte blocks. What goes on the disc
+// a .cue naming its tracks, the two in a .zip, or plain 2048-byte blocks. What goes on the disc
 // is a directory placed as it is, host files placed at paths, the executable
 // that boots it with a SYSTEM.CNF naming it, the files that executable
 // registers with package disc, each placed where its declaration says and
@@ -10,6 +10,7 @@
 package mkdisc
 
 import (
+	"archive/zip"
 	"bufio"
 	"bytes"
 	"errors"
@@ -47,9 +48,15 @@ const DefaultStack = 0x801ff000
 // Options say what goes on the disc and how it is written. NewOptions gives
 // the defaults.
 type Options struct {
-	// Output is the image to write: a .bin, with its .cue beside it, or a
-	// .cue, naming the .bin beside it. With ISO it is written as it is.
+	// Output is the image to write: a .bin, with its .cue beside it, a
+	// .cue, naming the .bin beside it, or a .zip holding the two. With ISO
+	// it is written as it is.
 	Output string
+
+	// Deflate compresses the .bin and .cue in a .zip rather than storing
+	// them, which makes a smaller file that an emulator has to unpack into
+	// memory rather than read in place.
+	Deflate bool
 
 	// ISO writes 2048-byte blocks rather than raw sectors: what ordinary
 	// ISO 9660 tools read, and what cannot hold a stream or an audio track.
@@ -227,6 +234,9 @@ func Build(o Options) error {
 		list(out, root, prog, tracks)
 	}
 	if o.ISO {
+		if strings.EqualFold(filepath.Ext(o.Output), ".zip") {
+			return fmt.Errorf("a .iso is written as it is, not into %s", o.Output)
+		}
 		if len(tracks) > 0 {
 			return fmt.Errorf("%d audio track(s) given, which a .iso of 2048-byte blocks cannot hold", len(tracks))
 		}
@@ -237,32 +247,82 @@ func Build(o Options) error {
 		return nil
 	}
 
-	bin, cue := names(o.Output)
+	zipped := strings.EqualFold(filepath.Ext(o.Output), ".zip")
+	if o.Deflate && !zipped {
+		return fmt.Errorf("deflating is for a .zip, and %s is not one", o.Output)
+	}
+	img := psxdisc.Image{Data: w, Audio: tracks}
 	var layout psxdisc.Layout
-	err = writeFile(bin, func(w2 io.Writer) error {
-		img := psxdisc.Image{Data: w, Audio: tracks}
-		var err error
-		layout, err = img.Write(w2)
-		return err
-	})
+	var bin, cue string
+	if zipped {
+		stem := strings.TrimSuffix(filepath.Base(o.Output), filepath.Ext(o.Output))
+		bin, cue = stem+".bin", stem+".cue"
+		err = writeFile(o.Output, func(w2 io.Writer) error {
+			var err error
+			layout, err = writeZip(w2, &img, bin, cue, o.Deflate)
+			return err
+		})
+	} else {
+		bin, cue = names(o.Output)
+		err = writeFile(bin, func(w2 io.Writer) error {
+			var err error
+			layout, err = img.Write(w2)
+			return err
+		})
+		if err == nil {
+			err = writeFile(cue, func(w2 io.Writer) error {
+				return psxdisc.WriteCueSheet(w2, filepath.Base(bin), layout)
+			})
+		}
+	}
 	if err != nil {
 		return err
 	}
-	if err := writeFile(cue, func(w2 io.Writer) error {
-		return psxdisc.WriteCueSheet(w2, filepath.Base(bin), layout)
-	}); err != nil {
-		return err
-	}
 
-	fmt.Fprintf(out, "wrote %s: %d blocks", bin, w.TotalBlocks())
+	if zipped {
+		fmt.Fprintf(out, "wrote %s: %s of %d blocks", o.Output, bin, w.TotalBlocks())
+	} else {
+		fmt.Fprintf(out, "wrote %s: %d blocks", bin, w.TotalBlocks())
+	}
 	if o.Padding > 0 {
 		fmt.Fprintf(out, ", %d of them run-out", o.Padding)
 	}
 	if n := len(tracks); n > 0 {
 		fmt.Fprintf(out, ", and %d audio track(s), %d sectors in all", n, layout.Sectors())
 	}
-	fmt.Fprintf(out, "; %s beside it\n", filepath.Base(cue))
+	if zipped {
+		fmt.Fprintf(out, "; %s with it\n", cue)
+	} else {
+		fmt.Fprintf(out, "; %s beside it\n", filepath.Base(cue))
+	}
 	return nil
+}
+
+// writeZip writes the image into a zip archive as bin, with the cue sheet
+// naming it as cue. They are stored as they are, so that an emulator reads
+// the sectors in place, unless deflate is set.
+func writeZip(w io.Writer, img *psxdisc.Image, bin, cue string, deflate bool) (psxdisc.Layout, error) {
+	method := zip.Store
+	if deflate {
+		method = zip.Deflate
+	}
+	zw := zip.NewWriter(w)
+	bw, err := zw.CreateHeader(&zip.FileHeader{Name: bin, Method: method})
+	if err != nil {
+		return psxdisc.Layout{}, err
+	}
+	layout, err := img.Write(bw)
+	if err != nil {
+		return layout, err
+	}
+	cw, err := zw.CreateHeader(&zip.FileHeader{Name: cue, Method: method})
+	if err != nil {
+		return layout, err
+	}
+	if err := psxdisc.WriteCueSheet(cw, bin, layout); err != nil {
+		return layout, err
+	}
+	return layout, zw.Close()
 }
 
 // names returns the .bin and the .cue for an output, which may name either.

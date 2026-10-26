@@ -9,7 +9,7 @@ weight: 6
 $ psxemu --bios openbios.bin --disc .build/check/check.cue --png screen.png
 ```
 
-`--trace`, `--skip` and `--count` write an instruction trace in the format the patched psxe writes with `PSXE_TRACE`. `--vram` dumps VRAM at the end, `--png` saves what the display shows, `--card` attaches a memory card image to slot 1, and `--cpuprofile` profiles the run for `go tool pprof`.
+`--disc` takes a cue sheet, or a `.zip` holding one and its files, as [`mkdisc`](mkdisc.md#one-file) writes. `--trace`, `--skip` and `--count` write an instruction trace in the format the patched psxe writes with `PSXE_TRACE`. `--vram` dumps VRAM at the end, `--png` saves what the display shows, `--card` attaches a memory card image to slot 1, and `--cpuprofile` profiles the run for `go tool pprof`.
 
 ## Driving a program
 

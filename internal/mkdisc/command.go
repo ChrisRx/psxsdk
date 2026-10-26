@@ -20,6 +20,9 @@ func Command(use string) *cobra.Command {
 		Long: use + ` writes a disc image: a .bin of raw CD-ROM XA sectors with a .cue
 sheet beside it naming its tracks, which an emulator opens and which burns
 to a CD-R, or with --iso plain 2048-byte blocks for ordinary ISO 9660 tools.
+An output ending in .zip puts the .bin and .cue in one archive, stored as
+they are so that an emulator reads the sectors in place, or compressed with
+--deflate.
 
 The directory given is placed on the disc as it is, with names folded to
 the capitals, digits and underscores ISO 9660 allows and given the ";1"
@@ -67,7 +70,8 @@ cannot finish reading. --padding sets how many, and 0 leaves none.`,
 		SilenceUsage: true,
 	}
 	f := cmd.Flags()
-	f.StringVarP(&opts.Output, "output", "o", "", "the image to write: a .bin, with its .cue beside it, or with --iso a .iso")
+	f.StringVarP(&opts.Output, "output", "o", "", "the image to write: a .bin, with its .cue beside it, a .zip holding the two, or with --iso a .iso")
+	f.BoolVar(&opts.Deflate, "deflate", false, "compress the .bin and .cue in a .zip rather than storing them")
 	f.BoolVar(&opts.ISO, "iso", false, "write 2048-byte blocks rather than raw sectors, which holds no streams or audio")
 	f.StringVar(&opts.Boot, "boot", "", "the path on the disc of the executable that boots it: SYSTEM.CNF names it, and the files it registers are placed")
 	f.StringArrayVar(&opts.Files, "file", nil, "DISC=HOST: place a host file at a path on the disc; may be repeated")

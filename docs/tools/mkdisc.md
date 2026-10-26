@@ -87,6 +87,17 @@ FILE "game.bin" BINARY
 
 A program can declare its own tracks instead, with [`disc.Track`](disc), which `yaroze disc` and `mkdisc --boot` record after any `--audio` tracks and whose numbers they write into the program, as they do the sectors of its files. The [cdda example](../examples/cdda.md) plays three.
 
+## One file
+
+An output ending in `.zip` puts the `.bin` and the `.cue` in one archive, named after it:
+
+```bash
+$ mkdisc -o game.zip --boot MAIN.EXE ./disc
+wrote game.zip: game.bin of 789 blocks, 150 of them run-out; game.cue with it
+```
+
+[`psxemu`](psxemu.md) and `yaroze run` open the archive as they would the cue sheet. The files are stored rather than compressed, so the emulator reads sectors straight out of the archive. `--deflate` compresses them, which makes a smaller file, and the emulator then unpacks the whole disc into memory when it opens it. Other emulators expect the `.cue` and `.bin` themselves, and `unzip` gives them back.
+
 ## Plain ISO 9660
 
 `--iso` writes plain 2048-byte blocks instead. That cannot represent audio tracks or Form 2 sectors, and says so rather than writing an image missing either, but ordinary ISO 9660 tools can read it, which is how the filesystem is checked against an independent implementation:

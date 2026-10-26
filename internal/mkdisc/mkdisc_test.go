@@ -1,6 +1,7 @@
 package mkdisc
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/binary"
 	"io"
@@ -357,6 +358,65 @@ func TestISO(t *testing.T) {
 
 	opts.Audio = []string{write(t, dir, "a.raw", make([]byte, psxdisc.AudioSectorSize))}
 	assert.Error(t, "cannot hold", Build(opts))
+}
+
+// TestZip writes the .bin and .cue into a .zip, the same bytes as beside
+// each other, stored or deflated.
+func TestZip(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "tree/a.txt", []byte("a"))
+	opts := NewOptions()
+	opts.Dir = filepath.Join(dir, "tree")
+	opts.Audio = []string{write(t, dir, "a.raw", make([]byte, 3*psxdisc.AudioSectorSize))}
+	opts.Stdout = io.Discard
+	opts.Output = filepath.Join(dir, "plain.bin")
+	if !assert.NoError(t, Build(opts)) {
+		t.FailNow()
+	}
+	bin, err := os.ReadFile(filepath.Join(dir, "plain.bin"))
+	assert.NoError(t, err)
+	cue, err := os.ReadFile(filepath.Join(dir, "plain.cue"))
+	assert.NoError(t, err)
+	cue = bytes.ReplaceAll(cue, []byte("plain.bin"), []byte("game.bin"))
+
+	for _, deflate := range []bool{false, true} {
+		opts.Output = filepath.Join(dir, "game.zip")
+		opts.Deflate = deflate
+		if !assert.NoError(t, Build(opts)) {
+			t.FailNow()
+		}
+		zr, err := zip.OpenReader(opts.Output)
+		if !assert.NoError(t, err) {
+			t.FailNow()
+		}
+		want := map[string][]byte{"game.bin": bin, "game.cue": cue}
+		method := zip.Store
+		if deflate {
+			method = zip.Deflate
+		}
+		for _, f := range zr.File {
+			assert.Equal(t, method, f.Method, f.Name)
+			rc, err := f.Open()
+			if !assert.NoError(t, err) {
+				t.FailNow()
+			}
+			got, err := io.ReadAll(rc)
+			rc.Close()
+			assert.NoError(t, err)
+			assert.Equal(t, true, bytes.Equal(want[f.Name], got), "%s, deflated %v", f.Name, deflate)
+			delete(want, f.Name)
+		}
+		zr.Close()
+		assert.Equal(t, 0, len(want), "every file is in the archive")
+	}
+
+	opts.Output = filepath.Join(dir, "game.bin")
+	assert.Error(t, "is for a .zip", Build(opts))
+	opts.Output = filepath.Join(dir, "game.zip")
+	opts.Deflate = false
+	opts.Audio = nil
+	opts.ISO = true
+	assert.Error(t, "written as it is", Build(opts))
 }
 
 func TestNames(t *testing.T) {

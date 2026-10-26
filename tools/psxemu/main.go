@@ -75,7 +75,7 @@ compared frame by frame.
 	}
 	f := cmd.Flags()
 	f.StringVar(&opts.BIOS, "bios", "", "BIOS image to boot")
-	f.StringVar(&opts.Disc, "disc", "", "cue sheet of a disc to put in the drive")
+	f.StringVar(&opts.Disc, "disc", "", "cue sheet, or .zip holding one, of a disc to put in the drive")
 	f.StringVar(&opts.EXE, "exe", "", "PSX-EXE to load when the BIOS reaches its shell, as psxe -x does")
 	f.StringVar(&opts.Trace, "trace", "", "write an instruction trace here")
 	f.Uint64Var(&opts.Skip, "skip", 0, "instructions to run before tracing")
