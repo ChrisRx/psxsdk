@@ -25,6 +25,13 @@ func LoadUint16(p *uint16) uint16 { return volatile.LoadUint16(p) }
 
 // StoreUint16 writes the half-word at p, every time it is called.
 func StoreUint16(p *uint16, v uint16) { volatile.StoreUint16(p, v) }
+// A Register16 is a halfword of memory-mapped hardware, read and written
+// as is, every time.
+type Register16 = volatile.Register16
+
+// A Register8 is a byte of memory-mapped hardware, read and written as
+// is, every time.
+type Register8 = volatile.Register8
 
 // LoadUint8 reads the byte at p, every time it is called.
 //
