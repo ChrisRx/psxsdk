@@ -170,6 +170,7 @@
           <span id="save-status" class="status" aria-live="polite"></span>
           <button id="format" class="small-button" type="button" title="Format the program with gofmt (Ctrl+Shift+F)">Format</button>
           <label class="pg-hot" title="Hot reload: while this project runs, Run builds a patch of its main package and loads it into the running program between frames, keeping its variables, instead of starting over. Experimental: a change to a variable's type, to a type's layout or to another package needs a restart, which Run does when it cannot build a patch, and the game may misbehave if a running function's locals changed."><input type="checkbox" id="hot"> Hot</label>
+          <label class="pg-hot" id="golib-label" hidden title="Go library: build against psxsdk's own reimplementation of the Net Yaroze library, linked into the program, instead of laying the program over Sony's resident one. Experimental: a library function it does not have yet fails the build by name."><input type="checkbox" id="golib"> Go library</label>
         </div>
       </div>
       <div id="editors" class="pg-editors">
