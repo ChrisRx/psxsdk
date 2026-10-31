@@ -93,6 +93,14 @@ type CPU struct {
 	LastCycles  uint32
 	TotalCycles uint64
 
+	// gteDone is when the GTE command in flight finishes, in TotalCycles.
+	// The GTE runs a command while the CPU goes on, and holds the CPU at
+	// its next GTE instruction until the command is done, so a command
+	// costs nothing when issued and the wait is charged to that
+	// instruction, which is what makes work placed between a command
+	// and its result read free.
+	gteDone uint64
+
 	// Excode is the exception the last step took, or NoException.
 	Excode uint8
 
@@ -312,7 +320,8 @@ func (c *CPU) Run(n uint64, k *Clock) uint64 {
 			// exception.
 			if c.Opcode&0xfe000000 == 0x4a000000 {
 				c.pendingLoad()
-				c.LastCycles += c.GTE.Command(c.Opcode)
+				c.LastCycles += c.gteWait() + c.GTE.Command(c.Opcode)
+				c.gteDone = 0
 			}
 			c.TotalCycles += uint64(c.LastCycles)
 			c.R[0] = 0
