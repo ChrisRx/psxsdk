@@ -122,11 +122,11 @@ func TestLoad(t *testing.T) {
 	got.Texture0, got.Model0 = s.Textures[0][0], s.Models[0][0]
 	assert.Equal(t, want, got)
 	model, index := s.ObjectModel(1)
-	assert.Equal(t, [2]int32{0, 1}, [2]int32{int32(model), index})
+	assert.Equal(t, [2]int{0, 1}, [2]int{model, index})
 	f0, f1 := s.ObjectFields(1)
-	assert.Equal(t, [2]int32{7, -3}, [2]int32{f0, f1})
+	assert.Equal(t, [2]int{7, -3}, [2]int{f0, f1})
 	f0, f1 = s.ObjectFields(0)
-	assert.Equal(t, [2]int32{0, 0}, [2]int32{f0, f1})
+	assert.Equal(t, [2]int{0, 0}, [2]int{f0, f1})
 }
 
 // withLayers gives the sample a far layer and a ground layer with flags,
@@ -287,7 +287,7 @@ func TestLoadRoom(t *testing.T) {
 	assert.Equal(t, 300, r.CamBack)
 	assert.Equal(t, "ASSETS/CAVE.DAT", s.Link('2'))
 	assert.Equal(t, "", s.Link('3'))
-	assert.Equal(t, &Marker{I: 1, J: 1, Fields: [2]int32{4, -1}}, s.Marker("chest"))
+	assert.Equal(t, &Marker{I: 1, J: 1, Fields: [2]int{4, -1}}, s.Marker("chest"))
 	assert.Equal(t, &Marker{I: 2, J: 1}, s.Marker("host"))
 	assert.Equal(t, (*Marker)(nil), s.Marker("nobody"))
 	assert.Equal(t, 2, s.NMarkers())

@@ -17,7 +17,7 @@ func (s *Scene) setup() {
 	for i := range s.NObjects {
 		o := &s.Objects[i]
 		o.Init(yaroze.WORLD)
-		o.Link(s.Models[s.objectModel[i]], s.objectIndex[i])
+		o.Link(s.Models[s.objectModel[i]], int32(s.objectIndex[i]))
 	}
 	for i := range s.nLayers {
 		// The cells are cut from the texture in reading order, as many
