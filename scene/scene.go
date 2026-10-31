@@ -199,8 +199,8 @@ type Scene struct {
 	spriteNames [MaxSprites][16]byte
 	// Each object's model, an index into Models, and its number in the TMD.
 	objectModel  [MaxObjects]uint8
-	objectIndex  [MaxObjects]int32
-	objectFields [MaxObjects][2]int32
+	objectIndex  [MaxObjects]int
+	objectFields [MaxObjects][2]int
 	ready        bool
 
 	// What Load was given, for reload.
@@ -320,7 +320,7 @@ type Room struct {
 // stand on, with two fields of the program's own.
 type Marker struct {
 	I, J   int
-	Fields [2]int32
+	Fields [2]int
 }
 
 // Room returns the scene's room, or nil when it has none. Its map's
@@ -507,8 +507,8 @@ func (s *Scene) parse(data []uint32, src Source) error {
 			return ErrFormat
 		}
 		s.objectModel[i] = uint8(r[4])
-		s.objectIndex[i] = int32(r[5])
-		s.objectFields[i] = [2]int32{int32(r[14]), int32(r[15])}
+		s.objectIndex[i] = int(int32(r[5]))
+		s.objectFields[i] = [2]int{int(int32(r[14])), int(int32(r[15]))}
 		at += objectWords
 	}
 	s.NSprites = ns
@@ -685,7 +685,11 @@ func (s *Scene) parseRoom(data []uint32, at int) error {
 	for i := range nm {
 		w := r[roomWords+at/4:]
 		copyName(&s.markerName[i], w[:nameWords])
-		s.markers[i] = Marker{I: int(w[4] & 0xffff), J: int(w[4] >> 16), Fields: [2]int32{int32(w[5]), int32(w[6])}}
+		s.markers[i] = Marker{
+			I:      int(w[4] & 0xffff),
+			J:      int(w[4] >> 16),
+			Fields: [2]int{int(int32(w[5])), int(int32(w[6]))},
+		}
 		at += 4 * markerWords
 	}
 	s.hasRoom = true
@@ -694,14 +698,14 @@ func (s *Scene) parseRoom(data []uint32, at int) error {
 
 // ObjectModel returns the index into Models of object i's model, and the
 // object's number in that TMD.
-func (s *Scene) ObjectModel(i int) (model int, index int32) {
+func (s *Scene) ObjectModel(i int) (model, index int) {
 	return int(s.objectModel[i]), s.objectIndex[i]
 }
 
 // ObjectFields returns the two numbers the file gives object i, for the
 // program's own purposes: a kind, a score, a door's key, as the scene's
 // editor set them.
-func (s *Scene) ObjectFields(i int) (int32, int32) {
+func (s *Scene) ObjectFields(i int) (int, int) {
 	return s.objectFields[i][0], s.objectFields[i][1]
 }
 

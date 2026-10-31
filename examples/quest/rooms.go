@@ -112,7 +112,7 @@ func (r *room) place() {
 	for k := range r.npcs {
 		n := &r.npcs[k]
 		if m := world.Marker(n.name); m != nil {
-			n.i, n.j, n.facing = m.I, m.J, int(m.Fields[0])
+			n.i, n.j, n.facing = m.I, m.J, m.Fields[0]
 		}
 	}
 	for k := range r.chests {
