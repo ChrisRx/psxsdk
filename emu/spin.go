@@ -153,7 +153,7 @@ func (m *Machine) skipSpin(k *cpu.Clock, budget uint64) uint64 {
 	const passSteps = uint64(len(m.spin.cycles))
 	timeout := int32(binary.LittleEndian.Uint32(slot))
 	n := int64(max(timeout, 0))
-	if due := min(*k.Due[0], *k.Due[1], c.TotalCycles+uint64(k.SampleCycles-*k.Sample)); due > c.TotalCycles {
+	if due := min(*k.Due[0], *k.Due[1], *k.Due[2], c.TotalCycles+uint64(k.SampleCycles-*k.Sample)); due > c.TotalCycles {
 		n = min(n, int64((due-c.TotalCycles-1)/s.passCycles))
 	} else {
 		n = 0

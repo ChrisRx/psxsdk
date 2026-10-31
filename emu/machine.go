@@ -48,6 +48,7 @@ type Machine struct {
 	tmr  *timers
 	cd   *cdrom
 	sio  *sio0
+	sio1 *sio1
 	mdec *mdec
 
 	// spuCycles counts towards the next SPU sample.
@@ -108,6 +109,7 @@ func New(bios []byte) (*Machine, error) {
 	m.gpu.timers = m.tmr
 	m.cd = newCDROM(m.ic, cycles, &m.wake, m.fail.report)
 	m.sio = newSIO0(m.ic, cycles, &m.wake, [2]*Pad{newDigitalPad(), nil})
+	m.sio1 = newSIO1(m.ic, cycles, &m.wake)
 	m.mdec = newMDEC(m.fail.report)
 
 	// The order is psxe's, which only matters where ranges overlap.
@@ -129,6 +131,7 @@ func New(bios []byte) (*Machine, error) {
 		{base: 0x1f801100, size: 0x30, dev: m.tmr},
 		{base: 0x1f801800, size: 0x4, dev: m.cd},
 		{base: 0x1f801040, size: 0x10, dev: m.sio},
+		{base: 0x1f801050, size: 0x10, dev: m.sio1},
 		{base: 0x1f801820, size: 0x8, dev: m.mdec},
 	})
 	// Most accesses are to RAM, and code runs from RAM and the BIOS. The
@@ -440,7 +443,7 @@ func (m *Machine) RunFrame(budget uint64) (uint64, error) {
 // invariant over the run is worked out once rather than every instruction.
 func (m *Machine) run(n, frames uint64) (uint64, error) {
 	c := m.CPU
-	cd, gpu, sio, tmr, dma, spu := m.cd, m.gpu, m.sio, m.tmr, m.dma, m.spu
+	cd, gpu, sio, sio1, tmr, dma, spu := m.cd, m.gpu, m.sio, m.sio1, m.tmr, m.dma, m.spu
 	tty, trace := m.TTY != nil, m.trace != nil
 	logging := m.log.l != nil
 
@@ -449,7 +452,7 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 	// something to do, keeping the clocks below up to date as it goes.
 	k := cpu.Clock{
 		Steps: &m.steps, StepsDue: &tmr.due,
-		Due:   [2]*uint64{&cd.due, &sio.due},
+		Due:   [3]*uint64{&cd.due, &sio.due, &sio1.due},
 		Video: &gpu.cycles, VideoEdge: &gpu.edge, VideoRate: gpuCyclesPerCPU,
 		Sample: &m.spuCycles, SampleCycles: spuSampleCycles,
 		Busy: &dma.active,
@@ -514,6 +517,9 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 		gpu.update(c.LastCycles)
 		if c.TotalCycles >= sio.due {
 			sio.update()
+		}
+		if c.TotalCycles >= sio1.due {
+			sio1.update()
 		}
 		m.steps++
 		if m.steps >= tmr.due {

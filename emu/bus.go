@@ -58,10 +58,6 @@ type Bus struct {
 	ram  window
 	code []window
 
-	// sioCtrl is the one register psxe answers for SIO1, which it does
-	// not otherwise emulate. Nothing ever writes it.
-	sioCtrl uint16
-
 	// log is the machine's, for accesses to nothing.
 	log *logger
 }
@@ -238,10 +234,6 @@ func (b *Bus) Read16(addr uint32) uint16 {
 		return m.dev.Read16(off)
 	}
 	switch addr {
-	case 0x1f80105a:
-		return b.sioCtrl
-	case 0x1f801054:
-		return 0x05 // SIO1 status: transmitter ready and idle
 	case 0x1f400004:
 		return 0xc8
 	case 0x1f400006:
