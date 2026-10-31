@@ -30,6 +30,13 @@ type Machine struct {
 	CPU *cpu.CPU
 	Bus *Bus
 
+	// hookTarget is the handler a call through the B-function table is
+	// about to reach, where the TTY looks at the call, and hookCall the
+	// call's registers at the jump, which must still hold there: the
+	// function number, its first three arguments and the return address.
+	hookTarget uint32
+	hookCall   [5]uint32
+
 	// TTY receives what the BIOS prints through its putchar and puts
 	// functions, which is where the kernel's boot messages and a program's
 	// printf output go.
@@ -476,14 +483,36 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 	// in 0xb4 as well as the exception vector and the BIOS's tables.
 	if logging {
 		k.Hook, k.HookMask, k.Hooked = 0, 0x3fffff00, true
+	} else if m.hookTarget != 0 {
+		k.Hook = m.hookTarget
 	}
 
 	var i uint64
 	for i < n && gpu.frames < frames {
 		// A call through the B-function table lands at 0xb0 and jumps to
-		// the handler at 0xb4, with the function number in $t1.
-		if tty && c.PC&0x3fffffff == 0xb4 {
-			m.bFunction()
+		// the handler at 0xb4, with the function number in $t1 and the
+		// handler's address in $t0. The call is looked at when the
+		// handler is reached rather than at the jump: an interrupt taken
+		// in the jump's delay slot returns to the jump, which runs again,
+		// and the call would be seen twice.
+		if tty && !logging {
+			if c.PC&0x3fffffff == 0xb4 {
+				// The kernels jump through a register there; a test's
+				// stand-in may not, and is looked at as it is.
+				if op := m.Bus.Read32(0xb4); op&0xfc1fffff == 0x08 && op>>21&31 != 31 {
+					m.hookCall = [5]uint32{c.R[9], c.R[4], c.R[5], c.R[6], c.R[31]}
+					m.hookTarget = c.R[op>>21&31] & 0x3fffffff
+					k.Hook = m.hookTarget
+				} else {
+					m.bFunction()
+				}
+			} else if m.hookTarget != 0 && c.PC&0x3fffffff == m.hookTarget {
+				if m.hookCall == [5]uint32{c.R[9], c.R[4], c.R[5], c.R[6], c.R[31]} {
+					m.bFunction()
+				}
+				m.hookTarget = 0
+				k.Hook = 0xb4
+			}
 		}
 		if logging && c.PC&0x3fffff00 == 0 {
 			m.hooked()

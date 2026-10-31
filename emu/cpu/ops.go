@@ -86,6 +86,8 @@ func (c *CPU) execute() (cycles uint32, ok bool) {
 			return 0, false
 		}
 	case 0x12:
+		// Every GTE instruction waits for the command in flight first.
+		wait := c.gteWait()
 		switch c.rs() {
 		case 0x00: // mfc2
 			c.pendingLoad()
@@ -109,8 +111,12 @@ func (c *CPU) execute() (cycles uint32, ok bool) {
 			if n == 0 {
 				return 0, false
 			}
-			return n, true
+			// The command runs from here: its cost is charged to the next
+			// GTE instruction that comes before it is done.
+			c.gteDone = c.TotalCycles + uint64(c.LastCycles) + uint64(wait) + uint64(n)
+			return wait, true
 		}
+		return 2 + wait, true
 	case 0x22:
 		c.opLWL()
 	case 0x26:
@@ -124,13 +130,27 @@ func (c *CPU) execute() (cycles uint32, ok bool) {
 		// pending load first.
 		c.exception(ExcCpU)
 	case 0x32:
+		wait := c.gteWait()
 		c.opLWC2()
+		return 2 + wait, true
 	case 0x3a:
+		wait := c.gteWait()
 		c.opSWC2()
+		return 2 + wait, true
 	default:
 		return 0, false
 	}
 	return 2, true
+}
+
+// gteWait is how long the CPU waits for the GTE command in flight at a
+// GTE instruction: what is left of the command, or nothing.
+func (c *CPU) gteWait() uint32 {
+	now := c.TotalCycles + uint64(c.LastCycles)
+	if c.gteDone > now {
+		return uint32(c.gteDone - now)
+	}
+	return 0
 }
 
 func b2u(b bool) uint32 {
