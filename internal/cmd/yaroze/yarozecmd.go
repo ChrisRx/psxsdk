@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"go.chrisrx.dev/x/context"
 
 	"go.chrisrx.dev/psx/internal/cmd/discgen"
 	"go.chrisrx.dev/psx/internal/cmd/mkarc"
@@ -56,7 +57,7 @@ runs it under the wasmtime command when there is one, which is quicker.`,
 		mkarc.Command("arc"),
 		sioload.Command("sio"),
 	)
-	if err := root.Execute(); err != nil {
+	if err := root.ExecuteContext(context.Shutdown()); err != nil {
 		fmt.Fprintf(os.Stderr, "%s: %v\n", name, err)
 		os.Exit(1)
 	}

@@ -1,16 +1,17 @@
-// Package sioload uploads an ECOFF executable to a Net Yaroze over the
-// serial cable, as siocons did, and with --exec runs it. It is the sioload
-// tool and yaroze's sio command.
+// Package sioload uploads an executable to a Net Yaroze over the serial
+// cable, as SIOCONS's load did, a PS-X EXE, ECOFF or ELF, and with --exec
+// runs it. It is the sioload tool.
 package sioload
 
 import (
-	"errors"
-	"io"
+	"context"
 	"os"
 
 	"github.com/spf13/cobra"
-	"go.bug.st/serial"
-	"go.chrisrx.dev/psx/format/ecoff"
+	xcontext "go.chrisrx.dev/x/context"
+	"go.chrisrx.dev/x/errors"
+
+	"go.chrisrx.dev/psx/serial"
 )
 
 type options struct {
@@ -20,8 +21,7 @@ type options struct {
 	Stdout     bool
 }
 
-// Command returns the command, as use: sioload as a tool of its own, and
-// sio in yaroze.
+// Command returns the command, as use.
 func Command(use string) *cobra.Command {
 	var opts options
 	cmd := &cobra.Command{
@@ -30,7 +30,7 @@ func Command(use string) *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return run(&opts, args)
+			return run(cmd.Context(), &opts, args)
 		},
 	}
 	cmd.Flags().IntVarP(&opts.BaudRate, "baud", "b", 115200, "baud rate")
@@ -40,17 +40,13 @@ func Command(use string) *cobra.Command {
 	return cmd
 }
 
-func run(opts *options, args []string) error {
-	f, err := ecoff.Open(args[0])
+func run(ctx context.Context, opts *options, args []string) error {
+	prog, err := serial.OpenProgram(args[0])
 	if err != nil {
 		return err
 	}
-	w := io.Discard
-	if opts.Stdout {
-		w = os.Stdout
-	}
 	if opts.DeviceName == "" {
-		ports, err := serial.GetPortsList()
+		ports, err := serial.Devices()
 		if err != nil {
 			return err
 		}
@@ -59,24 +55,31 @@ func run(opts *options, args []string) error {
 		}
 		opts.DeviceName = ports[0]
 	}
-	c, err := OpenPort(&PortConfig{
-		BaudRate:   opts.BaudRate,
-		DeviceName: opts.DeviceName,
-		Output:     w,
-	})
+	// Under the shutdown context the tool runs with, the first Ctrl-C
+	// cancels ctx, which stops the upload between bytes and closes the port,
+	// and a second kills the process.
+	xcontext.AddHandler(ctx, func() {})
+	port, err := serial.Open(opts.DeviceName, opts.BaudRate)
 	if err != nil {
 		return err
 	}
-	defer c.Close()
+	defer port.Close()
+	if opts.Stdout {
+		port.Output = os.Stdout
+	}
 
-	if err := c.ClearScreen(); err != nil {
+	m, err := serial.NewMonitor(ctx, port)
+	if err != nil {
 		return err
 	}
-	if err := c.Load(f); err != nil {
+	if err := m.ClearScreen(ctx); err != nil {
+		return err
+	}
+	if err := m.Load(ctx, prog); err != nil {
 		return err
 	}
 	if opts.Exec {
-		return c.Go()
+		return m.Run(ctx)
 	}
 	return nil
 }
