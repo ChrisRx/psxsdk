@@ -6,7 +6,7 @@ package main
 import (
 	"log"
 
-	"go.chrisrx.dev/psx/internal/mkscene"
+	"go.chrisrx.dev/psx/internal/cmd/mkscene"
 )
 
 func main() {

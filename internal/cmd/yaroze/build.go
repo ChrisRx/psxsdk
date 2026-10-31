@@ -1,4 +1,4 @@
-package yarozecmd
+package yaroze
 
 import (
 	"bytes"
@@ -12,8 +12,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.chrisrx.dev/psx/internal/cmd/mkdisc"
 	"go.chrisrx.dev/psx/internal/flags"
-	"go.chrisrx.dev/psx/internal/mkdisc"
 	"go.chrisrx.dev/psx/internal/toolchain"
 	"go.chrisrx.dev/psx/link"
 )

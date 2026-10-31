@@ -10,7 +10,7 @@ package main
 import (
 	"log"
 
-	"go.chrisrx.dev/psx/internal/discgen"
+	"go.chrisrx.dev/psx/internal/cmd/discgen"
 )
 
 func main() {

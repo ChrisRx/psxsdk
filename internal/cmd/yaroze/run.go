@@ -1,4 +1,4 @@
-package yarozecmd
+package yaroze
 
 import (
 	"context"

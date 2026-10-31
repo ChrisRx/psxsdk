@@ -7,7 +7,7 @@ package main
 import (
 	"log"
 
-	"go.chrisrx.dev/psx/internal/mkvab"
+	"go.chrisrx.dev/psx/internal/cmd/mkvab"
 )
 
 func main() {

@@ -1,7 +1,7 @@
-// Package yarozecmd is the yaroze command, which cmd/yaroze builds with the
+// Package yaroze is the yaroze command, which cmd/yaroze builds with the
 // compiler embedded. It is not package yaroze, the library a program is
 // written against, which it builds programs with.
-package yarozecmd
+package yaroze
 
 import (
 	"fmt"
@@ -10,16 +10,16 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"go.chrisrx.dev/psx/internal/discgen"
-	"go.chrisrx.dev/psx/internal/mkarc"
-	"go.chrisrx.dev/psx/internal/mkdisc"
-	"go.chrisrx.dev/psx/internal/mkscene"
-	"go.chrisrx.dev/psx/internal/mkvab"
-	"go.chrisrx.dev/psx/internal/obj2tmd"
-	"go.chrisrx.dev/psx/internal/png2tim"
-	"go.chrisrx.dev/psx/internal/sioload"
-	"go.chrisrx.dev/psx/internal/smf2seq"
-	"go.chrisrx.dev/psx/internal/wav2vag"
+	"go.chrisrx.dev/psx/internal/cmd/discgen"
+	"go.chrisrx.dev/psx/internal/cmd/mkarc"
+	"go.chrisrx.dev/psx/internal/cmd/mkdisc"
+	"go.chrisrx.dev/psx/internal/cmd/mkscene"
+	"go.chrisrx.dev/psx/internal/cmd/mkvab"
+	"go.chrisrx.dev/psx/internal/cmd/obj2tmd"
+	"go.chrisrx.dev/psx/internal/cmd/png2tim"
+	"go.chrisrx.dev/psx/internal/cmd/sioload"
+	"go.chrisrx.dev/psx/internal/cmd/smf2seq"
+	"go.chrisrx.dev/psx/internal/cmd/wav2vag"
 )
 
 // runtimeFlag adds the --runtime flag, defaulting to YAROZE_RUNTIME.

@@ -6,7 +6,7 @@ package main
 import (
 	"log"
 
-	"go.chrisrx.dev/psx/internal/smf2seq"
+	"go.chrisrx.dev/psx/internal/cmd/smf2seq"
 )
 
 func main() {

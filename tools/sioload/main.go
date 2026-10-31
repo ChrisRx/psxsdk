@@ -6,7 +6,7 @@ package main
 import (
 	"log"
 
-	"go.chrisrx.dev/psx/internal/sioload"
+	"go.chrisrx.dev/psx/internal/cmd/sioload"
 )
 
 func main() {

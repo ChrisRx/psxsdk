@@ -7,7 +7,7 @@ package main
 import (
 	"log"
 
-	"go.chrisrx.dev/psx/internal/png2tim"
+	"go.chrisrx.dev/psx/internal/cmd/png2tim"
 )
 
 func main() {

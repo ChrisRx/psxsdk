@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"go.chrisrx.dev/psx/internal/mkdisc"
+	"go.chrisrx.dev/psx/internal/cmd/mkdisc"
 )
 
 func main() {

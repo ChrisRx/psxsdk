@@ -18,7 +18,7 @@ import (
 // same order, with the same normals and texture coordinates, which is to
 // say obj2tmd turns the axes and the winding the right way.
 func TestCube(t *testing.T) {
-	data := "../../examples/square/assets"
+	data := "../../../examples/square/assets"
 	b, err := os.ReadFile(filepath.Join(data, "CUBE.TMD"))
 	if !assert.NoError(t, err) {
 		t.FailNow()

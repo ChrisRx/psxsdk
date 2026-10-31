@@ -6,7 +6,7 @@ package main
 import (
 	"log"
 
-	"go.chrisrx.dev/psx/internal/wav2vag"
+	"go.chrisrx.dev/psx/internal/cmd/wav2vag"
 )
 
 func main() {

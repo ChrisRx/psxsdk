@@ -5,7 +5,7 @@ package main
 import (
 	"log"
 
-	"go.chrisrx.dev/psx/internal/mkarc"
+	"go.chrisrx.dev/psx/internal/cmd/mkarc"
 )
 
 func main() {

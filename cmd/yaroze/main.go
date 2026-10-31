@@ -33,8 +33,8 @@ package main
 import (
 	_ "embed"
 
+	yarozecmd "go.chrisrx.dev/psx/internal/cmd/yaroze"
 	"go.chrisrx.dev/psx/internal/toolchain"
-	"go.chrisrx.dev/psx/internal/yarozecmd"
 )
 
 var (

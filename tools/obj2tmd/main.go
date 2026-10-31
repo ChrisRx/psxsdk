@@ -6,7 +6,7 @@ package main
 import (
 	"log"
 
-	"go.chrisrx.dev/psx/internal/obj2tmd"
+	"go.chrisrx.dev/psx/internal/cmd/obj2tmd"
 )
 
 func main() {
