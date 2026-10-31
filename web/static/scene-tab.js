@@ -328,7 +328,9 @@ const sceneTab = (() => {
   // says where the file is and takes the flag). A scene grown past the
   // memory the program loaded it into needs a Run.
   const liveStatus = $("scene-live");
-  const LIVE = "go.chrisrx.dev/psx/scene.live";
+  // The record is the scene package's, or the exp/ps one's in a program
+  // written against that API.
+  const LIVES = ["go.chrisrx.dev/psx/scene.live", "go.chrisrx.dev/psx/exp/ps/scene.live"];
   async function poke() {
     const p = project();
     if (!p || !state.running || state.current?.id !== p.id) {
@@ -337,7 +339,11 @@ const sceneTab = (() => {
     }
     const dat = p.get(datPath());
     if (!dat) return;
-    const { address } = await call("symbol", { name: LIVE });
+    let address = -1;
+    for (const name of LIVES) {
+      ({ address } = await call("symbol", { name }));
+      if (address >= 0) break;
+    }
     if (!(address >= 0)) {
       liveStatus.textContent = "The running program does not read a scene.";
       return;
@@ -383,7 +389,11 @@ const sceneTab = (() => {
       liveStatus.textContent = "Run the project to play from here.";
       return;
     }
-    const { address } = await call("symbol", { name: LIVE });
+    let address = -1;
+    for (const name of LIVES) {
+      ({ address } = await call("symbol", { name }));
+      if (address >= 0) break;
+    }
     if (!(address >= 0)) {
       liveStatus.textContent = "The running program does not read a scene.";
       return;

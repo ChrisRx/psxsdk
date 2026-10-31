@@ -153,6 +153,7 @@ function warm() {
     buildStatus.textContent = "Loading the compiler…";
     const reply = await request("load", {}, appendLog);
     if (!building) buildStatus.textContent = reply.ok ? "Ready." : `Could not load the compiler: ${reply.error}`;
+    if (reply.ok) offerLibrary(reply.targets ?? []);
     if (!reply.ok) warming = null;
     else prebuild();
   })();
@@ -163,7 +164,7 @@ function warm() {
 // to speed, since the browser compiles its code as it first runs and the
 // first build is the slowest, and when the program is the same by the time
 // Run is pressed, it is the build Run uses.
-let prebuilt = null; // {projectId, sig, hot, result, took} of the last one
+let prebuilt = null; // {projectId, sig, hot, libps, result, took} of the last one
 let prebuilding = null; // a promise while one is being made
 const encoder = new TextEncoder();
 
@@ -190,10 +191,11 @@ function prebuild() {
       if (!reply.ok) return;
       const formatted = new Map(reply.files.map((f) => [f.path, encoder.encode(f.text)]));
       const list = project.list().map((f) => (formatted.has(f.path) ? { path: f.path, data: formatted.get(f.path) } : f));
-      const hot = hotBox.checked;
+      const hot = hotChosen();
+      const libps = library();
       const t0 = performance.now();
-      const result = await request("build", { files: list, hot }, () => {});
-      if (result.ok) prebuilt = { projectId: project.id, sig: signature(list), hot, result, took: performance.now() - t0 };
+      const result = await request("build", { files: list, hot, libps }, () => {});
+      if (result.ok) prebuilt = { projectId: project.id, sig: signature(list), hot, libps, result, took: performance.now() - t0 };
     } catch {
       // Nothing is lost: Run builds for itself.
     } finally {
@@ -304,6 +306,30 @@ hotBox.addEventListener("change", () => {
   try { localStorage.setItem("hot", hotBox.checked ? "on" : "off"); } catch { /* no storage */ }
 });
 
+// The Go library: with the box ticked, a project is built against
+// psxsdk's own reimplementation of the Net Yaroze library, linked into the
+// program, rather than laid over the resident one (yaroze --libps go). The
+// box is offered once the compiler has loaded and said its cache can
+// build for that target, and the choice is remembered. Hot reload needs
+// the resident library, so the Hot box is disabled while it is ticked.
+const goLabel = $("golib-label");
+const goBox = $("golib");
+try { goBox.checked = localStorage.getItem("libps") === "go"; } catch { /* no storage */ }
+goBox.addEventListener("change", () => {
+  try { localStorage.setItem("libps", goBox.checked ? "go" : "resident"); } catch { /* no storage */ }
+});
+function offerLibrary(targets) {
+  goLabel.hidden = !targets.includes("playstation-yaroze-go");
+}
+// library is the library the next build is for.
+function library() {
+  return !goLabel.hidden && goBox.checked ? "go" : "resident";
+}
+// hotChosen says whether the next build is for hot reload: the Hot box.
+function hotChosen() {
+  return hotBox.checked;
+}
+
 // patchRunning builds a patch of project for its program, which is
 // running, and loads it. It returns whether that settled the run: it did
 // when the patch was loaded, or the program does not compile; it did not
@@ -328,7 +354,7 @@ async function patchRunning(project) {
     buildStatus.textContent = "Building a patch…";
     const t0 = performance.now();
     let log = "";
-    const result = await request("patch", { files: project.list(), base: state.hot.base, at: region.at }, (text) => {
+    const result = await request("patch", { files: project.list(), base: state.hot.base, at: region.at, libps: library() }, (text) => {
       log += text;
       appendLog(text);
     });
@@ -361,7 +387,7 @@ async function patchRunning(project) {
 async function buildAndRun() {
   if (building || !projects.current) return;
   const project = projects.current;
-  if (hotBox.checked && state.hot?.projectId === project.id && state.current?.id === project.id && state.hot.base) {
+  if (hotChosen() && state.hot?.projectId === project.id && state.current?.id === project.id && state.hot.base) {
     if (await patchRunning(project)) return;
   }
   building = true;
@@ -386,12 +412,12 @@ async function buildAndRun() {
   // A build made ahead of this one, of these very files, is this one.
   if (prebuilding) await prebuilding;
   const list = project.list();
-  const ahead = prebuilt && prebuilt.projectId === project.id && prebuilt.hot === hotBox.checked && prebuilt.sig === signature(list) ? prebuilt : null;
+  const ahead = prebuilt && prebuilt.projectId === project.id && prebuilt.hot === hotChosen() && prebuilt.libps === library() && prebuilt.sig === signature(list) ? prebuilt : null;
   prebuilt = null;
   let result = ahead?.result;
   let log = "";
   if (!ahead) {
-    result = await request("build", { files: list, hot: hotBox.checked }, (text) => {
+    result = await request("build", { files: list, hot: hotChosen(), libps: library() }, (text) => {
       log += text;
       appendLog(text);
     });
@@ -411,7 +437,7 @@ async function buildAndRun() {
   buildStatus.textContent = ahead ? `Built ahead of time, in ${(ahead.took / 1000).toFixed(1)}s` : `Built in ${((performance.now() - t0) / 1000).toFixed(1)}s`;
   state.current = { name: project.name, id: project.id };
   state.disc = { cue: "prog.cue", files: result.files, elf: result.elf };
-  state.hot = hotBox.checked ? { projectId: project.id, base: result.elf } : null;
+  state.hot = hotChosen() ? { projectId: project.id, base: result.elf } : null;
   ttyLog.textContent = "";
   showTab("tty");
   try {
