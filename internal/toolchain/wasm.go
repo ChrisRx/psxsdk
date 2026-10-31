@@ -244,7 +244,15 @@ func (w *Wasm) Compile(ctx context.Context, b *Build) error {
 	}
 	w.builds++
 	out := fmt.Sprintf("%s/prog%d.elf", guestTmp, w.builds)
-	args := []string{"-target=" + Target, "-opt=" + opt, "-C", filepath.ToSlash(wd), "-o", out}
+	target := Target
+	if b.Target != "" {
+		abs, err := filepath.Abs(b.Target)
+		if err != nil {
+			return err
+		}
+		target = filepath.ToSlash(abs)
+	}
+	args := []string{"-target=" + target, "-opt=" + opt, "-C", filepath.ToSlash(wd), "-o", out}
 	if len(b.Tags) > 0 {
 		args = append(args, "-tags="+strings.Join(b.Tags, " "))
 	}

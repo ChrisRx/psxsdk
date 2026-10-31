@@ -43,7 +43,7 @@ or on its own with `go install go.chrisrx.dev/psx/cmd/yaroze@latest`.
 - **`yaroze sio`** is [`sioload`](sioload.md), which uploads an executable to a Net Yaroze over the serial cable.
 - **`yaroze env`** says how a build would run the compiler, and where it is.
 
-Every command that compiles takes `--opt`, TinyGo's optimization level, 2 by default since a frame has a budget, `--tags`, `--load file@addr` to put a file into the executable as siocons' `local dload` did, `--hot` to build a program that takes patches, which calls the main package's functions through a slot each and reserves 256KB for the patches, and `-v`, which says how the compiler ran and how long each step took.
+Every command that compiles takes `--opt`, TinyGo's optimization level, 2 by default since a frame has a budget, `--tags`, `--load file@addr` to put a file into the executable as siocons' `local dload` did, `--hot` to build a program that takes patches, which calls the main package's functions through a slot each and reserves 256KB for the patches, `--target FILE.json`, a TinyGo target that inherits `playstation-yaroze` and changes what the program needs, such as where it is linked, and `-v`, which says how the compiler ran and how long each step took.
 
 ## The window
 

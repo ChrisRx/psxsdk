@@ -40,6 +40,12 @@ type Build struct {
 	HotBase string
 	HotAt   uint32
 
+	// Target is a TinyGo target file to build for instead of Target: JSON
+	// that inherits it and changes what a program needs changed, such as
+	// the address it is linked at, which ldflags of --defsym=__load=ADDR
+	// set (the serial monitor's is one).
+	Target string
+
 	Stderr io.Writer // the compiler's output
 	Log    func(format string, args ...any)
 }

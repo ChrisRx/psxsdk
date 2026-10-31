@@ -26,6 +26,7 @@ type buildFlags struct {
 	loads   flags.Loads
 	verbose bool
 	hot     bool
+	target  string
 
 	// c is the compiler, found once and kept for every build of the
 	// command: under wazero it stays loaded between builds.
@@ -59,6 +60,7 @@ func (f *buildFlags) register(cmd *cobra.Command) {
 	fl.StringSliceVar(&f.tags, "tags", nil, "extra build tags")
 	fl.Var(&f.loads, "load", "file@addr: put a file into the executable at a hexadecimal address, or with run --exe into memory there, as siocons' local dload did; may be repeated")
 	fl.BoolVarP(&f.verbose, "verbose", "v", false, "say which compiler runs, and how long each step takes")
+	fl.StringVar(&f.target, "target", "", "a TinyGo target file, JSON that inherits playstation-yaroze and changes what the program needs, such as where it is linked")
 	fl.BoolVar(&f.hot, "hot", false, "build a program that can take patches from the patch command while it runs: its main package's functions are called through slots, which costs a little speed, and 256KB is reserved for the patches")
 }
 
@@ -99,6 +101,7 @@ func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
 		Opt:     f.opt,
 		Tags:    f.tags,
 		Hot:     f.hot,
+		Target:  f.target,
 		Output:  filepath.Join(tmp, "prog.elf"),
 		Stderr:  os.Stderr,
 		Log:     f.logf,
