@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.chrisrx.dev/psx/format/psx"
 	"go.chrisrx.dev/psx/internal/cmd/mkdisc"
 	"go.chrisrx.dev/psx/internal/cproject"
 	"go.chrisrx.dev/psx/internal/flags"
@@ -29,6 +30,7 @@ type buildFlags struct {
 	verbose bool
 	hot     bool
 	target  string
+	libps   string
 
 	// c is the compiler, found once and kept for every build of the
 	// command: under wazero it stays loaded between builds.
@@ -64,6 +66,29 @@ func (f *buildFlags) register(cmd *cobra.Command) {
 	fl.BoolVarP(&f.verbose, "verbose", "v", false, "say which compiler runs, and how long each step takes")
 	fl.StringVar(&f.target, "target", "", "a TinyGo target file, JSON that inherits playstation-yaroze and changes what the program needs, such as where it is linked")
 	fl.BoolVar(&f.hot, "hot", false, "build a program that can take patches from the patch command while it runs: its main package's functions are called through slots, which costs a little speed, and 256KB is reserved for the patches")
+	fl.StringVar(&f.libps, "libps", "resident", "the Net Yaroze library: resident, laid under the program, or go, the experimental reimplementation linked into it")
+}
+
+// targetName is the TinyGo target the --libps flag chooses.
+func (f *buildFlags) targetName() string {
+	if f.libps == "go" {
+		return toolchain.GoLibraryTarget
+	}
+	return toolchain.DefaultTarget
+}
+
+// check rejects a --libps value that names no library, and a target file
+// with the Go library, since the file says what the program links.
+func (f *buildFlags) check() error {
+	switch f.libps {
+	case "resident", "go":
+	default:
+		return fmt.Errorf("--libps %q names no library: resident or go", f.libps)
+	}
+	if f.libps == "go" && f.target != "" {
+		return errors.New("--target and --libps go can't be used together")
+	}
+	return nil
 }
 
 // logf prints a step's progress with -v.
@@ -86,6 +111,13 @@ func pkgName(pkg string) (string, error) {
 // build compiles pkg and writes the PSX-EXE to exe and, if elf is not empty,
 // the ELF, with its traps removed, to elf. Either may be empty.
 func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
+	if f.libps != "go" && importsGoAPI(pkg) {
+		f.logf("the program imports %s: building against the Go library", goAPI)
+		f.libps = "go"
+	}
+	if err := f.check(); err != nil {
+		return err
+	}
 	start := time.Now()
 	c, err := f.find()
 	if err != nil {
@@ -105,14 +137,15 @@ func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
 		return err
 	}
 	b := &toolchain.Build{
-		Package: pkg,
-		Opt:     f.opt,
-		Tags:    f.tags,
-		Hot:     f.hot,
-		Target:  f.target,
-		Output:  filepath.Join(tmp, "prog.elf"),
-		Stderr:  os.Stderr,
-		Log:     f.logf,
+		Package:    pkg,
+		TargetName: f.targetName(),
+		Opt:        f.opt,
+		Tags:       f.tags,
+		Hot:        f.hot,
+		Target:     f.target,
+		Output:     filepath.Join(tmp, "prog.elf"),
+		Stderr:     os.Stderr,
+		Log:        f.logf,
 	}
 	return f.finish(ctx, func(ctx context.Context) error { return c.Compile(ctx, b) }, b.Output, exe, elf)
 }
@@ -181,7 +214,14 @@ func (f *buildFlags) finish(ctx context.Context, compile func(context.Context) e
 		if err != nil {
 			return err
 		}
-		x, err := link.Executable(img, true, f.loads...)
+		var x *psx.File
+		if f.libps == "go" {
+			// The program brought its own library: nothing to lay it
+			// over, nothing to start first.
+			x, err = link.Standalone(img, f.loads...)
+		} else {
+			x, err = link.Executable(img, true, f.loads...)
+		}
 		if err != nil {
 			return err
 		}

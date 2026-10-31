@@ -12,7 +12,8 @@ import (
 
 // The fixtures task build:hot writes: v1 built with --hot onto a disc,
 // its ELF, and the patch for v2 built against it; and the same for v3 and
-// v4.
+// v4. build:hot:go writes v1 and v2 built against the Go library,
+// exp/libps, onto .build/hot-go.
 const (
 	disc  = "../../.build/hot/v1.cue"
 	base  = "../../.build/hot/prog.elf"
@@ -21,6 +22,10 @@ const (
 	disc3  = "../../.build/hot/v3.cue"
 	base3  = "../../.build/hot/prog3.elf"
 	patch4 = "../../.build/hot/v4.patch.elf"
+
+	discGo  = "../../.build/hot-go/v1.cue"
+	baseGo  = "../../.build/hot-go/prog.elf"
+	patchGo = "../../.build/hot-go/v2.patch.elf"
 )
 
 // TestPatch runs v1, which prints a line on teal and counts frames, and
@@ -28,7 +33,14 @@ const (
 // writes, takes its new initial value, the background turns orange, from
 // the new loop body calling the new function, and the count goes on from
 // where it was, since the patch keeps a variable the program has written.
-func TestPatch(t *testing.T) {
+func TestPatch(t *testing.T) { testPatch(t, disc, base, patch) }
+
+// TestPatchGo is TestPatch with the fixtures built against the Go
+// library (task build:hot:go), whose variables the patch binds by name as
+// it does the program's own: the library is ordinary code in the base.
+func TestPatchGo(t *testing.T) { testPatch(t, discGo, baseGo, patchGo) }
+
+func testPatch(t *testing.T, disc, base, patch string) {
 	data, err := os.ReadFile(patch)
 	if err != nil {
 		t.Skipf("no patch to apply (run task build:hot): %v", err)

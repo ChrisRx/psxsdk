@@ -63,6 +63,22 @@ func Executable(img *Image, patch bool, loads ...Load) (*psx.File, error) {
 	return exe, nil
 }
 
+// Standalone makes a PSX-EXE of a program that brings its own library, as
+// one built for the playstation-yaroze-go target does: the image as it is,
+// entered at its own entry point, with no library combined in and no
+// startup stub, and each of loads put into it at its address.
+func Standalone(img *Image, loads ...Load) (*psx.File, error) {
+	exe := psx.New(img.Addr, img.Entry, img.Data)
+	exe.StackAddr = 0x801fff00
+	psx.AlignTextData(exe, 2048)
+	for _, l := range loads {
+		if err := psx.Embed(exe, l.Addr, l.Data); err != nil {
+			return nil, err
+		}
+	}
+	return exe, nil
+}
+
 // libpsInit is the resident library's initialization routine, which has to
 // run before the program does.
 const libpsInit = 0x80010030

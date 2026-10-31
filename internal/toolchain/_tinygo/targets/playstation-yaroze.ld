@@ -185,16 +185,17 @@ SECTIONS
    * addresses come from the library itself: CdReadFile calls CdControl
    * with CdlSetloc and the file's position before it calls CdRead, and
    * afterwards moves that position on through CdPosToInt and CdIntToPos.
-   * All read as libcd's do: the two control routines with their retries,
-   * told apart by the blocking flag only CdControlB passes to the routine
-   * that talks to the drive, and the conversions as the arithmetic between
-   * a sector number and binary coded minutes, seconds and sectors. Script
+   * All read as libcd's do: the control routines with their retries,
+   * CdControl waiting for the drive's acknowledge and CdControlB for the
+   * command's completion (the routine at 0x80039618 is CdControlF, which
+   * waits for neither), and the conversions as the arithmetic between a
+   * sector number and binary coded minutes, seconds and sectors. Script
    * assignments are fine here, unlike for the entry points symusr.S
    * defines, because no archive member shares these names, so there is
    * nothing for the linker to pull in before it sees them. psxsdk's yaroze
    * package declares them. */
   PROVIDE(CdControl = 0x800394E0);
-  PROVIDE(CdControlB = 0x80039618);
+  PROVIDE(CdControlB = 0x80039744);
   PROVIDE(CdIntToPos = 0x80039914);
   PROVIDE(CdPosToInt = 0x80039A18);
 

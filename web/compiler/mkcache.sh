@@ -8,7 +8,9 @@
 # SYSROOT is a directory tinygo-sysroot wrote; the cache goes into
 # SYSROOT/cache and TINYGO.wasm's hash into its env.json as buildID. Each
 # PROGRAM is the directory of a main package within one of the sysroot's
-# modules, given as a path inside the sysroot (mod/go.chrisrx.dev/psx/examples/check).
+# modules, given as a path inside the sysroot (mod/go.chrisrx.dev/psx/examples/check),
+# built for the sysroot's target, or for another named after an @
+# (mod/go.chrisrx.dev/psx/exp/libps/probe/@playstation-yaroze-go).
 #
 # The compiler in the browser has no clang, so the C and assembly files the
 # target needs have to be compiled here, against the same paths, and found
@@ -34,7 +36,8 @@
 # each program is built at every level in OPTS: z by default, TinyGo's own
 # and the playground's. task yaroze runs it again over a copy of the
 # playground's sysroot with OPTS=2, the level yaroze builds at by default.
-# env.json's opts lists the levels the cache holds.
+# env.json's opts lists the levels the cache holds, and its targets the
+# targets, which the playground reads to know what it can offer.
 set -euo pipefail
 usage="usage: mkcache.sh COMPILER.wasm TINYGO.wasm SYSROOT PROGRAM..."
 FULL=$(realpath "${1:?$usage}")
@@ -77,18 +80,26 @@ PY
 
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
+targets=
 mkdir -p "$WORK/tmp" "$SYSROOT/cache"
 printf 'module play\n\ngo %s\n\n%s' "$(echo "$GOVERSION" | sed -E 's/^go([0-9]+\.[0-9]+).*/\1/')" "$GOMOD" > "$WORK/go.mod"
 
 # wasmtime compiles the module once, since that takes a while.
 wasmtime compile -o "$WORK/tinygo.cwasm" "$FULL"
-for prog in "$@"; do
+for spec in "$@"; do
+  # A program is built for the sysroot's target, or for the one named
+  # after an @: dir@playstation-yaroze-go, whose C and assembly entries
+  # differ from the default target's by their flags.
+  prog=${spec%@*}
+  progtarget=$target
+  case "$spec" in *@*) progtarget=${spec##*@} ;; esac
+  case " $targets " in *" $progtarget "*) ;; *) targets="$targets $progtarget" ;; esac
   rm -rf "$WORK/prog"
   mkdir -p "$WORK/prog"
   cp "$SYSROOT/$prog"/*.go "$WORK/prog/"
   for opt in ${OPTS:-z}; do
-    echo "mkcache: $prog -opt=$opt"
-    args=(-target="$target" -opt="$opt" -o /work/prog.elf /work/prog)
+    echo "mkcache: $prog -target=$progtarget -opt=$opt"
+    args=(-target="$progtarget" -opt="$opt" -o /work/prog.elf /work/prog)
     # The full build is a command and takes its arguments as one. The
     # shipped compiler is a reactor, driven through its exports, which
     # the wasmtime command can call but not write to: its tinygo_main
@@ -109,4 +120,14 @@ for prog in "$@"; do
     rm -f "$WORK/prog.elf"
   done
 done
-echo "mkcache: $(ls "$SYSROOT/cache" | wc -l) entries, $(du -sh "$SYSROOT/cache" | cut -f1), build id $BUILDID"
+python3 - "$SYSROOT/env.json" $targets <<'PY'
+import json, sys
+p, targets = sys.argv[1], sys.argv[2:]
+env = json.load(open(p))
+# The targets the cache holds C and assembly for, those of an earlier run
+# on the same sysroot included.
+env["targets"] = env.get("targets", []) + [t for t in dict.fromkeys(targets) if t not in env.get("targets", [])]
+json.dump(env, open(p, "w"), indent="\t")
+open(p, "a").write("\n")
+PY
+echo "mkcache: $(ls "$SYSROOT/cache" | wc -l) entries, $(du -sh "$SYSROOT/cache" | cut -f1), build id $BUILDID, targets:$targets"

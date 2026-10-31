@@ -69,6 +69,6 @@ In CI, the Compiler workflow builds the modules when `web/compiler`, the flake, 
 
 - The shipped compiler has no clang, so a Go program cannot use cgo or anything whose C is not already in the cache. Only the ELF flavor of lld is linked in, for size.
 - The cache and the sysroot are made together, by `task playground`, and a compiler with another hash ignores the cache.
-- The compiler builds only at the optimization levels its cache holds.
+- The compiler builds only at the optimization levels its cache holds, and only for the targets it holds, which `env.json` lists: the Net Yaroze target and, since the cache is filled over a program for it too, the Go library's.
 - Memory is TinyGo's garbage collector's, LLVM's allocations included, and is scanned conservatively.
 - A project is kept in the browser that made it, until it is downloaded.

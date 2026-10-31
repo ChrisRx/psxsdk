@@ -50,15 +50,22 @@ func (f *buildFlags) patch(ctx context.Context, pkg, base string, at uint32, out
 		return err
 	}
 	defer os.RemoveAll(tmp)
+	if f.libps != "go" && importsGoAPI(pkg) {
+		f.libps = "go"
+	}
+	if err := f.check(); err != nil {
+		return err
+	}
 	b := &toolchain.Build{
-		Package: pkg,
-		Opt:     f.opt,
-		Tags:    f.tags,
-		HotBase: abs,
-		HotAt:   at,
-		Output:  filepath.Join(tmp, "patch.elf"),
-		Stderr:  os.Stderr,
-		Log:     f.logf,
+		Package:    pkg,
+		TargetName: f.targetName(),
+		Opt:        f.opt,
+		Tags:       f.tags,
+		HotBase:    abs,
+		HotAt:      at,
+		Output:     filepath.Join(tmp, "patch.elf"),
+		Stderr:     os.Stderr,
+		Log:        f.logf,
 	}
 	return f.finish(ctx, func(ctx context.Context) error { return c.Compile(ctx, b) }, b.Output, "", out)
 }
