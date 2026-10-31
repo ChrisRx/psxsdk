@@ -70,7 +70,7 @@ func main() {
 	b := screen.Bounds()
 	screen.Font(int32(b.X)+16, int32(b.Y)+16, 256, 64, 512)
 
-	loader.Start(300, files...)
+	loader.Start(300)
 	for ot := range screen.Frames() {
 		pad.Update()
 		if !world.Ready() {
@@ -135,6 +135,6 @@ func open() error {
 	if err != nil {
 		return err
 	}
-	source = scene.Sources{scene.Files(files), scene.NewArchive(a)}
+	source = scene.Sources{scene.Files(disc.Registered()), scene.NewArchive(a)}
 	return world.Load(scenes[which].Data(), source)
 }

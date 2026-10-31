@@ -42,7 +42,7 @@ var packed = []*disc.File{&castleDFL, &castleLZ4, &dogDFL, &dogLZ4, &md0DFL, &md
 
 func main() {
 	screen.Open()
-	loader.Start(300, files...)
+	loader.Start(300)
 	done := false
 	for range screen.Frames() {
 		if done {

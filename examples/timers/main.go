@@ -83,7 +83,7 @@ func main() {
 		frameLines, rate = 313, 50
 	}
 
-	if f := disc.LoadAll(300, files...); f == nil {
+	if f := disc.LoadAll(300); f == nil {
 		sprite = yaroze.TIM(ballTIM.Data()).Load().Sprite()
 	}
 	yaroze.Srand(7)

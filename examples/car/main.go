@@ -68,7 +68,6 @@ var (
 	tex6File  = disc.Register("ASSETS/GIULI_WN.TIM", "assets/GIULI_WN.TIM").Into(tex6Data[:])
 	tex7File  = disc.Register("ASSETS/WHEEL256.TIM", "assets/WHEEL256.TIM").Into(tex7Data[:])
 	modelFile = disc.Register("ASSETS/GIULIETA.TMD", "assets/GIULIETA.TMD").Into(modelData[:])
-	files     = []*disc.File{&tex1File, &tex2File, &tex3File, &tex4File, &tex5File, &tex6File, &tex7File, &modelFile}
 
 	textures = [...]yaroze.TIM{tex1Data[:], tex2Data[:], tex3Data[:], tex4Data[:], tex5Data[:], tex6Data[:], tex7Data[:]}
 	model    = yaroze.TMD(modelData[:])
@@ -105,7 +104,7 @@ func main() {
 	text.Init(textBuf[:])
 	initSystem()
 
-	if missing := demo.Load(files, nil); missing != "" {
+	if missing := demo.Load(disc.Registered(), nil); missing != "" {
 		fail("could not read ", missing)
 		return
 	}

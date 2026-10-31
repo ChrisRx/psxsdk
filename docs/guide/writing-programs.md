@@ -79,7 +79,7 @@ A `Bank` is a sound bank sent to the SPU, and a `Sequence` a piece of music open
 The [`disc`](disc) package declares a program's files. A registration names the file on the disc and the file on the host that goes there, and the build places it on the disc. The program then reads it and finds it in `Data`, with no address anywhere in the code:
 
 - `Load` reads a file and `Wait` waits for it. `Load` allocates the file's memory the first time, as many sectors as the build recorded.
-- `LoadAll` reads a list of files.
+- `LoadAll` reads a list of files, or every file registered when given none, and `Registered` lists those.
 - A `Loader` reads them a step a frame, while the frames go on.
 - With `Into`, a registration names memory of the program's own instead, and the build checks the file fits it. Use it when a program needs to know a file's size at build time, or to share one buffer between files.
 

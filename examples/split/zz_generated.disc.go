@@ -12,10 +12,3 @@ var (
 	cubetexTMD = disc.Register("ASSETS/CUBETEX.TMD", "assets/CUBETEX.TMD")
 	stone02TIM = disc.Register("ASSETS/STONE02.TIM", "assets/STONE02.TIM")
 )
-
-// files is every file above, in the order disc.LoadAll reads them.
-var files = []*disc.File{
-	&cubeTMD,
-	&cubetexTMD,
-	&stone02TIM,
-}

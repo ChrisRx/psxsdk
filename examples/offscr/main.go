@@ -84,7 +84,6 @@ var (
 	tile2File  = disc.Register("ASSETS/TILE3.TIM", "assets/TILE3.TIM").Into(tile2Data[:])
 	sphereFile = disc.Register("ASSETS/16BIT.TMD", "assets/16BIT.TMD").Into(sphereData[:])
 	dongleFile = disc.Register("ASSETS/DONGLE.TIM", "assets/DONGLE.TIM").Into(dongleData[:])
-	files      = []*disc.File{&squareFile, &shipFile, &waveFile, &fireFile, &tileFile, &tile2File, &sphereFile, &dongleFile}
 
 	squareModel = yaroze.TMD(squareData[:])
 	sphereModel = yaroze.TMD(sphereData[:])
@@ -304,7 +303,7 @@ func initializeAll() bool {
 
 	yaroze.FntLoad(960, 256)
 	yaroze.FntOpen(-120, 40, 256, 200, 0, 512)
-	if missing := demo.Load(files, nil); missing != "" {
+	if missing := demo.Load(disc.Registered(), nil); missing != "" {
 		for {
 			pad := yaroze.PadRead()
 			if pad&yaroze.PADstart != 0 && pad&yaroze.PADselect != 0 {

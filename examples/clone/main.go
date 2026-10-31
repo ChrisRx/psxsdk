@@ -109,7 +109,6 @@ var (
 	efloorFile   = disc.Register("ASSETS/EWAVE01.TIM", "assets/EWAVE01.TIM").Into(efloorData[:])
 	fwallFile    = disc.Register("ASSETS/FSTONE01.TIM", "assets/FSTONE01.TIM").Into(fwallData[:])
 	faceFile     = disc.Register("ASSETS/FACE.TIM", "assets/FACE.TIM").Into(faceData[:])
-	files        = []*disc.File{&vh, &vb, &map1File, &map2File, &map3File, &statusFile, &roofFile, &wallFile, &floorFile, &man1File, &man2File, &bulletFile, &bloodFile, &deadmanFile, &ricochetFile, &healthFile, &bullet2File, &eroofFile, &ewallFile, &efloorFile, &fwallFile, &faceFile}
 
 	statusTIM   = yaroze.TIM(statusData[:])
 	roofTIM     = yaroze.TIM(roofData[:])
@@ -296,7 +295,7 @@ func main() {
 		ot2[i].Org = &zTable2[i][0]
 	}
 
-	if missing := demo.Load(files, func(string) { message("loading") }); missing != "" {
+	if missing := demo.Load(disc.Registered(), func(string) { message("loading") }); missing != "" {
 		for yaroze.PadRead()&(yaroze.PADstart|yaroze.PADselect) != yaroze.PADstart|yaroze.PADselect {
 			message("missing data")
 		}

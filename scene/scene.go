@@ -7,11 +7,11 @@
 //
 //	var world scene.Scene
 //
-//	loader.Start(300, files...)
+//	loader.Start(300)
 //	for ot := range screen.Frames() {
 //		if !world.Ready() {
 //			if done, failed := loader.Step(); done && !failed {
-//				world.Load(sceneDAT.Data(), files)
+//				world.Load(sceneDAT.Data(), scene.Files(disc.Registered()))
 //			}
 //			continue
 //		}

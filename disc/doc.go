@@ -10,7 +10,14 @@
 // out writes the file's first sector and its length back into the record. The
 // program then reads the file from the sector it was told, without searching
 // the disc's directory for it, and the one declaration is what both the
-// program and the image are built from.
+// program and the image are built from. The records are kept together in
+// the package, so every file a program registers goes on the disc, whether
+// or not its code mentions the File, and LoadAll, given no files, reads
+// them all:
+//
+//	if f := disc.LoadAll(300); f != nil {
+//		// f.Name is missing or unreadable
+//	}
 //
 // The program reads the file with Load, into memory Load allocates the
 // first time, as many whole sectors as mkdisc recorded the file has, and

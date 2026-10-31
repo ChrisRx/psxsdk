@@ -13,11 +13,3 @@ var (
 	levelDAT = disc.Register("ASSETS/LEVEL.DAT", "assets/LEVEL.DAT")
 	tilesTIM = disc.Register("ASSETS/TILES.TIM", "assets/TILES.TIM")
 )
-
-// files is every file above, in the order disc.LoadAll reads them.
-var files = []*disc.File{
-	&farTIM,
-	&heroTIM,
-	&levelDAT,
-	&tilesTIM,
-}

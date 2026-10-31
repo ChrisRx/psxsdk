@@ -1,6 +1,6 @@
 // Package discgen writes the Go declarations for a program's data files:
 // for each file under a directory, the disc.File that registers it with
-// mkdisc, and a slice of every File for disc.LoadAll, which reads each
+// mkdisc, which disc.LoadAll then reads with every other registered file,
 // into memory it allocates. The sources the converters read, which lie in
 // the same directory, are left off the disc: a picture, model, sound or
 // score by its extension, and any file a go:generate line of the package
@@ -77,7 +77,6 @@ type options struct {
 	Package string // the package the declarations are in
 	Dir     string // the directory the files are under, as the program's sources name it
 	Root    string // the directory on the disc they are placed under
-	Files   string // the name of the slice of every File
 	Into    bool   // whether to declare the memory each file is read into
 }
 
@@ -126,9 +125,7 @@ func generate(opts options, files []entry) ([]byte, error) {
 		fmt.Fprintf(&b, "\t%q\n", imp)
 	}
 	fmt.Fprintf(&b, ")\n\n")
-	file := func(d decl) string { return d.name }
 	if opts.Into {
-		file = func(d decl) string { return d.name + "File" }
 		fmt.Fprintf(&b, "// The files under %s, placed on the disc under %s, each with the memory\n", opts.Dir, opts.Root)
 		fmt.Fprintf(&b, "// it is read into: its length rounded up to whole 2048-byte sectors, as\n")
 		fmt.Fprintf(&b, "// the drive delivers them.\n")
@@ -150,13 +147,7 @@ func generate(opts options, files []entry) ([]byte, error) {
 			fmt.Fprintf(&b, "\t%s = yaroze.%s(%sData[:])\n", d.name, d.view, d.name)
 		}
 	}
-	fmt.Fprintf(&b, ")\n\n")
-	fmt.Fprintf(&b, "// %s is every file above, in the order disc.LoadAll reads them.\n", opts.Files)
-	fmt.Fprintf(&b, "var %s = []*disc.File{\n", opts.Files)
-	for _, d := range decls {
-		fmt.Fprintf(&b, "\t&%s,\n", file(d))
-	}
-	fmt.Fprintf(&b, "}\n")
+	fmt.Fprintf(&b, ")\n")
 	return format.Source(b.Bytes())
 }
 
@@ -264,8 +255,8 @@ func Command(use string) *cobra.Command {
 		Use:   use + " [flags] <dir>",
 		Short: "write the declarations that put a program's data files on its disc",
 		Long: use + ` writes Go declarations for every file under dir: the disc.File
-registering it for mkdisc, and a slice of every File for disc.LoadAll, which
-reads each into memory it allocates. The sources the converters read are left
+registering it for mkdisc, which disc.LoadAll reads with every other registered
+file, into memory it allocates. The sources the converters read are left
 out: pictures, models, sounds and scores by their extension, and any file a
 go:generate line of the package reads. With --into it declares that memory as
 well: an array per file, sized to whole 2048-byte sectors, given to the File
@@ -301,7 +292,6 @@ model. Run it from the program's package directory, as go:generate does.`,
 	f.StringVarP(&out, "output", "o", "zz_generated.disc.go", "the file to write")
 	f.StringVarP(&opts.Package, "package", "p", pkg, "the package of the declarations, $GOPACKAGE under go:generate")
 	f.StringVar(&opts.Root, "root", "", "the directory on the disc to place the files under, dir in capitals if not given")
-	f.StringVar(&opts.Files, "files", "files", "the name of the slice of every File")
 	f.BoolVar(&opts.Into, "into", false, "declare an array for each file to be read into, rather than leaving Load to allocate")
 	return cmd
 }

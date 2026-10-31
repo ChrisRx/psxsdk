@@ -25,12 +25,12 @@ A program names each file it reads with `disc.Register`, giving the path it has 
 
 and `go generate` then writes `zz_generated.disc.go`:
 
-```go src=../../examples/square/zz_generated.disc.go#cubeTIM,files
+```go src=../../examples/square/zz_generated.disc.go
 ```
 
-Each name is the file's name in camel case with its extension in capitals, and `files` is all of them, in the order they will be read. Run `go generate` again whenever a file is added or renamed. `discgen` is also `yaroze generate`, so with `yaroze` as the module's tool the line can be `//go:generate go tool yaroze generate data`; the [playground](/play/) recognizes only the first form.
+Each name is the file's name in camel case with its extension in capitals. Run `go generate` again whenever a file is added or renamed. `discgen` is also `yaroze generate`, so with `yaroze` as the module's tool the line can be `//go:generate go tool yaroze generate data`; the [playground](/play/) recognizes only the first form.
 
-A registration does more than it looks like it does. TinyGo works the call out when it compiles the program, so each one ends up as a small record of constant data in the executable. When `yaroze` builds the disc it finds the records in the executable it is told to boot, places each file at its path, and, once it knows where on the disc each one landed, writes the file's first sector and its length back into the record. The program is built knowing where its files are, and reads each from its sector directly, without searching the disc's directory for it by name. A file that is missing or misnamed fails the build, not the program.
+A registration does more than it looks like it does. TinyGo works the call out when it compiles the program, so each one ends up as a small record of constant data in the executable. When `yaroze` builds the disc it finds the records in the executable it is told to boot, places each file at its path, and, once it knows where on the disc each one landed, writes the file's first sector and its length back into the record. The program is built knowing where its files are, and reads each from its sector directly, without searching the disc's directory for it by name. A file that is missing or misnamed fails the build, not the program. Every file registered goes on the disc, whether or not the code mentions it, and the package keeps a list of them, which `disc.Registered` returns.
 
 ## Reading them while the frames go on
 
@@ -39,7 +39,7 @@ The drive is slow, and a read takes many frames. A program could stop and wait, 
 ```go src=../../examples/square/main.go#loader
 ```
 
-Before the loop, `main` gives it the files and how many frames each may take before it is given up on, `loader.Start(300, files...)`: 300 frames, five seconds, which is far longer than a file that is there takes. Then, in each frame, the first case of the `switch` in [main](frame.md#the-frame) runs until the loader is done. `Step` starts the next file's read, or sees whether the one in progress has finished, and reports whether the loader is done, either with every file read or with one that failed, and whether one did. On the frame it finishes with every file read, the program sets up the cube and starts the music. Until then the bar's width is how many of the files have arrived, out of 200 pixels, and the bar is drawn at depth 0 like the box.
+Before the loop, `main` tells it how many frames each file may take before it is given up on, `loader.Start(300)`. Given no files, it reads every one registered. 300 frames is five seconds, which is far longer than a file that is there takes. Then, in each frame, the first case of the `switch` in [main](frame.md#the-frame) runs until the loader is done. `Step` starts the next file's read, or sees whether the one in progress has finished, and reports whether the loader is done, either with every file read or with one that failed, and whether one did. On the frame it finishes with every file read, the program sets up the cube and starts the music. Until then the bar's width is how many of the files have arrived, `Loaded`, out of how many there are, `Total`, scaled to 200 pixels, and the bar is drawn at depth 0 like the box.
 
 If a file could not be read, `Failed` says which, and the second case prints its name each frame from then on. The box still moves: a program that cannot find its disc should still respond, and say why it is not doing more.
 

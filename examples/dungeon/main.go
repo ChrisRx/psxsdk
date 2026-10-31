@@ -68,7 +68,6 @@ var (
 	yukaFile  = disc.Register("ASSETS/YUKA.TMD", "assets/YUKA.TMD").Into(yukaData[:])
 	shipFile  = disc.Register("ASSETS/THESHIP.TMD", "assets/THESHIP.TMD").Into(shipData[:])
 	stoneFile = disc.Register("ASSETS/STONE.TIM", "assets/STONE.TIM").Into(stoneData[:])
-	files     = []*disc.File{&wall0File, &wall1File, &wall2File, &wall3File, &tenFile, &yukaFile, &shipFile, &stoneFile}
 
 	shipTMD  = yaroze.TMD(shipData[:])
 	stoneTIM = yaroze.TIM(stoneData[:])
@@ -484,7 +483,7 @@ func initializeAll() bool {
 	yaroze.FntLoad(960, 256)
 	yaroze.FntOpen(0, 0, 256, 200, 0, 512)
 
-	if missing := demo.Load(files, nil); missing != "" {
+	if missing := demo.Load(disc.Registered(), nil); missing != "" {
 		fail("could not read\n", missing)
 		return false
 	}

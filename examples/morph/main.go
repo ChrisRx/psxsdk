@@ -86,7 +86,6 @@ var (
 	sheetData   [sheetWords]uint32
 
 	pictureFile = disc.Register("ASSETS/SB.TIM", "assets/SB.TIM").Into(pictureData[:])
-	files       = []*disc.File{&pictureFile}
 
 	pictureTIM = yaroze.TIM(pictureData[:])
 	pictureTMD = yaroze.TMD(sheetData[:])
@@ -138,7 +137,7 @@ func main() {
 	padStatus = 0
 	yaroze.PadInit()
 
-	if missing := demo.Load(files, nil); missing != "" {
+	if missing := demo.Load(disc.Registered(), nil); missing != "" {
 		fail("could not read ", missing)
 		return
 	}

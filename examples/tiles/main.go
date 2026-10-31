@@ -101,7 +101,7 @@ func main() {
 	screen.Font(8, 8, 304, 40, 200)
 	text.Init(textBuf[:])
 
-	if f := disc.LoadAll(300, files...); f != nil {
+	if f := disc.LoadAll(300); f != nil {
 		for range screen.Frames() {
 			yaroze.Print("could not read ")
 			yaroze.Print(f.Name)
