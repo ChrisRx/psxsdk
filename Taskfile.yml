@@ -40,7 +40,26 @@ tasks:
       - build:disc:tutorial
     cmds:
       - task: build:discs:examples
+      - task: build:discs:exp
       - task: build:disc:cookbook
+
+  # The programs under exp/examples, written against the exp/ps API, go
+  # onto .build/NAME-ps: yaroze sees the import and builds them against
+  # the Go library. The ports of examples are built with the original's
+  # font, since their pictures are compared with the originals'; the
+  # gallery, which is the Go library's own picture, is built as a program
+  # is, with the library's own font.
+  build:discs:exp:
+    internal: true
+    deps:
+      - for: { var: PORTS }
+        task: build:disc
+        vars: { NAME: '{{.ITEM}}-ps', DIR: 'exp/examples/{{.ITEM}}', TAGS: sonydata }
+      - task: build:disc
+        vars: { NAME: gallery-ps, DIR: exp/examples/gallery }
+    vars:
+      PORTS:
+        sh: for f in exp/examples/*/main.go; do d=$(basename "$(dirname "$f")"); [ "$d" = gallery ] || echo "$d"; done
 
   build:discs:examples:
     internal: true

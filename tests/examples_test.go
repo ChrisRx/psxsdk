@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"image/png"
 	"os"
+	"strings"
 	"testing"
 
 	"go.chrisrx.dev/x/assert"
@@ -38,44 +40,72 @@ func TestMDECScreenshot(t *testing.T) {
 // up to a wall, with the compass turned to match. The program prints the
 // count of horizontal syncs VSync returns, which is the BIOS's to make, so
 // this golden is OpenBIOS's by that one line.
-func TestDungeonScreenshot(t *testing.T) {
+func TestDungeonScreenshot(t *testing.T) { dungeonScreenshot(t, "dungeon") }
+
+// TestDungeonScreenshotGo is TestDungeonScreenshot with the program built against
+// the Go library (task build:disc:go NAME=dungeon).
+func TestDungeonScreenshotGo(t *testing.T) { dungeonScreenshot(t, "dungeon-go") }
+
+func dungeonScreenshot(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "dungeon")
+	m := bootExample(t, name)
 	m.RunUntilCount("main.frameNumber", 60, frameBudget)
 	m.Hold(1, emu.ButtonLeft, 40)
 	m.Hold(1, emu.ButtonUp, 150)
 	m.RunFrames(10)
-	m.Golden("dungeon.png")
+	goldenSkippingRows(t, m, "dungeon.png", name, 152, 160)
+	noComplaints(t, m)
 }
 
 // TestCarScreenshot checks the car fifty frames after its drive in from
 // the distance, close to the viewpoint and turning.
-func TestCarScreenshot(t *testing.T) {
+func TestCarScreenshot(t *testing.T) { carScreenshot(t, "car") }
+
+// TestCarScreenshotGo is TestCarScreenshot with the program built against
+// the Go library (task build:disc:go NAME=car).
+func TestCarScreenshotGo(t *testing.T) { carScreenshot(t, "car-go") }
+
+func carScreenshot(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "car")
+	m := bootExample(t, name)
 	m.RunUntilCount("main.frameNumber", 520, frameBudget)
 	m.Golden("car.png")
+	noComplaints(t, m)
 }
 
 // TestOdenScreenshot checks the three shapes under the three lights after
 // the ball is swapped for its textured version and the scene is turned.
-func TestOdenScreenshot(t *testing.T) {
+func TestOdenScreenshot(t *testing.T) { odenScreenshot(t, "oden") }
+
+// TestOdenScreenshotGo is TestOdenScreenshot with the program built against
+// the Go library (task build:disc:go NAME=oden).
+func TestOdenScreenshotGo(t *testing.T) { odenScreenshot(t, "oden-go") }
+
+func odenScreenshot(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "oden")
+	m := bootExample(t, name)
 	m.RunUntilCount("main.frameNumber", 30, frameBudget)
 	m.Hold(1, emu.ButtonLeft, 3)
 	m.Hold(1, emu.ButtonSquare, 20)
 	m.RunFrames(5)
 	m.Golden("oden.png")
+	noComplaints(t, m)
 }
 
 // TestMorphScreenshot checks the sheet most of the way to becoming a
 // cylinder, with the picture wrapped round it.
-func TestMorphScreenshot(t *testing.T) {
+func TestMorphScreenshot(t *testing.T) { morphScreenshot(t, "morph") }
+
+// TestMorphScreenshotGo is TestMorphScreenshot with the program built against
+// the Go library (task build:disc:go NAME=morph).
+func TestMorphScreenshotGo(t *testing.T) { morphScreenshot(t, "morph-go") }
+
+func morphScreenshot(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "morph")
+	m := bootExample(t, name)
 	m.RunUntilCount("main.frameNumber", 400, frameBudget)
-	m.Golden("morph.png")
+	goldenSkippingRows(t, m, "morph.png", name, 0, 48)
+	noComplaints(t, m)
 }
 
 // TestOffscrScreenshot checks the sphere wearing the texture the sprite is
@@ -83,72 +113,194 @@ func TestMorphScreenshot(t *testing.T) {
 // over the square's texture. The program prints the count of horizontal
 // syncs VSync returns, which is the BIOS's to make: Sony's says 51 a frame
 // and OpenBIOS 52, so this golden is Sony's by that one line.
-func TestOffscrScreenshot(t *testing.T) {
+func TestOffscrScreenshot(t *testing.T) { offscrScreenshot(t, "offscr") }
+
+// TestOffscrScreenshotGo is TestOffscrScreenshot with the program built against
+// the Go library (task build:disc:go NAME=offscr).
+func TestOffscrScreenshotGo(t *testing.T) { offscrScreenshot(t, "offscr-go") }
+
+func offscrScreenshot(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "offscr")
+	m := bootExample(t, name)
 	m.RunUntilCount("main.frameNumber", 330, frameBudget)
-	m.Golden("offscr.png")
+	goldenSkippingRows(t, m, "offscr.png", name, 168, 176)
+	noComplaints(t, m)
 }
 
 // TestTunnelScreenshot checks the tunnel after the flight in, with the
 // score drawn in sprites.
-func TestTunnelScreenshot(t *testing.T) {
+func TestTunnelScreenshot(t *testing.T) { tunnelScreenshot(t, "tunnel") }
+
+// TestTunnelScreenshotGo is TestTunnelScreenshot with the program built against
+// the Go library (task build:disc:go NAME=tunnel).
+func TestTunnelScreenshotGo(t *testing.T) { tunnelScreenshot(t, "tunnel-go") }
+
+func tunnelScreenshot(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "tunnel")
+	m := bootExample(t, name)
 	m.RunUntilCount("main.frameNumber", 166, frameBudget)
 	m.Golden("tunnel.png")
+	noComplaints(t, m)
 }
 
 // TestFlameScreenshot checks the sheet of fire a second and a half in, with
 // the hot spots along its bottom edge and the heat risen through the
 // palette above them.
-func TestFlameScreenshot(t *testing.T) {
+func TestFlameScreenshot(t *testing.T) { flameScreenshot(t, "flame") }
+
+// TestFlameScreenshotGo is TestFlameScreenshot with the program built against
+// the Go library (task build:disc:go NAME=flame).
+func TestFlameScreenshotGo(t *testing.T) { flameScreenshot(t, "flame-go") }
+
+func flameScreenshot(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "flame")
+	m := bootExample(t, name)
 	m.RunUntilCount("main.frameNumber", 90, frameBudget)
-	m.Golden("flame.png")
+	goldenSkippingRows(t, m, "flame.png", name, 0, 48)
+	noComplaints(t, m)
+}
+
+// goldenSkippingRows compares the screen with the golden image, as Golden
+// does, except under the Go library, where the rows from y0 up to y1 are
+// left out: the programs print the count of horizontal syncs a frame
+// took there, which depends on the library's speed, as the timers test
+// says.
+func goldenSkippingRows(t *testing.T, m *emutest.Machine, golden, name string, y0, y1 int) {
+	t.Helper()
+	if !strings.HasSuffix(name, "-go") {
+		m.Golden(golden)
+		return
+	}
+	f, err := os.Open("testdata/" + golden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	want, err := png.Decode(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := m.Display()
+	b := got.Bounds()
+	if want.Bounds() != b {
+		t.Fatalf("%s: the golden is %v, the screen %v", golden, want.Bounds(), b)
+	}
+	n := 0
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		if y >= y0 && y < y1 {
+			continue
+		}
+		for x := b.Min.X; x < b.Max.X; x++ {
+			wr, wg, wb, _ := want.At(x, y).RGBA()
+			gr, gg, gb, _ := got.At(x, y).RGBA()
+			if wr != gr || wg != gg || wb != gb {
+				if n == 0 {
+					t.Errorf("%s: the first pixel to differ outside the text is %d,%d", golden, x, y)
+				}
+				n++
+			}
+		}
+	}
+	if n > 0 {
+		t.Errorf("%s: %d pixels differ outside the text", golden, n)
+	}
 }
 
 // TestInvadersScreenshot checks the invaders on their march after the ship
 // has slid to the left and fired a shot.
-func TestInvadersScreenshot(t *testing.T) {
+func TestInvadersScreenshot(t *testing.T) { invadersScreenshot(t, "invaders") }
+
+// TestInvadersScreenshotGo is TestInvadersScreenshot with the program built
+// against the Go library (task build:disc:go NAME=invaders), with the music
+// checked as heard.
+func TestInvadersScreenshotGo(t *testing.T) { invadersScreenshot(t, "invaders-go") }
+
+// TestInvadersScreenshotPS is TestInvadersScreenshot on exp/examples/invaders,
+// the game written against the exp/ps API (task build:disc NAME=invaders-ps
+// DIR=exp/examples/invaders), which has to draw the same picture.
+func TestInvadersScreenshotPS(t *testing.T) { invadersScreenshot(t, "invaders-ps") }
+
+func invadersScreenshot(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "invaders")
-	m.RunUntilCount("main.frameNumber", 30, frameBudget)
+	m := bootExample(t, name)
+	m.SetAudio(true)
+	// The exp/ps port counts frames in its screen, whose count is the
+	// screen's first field.
+	counter := "main.frameNumber"
+	if name == "invaders-ps" {
+		counter = "main.screen"
+	}
+	m.RunUntilCount(counter, 30, frameBudget)
 	m.Hold(1, emu.ButtonLeft, 20)
 	m.RunFrames(5)
 	m.Hold(1, emu.ButtonTriangle, 5)
-	m.RunFrames(40)
+	loud := peak(m, 40)
+	t.Logf("peak %d playing", loud)
+	assert.Equal(t, true, loud > 1000, "the music is heard")
 	m.Golden("invaders.png")
+	noComplaints(t, m)
 }
 
 // TestBreakoutScreenshot checks the wall of bricks with the ball on its
 // way down and the bat moved to the right to meet it.
-func TestBreakoutScreenshot(t *testing.T) {
+func TestBreakoutScreenshot(t *testing.T) { breakoutScreenshot(t, "breakout") }
+
+// TestBreakoutScreenshotGo is TestBreakoutScreenshot with the program built
+// against the Go library (task build:disc:go NAME=breakout), whose
+// sequencer plays the music. The music is checked as heard.
+func TestBreakoutScreenshotGo(t *testing.T) { breakoutScreenshot(t, "breakout-go") }
+
+func breakoutScreenshot(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "breakout")
+	m := bootExample(t, name)
+	m.SetAudio(true)
 	m.RunUntilCount("main.frameNumber", 30, frameBudget)
 	m.Hold(1, emu.ButtonRight, 20)
-	m.RunFrames(100)
+	loud := peak(m, 100)
+	t.Logf("peak %d playing", loud)
+	assert.Equal(t, true, loud > 1000, "the music is heard")
 	m.Golden("breakout.png")
+	noComplaints(t, m)
 }
 
 // TestDinoScreenshot checks the dinosaur in front of the castle two
 // seconds into its walk.
-func TestDinoScreenshot(t *testing.T) {
+func TestDinoScreenshot(t *testing.T) { dinoScreenshot(t, "dino") }
+
+// TestDinoScreenshotGo is TestDinoScreenshot with the program built against
+// the Go library (task build:disc:go NAME=dino).
+func TestDinoScreenshotGo(t *testing.T) { dinoScreenshot(t, "dino-go") }
+
+// TestDinoScreenshotPS is TestDinoScreenshot on exp/examples/dino, the
+// program written against the exp/ps API (task build:disc NAME=dino-ps
+// DIR=exp/examples/dino), which has to draw the same picture.
+func TestDinoScreenshotPS(t *testing.T) { dinoScreenshot(t, "dino-ps") }
+
+func dinoScreenshot(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "dino")
-	m.RunUntilCount("main.frameNumber", 120, frameBudget)
+	m := bootExample(t, name)
+	counter := "main.frameNumber"
+	if name == "dino-ps" {
+		counter = "main.screen"
+	}
+	m.RunUntilCount(counter, 120, frameBudget)
 	m.Golden("dino.png")
+	noComplaints(t, m)
 }
 
 // TestDogTaleScreenshot checks the level a little way in: the title is
 // left by choosing Play with Right and Cross, "get ready" is shown for 75
 // frames, and then the man walks right, past the first bones, and jumps
 // before he reaches the first cactus.
-func TestDogTaleScreenshot(t *testing.T) {
+func TestDogTaleScreenshot(t *testing.T) { dogtaleScreenshot(t, "dogtale") }
+
+// TestDogTaleScreenshotGo is TestDogTaleScreenshot with the program built against
+// the Go library (task build:disc:go NAME=dogtale).
+func TestDogTaleScreenshotGo(t *testing.T) { dogtaleScreenshot(t, "dogtale-go") }
+
+func dogtaleScreenshot(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "dogtale")
+	m := bootExample(t, name)
 	m.RunUntilCount("main.frameNumber", 60, frameBudget)
 	m.Hold(1, emu.ButtonRight, 3)
 	m.RunFrames(3)
@@ -158,6 +310,7 @@ func TestDogTaleScreenshot(t *testing.T) {
 	m.Hold(1, emu.ButtonCross|emu.ButtonRight, 3)
 	m.RunFrames(10)
 	m.Golden("dogtale.png")
+	noComplaints(t, m)
 }
 
 // The camera's quarters look along the rooms' diagonals, so a pair of
@@ -183,9 +336,16 @@ func questState(m *emutest.Machine) questSyms {
 // up into its far wall, which stops them at the wall's margin, and right
 // along it until the chest stops them, for the first picture; then L1
 // eight times turns the camera all the way round.
-func TestQuestScreenshot(t *testing.T) {
+func TestQuestScreenshot(t *testing.T) { questScreenshot(t, "quest") }
+
+// TestQuestScreenshotPS is TestQuestScreenshot on exp/examples/quest, the
+// program on the exp/ps API, which must draw the same pictures; the
+// other quest tests have the same.
+func TestQuestScreenshotPS(t *testing.T) { questScreenshot(t, "quest-ps") }
+
+func questScreenshot(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "quest")
+	m := bootExample(t, name)
 	m.RunUntilCount("main.screen", 60, frameBudget)
 	// The count is reached in the middle of a frame, after its controller
 	// read; a frame on, a hold is seen from its first frame.
@@ -225,9 +385,12 @@ func TestQuestScreenshot(t *testing.T) {
 // lines come a letter a frame, then the box waits with its arrow, Cross
 // scrolls the last line in, and Cross closes the box, leaving the chest
 // open; opened again, it is empty.
-func TestQuestChest(t *testing.T) {
+func TestQuestChest(t *testing.T)   { questChest(t, "quest") }
+func TestQuestChestPS(t *testing.T) { questChest(t, "quest-ps") }
+
+func questChest(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "quest")
+	m := bootExample(t, name)
 	m.RunUntilCount("main.screen", 60, frameBudget)
 	m.RunFrames(1)
 	j := questState(m)
@@ -267,9 +430,12 @@ func TestQuestChest(t *testing.T) {
 // house's doorway, in its far side, and down through
 // it into the room inside, for a picture of the villager and the bed, and
 // on to the villager, who says their line.
-func TestQuestMeadow(t *testing.T) {
+func TestQuestMeadow(t *testing.T)   { questMeadow(t, "quest") }
+func TestQuestMeadowPS(t *testing.T) { questMeadow(t, "quest-ps") }
+
+func questMeadow(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "quest")
+	m := bootExample(t, name)
 	m.RunUntilCount("main.screen", 60, frameBudget)
 	m.RunFrames(1)
 	j := questState(m)
@@ -328,13 +494,19 @@ func TestQuestMeadow(t *testing.T) {
 // here does, and writes a hall with a wall painted beside her over the
 // file the program loaded, as the Room panel does, which the program
 // places again, so that the wall stops her.
-func TestQuestLive(t *testing.T) {
+func TestQuestLive(t *testing.T) { questLive(t, "quest", "go.chrisrx.dev/psx/scene.live") }
+
+// TestQuestLivePS is TestQuestLive on exp/examples/quest, whose scene
+// package, exp/ps/scene, has a live record of its own.
+func TestQuestLivePS(t *testing.T) { questLive(t, "quest-ps", "go.chrisrx.dev/psx/exp/ps/scene.live") }
+
+func questLive(t *testing.T, program, liveSym string) {
 	parallel(t)
-	m := bootExample(t, "quest")
+	m := bootExample(t, program)
 	m.RunUntilCount("main.screen", 60, frameBudget)
 	m.RunFrames(1)
 	j := questState(m)
-	live := m.Sym("go.chrisrx.dev/psx/scene.live")
+	live := m.Sym(liveSym)
 	ptr, words := m.Read32(live), m.Read32(live+4)
 	assert.Equal(t, true, ptr != 0 && words > 0, "the hall's file should be the live scene")
 	name := make([]byte, 0, 32)
@@ -459,9 +631,15 @@ func TestSceneLive(t *testing.T) {
 // before them, and the flag, which ends the level until Start plays it
 // again with its coins back. The cube is put where each part of the
 // level is by writing its position between frames.
-func TestJumpcube(t *testing.T) {
+func TestJumpcube(t *testing.T) { jumpcube(t, "jumpcube") }
+
+// TestJumpcubePS is TestJumpcube on exp/examples/jumpcube, the program
+// on the exp/ps API, which must draw the same pictures.
+func TestJumpcubePS(t *testing.T) { jumpcube(t, "jumpcube-ps") }
+
+func jumpcube(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "jumpcube")
+	m := bootExample(t, name)
 	m.RunUntilCount("main.screen", 60, frameBudget)
 	get := func(name string) int { return int(int32(m.Read32(m.Sym(name)))) }
 	set := func(name string, v int) { m.Bus.Write32(m.Sym(name), uint32(int32(v))) }
@@ -537,9 +715,33 @@ func TestJumpcube(t *testing.T) {
 // screen's own count, the first word of yaroze.Screen, and the cube turns
 // by that count, so that the picture is the same however long the BIOS
 // took to start the program and the disc to deliver its files.
-func TestSquareScreenshot(t *testing.T) {
+func TestSquareScreenshot(t *testing.T) { squareScreenshot(t, "square") }
+
+// TestSquareScreenshotGo is TestSquareScreenshot with the program built against
+// the Go library (task build:disc:go NAME=square).
+func TestSquareScreenshotGo(t *testing.T) { squareScreenshot(t, "square-go") }
+
+// TestGalleryScreenshotPS checks exp/examples/gallery, one of everything
+// the exp/ps API draws, against its own picture: the Go library's own
+// font and tables, which a program built against it has, rather than
+// the original's, which the ports above are built with to match the
+// originals' pictures.
+func TestGalleryScreenshotPS(t *testing.T) {
+	m := bootExample(t, "gallery-ps")
+	m.RunUntilCount("main.screen", 30, frameBudget)
+	m.Golden("gallery.png")
+	noComplaints(t, m)
+}
+
+// TestSquareScreenshotPS is TestSquareScreenshot on exp/examples/square,
+// the program written against the exp/ps API (task build:disc
+// NAME=square-ps DIR=exp/examples/square), which has to draw the same
+// picture.
+func TestSquareScreenshotPS(t *testing.T) { squareScreenshot(t, "square-ps") }
+
+func squareScreenshot(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "square")
+	m := bootExample(t, name)
 	m.SetAudio(true)
 	m.RunUntilCount("main.screen", 150, frameBudget)
 
@@ -557,6 +759,7 @@ func TestSquareScreenshot(t *testing.T) {
 	m.Hold(1, emu.ButtonLeft|emu.ButtonRight, 20)
 	m.RunFrames(5)
 	m.Golden("square.png")
+	noComplaints(t, m)
 }
 
 // TestTerraScreenshot checks the first conversation at the port: the
@@ -565,9 +768,15 @@ func TestSquareScreenshot(t *testing.T) {
 // the camera's tour ends on the two of them with the first line said. The
 // counts are the scene counter's, which the opening and the title each
 // run from zero, so the picture is the same however long the BIOS took.
-func TestTerraScreenshot(t *testing.T) {
+func TestTerraScreenshot(t *testing.T) { terraScreenshot(t, "terra") }
+
+// TestTerraScreenshotGo is TestTerraScreenshot with the program built against
+// the Go library (task build:disc:go NAME=terra).
+func TestTerraScreenshotGo(t *testing.T) { terraScreenshot(t, "terra-go") }
+
+func terraScreenshot(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "terra")
+	m := bootExample(t, name)
 	sceneT := m.Sym("main.sceneT")
 	m.RunUntilCount("main.sceneT", 0x11f, frameBudget)
 	// The port is built while the counter still reads the opening's end.
@@ -579,6 +788,7 @@ func TestTerraScreenshot(t *testing.T) {
 	m.RunUntilCount("main.sceneT", 0x2c0, frameBudget)
 	m.RunFrames(80)
 	m.Golden("terra.png")
+	noComplaints(t, m)
 }
 
 // peak runs the machine for frames frames and returns the loudest sample
@@ -600,9 +810,15 @@ func peak(m *emutest.Machine, frames int) int {
 // port 2, holds Cross and pushes the left stick right while the mouse moves
 // up, and checks that the cursor went right and up and that the screen
 // names both and what they send.
-func TestPadsScreenshot(t *testing.T) {
+func TestPadsScreenshot(t *testing.T) { padsScreenshot(t, "pads") }
+
+// TestPadsScreenshotPS is TestPadsScreenshot on exp/examples/pads, the
+// program on the exp/ps API, which must draw the same picture.
+func TestPadsScreenshotPS(t *testing.T) { padsScreenshot(t, "pads-ps") }
+
+func padsScreenshot(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "pads")
+	m := bootExample(t, name)
 	analog := emu.NewPad(emu.PadAnalog)
 	mouse := emu.NewPad(emu.PadMouse)
 	m.ConnectPad(1, analog)
@@ -645,9 +861,20 @@ func TestPadsScreenshot(t *testing.T) {
 // icon frame and one block, and the title in full-width Shift-JIS. It
 // passes under Sony's BIOS as well as OpenBIOS: run it with PSX_BIOS set to
 // one of Sony's to check the card against the BIOS that games used.
-func TestCardScreenshot(t *testing.T) {
+func TestCardScreenshot(t *testing.T) { cardScreenshot(t, "card") }
+
+// TestCardScreenshotGo is TestCardScreenshot with the program built
+// against the Go library (task build:disc:go NAME=card), whose memory
+// card calls go through the kernel as the resident library's did.
+func TestCardScreenshotGo(t *testing.T) { cardScreenshot(t, "card-go") }
+
+// TestCardScreenshotPS is TestCardScreenshot on exp/examples/card, the
+// program on the exp/ps API, which must draw the same picture.
+func TestCardScreenshotPS(t *testing.T) { cardScreenshot(t, "card-ps") }
+
+func cardScreenshot(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "card")
+	m := bootExample(t, name)
 	card, err := emu.NewMemoryCard(nil)
 	if !assert.NoError(t, err) {
 		t.FailNow()
@@ -706,9 +933,20 @@ func TestCardScreenshot(t *testing.T) {
 // 2 to 4 after the data track, that cross plays the chosen one, which is
 // heard in what the SPU mixes and which the drive then reports playing, and
 // that circle stops it.
-func TestCDDAScreenshot(t *testing.T) {
+func TestCDDAScreenshot(t *testing.T) { cddaScreenshot(t, "cdda") }
+
+// TestCDDAScreenshotGo is TestCDDAScreenshot with the program built against
+// the Go library (task build:disc:go NAME=cdda), whose CdPlay drives the
+// tracks.
+func TestCDDAScreenshotGo(t *testing.T) { cddaScreenshot(t, "cdda-go") }
+
+// TestCDDAScreenshotPS is TestCDDAScreenshot on exp/examples/cdda, the
+// program on the exp/ps API, which must draw the same picture.
+func TestCDDAScreenshotPS(t *testing.T) { cddaScreenshot(t, "cdda-ps") }
+
+func cddaScreenshot(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "cdda")
+	m := bootExample(t, name)
 	m.SetAudio(true)
 	m.RunUntilCount("main.screen", 30, frameBudget)
 	tracks, playing := m.Sym("main.tracks"), m.Sym("main.playing")
@@ -733,14 +971,27 @@ func TestCDDAScreenshot(t *testing.T) {
 	m.Hold(1, emu.ButtonCircle, 3)
 	m.RunFrames(30)
 	assert.Equal(t, int32(-1), int32(m.Read32(playing)), "circle stops it")
+	noComplaints(t, m)
 }
 
 // TestTimersScreenshot checks that the line counter runs and passes its
 // mark every four seconds or so, and that more sprites take more of the
 // frame, measured in lines.
-func TestTimersScreenshot(t *testing.T) {
+func TestTimersScreenshot(t *testing.T) { timersScreenshot(t, "timers") }
+
+// TestTimersScreenshotGo is TestTimersScreenshot with the program built
+// against the Go library (task build:disc:go NAME=timers). The picture is
+// not compared: it prints the lines the frame took, which are fewer under
+// the Go library, whose sprite sorting is faster than the resident's.
+func TestTimersScreenshotGo(t *testing.T) { timersScreenshot(t, "timers-go") }
+
+// TestTimersScreenshotPS is TestTimersScreenshot on exp/examples/timers,
+// the program on the exp/ps API.
+func TestTimersScreenshotPS(t *testing.T) { timersScreenshot(t, "timers-ps") }
+
+func timersScreenshot(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "timers")
+	m := bootExample(t, name)
 	m.RunUntilCount("main.screen", 60, frameBudget)
 	count, lines, wraps := m.Sym("main.count"), m.Sym("main.lines"), m.Sym("main.wraps")
 	few := int32(m.Read32(lines))
@@ -752,17 +1003,37 @@ func TestTimersScreenshot(t *testing.T) {
 	t.Logf("%d lines with 20 sprites, %d with 400; the counter passed its mark %d times", few, many, m.Read32(wraps))
 	assert.Equal(t, true, many > few+20, "more sprites take more of the frame")
 	assert.Equal(t, true, m.Read32(wraps) >= 1, "the line counter passes its mark")
-	m.Golden("timers.png")
+	if name == "timers" {
+		m.Golden("timers.png")
+	}
 }
 
 // TestTilesScreenshot scrolls the map right and down, to where its four
 // screens meet, and checks the scroll stops at the map's far corner.
-func TestTilesScreenshot(t *testing.T) {
+func TestTilesScreenshot(t *testing.T) { tilesScreenshot(t, "tiles") }
+
+// TestTilesScreenshotGo is TestTilesScreenshot with the program built
+// against the Go library (task build:disc:go NAME=tiles), which reads
+// the map from the disc and draws it through the same background packets.
+// The scroll's far corner is checked in the picture alone: with the
+// library's calls open to the optimizer, the background is no longer a
+// variable the test can read.
+func TestTilesScreenshotGo(t *testing.T) { tilesScreenshot(t, "tiles-go") }
+
+// TestTilesScreenshotPS is TestTilesScreenshot on exp/examples/tiles, the
+// program written against the exp/ps API (task build:disc NAME=tiles-ps
+// DIR=exp/examples/tiles), which has to draw the same picture.
+func TestTilesScreenshotPS(t *testing.T) { tilesScreenshot(t, "tiles-ps") }
+
+func tilesScreenshot(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "tiles")
+	m := bootExample(t, name)
 	m.RunUntilCount("main.screen", 30, frameBudget)
 	m.Hold(1, emu.ButtonRight|emu.ButtonDown, 60)
 	m.Golden("tiles.png")
+	if name != "tiles" {
+		return
+	}
 	m.Hold(1, emu.ButtonRight|emu.ButtonDown, 200)
 	bg := m.Sym("main.bg")
 	scroll := m.Read32(bg + 12)
@@ -778,9 +1049,15 @@ const (
 
 // TestSplitScreenshot drives each player's cube, checks each moved, and
 // shows the halves one above the other and then side by side.
-func TestSplitScreenshot(t *testing.T) {
+func TestSplitScreenshot(t *testing.T) { splitScreenshot(t, "split") }
+
+// TestSplitScreenshotGo is TestSplitScreenshot with the program built against
+// the Go library (task build:disc:go NAME=split).
+func TestSplitScreenshotGo(t *testing.T) { splitScreenshot(t, "split-go") }
+
+func splitScreenshot(t *testing.T, name string) {
 	parallel(t)
-	m := bootExample(t, "split")
+	m := bootExample(t, name)
 	frames := m.Sym("main.frames")
 	m.RunUntil(func() bool { return m.Read32(frames) >= 30 }, frameBudget, "thirty frames")
 	players := m.Sym("main.players")
@@ -799,4 +1076,5 @@ func TestSplitScreenshot(t *testing.T) {
 	m.Hold(1, emu.ButtonSelect, 6)
 	assert.Equal(t, uint32(1), m.Read32(m.Sym("main.sideBySide"))&0xff, "side by side")
 	m.Golden("split-side.png")
+	noComplaints(t, m)
 }
