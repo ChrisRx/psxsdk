@@ -26,8 +26,8 @@
 // yaroze generate is discgen, for go:generate, and yaroze iso is mkdisc with
 // all of its flags. The converters are here too, each the tool of its name:
 // tim is png2tim, tmd obj2tmd, vag wav2vag, vab mkvab, seq smf2seq, scene
-// mkscene and arc mkarc. sio is sioload, for a Net Yaroze on the serial
-// cable.
+// mkscene and arc mkarc. sio is siocons, Sony's SIOCONS for a Net Yaroze
+// on the serial cable.
 package main
 
 import (

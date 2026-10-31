@@ -18,7 +18,7 @@ import (
 	"go.chrisrx.dev/psx/internal/cmd/mkvab"
 	"go.chrisrx.dev/psx/internal/cmd/obj2tmd"
 	"go.chrisrx.dev/psx/internal/cmd/png2tim"
-	"go.chrisrx.dev/psx/internal/cmd/sioload"
+	"go.chrisrx.dev/psx/internal/cmd/siocons"
 	"go.chrisrx.dev/psx/internal/cmd/smf2seq"
 	"go.chrisrx.dev/psx/internal/cmd/wav2vag"
 )
@@ -55,7 +55,7 @@ runs it under the wasmtime command when there is one, which is quicker.`,
 		smf2seq.Command("seq"),
 		mkscene.Command("scene"),
 		mkarc.Command("arc"),
-		sioload.Command("sio"),
+		siocons.Command("sio"),
 	)
 	if err := root.ExecuteContext(context.Shutdown()); err != nil {
 		fmt.Fprintf(os.Stderr, "%s: %v\n", name, err)

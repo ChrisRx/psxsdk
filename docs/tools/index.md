@@ -26,7 +26,7 @@ Each of these is a tool of its own, which `go:generate` lines and the playground
 | [smf2seq](smf2seq.md) | `yaroze seq` | Convert MIDI files into SEQ scores for the sound library |
 | [mkscene](mkscene.md) | `yaroze scene` | Cook a scene, as the playground's scene editor writes it, into the file package scene draws |
 | [mkarc](mkarc.md) | `yaroze arc` | Pack files into one archive for the disc, with deflate, which package archive unpacks piece by piece |
-| [sioload](sioload.md) | `yaroze sio` | Upload an executable to a Net Yaroze over the serial cable |
+| [siocons](siocons.md) | `yaroze sio` | Talk to a Net Yaroze over the serial cable, as Sony's SIOCONS did: a terminal on its monitor, with SIOCONS's local commands and batch files |
 
 ## Standalone
 
@@ -38,6 +38,7 @@ Each of these is a tool of its own, which `go:generate` lines and the playground
 | [dumpsxiso](dumpsxiso.md) | List or extract a disc image |
 | [mdecenc](mdecenc.md) | Encode pictures into an MDEC movie |
 | [rsdlink](rsdlink.md) | Link Sony's RSD models into a TMD, byte for byte as Sony's rsdlink did |
+| [sioload](sioload.md) | Upload an executable to a Net Yaroze over the serial cable, and run it |
 | [hdr2go](hdr2go.md) | Generate layout-checked Go bindings from a C header |
 | [psxemu](psxemu.md) | Run the emulator headless, with traces, VRAM dumps and screenshots, or drive a program with scripted presses, watched and poked memory, and a profile |
 | [psxtrace](psxtrace.md) | Print and diff instruction traces, compare VRAM dumps |

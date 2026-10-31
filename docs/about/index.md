@@ -24,7 +24,7 @@ The point is preservation: that anyone can still write, build and play Net Yaroz
 - **Data comes off the disc.** A program declares its files with package [`disc`](https://pkg.go.dev/go.chrisrx.dev/psx/disc), the build puts them on its disc, and the program reads them as it needs them, rather than everything having to fit in memory up front.
 - **Programs are written in Go**, compiled by TinyGo against bindings that keep Sony's names, so the manuals still apply. One command, [`yaroze`](../tools/yaroze.md), builds a program onto a disc.
 - **The tools run anywhere Go does**, and so does the emulator, which also runs in a browser and drives the tests. The converters for pictures, sounds, music and models are checked against what Sony's tools made from members' files.
-- **Nothing is lost along the way.** Sony's [manuals](../manuals/index.md), supplements and FAQs are here as published, the [examples](../examples/index.md) port Sony's demos and members' games, and [`sioload`](../tools/sioload.md) still uploads a program to a real Net Yaroze over its cable.
+- **Nothing is lost along the way.** Sony's [manuals](../manuals/index.md), supplements and FAQs are here as published, the [examples](../examples/index.md) port Sony's demos and members' games, and [`siocons`](../tools/siocons.md) still talks to a real Net Yaroze over its cable, as Sony's SIOCONS did.
 
 ## How it was made
 

@@ -14,6 +14,7 @@ require (
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
 	go.bug.st/serial v1.8.0
 	go.chrisrx.dev/x v0.0.0-20261015142902-ad113d4a3a98
+	golang.org/x/term v0.47.0
 )
 
 require (
@@ -26,7 +27,7 @@ require (
 	github.com/jfreymuth/pulse v0.1.3 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 )
 
 // Sony's manuals, 11MB of PDFs the docs site serves, which nothing that

@@ -40,7 +40,7 @@ or on its own with `go install go.chrisrx.dev/psx/cmd/yaroze@latest`.
 - **`yaroze patch --base prog.elf [package]`** builds such a patch by hand, for the program whose ELF `--base` names, built with `--hot` and kept with `--elf`, linked at `--at` inside the program's region, which an emulator loads with the `hot` package. It is what `run --hot` does on each save.
 - **`yaroze generate`** is [`discgen`](discgen.md), and **`yaroze iso`** is [`mkdisc`](mkdisc.md) with every flag, for a disc laid out by hand.
 - **`yaroze tim`**, **`tmd`**, **`vag`**, **`vab`**, **`seq`**, **`scene`** and **`arc`** are the converters [`png2tim`](png2tim.md), [`obj2tmd`](obj2tmd.md), [`wav2vag`](wav2vag.md), [`mkvab`](mkvab.md), [`smf2seq`](smf2seq.md), [`mkscene`](mkscene.md) and [`mkarc`](mkarc.md), with the same flags.
-- **`yaroze sio`** is [`sioload`](sioload.md), which uploads an executable to a Net Yaroze over the serial cable.
+- **`yaroze sio`** is [`siocons`](siocons.md), Sony's SIOCONS for a Net Yaroze on the serial cable.
 - **`yaroze env`** says how a build would run the compiler, and where it is.
 
 Every command that compiles takes `--opt`, TinyGo's optimization level, 2 by default since a frame has a budget, `--tags`, `--load file@addr` to put a file into the executable as siocons' `local dload` did, `--hot` to build a program that takes patches, which calls the main package's functions through a slot each and reserves 256KB for the patches, `--target FILE.json`, a TinyGo target that inherits `playstation-yaroze` and changes what the program needs, such as where it is linked, and `-v`, which says how the compiler ran and how long each step took.
