@@ -47,7 +47,6 @@ var (
 
 	modelFile = disc.Register("ASSETS/ODEN.TMD", "assets/ODEN.TMD").Into(modelData[:])
 	texFile   = disc.Register("ASSETS/ODEN.TIM", "assets/ODEN.TIM").Into(texData[:])
-	files     = []*disc.File{&modelFile, &texFile}
 
 	model   = yaroze.TMD(modelData[:])
 	texture = yaroze.TIM(texData[:])
@@ -88,7 +87,7 @@ func main() {
 	text.Init(textBuf[:])
 	initAll()
 
-	if missing := demo.Load(files, nil); missing != "" {
+	if missing := demo.Load(disc.Registered(), nil); missing != "" {
 		fail("could not read ", missing)
 		return
 	}

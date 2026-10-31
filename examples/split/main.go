@@ -94,7 +94,7 @@ func main() {
 	font := screen.Font(int32(b.X)+8, int32(b.Y)+8, int32(b.W)-16, int32(b.H)-16, 200)
 	text.Init(textBuf[:])
 
-	if f := disc.LoadAll(300, files...); f != nil {
+	if f := disc.LoadAll(300); f != nil {
 		for range screen.Frames() {
 			yaroze.Print("could not read ")
 			yaroze.Print(f.Name)

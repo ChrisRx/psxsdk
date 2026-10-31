@@ -15,13 +15,3 @@ var (
 	md0DFL    = disc.Register("DATA/MD0.DFL", "data/MD0.DFL")
 	md0LZ4    = disc.Register("DATA/MD0.LZ4", "data/MD0.LZ4")
 )
-
-// files is every file above, in the order disc.LoadAll reads them.
-var files = []*disc.File{
-	&castleDFL,
-	&castleLZ4,
-	&dogDFL,
-	&dogLZ4,
-	&md0DFL,
-	&md0LZ4,
-}

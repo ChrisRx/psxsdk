@@ -101,7 +101,6 @@ var (
 	invaderFile = disc.Register("ASSETS/INVADER1.TIM", "assets/INVADER1.TIM").Into(invaderData[:])
 	shipFile    = disc.Register("ASSETS/SHIP1.TIM", "assets/SHIP1.TIM").Into(shipData[:])
 	shotFile    = disc.Register("ASSETS/FIRE04.TIM", "assets/FIRE04.TIM").Into(shotData[:])
-	files       = []*disc.File{&vh, &vb, &seqFile, &invaderFile, &shipFile, &shotFile}
 
 	invaderTIM = yaroze.TIM(invaderData[:])
 	shipTIM    = yaroze.TIM(shipData[:])
@@ -380,7 +379,7 @@ func initializeAll() bool {
 	yaroze.FntLoad(960, 256)
 	yaroze.FntOpen(16, 16, 256, 200, 0, 512)
 
-	if missing := demo.Load(files, nil); missing != "" {
+	if missing := demo.Load(disc.Registered(), nil); missing != "" {
 		fail("could not read ", missing)
 		return false
 	}

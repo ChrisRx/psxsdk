@@ -12,10 +12,3 @@ var (
 	levelARC = disc.Register("ASSETS/LEVEL.ARC", "assets/LEVEL.ARC")
 	towerDAT = disc.Register("ASSETS/TOWER.DAT", "assets/TOWER.DAT")
 )
-
-// files is every file above, in the order disc.LoadAll reads them.
-var files = []*disc.File{
-	&cubesDAT,
-	&levelARC,
-	&towerDAT,
-}

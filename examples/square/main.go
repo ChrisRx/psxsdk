@@ -15,7 +15,7 @@ package main
 
 // The files under assets/ are declared, ready to load, in
 // zz_generated.disc.go, by discgen: cubeTIM, cubeTMD, sample1SEQ, std0VB and
-// std0VH, and files, every one of them.
+// std0VH.
 //go:generate go run go.chrisrx.dev/psx/tools/discgen assets
 
 import (
@@ -60,7 +60,7 @@ func main() {
 	box.X, box.Y = b.X+24, b.Y+b.H-64
 	bar.X, bar.Y = b.X+b.W/2-100, b.Y+b.H/2
 
-	loader.Start(300, files...)
+	loader.Start(300)
 	for ot := range screen.Frames() {
 		pad.Update()
 		dx, dy := pad.Dir()
@@ -80,7 +80,7 @@ func main() {
 				setupCube()
 				startMusic()
 			}
-			bar.W = uint16(200 * loader.Loaded() / len(files))
+			bar.W = uint16(200 * loader.Loaded() / loader.Total())
 			bar.Sort(ot, 0)
 		case loader.Failed() != nil:
 			yaroze.Print("could not read ")

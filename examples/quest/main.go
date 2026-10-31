@@ -154,7 +154,7 @@ func main() {
 	for k := range rooms {
 		*rooms[k].file = rooms[k].file.Into(roomData[k][:])
 	}
-	if failed = disc.LoadAll(300, files...); failed == nil {
+	if failed = disc.LoadAll(300); failed == nil {
 		setup(b)
 		hero.here().load()
 		screen.Background = hero.here().background()

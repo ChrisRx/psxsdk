@@ -78,7 +78,6 @@ var (
 	asciiFile    = disc.Register("ASSETS/ASCII2.TIM", "assets/ASCII2.TIM").Into(asciiData[:])
 	vh           = disc.Register("ASSETS/LEWIS.VH", "assets/LEWIS.VH").Into(vhData[:])
 	vb           = disc.Register("ASSETS/LEWIS.VB", "assets/LEWIS.VB").Into(vbData[:])
-	files        = []*disc.File{&squareFile, &shipFile, &mainFile, &fireFile, &multipleFile, &multiTIMFile, &mascotsFile, &asciiFile, &vh, &vb}
 
 	squareModel   = yaroze.TMD(squareData[:])
 	shipModel     = yaroze.TMD(shipData[:])
@@ -327,7 +326,7 @@ func initializeAll() bool {
 	yaroze.FntLoad(960, 256)
 	yaroze.FntOpen(0, 40, 256, 200, 0, 512)
 
-	if missing := demo.Load(files, nil); missing != "" {
+	if missing := demo.Load(disc.Registered(), nil); missing != "" {
 		basicText[0].Reset()
 		basicText[0].WriteString("could not read\n").WriteString(missing)
 		dummyGuiLoopForTextPrinting(1, yaroze.PADstart|yaroze.PADselect)

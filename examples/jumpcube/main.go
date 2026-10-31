@@ -142,7 +142,7 @@ func main() {
 	wonBack.X, wonBack.Y = b.X+72, b.Y+72
 
 	levelDAT = levelDAT.Into(levelData[:])
-	if failed = disc.LoadAll(300, files...); failed == nil {
+	if failed = disc.LoadAll(300); failed == nil {
 		start(b)
 	}
 	for ot := range screen.Frames() {
@@ -203,7 +203,7 @@ func main() {
 // start loads the level, which puts back the coins taken, and puts the
 // hero where it starts.
 func start(b yaroze.RECT) {
-	if err = world.Load(levelDAT.Data(), scene.Files(files)); err != nil {
+	if err = world.Load(levelDAT.Data(), scene.Files(disc.Registered())); err != nil {
 		return
 	}
 	read(b)

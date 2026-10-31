@@ -1,12 +1,14 @@
 package disc
 
-// The runtime half of the package. Nothing here allocates, and nothing runs
-// unless the program asks a File where it is. It builds on a host too, where
+// The runtime half of the package. Nothing here allocates but Load, for a
+// file Into gave no memory, and Registered, once, and nothing runs unless
+// the program asks a File where it is. It builds on a host too, where
 // the yaroze package's functions are stubs, so that a program using it
 // type-checks there; disc_yaroze.go holds what only means anything on the
 // console.
 
 import (
+	"strings"
 	"unsafe"
 
 	"go.chrisrx.dev/psx/internal/discrecord"
@@ -15,13 +17,29 @@ import (
 )
 
 // A File is a file on the disc, declared by Register, and the memory it is
-// read into, which Into gives it or Load allocates.
-//
-// Its layout is the record mkdisc looks for in the executable, so the
-// fields, their order and their types are part of the contract with the host
-// half of the package. discrecord spells the record out, and disc_yaroze.go
-// fails the build if the two drift apart.
+// read into, which Into gives it or Load allocates. It is a handle on the
+// file's record in the registry, so a copy of it is the same file.
 type File struct {
+	// Name is the path on the disc, as it was registered.
+	Name string
+
+	i int // the record's index in registry, plus one, so that a zero File is none
+}
+
+// registry is the record of every File, in the order the program
+// registered them. Every File reaches its record through it, so a program
+// that uses any File keeps every record, and mkdisc places every file the
+// program registered, whether or not anything else refers to it. The
+// records are indexed rather than separate variables for the same reason:
+// the compiler can neither drop one nor take its fields apart.
+var registry []record
+
+// A record is what Register declares a file with: its layout is the record
+// mkdisc looks for in the executable, so the fields, their order and their
+// types are part of the contract with the host half of the package.
+// discrecord spells the record out, and disc_yaroze.go fails the build if
+// the two drift apart.
+type record struct {
 	magic uint32
 
 	// Name is the path on the disc, as it was registered.
@@ -61,13 +79,36 @@ type File struct {
 //
 //	var stone = disc.Register("ASSETS/STONE.TIM", "assets/stone.tim")
 //
-// TinyGo evaluates such a call at compile time and the File becomes constant
-// data in the executable, which is where mkdisc finds it. A call made at
-// run time instead produces a File that mkdisc never sees, so the file is
-// not on the disc and Placed reports false.
+// TinyGo evaluates such a call at compile time and the record becomes
+// constant data in the executable, which is where mkdisc finds it. A call
+// made at run time instead adds a record that mkdisc never sees, so the
+// file is not on the disc and Placed reports false.
 func Register(path, src string) File {
-	return File{magic: discrecord.Magic, Name: path, src: src}
+	return add(path, src)
 }
+
+// add appends a record to the registry and returns the File for it.
+//
+// It grows the registry by one with make and copy rather than append,
+// whose growth works out a power of two with an instruction TinyGo cannot
+// evaluate at compile time: it would put off every registration in the
+// package to run time, where mkdisc never sees them. Growing by one also
+// leaves no spare capacity in the executable.
+func add(path, src string) File {
+	grown := make([]record, len(registry)+1)
+	copy(grown, registry)
+	grown[len(registry)] = record{
+		magic: discrecord.Magic,
+		Name:  path,
+		src:   src,
+	}
+	registry = grown
+	return File{Name: path, i: len(registry)}
+}
+
+// rec is the file's record. A File not from Register has none, and fails
+// its index check here.
+func (f *File) rec() *record { return &registry[f.i-1] }
 
 // TrackName is the disc path Track registers an audio track under, which
 // mkdisc takes to mean a track of CD audio rather than a file.
@@ -86,7 +127,7 @@ const TrackName = "#CDDA"
 // Like Register, the call must initialize a package-level variable with a
 // constant. Tracks are numbered in the order the program declares them.
 func Track(src string) File {
-	return File{magic: discrecord.Magic, Name: TrackName, src: src}
+	return add(TrackName, src)
 }
 
 // TrackNumber is the number of the audio track Track registered, 2 for the
@@ -105,32 +146,33 @@ func (f *File) TrackNumber() int32 { return int32(f.Sector()) }
 //	var modelData [2048]uint32
 //	var model = disc.Register("ASSETS/CUBE.TMD", "assets/CUBE.TMD").Into(modelData[:])
 func (f File) Into(buf []uint32) File {
-	f.dst = buf
+	f.rec().dst = buf
 	return f
 }
 
 // Data is the memory the file is read into, as words: what Into gave it,
 // or what Load allocated, or nil before either. It is whole sectors, so
 // past the file's Size it holds whatever the drive delivered or zeros.
-func (f *File) Data() []uint32 { return f.dst }
+func (f *File) Data() []uint32 { return f.rec().dst }
 
 // Bytes is the memory the file is read into, as the library takes a sound
 // bank, or nil.
 func (f *File) Bytes() *uint8 {
-	if f.dst == nil {
+	dst := f.rec().dst
+	if dst == nil {
 		return nil
 	}
-	return (*uint8)(unsafe.Pointer(&f.dst[0]))
+	return (*uint8)(unsafe.Pointer(&dst[0]))
 }
 
 // Sector is the file's first sector on the disc, as a logical block address.
 // It is zero until mkdisc has placed the file.
-func (f *File) Sector() uint32 { return volatile.LoadUint32(&f.sector) }
+func (f *File) Sector() uint32 { return volatile.LoadUint32(&f.rec().sector) }
 
 // Size is the file's length in bytes. For a file of raw sectors, an .XA or
 // .STR, it counts the 2336 bytes of each. It is zero until mkdisc has
 // placed the file.
-func (f *File) Size() uint32 { return volatile.LoadUint32(&f.size) }
+func (f *File) Size() uint32 { return volatile.LoadUint32(&f.rec().size) }
 
 // Path writes the file's name into buf in the form the library's
 // CdSearchFile and CdReadFile take, "\ASSETS\WALL0.TMD;1" for a file
@@ -194,13 +236,14 @@ func (f *File) Read(addr *uint32, buf []byte) bool {
 // program whose files do not fit in it stops at the allocation with "out
 // of memory".
 func (f *File) Load() bool {
-	if f.dst == nil {
+	r := f.rec()
+	if r.dst == nil {
 		if !f.Placed() {
 			return false
 		}
-		f.dst = make([]uint32, (f.Size()+2047)/2048*512)
+		r.dst = make([]uint32, (f.Size()+2047)/2048*512)
 	}
-	return f.Read(&f.dst[0], pathBuf[:])
+	return f.Read(&r.dst[0], pathBuf[:])
 }
 
 // Wait waits for the read in progress to finish, polling once a frame for
@@ -222,6 +265,36 @@ func Wait(frames int) bool {
 	return false
 }
 
+// registered is what Registered returns, made the first time.
+var registered []*File
+
+// Registered returns every file the program registered that a read can
+// deliver, in the order it registered them: all but the tracks of CD audio
+// and the streams, .XA and .STR, which are played rather than read. The
+// slice is made the first time and shared after.
+func Registered() []*File {
+	if registered == nil {
+		files := make([]File, 0, len(registry))
+		for i := range registry {
+			if name := registry[i].Name; name != TrackName && !stream(name) {
+				files = append(files, File{Name: name, i: i + 1})
+			}
+		}
+		registered = make([]*File, len(files))
+		for i := range files {
+			registered[i] = &files[i]
+		}
+	}
+	return registered
+}
+
+// stream reports whether name is a file of raw sectors, by the extensions
+// mkdisc takes to be one unless told otherwise.
+func stream(name string) bool {
+	ext := name[strings.LastIndexByte(name, '.')+1:]
+	return strings.EqualFold(ext, "XA") || strings.EqualFold(ext, "STR")
+}
+
 // LoadAll reads each of files into its memory, as Load does, one after the
 // other, waiting up to frames frames for each as Wait does, and returns the
 // first that could not be read, or nil once they all are:
@@ -229,7 +302,14 @@ func Wait(frames int) bool {
 //	if f := disc.LoadAll(300, &model, &texture); f != nil {
 //		// f.Name is missing or unreadable
 //	}
+//
+// Given no files, it reads every one Registered returns. Files that share
+// the memory Into gave them would be read over one another that way, so a
+// program with those names the ones it wants.
 func LoadAll(frames int, files ...*File) *File {
+	if len(files) == 0 {
+		files = Registered()
+	}
 	for _, f := range files {
 		if !f.Load() || !Wait(frames) {
 			return f
@@ -240,10 +320,11 @@ func LoadAll(frames int, files ...*File) *File {
 
 // A Loader reads files while the frames go on, a step a frame, so that a
 // program can draw something, a bar or a message, while its data arrives,
-// rather than stopping in LoadAll. Start gives it the files, and Step,
-// once a frame, starts each read in turn and sees whether it has finished:
+// rather than stopping in LoadAll. Start gives it the files, every one
+// registered if it is given none, as LoadAll takes them, and Step, once a
+// frame, starts each read in turn and sees whether it has finished:
 //
-//	loader.Start(300, files...)
+//	loader.Start(300)
 //	for ot := range screen.Frames() {
 //		done, failed := loader.Step()
 //		if failed {
@@ -252,7 +333,7 @@ func LoadAll(frames int, files ...*File) *File {
 //			continue
 //		}
 //		if !done {
-//			bar.W = uint16(200 * loader.Loaded() / len(files))
+//			bar.W = uint16(200 * loader.Loaded() / loader.Total())
 //			bar.Sort(ot, 0)
 //			continue
 //		}
@@ -270,9 +351,13 @@ type Loader struct {
 	failed  *File
 }
 
-// Start sets the loader to read files, each given up on after frames
-// frames, as Wait gives up. Nothing is read until Step.
+// Start sets the loader to read files, or every one Registered returns if
+// it is given none, each given up on after frames frames, as Wait gives
+// up. Nothing is read until Step.
 func (l *Loader) Start(frames int, files ...*File) {
+	if len(files) == 0 {
+		files = Registered()
+	}
 	*l = Loader{files: files, frames: frames}
 }
 
@@ -314,6 +399,9 @@ func (l *Loader) Done() bool { return l.failed != nil || l.next >= len(l.files) 
 
 // Loaded returns how many of the files have been read.
 func (l *Loader) Loaded() int { return l.next }
+
+// Total returns how many files the loader reads.
+func (l *Loader) Total() int { return len(l.files) }
 
 // Failed returns the file that could not be read, or nil.
 func (l *Loader) Failed() *File { return l.failed }

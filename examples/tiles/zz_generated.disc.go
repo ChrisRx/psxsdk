@@ -10,8 +10,3 @@ import (
 var (
 	bgTIM = disc.Register("ASSETS/BG.TIM", "assets/BG.TIM")
 )
-
-// files is every file above, in the order disc.LoadAll reads them.
-var files = []*disc.File{
-	&bgTIM,
-}

@@ -1,6 +1,6 @@
 // Package discrecord finds the records package disc's Register leaves in
 // an executable, and fills them in: the host half of package disc, which
-// mkdisc uses. The layout of a record is here too, which disc's File
+// mkdisc uses. The layout of a record is here too, which disc's record
 // is checked against when it builds for the console.
 package discrecord
 
@@ -12,11 +12,11 @@ import (
 // "PSXD", which is how it looks in a hex dump of the executable.
 const Magic = 0x44585350
 
-// Size and the offsets lay out a record, a disc.File as TinyGo lays it out
-// on a 32-bit target: the magic word, the disc path and the host path each
-// as a pointer and a length, the sector and the length that mkdisc fills
-// in, and the destination as a slice, a pointer, a length and a capacity,
-// all zero when there is none. disc_yaroze.go in package disc asserts that
+// Size and the offsets lay out a record, the one package disc keeps for
+// each File, as TinyGo lays it out on a 32-bit target: the magic word, the
+// disc path and the host path each as a pointer and a length, the sector
+// and the length that mkdisc fills in, and the destination as a slice, a
+// pointer, a length and a capacity, all zero when there is none. disc_yaroze.go in package disc asserts that
 // the type matches.
 const (
 	Size      = 40
@@ -29,7 +29,7 @@ const (
 )
 
 // A Record is one registration found in a program's image: what Register
-// was called with, and where the File lies so that it can be patched.
+// was called with, and where the record lies so that it can be patched.
 type Record struct {
 	// Name is the path on the disc, as the program wrote it.
 	Name string

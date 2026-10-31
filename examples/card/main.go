@@ -111,7 +111,7 @@ func main() {
 	screen.Font(16, 48, 288, 184, 900)
 	text.Init(textBuf[:])
 
-	if f := disc.LoadAll(300, files...); f != nil {
+	if f := disc.LoadAll(300); f != nil {
 		message = "could not read " + f.Name
 	} else {
 		iconImage = yaroze.TIM(iconTIM.Data()).Load()

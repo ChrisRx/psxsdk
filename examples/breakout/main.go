@@ -99,7 +99,6 @@ var (
 	seqFile   = disc.Register("ASSETS/SOUND/GOGO.SEQ", "assets/GOGO.SEQ").Into(seqData[:])
 	batFile   = disc.Register("ASSETS/BREAK3.TIM", "assets/BREAK3.TIM").Into(batData[:])
 	brickFile = disc.Register("ASSETS/ODEN3.TIM", "assets/ODEN3.TIM").Into(brickData[:])
-	files     = []*disc.File{&vh, &vb, &seqFile, &batFile, &brickFile}
 
 	batTIM   = yaroze.TIM(batData[:])
 	brickTIM = yaroze.TIM(brickData[:])
@@ -376,7 +375,7 @@ func initializeAll() bool {
 	yaroze.FntLoad(960, 256)
 	yaroze.FntOpen(16, 16, 256, 200, 0, 512)
 
-	if missing := demo.Load(files, nil); missing != "" {
+	if missing := demo.Load(disc.Registered(), nil); missing != "" {
 		fail("could not read ", missing)
 		return false
 	}

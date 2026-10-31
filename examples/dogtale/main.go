@@ -127,7 +127,6 @@ var (
 	seqFile = disc.Register("ASSETS/SOUND/SAMPLE1.SEQ", "assets/SAMPLE1.SEQ").Into(seqData[:])
 	vh      = disc.Register("ASSETS/SOUND/STD0.VH", "assets/STD0.VH").Into(vhData[:])
 	vb      = disc.Register("ASSETS/SOUND/STD0.VB", "assets/STD0.VB").Into(vbData[:])
-	files   = []*disc.File{&dogFile, &seqFile, &vh, &vb}
 )
 
 // The pictures, as addresses within the file, since the sprites are set
@@ -264,7 +263,7 @@ func main() {
 		worldOT[i].Org = &otTags[i][0]
 	}
 
-	if missing := demo.Load(files, nil); missing != "" {
+	if missing := demo.Load(disc.Registered(), nil); missing != "" {
 		fail("could not read ", missing)
 		return
 	}
