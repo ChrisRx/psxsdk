@@ -198,3 +198,22 @@
      PeakMemory = static_cast<uint64_t>(Info.ru_maxrss);
  #endif
      *ProcStat = ProcessStatistics{UserT + KernelT, UserT, PeakMemory};
+--- a/llvm/lib/Target/Mips/MipsDelaySlotFiller.cpp
++++ b/llvm/lib/Target/Mips/MipsDelaySlotFiller.cpp
+@@ -1054,7 +1054,15 @@
+         return true;
+       }
+ 
+-      const auto &BranchTargetInstr = TargetMBB->instr_front();
++      // The first instruction that will run at the target: a debug value
++      // or another meta instruction at the front of the block is not one,
++      // and checking it instead of the instruction that follows would let
++      // a load into the slot whose result that instruction uses.
++      auto BranchTargetIter = TargetMBB->getFirstNonDebugInstr();
++      if (BranchTargetIter == TargetMBB->end()) {
++        return true;
++      }
++      const auto &BranchTargetInstr = *BranchTargetIter;
+       bool HasNewHazard =
+           !TII->SafeInLoadDelaySlot(BranchTargetInstr, Candidate);
+       // If the branch is unconditional then we do not need to bother to check
