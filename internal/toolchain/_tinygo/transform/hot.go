@@ -43,8 +43,26 @@ import (
 	"strings"
 
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
+
+// hotKeepName is the function that keeps every variable as declared.
+const hotKeepName = "__hot_keep"
+
+// isHotVariable reports whether name is a variable the keeper holds as
+// declared: any with a name but the runtime's and the compiler's own.
+func isHotVariable(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, prefix := range []string{"llvm.", "runtime.", "runtime/", "internal/task.", "reflect/", "machine.", "device."} {
+		if strings.HasPrefix(name, prefix) {
+			return false
+		}
+	}
+	return true
+}
 
 // isHotFunction reports whether name is a function of the main package:
 // a function, a method of one of its types, a closure or an instantiation
@@ -54,11 +72,41 @@ func isHotFunction(name string) bool {
 }
 
 // HotStubs gives every function of the main package a slot and a stub, as
-// described above.
+// described above, and keeps every variable as it was declared.
 func HotStubs(mod llvm.Module, config *compileopts.Config) {
 	ctx := mod.Context()
 	ptrType := llvm.PointerType(ctx.Int8Type(), 0)
 	noinline := ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0)
+
+	// The optimizer narrows a variable to what the program stores in it,
+	// a halfword stored 0 or 4 to a byte say, and folds one stored once
+	// into its readers. A patch is built from a program that has changed,
+	// so its view of what is stored, and so the width it would choose,
+	// can differ from the base's, and a variable has to be the same size
+	// in both for the patch to use the running program's. A volatile load
+	// of a variable puts it beyond the optimizer's analysis, so a function
+	// that is never called, kept through the link, loads a byte of every
+	// one. In a patch build the function is in the base already, and is
+	// bound away with the rest. The runtime's own variables are left to
+	// the optimizer: it links what it does by proving some of them never
+	// set, the main task's defer frame among them, without which the
+	// panic unwinding it never does would need a longjmp the target has
+	// not. A patch that changes what the runtime stores, the first defer
+	// of a program say, is refused for the size, and the program started
+	// again.
+	keeper := llvm.AddFunction(mod, hotKeepName, llvm.FunctionType(ctx.VoidType(), nil, false))
+	keeper.SetLinkage(llvm.ExternalLinkage)
+	keep := ctx.NewBuilder()
+	defer keep.Dispose()
+	keep.SetInsertPointAtEnd(ctx.AddBasicBlock(keeper, "entry"))
+	for g := mod.FirstGlobal(); !g.IsNil(); g = llvm.NextGlobal(g) {
+		if g.IsDeclaration() || g.IsGlobalConstant() || !isHotVariable(g.Name()) {
+			continue
+		}
+		keep.CreateLoad(ctx.Int8Type(), g, "").SetVolatile(true)
+	}
+	keep.CreateRetVoid()
+	llvmutil.AppendToGlobal(mod, "llvm.used", keeper)
 
 	var bodies []llvm.Value
 	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {

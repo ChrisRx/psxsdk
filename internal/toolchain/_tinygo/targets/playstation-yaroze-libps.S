@@ -4,6 +4,11 @@
 	.set noreorder
 	.set noat
 
+# The first three members call into the resident library (putchar,
+# SsSetTickMode and the resident half of SetVideoMode, Krom2RawAdd2) and
+# are replaced by exp/libps under LIBPS_GO, the playstation-yaroze-go
+# target. The float members stay: they call nothing resident.
+#ifndef LIBPS_GO
 # libps.a(puts.o)
 
 # Undefined references: putchar
@@ -49,7 +54,7 @@ puts:
 	.section .text.video,"ax",@progbits
 	.align 2
 .Lvideo_sect_text:
-	.globl SetVideoMode
+	.weak SetVideoMode
 SetVideoMode:
 	.word 0x27BDFFE8
 	.word 0xAFBF0014
@@ -75,8 +80,13 @@ SetVideoMode:
 	.section .text.krom2tm2,"ax",@progbits
 	.align 2
 .Lkrom2tm2_sect_text:
-	.globl Krom2Tim2
+# Weak, so that a program linking exp/libps, whose Krom2Tim2 is the
+# same routine in Go, takes that one; the twin-call test calls this one
+# by its _orig name, as it calls the resident library's entry points.
+	.weak Krom2Tim2
+	.globl Krom2Tim2_orig
 Krom2Tim2:
+Krom2Tim2_orig:
 	.word 0x3C0C0001
 	.word 0x358C2048
 	.word 0x03ACE823
@@ -472,6 +482,8 @@ Krom2Tim2:
 	.word 0x816F8165
 	.word 0x81708162
 	.word 0x00008150
+
+#endif
 
 # libps.a(EQSF2.O)
 

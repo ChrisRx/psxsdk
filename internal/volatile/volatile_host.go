@@ -28,6 +28,7 @@ func LoadUint16(p *uint16) uint16 { return *p }
 
 // StoreUint16 writes the half-word at p, every time it is called.
 func StoreUint16(p *uint16, v uint16) { *p = v }
+
 // A Register16 is a halfword of memory-mapped hardware.
 type Register16 struct {
 	Reg uint16
