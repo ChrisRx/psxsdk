@@ -1,0 +1,4 @@
+{
+	"inherits": ["playstation-yaroze"],
+	"ldflags": ["--defsym=__load=0x80068000", "--defsym=__stack_top=0x80090000", "--defsym=__stack_size=0x2000", "--nmagic"]
+}

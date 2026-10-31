@@ -16,12 +16,15 @@ tasks:
   # needs a BIOS, from PSX_BIOS or the OpenBIOS image the site ships, and
   # builds the discs with TinyGo, so it runs in the default dev shell rather
   # than the ci one. The memory card test drives Sony's shell, which OpenBIOS
-  # does not have, and runs only with Sony's BIOS in PSX_SONY_BIOS.
+  # does not have, and runs only with Sony's BIOS in PSX_SONY_BIOS. The
+  # serial tests talk to the Net Yaroze boot disc's monitor, from the image
+  # PSX_YAROZE_BOOT names, which also needs Sony's BIOS.
   test:emu:
     cmds:
       - task: build:discs
       - task: build:disc:tutorial
       - task: build:hot
+      - task: build:serial
       - go test -v ./tests/... ./internal/hot
 
   # Builds every example's disc, each onto .build/NAME/NAME.cue: every
@@ -107,6 +110,33 @@ tasks:
       - mkdir -p .build/hot
       - go run ./cmd/yaroze disc --hot --opt=2 --elf .build/hot/prog.elf -o .build/hot/v1.bin ./internal/hot/testdata/v1
       - go run ./cmd/yaroze patch --opt=2 --base .build/hot/prog.elf -o .build/hot/v2.patch.elf ./internal/hot/testdata/v2
+
+  # Builds the serial tests' programs onto .build/serial, each an ELF of
+  # the program alone, which the tests upload over the emulated cable for
+  # the library the boot disc leaves resident, and our monitor, which the
+  # tests run them on as well as Sony's, onto .build/monitor/monitor.cue,
+  # with the printing program as a PS-X EXE beside it, for its ld and ex.
+  build:serial:
+    sources:
+      - 'tests/testdata/serial/**/*'
+      - 'serial/monitor/**/*'
+      - 'yaroze/**/*.go'
+      - 'internal/**/*'
+      - 'cmd/yaroze/**/*.go'
+      - 'link/**/*'
+    generates:
+      - .build/serial/print.elf
+      - .build/serial/print.exe
+      - .build/serial/exit.elf
+      - .build/serial/crash.elf
+      - .build/monitor/monitor.cue
+    cmds:
+      - mkdir -p .build/serial .build/monitor
+      - go run ./cmd/yaroze build --opt=2 -o .build/serial/print.elf ./tests/testdata/serial/print
+      - go run ./tools/elf2exe .build/serial/print.elf .build/serial/print.exe
+      - go run ./cmd/yaroze disc --opt=2 --target serial/monitor/target.json --file PRINT.EXE=.build/serial/print.exe -o .build/monitor/monitor.bin ./serial/monitor
+      - go run ./cmd/yaroze build --opt=2 -o .build/serial/exit.elf ./tests/testdata/serial/exit
+      - go run ./cmd/yaroze build --opt=2 -o .build/serial/crash.elf ./tests/testdata/serial/crash
 
   # Builds the tutorial's first program onto .build/hello/hello.cue, so
   # that it runs on its page like the examples and in the emulator tests.

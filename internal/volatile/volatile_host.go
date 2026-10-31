@@ -22,3 +22,15 @@ func LoadUint32(p *uint32) uint32 { return *p }
 
 // StoreUint32 writes the word at p, every time it is called.
 func StoreUint32(p *uint32, v uint32) { *p = v }
+
+// LoadUint16 reads the half-word at p, every time it is called.
+func LoadUint16(p *uint16) uint16 { return *p }
+
+// StoreUint16 writes the half-word at p, every time it is called.
+func StoreUint16(p *uint16, v uint16) { *p = v }
+
+// LoadUint8 reads the byte at p, every time it is called.
+func LoadUint8(p *uint8) uint8 { return *p }
+
+// StoreUint8 writes the byte at p, every time it is called.
+func StoreUint8(p *uint8, v uint8) { *p = v }

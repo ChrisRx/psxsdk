@@ -61,4 +61,4 @@ task serve             # build the site and the playground, and serve them on lo
 
 `go run ./cmd/yaroze run ./examples/check` builds and plays one example, as `task play NAME=check` does. The build's single steps are Go tools too, so `go tool mkdisc` lays out a disc by hand.
 
-`task test:emu` boots with the OpenBIOS image in `emu/openbios`, or whatever `PSX_BIOS` names. The memory card test drives Sony's shell, which OpenBIOS does not have, so it only runs when `PSX_SONY_BIOS` points at a Sony BIOS. No Sony BIOS is distributed here.
+`task test:emu` boots with the OpenBIOS image in `emu/openbios`, or whatever `PSX_BIOS` names. The memory card test drives Sony's shell, which OpenBIOS does not have, so it only runs when `PSX_SONY_BIOS` points at a Sony BIOS. The serial tests run against the clean-room monitor in `serial/monitor`, which `task build:serial` builds, and against Sony's monitor too when `PSX_YAROZE_BOOT` also names an image of the Net Yaroze boot disc, a `.bin` or the `.zip` redump has. No Sony BIOS or boot disc is distributed here.
