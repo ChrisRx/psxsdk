@@ -20,6 +20,7 @@ import (
 // there is no disc, before any shell. So the BIOS comes from PSX_SONY_BIOS
 // rather than PSX_BIOS, and the test is skipped without it.
 func TestBIOSFormatsMemoryCard(t *testing.T) {
+	parallel(t)
 	path := os.Getenv("PSX_SONY_BIOS")
 	if path == "" {
 		t.Skip("PSX_SONY_BIOS is not set")

@@ -21,6 +21,7 @@ import (
 //
 // That message is Sony's BIOS's.
 func TestCheckQuitReturnsToBIOS(t *testing.T) {
+	parallel(t)
 	cue := disc(t, "check")
 	m := emutest.Boot(t,
 		emutest.BIOS(emutest.BIOSFromEnv(t)),
@@ -43,6 +44,7 @@ func TestCheckQuitReturnsToBIOS(t *testing.T) {
 // with a golden image: the balls where a second of bouncing leaves them,
 // and the text overlay. Run it with -update-golden to accept a change.
 func TestCheckScreenshot(t *testing.T) {
+	parallel(t)
 	cue := disc(t, "check")
 	m := emutest.Boot(t,
 		emutest.BIOS(emutest.BIOSFromEnv(t)),
@@ -59,6 +61,7 @@ func TestCheckScreenshot(t *testing.T) {
 // need, and checks the two machines end up the same and made the same sound.
 // check keeps every device busy, which the BIOS alone does not.
 func TestCheckRunMatchesStep(t *testing.T) {
+	parallel(t)
 	cue := disc(t, "check")
 	bios, err := os.ReadFile(emutest.BIOSFromEnv(t))
 	if !assert.NoError(t, err) {

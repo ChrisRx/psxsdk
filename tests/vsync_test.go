@@ -16,8 +16,10 @@ import (
 // comes while the program waits: the CPU, the clocks, the display and the
 // sound, and every tenth frame all of RAM, where the wait counts down.
 func TestVSyncSkipChangesNothing(t *testing.T) {
+	parallel(t)
 	for _, name := range []string{"dino", "check", "morph"} {
 		t.Run(name, func(t *testing.T) {
+			parallel(t)
 			cue := disc(t, name)
 			boot := func(skip bool) *emutest.Machine {
 				m := emutest.Boot(t, emutest.BIOS(emutest.BIOSFromEnv(t)), emutest.Disc(cue),

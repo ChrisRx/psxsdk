@@ -28,6 +28,7 @@ const frameBudget = 30 * emutest.Second
 // TestMDECScreenshot checks a frame of the movie the MDEC decodes, shown in
 // 24-bit color.
 func TestMDECScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "mdec")
 	m.RunUntilCount("main.shown", 86, frameBudget)
 	m.Golden("mdec.png")
@@ -38,6 +39,7 @@ func TestMDECScreenshot(t *testing.T) {
 // count of horizontal syncs VSync returns, which is the BIOS's to make, so
 // this golden is OpenBIOS's by that one line.
 func TestDungeonScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "dungeon")
 	m.RunUntilCount("main.frameNumber", 60, frameBudget)
 	m.Hold(1, emu.ButtonLeft, 40)
@@ -49,6 +51,7 @@ func TestDungeonScreenshot(t *testing.T) {
 // TestCarScreenshot checks the car fifty frames after its drive in from
 // the distance, close to the viewpoint and turning.
 func TestCarScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "car")
 	m.RunUntilCount("main.frameNumber", 520, frameBudget)
 	m.Golden("car.png")
@@ -57,6 +60,7 @@ func TestCarScreenshot(t *testing.T) {
 // TestOdenScreenshot checks the three shapes under the three lights after
 // the ball is swapped for its textured version and the scene is turned.
 func TestOdenScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "oden")
 	m.RunUntilCount("main.frameNumber", 30, frameBudget)
 	m.Hold(1, emu.ButtonLeft, 3)
@@ -68,6 +72,7 @@ func TestOdenScreenshot(t *testing.T) {
 // TestMorphScreenshot checks the sheet most of the way to becoming a
 // cylinder, with the picture wrapped round it.
 func TestMorphScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "morph")
 	m.RunUntilCount("main.frameNumber", 400, frameBudget)
 	m.Golden("morph.png")
@@ -79,6 +84,7 @@ func TestMorphScreenshot(t *testing.T) {
 // syncs VSync returns, which is the BIOS's to make: Sony's says 51 a frame
 // and OpenBIOS 52, so this golden is Sony's by that one line.
 func TestOffscrScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "offscr")
 	m.RunUntilCount("main.frameNumber", 330, frameBudget)
 	m.Golden("offscr.png")
@@ -87,6 +93,7 @@ func TestOffscrScreenshot(t *testing.T) {
 // TestTunnelScreenshot checks the tunnel after the flight in, with the
 // score drawn in sprites.
 func TestTunnelScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "tunnel")
 	m.RunUntilCount("main.frameNumber", 166, frameBudget)
 	m.Golden("tunnel.png")
@@ -96,6 +103,7 @@ func TestTunnelScreenshot(t *testing.T) {
 // the hot spots along its bottom edge and the heat risen through the
 // palette above them.
 func TestFlameScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "flame")
 	m.RunUntilCount("main.frameNumber", 90, frameBudget)
 	m.Golden("flame.png")
@@ -104,6 +112,7 @@ func TestFlameScreenshot(t *testing.T) {
 // TestInvadersScreenshot checks the invaders on their march after the ship
 // has slid to the left and fired a shot.
 func TestInvadersScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "invaders")
 	m.RunUntilCount("main.frameNumber", 30, frameBudget)
 	m.Hold(1, emu.ButtonLeft, 20)
@@ -116,6 +125,7 @@ func TestInvadersScreenshot(t *testing.T) {
 // TestBreakoutScreenshot checks the wall of bricks with the ball on its
 // way down and the bat moved to the right to meet it.
 func TestBreakoutScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "breakout")
 	m.RunUntilCount("main.frameNumber", 30, frameBudget)
 	m.Hold(1, emu.ButtonRight, 20)
@@ -126,6 +136,7 @@ func TestBreakoutScreenshot(t *testing.T) {
 // TestDinoScreenshot checks the dinosaur in front of the castle two
 // seconds into its walk.
 func TestDinoScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "dino")
 	m.RunUntilCount("main.frameNumber", 120, frameBudget)
 	m.Golden("dino.png")
@@ -136,6 +147,7 @@ func TestDinoScreenshot(t *testing.T) {
 // frames, and then the man walks right, past the first bones, and jumps
 // before he reaches the first cactus.
 func TestDogTaleScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "dogtale")
 	m.RunUntilCount("main.frameNumber", 60, frameBudget)
 	m.Hold(1, emu.ButtonRight, 3)
@@ -172,6 +184,7 @@ func questState(m *emutest.Machine) questSyms {
 // along it until the chest stops them, for the first picture; then L1
 // eight times turns the camera all the way round.
 func TestQuestScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "quest")
 	m.RunUntilCount("main.screen", 60, frameBudget)
 	// The count is reached in the middle of a frame, after its controller
@@ -213,6 +226,7 @@ func TestQuestScreenshot(t *testing.T) {
 // scrolls the last line in, and Cross closes the box, leaving the chest
 // open; opened again, it is empty.
 func TestQuestChest(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "quest")
 	m.RunUntilCount("main.screen", 60, frameBudget)
 	m.RunFrames(1)
@@ -254,6 +268,7 @@ func TestQuestChest(t *testing.T) {
 // it into the room inside, for a picture of the villager and the bed, and
 // on to the villager, who says their line.
 func TestQuestMeadow(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "quest")
 	m.RunUntilCount("main.screen", 60, frameBudget)
 	m.RunFrames(1)
@@ -314,6 +329,7 @@ func TestQuestMeadow(t *testing.T) {
 // file the program loaded, as the Room panel does, which the program
 // places again, so that the wall stops her.
 func TestQuestLive(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "quest")
 	m.RunUntilCount("main.screen", 60, frameBudget)
 	m.RunFrames(1)
@@ -383,6 +399,7 @@ func TestQuestLive(t *testing.T) {
 // right, and that Cross stops it turning: a frame held after the press
 // then matches a frame fifteen later.
 func TestSceneScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "scene")
 	m.RunUntilCount("main.screen", 120, frameBudget)
 	m.Hold(1, emu.ButtonRight, 10)
@@ -403,6 +420,7 @@ func TestSceneScreenshot(t *testing.T) {
 // file written over the one the program loaded, with the scene package's
 // reload flag set, moves the cubes on the next frame without a rebuild.
 func TestSceneLive(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "scene")
 	m.RunUntilCount("main.screen", 60, frameBudget)
 	live := m.Sym("go.chrisrx.dev/psx/scene.live")
@@ -442,6 +460,7 @@ func TestSceneLive(t *testing.T) {
 // again with its coins back. The cube is put where each part of the
 // level is by writing its position between frames.
 func TestJumpcube(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "jumpcube")
 	m.RunUntilCount("main.screen", 60, frameBudget)
 	get := func(name string) int { return int(int32(m.Read32(m.Sym(name)))) }
@@ -519,6 +538,7 @@ func TestJumpcube(t *testing.T) {
 // by that count, so that the picture is the same however long the BIOS
 // took to start the program and the disc to deliver its files.
 func TestSquareScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "square")
 	m.SetAudio(true)
 	m.RunUntilCount("main.screen", 150, frameBudget)
@@ -546,6 +566,7 @@ func TestSquareScreenshot(t *testing.T) {
 // counts are the scene counter's, which the opening and the title each
 // run from zero, so the picture is the same however long the BIOS took.
 func TestTerraScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "terra")
 	sceneT := m.Sym("main.sceneT")
 	m.RunUntilCount("main.sceneT", 0x11f, frameBudget)
@@ -580,6 +601,7 @@ func peak(m *emutest.Machine, frames int) int {
 // up, and checks that the cursor went right and up and that the screen
 // names both and what they send.
 func TestPadsScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "pads")
 	analog := emu.NewPad(emu.PadAnalog)
 	mouse := emu.NewPad(emu.PadMouse)
@@ -624,6 +646,7 @@ func TestPadsScreenshot(t *testing.T) {
 // passes under Sony's BIOS as well as OpenBIOS: run it with PSX_BIOS set to
 // one of Sony's to check the card against the BIOS that games used.
 func TestCardScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "card")
 	card, err := emu.NewMemoryCard(nil)
 	if !assert.NoError(t, err) {
@@ -684,6 +707,7 @@ func TestCardScreenshot(t *testing.T) {
 // heard in what the SPU mixes and which the drive then reports playing, and
 // that circle stops it.
 func TestCDDAScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "cdda")
 	m.SetAudio(true)
 	m.RunUntilCount("main.screen", 30, frameBudget)
@@ -715,6 +739,7 @@ func TestCDDAScreenshot(t *testing.T) {
 // mark every four seconds or so, and that more sprites take more of the
 // frame, measured in lines.
 func TestTimersScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "timers")
 	m.RunUntilCount("main.screen", 60, frameBudget)
 	count, lines, wraps := m.Sym("main.count"), m.Sym("main.lines"), m.Sym("main.wraps")
@@ -733,6 +758,7 @@ func TestTimersScreenshot(t *testing.T) {
 // TestTilesScreenshot scrolls the map right and down, to where its four
 // screens meet, and checks the scroll stops at the map's far corner.
 func TestTilesScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "tiles")
 	m.RunUntilCount("main.screen", 30, frameBudget)
 	m.Hold(1, emu.ButtonRight|emu.ButtonDown, 60)
@@ -753,6 +779,7 @@ const (
 // TestSplitScreenshot drives each player's cube, checks each moved, and
 // shows the halves one above the other and then side by side.
 func TestSplitScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "split")
 	frames := m.Sym("main.frames")
 	m.RunUntil(func() bool { return m.Read32(frames) >= 30 }, frameBudget, "thirty frames")

@@ -16,6 +16,15 @@ import (
 	"go.chrisrx.dev/psx/emu/emutest"
 )
 
+// parallel lets the test run beside the others, each on a machine of its
+// own, unless CI is set, as CI services set it, where they run one at a
+// time.
+func parallel(t *testing.T) {
+	if os.Getenv("CI") == "" {
+		t.Parallel()
+	}
+}
+
 // disc returns the cue sheet of the named example's disc, or skips the
 // test if there is none.
 func disc(t *testing.T, name string) string {

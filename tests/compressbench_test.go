@@ -13,6 +13,7 @@ import (
 // prints the speed of each: the measurements docs/architecture/compression.md
 // rests on. It runs when task bench:compress has built the disc.
 func TestCompressionBench(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "compressbench")
 	names := []string{"CASTLE.TIM deflate", "CASTLE.TIM lz4", "DOG.DAT deflate", "DOG.DAT lz4", "MD0.TMD deflate", "MD0.TMD lz4"}
 	raws := []string{"../examples/dino/assets/CASTLE.TIM", "../examples/dino/assets/CASTLE.TIM", "../examples/dogtale/assets/DOG.DAT", "../examples/dogtale/assets/DOG.DAT", "../examples/dino/assets/MD0.TMD", "../examples/dino/assets/MD0.TMD"}

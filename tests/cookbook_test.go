@@ -14,6 +14,7 @@ import (
 // the player while circle is held and draws away when it is let go, and in
 // the random states it changes state, which the picture shows.
 func TestEnemiesScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "enemies")
 	m.RunUntilCount("main.screen", 30, frameBudget)
 	dist := m.Sym("main.distance")

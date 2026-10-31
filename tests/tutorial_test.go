@@ -10,6 +10,7 @@ import (
 // the teal screen. The rest of the tutorial writes the square example, which
 // TestSquareScreenshot checks.
 func TestHelloScreenshot(t *testing.T) {
+	parallel(t)
 	m := bootExample(t, "hello")
 	m.RunUntilCount("main.screen", 30, frameBudget)
 	m.Golden("hello.png")
