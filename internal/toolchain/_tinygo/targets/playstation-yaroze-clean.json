@@ -1,0 +1,6 @@
+{
+	"comment": "The Net Yaroze target with the resident library replaced by psxsdk's exp/cleanlib, a clean-room reimplementation in Go, and Sony's start-up replaced by playstation-yaroze-clean.S. Experimental: see exp/cleanlib/CLEANROOM.md in psxsdk.",
+	"inherits": ["playstation-yaroze-go"],
+	"build-tags": ["cleanlib"],
+	"cflags": ["-DLIBPS_CLEAN"]
+}

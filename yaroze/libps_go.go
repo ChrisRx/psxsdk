@@ -1,4 +1,4 @@
-//go:build yaroze && golibps
+//go:build yaroze && golibps && !cleanlib
 
 package yaroze
 
