@@ -41,9 +41,15 @@ func putchar(c int32) int32 {
 			column++
 		}
 	}
-	fileWrite(1, &b, 1)
+	// The kernel is given a variable's address, which a local's would
+	// put on the heap, a byte for each character, never freed.
+	putcharByte = b
+	fileWrite(1, &putcharByte, 1)
 	return c
 }
+
+// putcharByte is the byte putchar gives the kernel to write.
+var putcharByte byte
 
 // printable is the original's test, through its ctype table masked with
 // 0x97: letters, digits, punctuation and the space class, which takes in

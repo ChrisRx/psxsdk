@@ -258,8 +258,10 @@ func onVBlank() {
 	if vsyncUser != 0 {
 		callC(vsyncUser)
 	}
-	for _, cb := range vsyncCallbacks {
-		if cb != nil {
+	// Indexed: ranging over the array would copy its eight function
+	// values first, some 400 instructions on every vertical blank.
+	for i := range vsyncCallbacks {
+		if cb := vsyncCallbacks[i]; cb != nil {
 			cb()
 		}
 	}
