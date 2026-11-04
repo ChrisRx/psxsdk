@@ -107,6 +107,17 @@ func ResetGraph(mode int32) int32 {
 		gpuYMax = yMaxByKind[gpuKind]
 		fill(unsafe.Pointer(&curDraw), 0xff, unsafe.Sizeof(curDraw))
 		fill(unsafe.Pointer(&curDisp), 0xff, unsafe.Sizeof(curDisp))
+		// The resident library's startup routine went on from its GPU
+		// reset to the rest of the library's start: the kernel given the
+		// pad buffers (see padStarted), the drive reset, the sequencer
+		// initialized and its tick started, and the card driver started,
+		// in that order, all before the member's program ran. This library
+		// has no routine before the program, so the program's first
+		// ResetGraph does them, once; a program that calls one of those
+		// systems before any ResetGraph starts that system there.
+		padStart()
+		sndStart()
+		cardStart()
 		return int32(gpuKind)
 	}
 	if gpuDebug >= 2 {
