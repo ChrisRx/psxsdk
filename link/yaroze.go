@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	_ "embed"
 	"encoding/binary"
+	"os"
 	"sync"
 
 	"go.chrisrx.dev/psx/format/psx"
@@ -19,6 +20,10 @@ var libpsGz []byte
 // Libps returns the Net Yaroze library as a PSX-EXE, read the first time it
 // is asked for.
 var Libps = sync.OnceValues(func() (*psx.File, error) {
+	// PROTOTYPE: an image of the Go library laid out as the resident one.
+	if p := os.Getenv("PSX_LIBPS_IMAGE"); p != "" {
+		return psx.Open(p)
+	}
 	r, err := gzip.NewReader(bytes.NewReader(libpsGz))
 	if err != nil {
 		return nil, err
