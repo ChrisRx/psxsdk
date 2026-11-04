@@ -4,7 +4,11 @@ package libps
 
 //go:generate go run ./gen/font
 
-import "unsafe"
+import (
+	"unsafe"
+
+	"go.chrisrx.dev/psx/internal/volatile"
+)
 
 // The font: libgpu's text streams. FntLoad puts the font into video
 // memory, FntOpen opens a window of up to n characters, FntPrint adds
@@ -53,13 +57,16 @@ var fontClut = [8]uint32{0xffff0000}
 
 var (
 	fontStream0 [fontStreams]fontStream
-	fontCount   int32            // libps 0x80047858: streams opened
-	fontDump    int32            // libps 0x8004785C: the stream FntPrint takes by default
-	fontUsed    int32            // libps 0x80048260: characters given out to streams
-	fontTPage   uint16           // libps 0x8005416C
-	fontClutID  uint16           // libps 0x80054170
-	fontText    [1024]byte       // libps 0x8004FD6C
-	fontSprites [1024 * 4]uint32 // libps 0x8005016C: 1024 sprite packets
+	fontCount   int32  // libps 0x80047858: streams opened
+	fontDump    int32  // libps 0x8004785C: the stream FntPrint takes by default
+	fontUsed    int32  // libps 0x80048260: characters given out to streams
+	fontTPage   uint16 // libps 0x8005416C
+	fontClutID  uint16 // libps 0x80054170
+	// fontOpenPace is what FntOpen's loop counts, to take as long as the
+	// original's did.
+	fontOpenPace [2]uint32
+	fontText     [1024]byte       // libps 0x8004FD6C
+	fontSprites  [1024 * 4]uint32 // libps 0x8005016C: 1024 sprite packets
 )
 
 // FntLoad puts the font at tx, ty in video memory, 128 by 32 pixels of
@@ -158,6 +165,11 @@ func FntOpen(x, y, w, h, isbg, n int32) int32 {
 		sprites[i*4+1] = 0x74 << 24
 		*(*uint16)(unsafe.Pointer(&sprites[i*4+3])) = 0
 		*(*uint16)(unsafe.Add(unsafe.Pointer(&sprites[i*4+3]), 2)) = fontClutID
+		// The original's loop took 28 cycles a character, this one 12:
+		// the difference moves a program's first CD commands, and their
+		// interrupts, against the vertical blank.
+		volatile.StoreUint32(&fontOpenPace[0], volatile.LoadUint32(&fontOpenPace[0])+volatile.LoadUint32(&fontOpenPace[1]))
+		volatile.StoreUint32(&fontOpenPace[1], volatile.LoadUint32(&fontOpenPace[1])+1)
 	}
 	fontUsed += n
 	fontCount++
@@ -183,6 +195,7 @@ func setDrawMode(p *modePacket, dfe, dtd uint8, tpage uint16, tw *RECT) {
 //
 //export FntPrint
 func FntPrint(str *byte) int32 {
+	pace(paceFntPrint)
 	id := fontDump
 	s := &fontStream0[id]
 	if s.text == nil {
@@ -191,23 +204,35 @@ func FntPrint(str *byte) int32 {
 	if s.n > s.max {
 		return -1
 	}
-	text := unsafe.Slice(s.text, 1025)
+	// The count and the limit stay in registers through the loop: Sony's
+	// library spends 50 cycles a character here (spec 08, "FntPrint and
+	// FntFlush by the character").
+	text, n, max := s.text, s.n, s.max
 	for p := str; *p != 0; p = (*byte)(unsafe.Add(unsafe.Pointer(p), 1)) {
 		c := *p
-		if c == '%' {
-			next := *(*byte)(unsafe.Add(unsafe.Pointer(p), 1))
-			if next == '%' {
-				p = (*byte)(unsafe.Add(unsafe.Pointer(p), 1))
-			}
+		if c == '%' && *(*byte)(unsafe.Add(unsafe.Pointer(p), 1)) == '%' {
+			p = (*byte)(unsafe.Add(unsafe.Pointer(p), 1))
 		}
-		text[s.n] = c
-		s.n++
-		if s.n > s.max {
+		*(*byte)(unsafe.Add(unsafe.Pointer(text), n)) = c
+		n++
+		volatile.StoreUint32(&paceWord, 0)
+		volatile.StoreUint32(&paceWord, 0)
+		volatile.StoreUint32(&paceWord, 0)
+		volatile.StoreUint32(&paceWord, 0)
+		if n > max {
+			// The print that cuts: 20 more than the characters kept.
+			// Five stores here make the compiler reshape the whole
+			// function (every print 40 dearer); three leave it alone.
+			volatile.StoreUint32(&paceWord, uint32(n))
+			volatile.StoreUint32(&paceWord, uint32(n))
+			volatile.StoreUint32(&paceWord, uint32(n))
+			s.n = n
 			return -1
 		}
 	}
-	text[s.n] = 0
-	return s.n
+	*(*byte)(unsafe.Add(unsafe.Pointer(text), n)) = 0
+	s.n = n
+	return n
 }
 
 // FntWrite adds s to window id, as FntPrint adds to the default window,
@@ -215,6 +240,18 @@ func FntPrint(str *byte) int32 {
 // many characters the window holds, or -1 when it is full or not open.
 func FntWrite(id int32, s string) int32 {
 	return FntWriteBytes(id, unsafe.Slice(unsafe.StringData(s), len(s)))
+}
+
+// FntDump is the window FntPrint prints to unless it is given another.
+func FntDump() int32 { return fontDump }
+
+// FntAddBytes is FntWriteBytes as FntPrint answers a window that is not
+// open: with 0 rather than -1, adding nothing.
+func FntAddBytes(id int32, b []byte) int32 {
+	if id < 0 || id >= fontCount || fontStream0[id].text == nil {
+		return 0
+	}
+	return FntWriteBytes(id, b)
 }
 
 // FntWriteBytes is FntWrite with the text as bytes.
@@ -246,8 +283,12 @@ func FntWriteBytes(id int32, b []byte) int32 {
 // libps 0x800255D8, 804 bytes
 //
 //export FntFlush
+//go:nobounds
 func FntFlush(id int32) *uint32 {
-	if id < 0 {
+	pace(paceFntFlush)
+	// An id that is not open flushes the default stream, as Sony's does
+	// (spec 01).
+	if id < 0 || id >= fontCount {
 		id = fontDump
 	}
 	s := &fontStream0[id]
@@ -263,58 +304,211 @@ func FntFlush(id int32) *uint32 {
 	r, g, b := uint8(0x80), uint8(0x80), uint8(0x80)
 	*head |= 0xffffff
 	sprite := s.sprites
-	text := s.text
-	for *text != 0 && left != 0 {
-		c := *text
-		newline := false
-		switch {
-		case c == ' ':
+	// Each kind of character takes what Sony's library takes (spec 08,
+	// "FntPrint and FntFlush by the character"): 140 cycles a glyph, 34
+	// a space, 46 a tab, 62 a newline, 28 more for a line wrap. The loop
+	// is kept lean (the text walked by index with bounds checks off, the
+	// wrap test hoisted, unsigned glyph arithmetic) and each path then
+	// spends the rest in stores to the scratch word.
+	wrap := s.autosize == 0
+	text := unsafe.Slice(s.text, 1025)
+	i := 0
+	for ; left != 0; left-- {
+		c := text[i]
+		if c == 0 {
+			break
+		}
+		// An if-chain, not a switch: the compiler turns a switch on the
+		// character into a jump table, nine instructions on every
+		// character. Spaces first, then the range of the glyphs.
+		if c == ' ' {
 			x += 8
-		case c == '\t':
-			x += 32
-		case c == '\n':
-			newline = true
-		case c == '~':
+			if wrap && x >= x1 {
+				// Each wrap's pad stores a different value, or the compiler
+				// merges the paths' stores into one tail and the counts
+				// stop being independent.
+				volatile.StoreUint32(&paceWord, uint32(x))
+				volatile.StoreUint32(&paceWord, uint32(x))
+				volatile.StoreUint32(&paceWord, uint32(x))
+				volatile.StoreUint32(&paceWord, uint32(x))
+				volatile.StoreUint32(&paceWord, uint32(x))
+				volatile.StoreUint32(&paceWord, uint32(x))
+				volatile.StoreUint32(&paceWord, uint32(x))
+				volatile.StoreUint32(&paceWord, uint32(x))
+				volatile.StoreUint32(&paceWord, uint32(x))
+				volatile.LoadUint32(&paceWord)
+				goto wrapspace
+			}
+			volatile.StoreUint32(&paceWord, 0)
+			volatile.StoreUint32(&paceWord, 0)
+			volatile.StoreUint32(&paceWord, 0)
+			volatile.StoreUint32(&paceWord, 0)
+			goto next
+		}
+		if c > ' ' {
+			if c != '~' {
+				goto glyph
+			}
 			// ~cRGB sets the color from three digits; any other
 			// escape is skipped with the character after it.
-			text = (*byte)(unsafe.Add(unsafe.Pointer(text), 1))
-			if *text == 'c' {
-				d := unsafe.Slice(text, 4)
-				r, g, b = (d[1]-'0')<<4, (d[2]-'0')<<4, (d[3]-'0')<<4
-				text = (*byte)(unsafe.Add(unsafe.Pointer(text), 3))
+			i++
+			if text[i] == 'c' {
+				r, g, b = (text[i+1]-'0')<<4, (text[i+2]-'0')<<4, (text[i+3]-'0')<<4
+				i += 3
 			}
-		default:
-			i := int32(c) - 32
-			if c >= 'a' && c <= 'z' {
-				i = int32(c) - 64
+			goto next
+		}
+		if c == '\n' {
+			volatile.StoreUint32(&paceWord, uint32(c))
+			volatile.StoreUint32(&paceWord, uint32(c))
+			volatile.StoreUint32(&paceWord, uint32(c))
+			volatile.StoreUint32(&paceWord, uint32(c))
+			volatile.StoreUint32(&paceWord, uint32(c))
+			goto newline
+		}
+		if c == '\t' {
+			x += 32
+			volatile.StoreUint32(&paceWord, 0)
+			volatile.StoreUint32(&paceWord, 0)
+			volatile.StoreUint32(&paceWord, 0)
+			if wrap && x >= x1 {
+				volatile.StoreUint32(&paceWord, uint32(left))
+				volatile.StoreUint32(&paceWord, uint32(left))
+				volatile.StoreUint32(&paceWord, uint32(left))
+				volatile.StoreUint32(&paceWord, uint32(left))
+				volatile.StoreUint32(&paceWord, uint32(left))
+				goto wraptab
 			}
+			goto next
+		}
+		// Any other control character draws as a glyph, as the original
+		// did.
+	glyph:
+		{
+			// The cell comes from a table (fontcell.go): Sony's signed
+			// division, which places every byte, costs 12 cycles a glyph.
+			k := uint32(fontCell[c])
 			p := (*[4]uint32)(unsafe.Pointer(sprite))
-			u, v := uint8((i%16)*8), uint8((i/16)*8)
 			p[1] = p[1]&0xff000000 | uint32(b)<<16 | uint32(g)<<8 | uint32(r)
 			p[2] = uint32(uint16(x)) | uint32(uint16(y))<<16
-			p[3] = p[3]&0xffff0000 | uint32(v)<<8 | uint32(u)
+			p[3] = p[3]&0xffff0000 | k
 			addPrim(head, &p[0])
 			sprite = (*uint32)(unsafe.Add(unsafe.Pointer(sprite), 16))
 			x += 8
-		}
-		if c != '\n' && c != '~' && x >= x1 && s.autosize == 0 {
-			newline = true
-		}
-		if newline {
-			if maxX < x {
-				maxX = x
+			volatile.StoreUint32(&paceWord, k)
+			volatile.StoreUint32(&paceWord, k)
+			volatile.StoreUint32(&paceWord, k)
+			volatile.StoreUint32(&paceWord, k)
+			volatile.StoreUint32(&paceWord, k)
+			volatile.StoreUint32(&paceWord, k)
+			volatile.StoreUint32(&paceWord, k)
+			volatile.StoreUint32(&paceWord, k)
+			volatile.StoreUint32(&paceWord, k)
+			volatile.StoreUint32(&paceWord, k)
+			volatile.StoreUint32(&paceWord, k)
+			volatile.StoreUint32(&paceWord, k)
+			volatile.StoreUint32(&paceWord, k)
+			// An odd number of stores costs 4 for the last, not 2: the
+			// compiler's delay-slot filling.
+			volatile.LoadUint32(&paceWord)
+			if wrap && x >= x1 {
+				volatile.StoreUint32(&paceWord, k)
+				volatile.StoreUint32(&paceWord, k)
+				volatile.StoreUint32(&paceWord, k)
+				volatile.StoreUint32(&paceWord, k)
+				volatile.StoreUint32(&paceWord, k)
+				volatile.StoreUint32(&paceWord, k)
+				goto wrapline
 			}
-			y += 8
-			x = x0
-			if y >= y1 {
-				break
-			}
 		}
-		text = (*byte)(unsafe.Add(unsafe.Pointer(text), 1))
-		left--
+	next:
+		i++
+		continue
+	newline:
+		if maxX < x {
+			maxX = x
+		}
+		y += 8
+		x = x0
+		if y >= y1 {
+			// Sony's newline that reaches the bottom costs 52, 10 less
+			// than one that does not, and ends the flush.
+			volatile.StoreUint32(&paceWord, uint32(y))
+			volatile.StoreUint32(&paceWord, uint32(y))
+			volatile.StoreUint32(&paceWord, uint32(y))
+			volatile.StoreUint32(&paceWord, uint32(y))
+			volatile.StoreUint32(&paceWord, uint32(y))
+			break
+		}
+		i++
+		continue
+	wrapline:
+		// A wrap's new line: as a newline's, with its own pad at the
+		// bottom (Sony's wrap that reaches the bottom costs 18 where its
+		// newline costs 52). One copy for each kind of wrap, since the
+		// compiler lays out each path's jump differently and the bottom
+		// pads come out different; each copy's pad stores its own value.
+		if maxX < x {
+			maxX = x
+		}
+		y += 8
+		x = x0
+		if y >= y1 {
+			volatile.StoreUint32(&paceWord, uint32(x1))
+			volatile.StoreUint32(&paceWord, uint32(x1))
+			volatile.StoreUint32(&paceWord, uint32(x1))
+			volatile.LoadUint32(&paceWord)
+			break
+		}
+		i++
+		continue
+	wrapspace:
+		if maxX < x {
+			maxX = x
+		}
+		y += 8
+		x = x0
+		if y >= y1 {
+			volatile.StoreUint32(&paceWord, uint32(x0))
+			volatile.StoreUint32(&paceWord, uint32(x0))
+			volatile.StoreUint32(&paceWord, uint32(x0))
+			volatile.StoreUint32(&paceWord, uint32(x0))
+			volatile.StoreUint32(&paceWord, uint32(x0))
+			break
+		}
+		i++
+		continue
+	wraptab:
+		if maxX < x {
+			maxX = x
+		}
+		y += 8
+		x = x0
+		if y >= y1 {
+			volatile.StoreUint32(&paceWord, uint32(y1))
+			volatile.StoreUint32(&paceWord, uint32(y1))
+			volatile.StoreUint32(&paceWord, uint32(y1))
+			volatile.StoreUint32(&paceWord, uint32(y1))
+			break
+		}
+		i++
+	}
+	if left == 0 {
+		// A full stream ends by the count without reading a terminator,
+		// which Sony's flush charges like the terminator's exit.
+		volatile.StoreUint32(&paceWord, uint32(i))
+		volatile.StoreUint32(&paceWord, uint32(i))
+		volatile.StoreUint32(&paceWord, uint32(i))
+		volatile.StoreUint32(&paceWord, uint32(i))
+		volatile.StoreUint32(&paceWord, uint32(i))
+		volatile.StoreUint32(&paceWord, uint32(i))
+		volatile.StoreUint32(&paceWord, uint32(i))
 	}
 	if s.tile.Code != 0 {
+		// The isbg tile costs 40 in Sony's flush (spec 08).
 		addPrim(head, &s.tile.Tag)
+		volatile.StoreUint32(&paceWord, uint32(s.tile.Code))
+		volatile.StoreUint32(&paceWord, uint32(s.tile.Code))
 		if s.autosize != 0 {
 			s.tile.W = int16(maxX - x0)
 			s.tile.H = int16(y - (y0 - 8))
