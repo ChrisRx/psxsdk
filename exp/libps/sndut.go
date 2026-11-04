@@ -74,9 +74,11 @@ func SsUtKeyOn(vab, prog, tone, note, fine, voll, volr int16) int16 {
 	vc.age = 0
 	vc.tone = tone
 	sndVoiceRegs()
-	// A sample numbered 255 took the original down its own volume path
-	// (libps 0x80016FA0), which is not translated, as in sndKeyOn.
-	sndKeyOnVolume(sndPitchFrom(int32(note), int32(fine)))
+	if sndCur.vag == 0xff {
+		sndKeyOnNoise()
+	} else {
+		sndKeyOnVolume(sndPitchFrom(int32(note), int32(fine)))
+	}
 	sndInTick = false
 	return int16(v)
 }

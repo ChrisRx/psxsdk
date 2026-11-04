@@ -2,6 +2,8 @@
 
 package libps
 
+import "go.chrisrx.dev/psx/internal/volatile"
+
 // The voices: the 24 the processor has, given out to notes as they are
 // keyed on, and written to the processor once a tick from a shadow of
 // their registers.
@@ -25,15 +27,15 @@ type sndVoice struct {
 	tone     int16
 	vab      int16
 	prio     int16
-	status   uint8 // voiceFree, voiceOn or voiceReleased
+	status   uint8 // voiceFree, voiceOn or voiceNoise
 	volFade  sndFade
 	panFade  sndFade
 }
 
 const (
-	voiceFree     = 0
-	voiceOn       = 1
-	voiceReleased = 2
+	voiceFree  = 0
+	voiceOn    = 1
+	voiceNoise = 2 // the last voice keyed on as noise (spec 05, "Noise voices")
 )
 
 // A sndFade moves a voice's volume or pan a step at a time: every reload
@@ -236,7 +238,7 @@ func sndAllocVoice() int32 {
 		vc := &sndVoices[found]
 		vc.age = 0
 		vc.prio = int16(sndCur.prio)
-		if vc.status == voiceReleased {
+		if vc.status == voiceNoise {
 			SpuSetNoiseVoice(0, 0xffffff)
 		}
 	}
@@ -378,6 +380,50 @@ func sndKeyOnVolume(pitch uint16) {
 	sndKeyOffHi &^= sndKeyOnHi
 }
 
+// sndKeyOnNoise sets the voice sndCur names going on the noise generator,
+// for a tone whose sample number is 255. The note and the tone's center
+// set the one noise clock at once, and the voice's bit replaces whatever
+// the noise registers hold. The pitch is not written. Its volumes have no
+// velocity or bank in them and no squaring; SsUtKeyOn's are 0. Spec 05,
+// "Noise voices".
+//
+// libps 0x80016FA0
+func sndKeyOnNoise() {
+	v := int32(sndCur.voice)
+	clock := (uint16(sndCur.note) - uint16(sndCur.center)) & 0x3f
+	spuReg(spuCnt).Set(spuReg(spuCnt).Get()&0xc0ff | clock<<8)
+	lo, hi := voiceBits(v)
+	spuReg(spuNoiseLo).Set(lo)
+	spuReg(spuNoiseHi).Set(hi)
+	var l, r uint32
+	if sndCur.seq != sndUtSeq {
+		x := 0x3fff * uint32(sndCur.toneVol) * uint32(sndCur.progVol) / 16129
+		sc := sndScore(sndCur.seq)
+		l, r = sndPanned(x*uint32(sc.volL)/127, x*uint32(sc.volR)/127, sndCur.tonePan)
+		l, r = sndPanned(l, r, sndCur.progPan)
+		l, r = sndPanned(l, r, sndCur.chPan)
+	}
+	sndRegs[v].volL, sndRegs[v].volR = uint16(l), uint16(r)
+	sndDirty[v] |= dirtyVol
+	for i := range sndVoices {
+		if sndVoices[i].status == voiceNoise {
+			sndVoices[i].status = voiceOn
+		}
+	}
+	sndVoices[v].status = voiceNoise
+	if sndCur.mode&4 != 0 {
+		sndRevLo |= lo
+		sndRevHi |= hi
+	} else {
+		sndRevLo &^= lo
+		sndRevHi &^= hi
+	}
+	sndKeyOnLo |= lo
+	sndKeyOffLo &^= sndKeyOnLo
+	sndKeyOnHi |= hi
+	sndKeyOffHi &^= sndKeyOnHi
+}
+
 // sndPanned scales one side down for a pan off center, 64 being center:
 // the right for a pan to the left and the left for one to the right.
 func sndPanned(l, r uint32, pan uint8) (uint32, uint32) {
@@ -466,10 +512,11 @@ func sndKeyOn(st int16, vab int16, prog int16, note uint8, vel uint8, pan uint8)
 		vc.prio = int16(sndCur.prio)
 		vc.vag = sndCur.vag
 		sndVoiceRegs()
-		// A sample numbered 255 took the original down SsUtKeyOn's
-		// volume path (libps 0x80016FA0), which is not translated; no
-		// bank the converters write has one.
-		sndKeyOnVolume(sndPitch())
+		if sndCur.vag == 0xff {
+			sndKeyOnNoise()
+		} else {
+			sndKeyOnVolume(sndPitch())
+		}
 		mask |= 1 << uint(sndCur.voice)
 	}
 	return mask
@@ -744,6 +791,9 @@ func sndPanFadeTick(v int32) {
 //
 // libps 0x80018BFC, 940 bytes
 func sndVoiceTick() {
+	// Sony's library's first envelope read comes 342 cycles after its
+	// handler's I_STAT read.
+	pace(paceTickStart)
 	sndEndedIdx = (sndEndedIdx + 1) & 0xf
 	ended := &sndEnded[sndEndedIdx]
 	*ended = 0
@@ -754,6 +804,10 @@ func sndVoiceTick() {
 		if e == 0 {
 			*ended |= 1 << uint(v)
 		}
+		// Sony's library reads the envelopes 32 cycles apart.
+		volatile.StoreUint32(&paceWord, uint32(e))
+		volatile.StoreUint32(&paceWord, uint32(e))
+		volatile.StoreUint32(&paceWord, uint32(e))
 	}
 	if sndNoRelease == 0 {
 		all := uint32(0xffffffff)
@@ -762,7 +816,7 @@ func sndVoiceTick() {
 		}
 		for v := int32(0); v < n; v++ {
 			if all&(1<<uint(v)) != 0 {
-				if sndVoices[v].status == voiceReleased {
+				if sndVoices[v].status == voiceNoise {
 					SpuSetNoiseVoice(0, 0xffffff)
 				}
 				sndVoices[v].status = voiceFree
@@ -803,10 +857,15 @@ func sndVoiceTick() {
 	revLo, revHi := sndRevLo, sndRevHi
 	sndKeyOffLo, sndKeyOffHi = 0, 0
 	sndKeyOnLo, sndKeyOnHi = 0, 0
+	// Sony's library's loops over the voices take longer: its six words
+	// go out 4,634 cycles after the handler's I_STAT read, and it
+	// returns from the exception 5,204 cycles after it.
+	pace(paceTickWords)
 	spuReg(spuKeyOffLo).Set(offLo)
 	spuReg(spuKeyOffHi).Set(offHi)
 	spuReg(spuKeyOnLo).Set(onLo)
 	spuReg(spuKeyOnHi).Set(onHi)
 	spuReg(spuRevOnLo).Set(revLo)
 	spuReg(spuRevOnHi).Set(revHi)
+	pace(paceTickEnd)
 }
