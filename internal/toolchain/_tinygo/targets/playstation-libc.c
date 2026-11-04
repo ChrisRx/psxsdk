@@ -41,6 +41,20 @@ memcpy(void *dst, const void *src, size_t n)
 	return dst;
 }
 
+/*
+ * Under LIBPS_GO this file stands in for the Net Yaroze library's C
+ * routines, and a program's timing against that library matters there
+ * (psxsdk's exp/cleanlib/spec/08-timing.md). The resident library's
+ * memmove takes 14 cycles a byte where this loop takes 12, so one nop an
+ * iteration keeps the two in step; its memset (8) and memcpy (12) already
+ * match.
+ */
+#ifdef LIBPS_GO
+#define MEMMOVE_PACE() __asm__ volatile("nop")
+#else
+#define MEMMOVE_PACE()
+#endif
+
 void *
 memmove(void *dst, const void *src, size_t n)
 {
@@ -50,15 +64,19 @@ memmove(void *dst, const void *src, size_t n)
 	if (d == s || n == 0)
 		return dst;
 	if (d < s) {
-		while (n-- > 0)
+		while (n-- > 0) {
 			*d++ = *s++;
+			MEMMOVE_PACE();
+		}
 	} else {
 		/* Backwards, so a forward overlap is read before it is
 		 * overwritten. */
 		d += n;
 		s += n;
-		while (n-- > 0)
+		while (n-- > 0) {
 			*--d = *--s;
+			MEMMOVE_PACE();
+		}
 	}
 	return dst;
 }

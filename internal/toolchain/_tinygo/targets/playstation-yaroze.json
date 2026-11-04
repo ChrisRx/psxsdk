@@ -7,6 +7,7 @@
 		"targets/playstation-yaroze.S",
 		"targets/playstation-yaroze-symusr.S",
 		"targets/playstation-yaroze-symusr-orig.S",
+		"targets/playstation-yaroze-cd.S",
 		"targets/playstation-yaroze-bios.S",
 		"targets/playstation-yaroze-libps-gte.S",
 		"targets/playstation-yaroze-libps.S",
