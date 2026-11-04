@@ -1,5 +1,12 @@
 # The Net Yaroze crt0 and the startup parameters it reads, from libps.a.
 # Converted by ecoff2asm. Must be linked first so _start is at __load.
+#
+# Under LIBPS_CLEAN, the playstation-yaroze-clean target, the clean-room
+# start-up in playstation-yaroze-clean.S takes its place, included here so
+# that it keeps this file's place first on the link line.
+#ifdef LIBPS_CLEAN
+#include "playstation-yaroze-clean.S"
+#else
 
 	.set noreorder
 	.set noat
@@ -239,4 +246,4 @@ _sys_init_bss_flag:
 	.word 0x00000000
 	.word 0x00000000
 	.word 0x00000000
-
+#endif

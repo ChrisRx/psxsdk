@@ -75,3 +75,37 @@ libps_intr_entry:
 libps_callC:
 	jr   $a0
 	nop
+
+# libps_syscall(code): the syscall instruction with the code in a0, as the
+# kernel takes it (1 enters a critical section, 2 leaves one), returning
+# what the kernel leaves in v0. The kernel resumes after the instruction.
+	.section .text.libps_syscall,"ax",@progbits
+	.align 2
+	.globl libps_syscall
+libps_syscall:
+	syscall
+	jr   $ra
+	nop
+
+# libps_draw_irq: the drawing queue's entry in the kernel's interrupt
+# chain, enqueued with SysEnqIntRP as a verifier. The kernel's own DMA
+# handler takes the DMA interrupt, so the library's custom exit never sees
+# it; this runs before that handler. A tail call to libps_draw_check,
+# which returns 0 so that the kernel's handlers still run.
+	.section .text.libps_draw_irq,"ax",@progbits
+	.align 2
+	.globl libps_draw_irq
+libps_draw_irq:
+	j    libps_draw_check
+	nop
+
+# libps_sound_irq: the sound system's entry in the kernel's interrupt
+# chain, enqueued by the first sound call. A tail call to
+# libps_sound_check, which runs the sound tick at a vertical blank and
+# returns 0.
+	.section .text.libps_sound_irq,"ax",@progbits
+	.align 2
+	.globl libps_sound_irq
+libps_sound_irq:
+	j    libps_sound_check
+	nop
