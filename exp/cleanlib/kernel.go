@@ -423,8 +423,8 @@ func callC(f uintptr) {
 }
 
 // FlushCache empties the instruction cache through the kernel, after code
-// in memory has changed. Sony's library exports it under this name; the
-// yaroze package's binding, after the header, calls it FlushCashe.
+// in memory has changed. Sony's library exports it under this name, and the
+// yaroze package binds it under the same name.
 //
 //export FlushCache
 func FlushCache() {
