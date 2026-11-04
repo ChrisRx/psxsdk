@@ -13,7 +13,7 @@ func stub(name string) string {
 	return "yaroze." + name + ": the Net Yaroze library is only present in a program built with tinygo -target=playstation-yaroze"
 }
 
-// FntPrint writes s to the current print stream, for FntFlush to draw.
+// FntPrint writes s to print stream 0, for FntFlush to draw.
 //
 // In C it is printf-style. Formatting happens in Go instead, so it takes a
 // finished C string, which Buffer builds without allocating and CString
@@ -57,6 +57,12 @@ func Rand() int32 { panic(stub("Rand")) }
 // Srand seeds Rand; a seed of 1 is where it starts. It takes a capital so
 // that Go can see it.
 func Srand(seed uint32) { panic(stub("Srand")) }
+
+// FlushCache empties the instruction cache, after code in memory has been
+// changed, so that the CPU fetches the new code. The header declares it as
+// FlushCashe, but the library exports it as FlushCache, so it is bound by
+// hand under the library's name (hdr2go skips the header's).
+func FlushCache() { panic(stub("FlushCache")) }
 
 // GsLinkObject4 ties the object objp to the nth model in the TMD whose
 // object table is at tmd, after GsMapModelingData has turned the file's
