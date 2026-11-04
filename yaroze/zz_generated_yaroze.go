@@ -120,17 +120,10 @@ func Exec(a0 *EXEC, a1 int32, a2 **byte) int32
 //export ExitCriticalSection
 func ExitCriticalSection()
 
-// FlushCashe empties the instruction cache, after code in memory has been
-// changed, so that the CPU fetches the new code. The library spells it
-// so.
-//
-//export FlushCashe
-func FlushCashe()
-
-// FntFlush draws print stream id's text into the current drawing buffer
-// and empties the stream, or every stream's with id -1. It returns the
-// ordering table it drew through. Like any drawing it only shows once
-// the buffer it drew into is displayed.
+// FntFlush draws print stream id's text into the current drawing buffer and
+// empties the stream; id -1 means stream 0. It returns the ordering table it
+// drew through. Like any drawing it only shows once the buffer it drew into
+// is displayed.
 //
 //export FntFlush
 func FntFlush(id int32) *uint32
@@ -143,11 +136,11 @@ func FntFlush(id int32) *uint32
 //export FntLoad
 func FntLoad(tx int32, ty int32)
 
-// FntOpen opens a print stream that shows at x, y on the screen, in a
-// window w by h, holding up to n characters, and returns its id. isbg
-// 0 clears the window to black each time it is drawn; 1 leaves what is
-// under it. Up to eight streams can be open, and they stay open until
-// the next FntLoad.
+// FntOpen opens a print stream that shows at x, y on the screen, in a window
+// w by h, holding up to n characters, and returns its id. isbg 1 clears the
+// window to black each time it is drawn, even with no text; 0 leaves what is
+// under it. Up to eight streams can be open, and they stay open until the
+// next FntLoad.
 //
 //export FntOpen
 func FntOpen(x int32, y int32, w int32, h int32, isbg int32, n int32) int32

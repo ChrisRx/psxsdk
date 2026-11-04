@@ -13,7 +13,7 @@ import "unsafe"
 // pointer typed as an integer, and gets a Go signature instead. The stubs
 // for every function here are in libps_stub.go, with the same comments.
 
-// FntPrint writes s to the current print stream, for FntFlush to draw.
+// FntPrint writes s to print stream 0, for FntFlush to draw.
 //
 // In C it is printf-style. Formatting happens in Go instead, so it takes a
 // finished C string, which Buffer builds without allocating and CString
@@ -69,6 +69,14 @@ func Rand() int32
 //
 //export srand
 func Srand(seed uint32)
+
+// FlushCache empties the instruction cache, after code in memory has been
+// changed, so that the CPU fetches the new code. The header declares it as
+// FlushCashe, but the library exports it as FlushCache, so it is bound by
+// hand under the library's name (hdr2go skips the header's).
+//
+//export FlushCache
+func FlushCache()
 
 //export GsLinkObject4
 func gsLinkObject4(tmd_base uint32, objp *GsDOBJ2, n int32)
