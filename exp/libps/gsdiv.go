@@ -61,7 +61,7 @@ type divider struct {
 	tpage    uint32
 	entry    *uint32 // the ordering table entry every piece goes to
 	verts    [4]divVertex
-	nodes    [6]divNode
+	nodes    [8]divNode // one a level: the field holds 0 to 7 (spec 04)
 }
 
 // gsDivider is the one divider, reused: its nodes point into it, which
