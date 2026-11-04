@@ -266,6 +266,13 @@ func GsSortClear(r, g, b uint8, ot *GsOT) {
 	} else {
 		p.W = int16(screenW)
 	}
+	if ot == nil {
+		// A C program may sort into a table it never gave memory, and the
+		// original then read one at address 0: given the same memory
+		// through its cached mirror, as ClearOTagR is. A table whose tag
+		// was never set is addPrim's to answer.
+		ot = (*GsOT)(unsafe.Pointer(uintptr(0x80000000)))
+	}
 	addPrim((*uint32)(unsafe.Pointer(ot.Tag)), &p.Tag)
 }
 

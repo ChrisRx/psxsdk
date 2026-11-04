@@ -165,6 +165,14 @@ func fileOpen(name *byte, mode int32) int32 {
 	return int32(biosB(0x32, addr(unsafe.Pointer(name)), uint32(mode), 0, 0))
 }
 
+// fileSeek moves fd's position: whence 0 from the start, 1 from where it
+// is.
+//
+//export lseek
+func fileSeek(fd, offset, whence int32) int32 {
+	return int32(biosB(0x33, uint32(fd), uint32(offset), uint32(whence), 0))
+}
+
 // libps 0x80042F78, 16 bytes
 //
 //export read
@@ -205,6 +213,14 @@ func fileFirst(name *byte, dir *DIRENTRY) *DIRENTRY {
 //export nextfile
 func fileNext(dir *DIRENTRY) *DIRENTRY {
 	return (*DIRENTRY)(unsafe.Pointer(uintptr(biosB(0x43, addr(unsafe.Pointer(dir)), 0, 0, 0))))
+}
+
+// fileRename renames the file old to new, on the same card.
+//
+//export rename
+func fileRename(old, new *byte) int32 {
+	cardStart()
+	return int32(biosB(0x44, addr(unsafe.Pointer(old)), addr(unsafe.Pointer(new)), 0, 0))
 }
 
 // libps 0x80042FE8, 8 bytes

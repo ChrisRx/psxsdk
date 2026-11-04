@@ -282,6 +282,12 @@ func ClearOTagR(ot *uint32, n int32) {
 	if gpuDebug >= 2 {
 		kprintf("ClearOTagR(%08x,%d)...\n", uint32(uintptr(unsafe.Pointer(ot))), n)
 	}
+	if ot == nil {
+		// A C program may clear a table it never gave memory, and the
+		// original then cleared one at address 0. Go would stop on the
+		// nil, so it is given the same memory through its cached mirror.
+		ot = (*uint32)(unsafe.Pointer(uintptr(0x80000000)))
+	}
 	gpuOtc(unsafe.Pointer(ot), uint32(n))
 	*ot = uint32(uintptr(unsafe.Pointer(&otTerminator[0]))) & 0xffffff
 }
@@ -309,6 +315,11 @@ func DrawOTag(p *uint32) {
 //
 // libps 0x8002762C, 60 bytes (AddPrim)
 func addPrim(ot, p *uint32) {
+	if ot == nil {
+		// A table entry a C program never set is at address 0, which the
+		// original wrote: the same memory through its cached mirror.
+		ot = (*uint32)(unsafe.Pointer(uintptr(0x80000000)))
+	}
 	*p = *p&0xff000000 | *ot&0xffffff
 	*ot = *ot&0xff000000 | uint32(uintptr(unsafe.Pointer(p)))&0xffffff
 }

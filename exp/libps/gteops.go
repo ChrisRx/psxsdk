@@ -595,17 +595,22 @@ func gteGPF() {
 // when a result overflowed. The assembler takes no cfc2, so the move is
 // written as its word, into a register named here, which must be one
 // the compiler never gives a value to, since the block cannot say it
-// clobbers one: the global pointer, which this target has no use for
-// and the kernel keeps across an interrupt. The compiler does give
-// values to $at, and a value of the caller's held there across an
-// inlined read was once overwritten by it.
+// clobbers one: the global pointer, which Go code has no use for and the
+// kernel keeps across an interrupt. The compiler does give values to
+// $at, and a value of the caller's held there across an inlined read was
+// once overwritten by it. A C program built with Sony's compiler does use
+// the global pointer, for its small data, so it is kept in the result's
+// register across the move and the two are swapped back after it.
 //
 //go:inline
 func gteFlag() int32 {
 	return int32(device.AsmFull(`.set push
 	.set noat
+	addu {}, $$gp, $$zero
 	.word 0x485cf800
 	nop
-	addu {}, $$gp, $$zero
+	xor $$gp, $$gp, {}
+	xor {}, {}, $$gp
+	xor $$gp, $$gp, {}
 	.set pop`, nil))
 }

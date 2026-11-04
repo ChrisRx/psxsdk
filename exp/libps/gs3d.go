@@ -9,18 +9,27 @@ import "unsafe"
 // fast sprite that sort through the GTE's offset.
 
 // The attribute bits of the object being sorted, as GsSortObject4 takes
-// them apart, and the light mode GsSetLightMode sets.
-//
-// libps 0x80062D10, 0x80062D14, 0x80062D0C, 0x80066274, 0x800658C8 and
-// 0x80065954
-var (
-	gsLMODE     int32  // the object's own light mode
-	gsLIGNR     int32  // the object asks for its own mode over the library's
-	gsLIOFF     int32  // the object is not lit
-	gsNDIV      int32  // how many times its polygons are halved
-	gsTON       uint32 // the object is translucent
-	gsLightMode int32  // GsLIGHT_MODE: 1 for fog
-)
+// them apart, and the light mode GsSetLightMode sets. They are the
+// library's named variables, GsLMODE and the rest, which a program can
+// reach by name as it can the others in gs.go.
+
+//go:extern GsLMODE
+var gsLMODE int32 // libps 0x80062D10: the object's own light mode
+
+//go:extern GsLIGNR
+var gsLIGNR int32 // libps 0x80062D14: the object asks for its own mode over the library's
+
+//go:extern GsLIOFF
+var gsLIOFF int32 // libps 0x80062D0C: the object is not lit
+
+//go:extern GsNDIV
+var gsNDIV int32 // libps 0x80066274: how many times its polygons are halved
+
+//go:extern GsTON
+var gsTON uint32 // libps 0x800658C8: the object is translucent
+
+//go:extern GsLIGHT_MODE
+var gsLightMode int32 // libps 0x80065954: 1 for fog
 
 // gsWSSaved is the world-to-screen matrix as GsSetRefView2 or GsSetView2
 // made it, before GsScaleScreen scales it.
@@ -284,6 +293,13 @@ var gsCoordStack [100]*GsCOORDINATE2
 //
 // libps 0x80023314, 708 bytes
 func gsWorkMatrix(coord *GsCOORDINATE2, out *MATRIX) {
+	if coord == nil {
+		// A C program may ask for WORLD, which is NULL, and the original
+		// then read, and wrote, a system at address 0: the kernel's first
+		// words, which it took as they were. Go would stop on the nil, so
+		// it is given the same memory through its cached mirror.
+		coord = (*GsCOORDINATE2)(unsafe.Pointer(uintptr(0x80000000)))
+	}
 	depth := 0
 	changed := 100
 	for c := coord; ; c = c.Super {
