@@ -226,11 +226,16 @@ func cdCacheFile(dir int32) int32 {
 		case 1:
 			f.Name[0], f.Name[1], f.Name[2] = '.', '.', 0
 		default:
-			// The original copied the whole name, over the next file for
-			// one longer than the sixteen bytes; see cdNewMedia.
-			m := min(int(b[i+32]), len(f.Name)-1)
-			copy(f.Name[:m], b[i+33:i+33+m])
-			f.Name[m] = 0
+			// The whole identifier and its NUL, as a C string copy: one
+			// longer than fifteen bytes runs into the next entry, which the
+			// next record then overwrites (spec 09, CdSearchFile; the probe
+			// cdlimits shows the leftovers). The copy stops at the table's
+			// end.
+			table := unsafe.Slice((*byte)(unsafe.Pointer(&cdFiles[0])), unsafe.Sizeof(cdFiles))
+			at := count*int(unsafe.Sizeof(cdFiles[0])) + int(unsafe.Offsetof(f.Name))
+			m := min(int(b[i+32]), len(table)-1-at)
+			copy(table[at:at+m], b[i+33:i+33+m])
+			table[at+m] = 0
 		}
 		if cdDebug >= 2 {
 			kprintf("\t(%02x:%02x:%02x) %8d %s\n", uint32(f.Pos.Minute), uint32(f.Pos.Second), uint32(f.Pos.Sector), int32(f.Size), cstr(&f.Name[0]))
