@@ -2,7 +2,11 @@
 
 package libps
 
-import "unsafe"
+import (
+	"unsafe"
+
+	"go.chrisrx.dev/psx/internal/volatile"
+)
 
 // The GPU, as libgpu's sys.c (v1.120) drives it: a driver of small
 // functions over the registers, and a queue of them, so that a transfer
@@ -316,6 +320,9 @@ func gpuDws(arg unsafe.Pointer, arg2 uint32) {
 	words := unsafe.Slice(p, n)
 	for _, w := range words[:rest] {
 		gp0.Set(w)
+		// Sony's library takes 16 cycles a word here.
+		volatile.StoreUint32(&paceWord, w)
+		volatile.StoreUint32(&paceWord, w)
 	}
 	if blocks != 0 {
 		gp1.Set(0x04000002)
@@ -522,7 +529,9 @@ func DrawSync(mode int32) int32 {
 	if gpuDebug >= 2 {
 		kprintf("DrawSync(%d)...\n", mode)
 	}
-	return gpuSync(mode)
+	n := gpuSync(mode)
+	pace(paceDrawSync)
+	return n
 }
 
 // LoadImage sends the pixels at p to the rectangle rect of video memory,
@@ -533,7 +542,9 @@ func DrawSync(mode int32) int32 {
 //export LoadImage
 func LoadImage(rect *RECT, p *uint32) int32 {
 	checkRect("LoadImage", rect)
-	return addque(gpuDws, unsafe.Pointer(rect), 8, uint32(uintptr(unsafe.Pointer(p))))
+	n := addque(gpuDws, unsafe.Pointer(rect), 8, uint32(uintptr(unsafe.Pointer(p))))
+	pace(paceLoadImage)
+	return n
 }
 
 // checkRect reports a rectangle at the debug levels: at 1 one that

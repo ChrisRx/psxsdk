@@ -21,6 +21,9 @@ func PutDrawEnv(env *DRAWENV) *DRAWENV {
 	env.Dr_env.Tag |= 0xffffff
 	addque(gpuCwc, unsafe.Pointer(&env.Dr_env), uint32(unsafe.Sizeof(env.Dr_env)), 0)
 	curDraw = *env
+	// Sony's library copies the environment a byte at a time here, 12
+	// cycles a byte.
+	pace(pacePutDrawEnv)
 	return env
 }
 

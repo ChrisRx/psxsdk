@@ -39,7 +39,9 @@ func GsGetTimInfo(tim *uint32, im *GsIMAGE) {
 //export ClearImage
 func ClearImage(rect *RECT, r, g, b uint8) int32 {
 	checkRect("ClearImage", rect)
-	return addque(gpuClr, unsafe.Pointer(rect), 8, uint32(b)<<16|uint32(g)<<8|uint32(r))
+	n := addque(gpuClr, unsafe.Pointer(rect), 8, uint32(b)<<16|uint32(g)<<8|uint32(r))
+	pace(paceClearImage)
+	return n
 }
 
 // StoreImage reads rect out of video memory into p, through the queue.
@@ -49,7 +51,9 @@ func ClearImage(rect *RECT, r, g, b uint8) int32 {
 //export StoreImage
 func StoreImage(rect *RECT, p *uint32) int32 {
 	checkRect("StoreImage", rect)
-	return addque(gpuDrs, unsafe.Pointer(rect), 8, uint32(uintptr(unsafe.Pointer(p))))
+	n := addque(gpuDrs, unsafe.Pointer(rect), 8, uint32(uintptr(unsafe.Pointer(p))))
+	pace(paceStoreImage)
+	return n
 }
 
 // moveBlock is the packet MoveImage sends: a copy within video memory,
@@ -72,5 +76,7 @@ func MoveImage(rect *RECT, x, y int32) int32 {
 	moveBlock[2] = *(*uint32)(unsafe.Pointer(rect))
 	moveBlock[3] = uint32(y)<<16 | uint32(x)&0xffff
 	moveBlock[4] = *(*uint32)(unsafe.Add(unsafe.Pointer(rect), 4))
-	return addque(gpuCwc, unsafe.Pointer(&moveBlock[0]), 20, 0)
+	n := addque(gpuCwc, unsafe.Pointer(&moveBlock[0]), 20, 0)
+	pace(paceMoveImage)
+	return n
 }

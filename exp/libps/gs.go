@@ -211,6 +211,7 @@ func GsSwapDispBuff() {
 	}
 	GsSetDrawBuffClip()
 	GsSetDrawBuffOffset()
+	pace(paceGsSwapDisp)
 }
 
 // GsSetWorkBase says where the packets of the sorts that follow go.
@@ -218,7 +219,10 @@ func GsSwapDispBuff() {
 // libps 0x80022A60, 16 bytes
 //
 //export GsSetWorkBase
-func GsSetWorkBase(p *PACKET) { GsOUT_PACKET_P = p }
+func GsSetWorkBase(p *PACKET) {
+	GsOUT_PACKET_P = p
+	pace(paceGsSetWorkBase)
+}
 
 // GsClearOt clears an ordering table, recording offset and point in it,
 // and points its Tag at its last entry, the first drawn.
@@ -231,6 +235,7 @@ func GsClearOt(offset, point uint16, ot *GsOT) {
 	ot.Point = uint32(point)
 	ot.Tag = (*GsOT_TAG)(unsafe.Add(unsafe.Pointer(ot.Org), 4<<ot.Length-4))
 	ClearOTagR((*uint32)(unsafe.Pointer(ot.Org)), 1<<ot.Length)
+	pace(paceGsClearOt)
 }
 
 // GsDrawOt draws an ordering table.
@@ -238,7 +243,10 @@ func GsClearOt(offset, point uint16, ot *GsOT) {
 // libps 0x80022628, 36 bytes
 //
 //export GsDrawOt
-func GsDrawOt(ot *GsOT) { DrawOTag((*uint32)(unsafe.Pointer(ot.Tag))) }
+func GsDrawOt(ot *GsOT) {
+	DrawOTag((*uint32)(unsafe.Pointer(ot.Tag)))
+	pace(paceGsDrawOt)
+}
 
 // GsSortClear sorts a clear of the buffer being drawn to the color
 // behind everything in the table.
@@ -247,6 +255,7 @@ func GsDrawOt(ot *GsOT) { DrawOTag((*uint32)(unsafe.Pointer(ot.Tag))) }
 //
 //export GsSortClear
 func GsSortClear(r, g, b uint8, ot *GsOT) {
+	pace(paceGsSortClear)
 	p := &clearPackets[PSDIDX]
 	p.R, p.G, p.B = r, g, b
 	p.X = PSDOFSX[PSDIDX]
