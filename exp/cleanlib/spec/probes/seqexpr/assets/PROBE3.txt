@@ -1,0 +1,170 @@
+VabHdr
+	ver = 0x7
+	mvol = 127
+	pan = 64
+
+ProgAtr 0
+	tones = 1
+	mvol = 127
+	mpan = 64
+
+ProgAtr 1
+	tones = 1
+	mvol = 127
+	mpan = 64
+
+ProgAtr 2
+	tones = 8
+	mvol = 127
+	mpan = 64
+
+VagAtr 0 0
+	prior = 64
+	vol = 127
+	pan = 64
+	center = 60
+	min = 0
+	max = 127
+	ar = 127
+	dr = 0
+	sr = 0
+	rr = 31
+	sl = 15
+	prog = 0
+	vag = 1
+
+VagAtr 1 0
+	prior = 64
+	vol = 127
+	pan = 64
+	center = 60
+	min = 0
+	max = 127
+	ar = 127
+	dr = 0
+	sr = 0
+	rr = 31
+	sl = 15
+	prog = 1
+	vag = 1
+
+VagAtr 2 0
+	prior = 64
+	vol = 127
+	pan = 64
+	center = 60
+	min = 0
+	max = 127
+	ar = 127
+	dr = 0
+	sr = 0
+	rr = 31
+	sl = 15
+	prog = 2
+	vag = 1
+
+VagAtr 2 1
+	prior = 64
+	vol = 127
+	pan = 64
+	center = 72
+	min = 0
+	max = 127
+	ar = 127
+	dr = 0
+	sr = 0
+	rr = 31
+	sl = 15
+	prog = 2
+	vag = 1
+
+VagAtr 2 2
+	prior = 64
+	vol = 127
+	pan = 64
+	center = 84
+	min = 0
+	max = 127
+	ar = 127
+	dr = 0
+	sr = 0
+	rr = 31
+	sl = 15
+	prog = 2
+	vag = 1
+
+VagAtr 2 3
+	prior = 64
+	vol = 127
+	pan = 64
+	center = 96
+	min = 0
+	max = 127
+	ar = 127
+	dr = 0
+	sr = 0
+	rr = 31
+	sl = 15
+	prog = 2
+	vag = 1
+
+VagAtr 2 4
+	prior = 64
+	vol = 127
+	pan = 64
+	center = 108
+	min = 0
+	max = 127
+	ar = 127
+	dr = 0
+	sr = 0
+	rr = 31
+	sl = 15
+	prog = 2
+	vag = 1
+
+VagAtr 2 5
+	prior = 64
+	vol = 127
+	pan = 64
+	center = 120
+	min = 0
+	max = 127
+	ar = 127
+	dr = 0
+	sr = 0
+	rr = 31
+	sl = 15
+	prog = 2
+	vag = 1
+
+VagAtr 2 6
+	prior = 64
+	vol = 127
+	pan = 64
+	center = 48
+	min = 0
+	max = 127
+	ar = 127
+	dr = 0
+	sr = 0
+	rr = 31
+	sl = 15
+	prog = 2
+	vag = 1
+
+VagAtr 2 7
+	prior = 64
+	vol = 127
+	pan = 64
+	center = 54
+	min = 0
+	max = 127
+	ar = 127
+	dr = 0
+	sr = 0
+	rr = 31
+	sl = 15
+	prog = 2
+	vag = 1
+
