@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # regress.sh [NAME...]: builds each example against the clean library and
-# runs TestClean on it next to its reference (.build/NAME-ref), several at
-# once, printing a line per run: PASS, FAIL or TIME (a run TestClean
-# lists as differing only in timing, which differed), the swap counts,
-# and the first difference or the reason. With no names it runs the whole
-# list below. A name may carry a pad mask, as quest:0410, or a comma list
+# runs TestClean on it next to its reference (.build/NAME-ref, which refs.sh
+# builds), several at once, printing a line per run: PASS, FAIL or TIME (a
+# run TestClean lists as differing only in timing, which differed), the swap
+# counts, and the first difference or the reason. With no names it runs the
+# whole list below. A name may carry a pad mask, as quest:0410, or a comma list
 # of them (PSX_CLEAN_PAD). The card runs format, save and then list, load,
 # dump or delete.
 # Logs land in .build/regress/. Run from the repository root.
