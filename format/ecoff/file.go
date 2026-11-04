@@ -169,7 +169,11 @@ func NewFile(r io.ReaderAt) (*File, error) {
 	// Read symbolic headers. A stripped executable keeps the header's
 	// pointer to the symbol table and drops the table itself, so one that
 	// points past the end of the file is a file without symbols rather than
-	// a broken one.
+	// a broken one. One stripped completely has no header at all, and an
+	// offset of 0.
+	if f.FileHeader.SymbolicHeaderOffset == 0 {
+		return f, nil
+	}
 	sr.Seek(int64(f.FileHeader.SymbolicHeaderOffset), os.SEEK_SET)
 	shdr := new(SymbolicHeader)
 	if err := binary.Read(sr, f.byteOrder, shdr); err != nil {
