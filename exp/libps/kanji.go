@@ -18,7 +18,8 @@ import "unsafe"
 
 const (
 	kanjiStreams = 4
-	kanjiGlyphs  = 256 // what one texture holds: 16 glyph rows of 16
+	kanjiGlyphs  = 256 // what Krom2Tim renders: 16 glyph rows of 16
+	kanjiCells   = 302 // what one flush fetches: 301 characters draw on Sony's, 302 break it
 )
 
 // A kanjiStream is one window: its background tile, the ordering table
@@ -66,14 +67,19 @@ var (
 	kanjiClutID  uint16 // libps 0x8005E578
 	kanjiTPage   uint16 // libps 0x8005E574: the texture page of the last flush's glyphs
 
-	kanjiText    [1024]byte      // libps 0x80054174
-	kanjiSprites [1024]kanjiQuad // libps 0x80054574
+	// kanjiPool holds the streams' text and, right after it, the flushes'
+	// packets. The two touch because text printed past the pool runs on
+	// into the packets (spec 13).
+	kanjiPool struct {
+		text    [1024]byte      // libps 0x80054174
+		sprites [1024]kanjiQuad // libps 0x80054574
+	}
 
 	// kanjiCache holds the glyphs a flush fetched, a row of 16 bits each
 	// and a blank sixteenth; kanjiPlaces where each goes on the screen
 	// and in the texture.
-	kanjiCache  [kanjiGlyphs][16]uint16 // libps 0x8005E57C
-	kanjiPlaces [kanjiGlyphs]struct {   // libps 0x80062D30
+	kanjiCache  [kanjiCells][16]uint16 // libps 0x8005E57C
+	kanjiPlaces [kanjiCells]struct {   // libps 0x80062D30
 		x, y int32
 		u, v uint8
 	}
@@ -391,14 +397,14 @@ func kanjiExpand(out *[4]uint16, row uint16) {
 // slot and records where in the texture it goes, and returns -1 for a
 // character the ROM has not.
 //
-// The original fetched without bound; past 256 glyphs it would have
-// written over what followed its cache. Here the 257th is one the ROM
-// has not.
+// The original fetches without bound, and a flush that draws 302
+// characters never returns on Sony's library (spec 13). Here the 302nd
+// is one the ROM has not.
 //
 // libps 0x80025FA4, 324 bytes
 func kanjiFetch(p *byte) int32 {
 	i := kanjiPending
-	if i >= kanjiGlyphs {
+	if i >= kanjiCells-1 {
 		return -1
 	}
 	addr, n := kanjiGlyph(p, false)
@@ -452,7 +458,7 @@ func kanjiUpload(dx, dy int32) {
 //
 //export KanjiFntOpen
 func KanjiFntOpen(x, y, w, h, dx, dy, cx, cy, isbg, n int32) int32 {
-	kanjiCache = [kanjiGlyphs][16]uint16{}
+	clear(kanjiCache[:kanjiGlyphs])
 	if kanjiCount < kanjiStreams {
 		kanjiStream0[kanjiCount] = kanjiStream{}
 	}
@@ -475,15 +481,18 @@ func KanjiFntOpen(x, y, w, h, dx, dy, cx, cy, isbg, n int32) int32 {
 		s.tile.R, s.tile.G, s.tile.B = 0, 0, 0
 	}
 	s.tile.X, s.tile.Y, s.tile.W, s.tile.H = int16(x), int16(y), int16(w), int16(h)
-	s.text = &kanjiText[kanjiUsed]
-	s.sprites = &kanjiSprites[kanjiUsed]
+	// A negative n lowers kanjiUsed, so a later stream can start before the
+	// pool, as Sony's does: these are pointer sums, not indexes.
+	s.text = (*byte)(unsafe.Add(unsafe.Pointer(&kanjiPool.text[0]), kanjiUsed))
+	s.sprites = (*kanjiQuad)(unsafe.Add(unsafe.Pointer(&kanjiPool.sprites[0]), int(kanjiUsed)*int(unsafe.Sizeof(kanjiQuad{}))))
 	s.max = n
 	s.n = 0
 	s.dx, s.dy = dx, dy
 	*s.text = 0
-	sprites := unsafe.Slice(s.sprites, n)
-	for i := range sprites {
-		q := &sprites[i]
+	// Only the packets inside the array are set up: Sony's writes the ones
+	// before it too, over whatever lies there, which is its own layout's.
+	for i := max(kanjiUsed, 0); i < kanjiUsed+n; i++ {
+		q := &kanjiPool.sprites[i]
 		q.Tag = q.Tag&0xffffff | 9<<24
 		q.Code = 0x2d
 		q.Clut = kanjiClutID
@@ -516,28 +525,69 @@ func KanjiFntClose() {
 // libps 0x80026A2C, 1240 bytes
 //
 //export KanjiFntPrint
-func KanjiFntPrint(str *byte) int32 {
-	s := &kanjiStream0[kanjiDump]
+func KanjiFntPrint(str *byte) int32 { return kanjiAdd(kanjiDump, str, true) }
+
+// KanjiWrite adds the text at str to window id, kanjiDump's for an id
+// below 0, as it is: for a caller that has formatted it already.
+func KanjiWrite(id int32, str *byte) int32 {
+	if id < 0 {
+		id = kanjiDump
+	}
+	if id >= int32(len(kanjiStream0)) {
+		return -1
+	}
+	return kanjiAdd(id, str, false)
+}
+
+// KanjiAddBytes adds b to Kanji window id, as the original's
+// KanjiFntPrint added its text: without the window's size limiting it,
+// only the end of the text space the windows share, and 0 for a window
+// that is not open. It returns the bytes the window holds.
+func KanjiAddBytes(id int32, b []byte) int32 {
+	if id < 0 {
+		id = kanjiDump
+	}
+	if id >= int32(len(kanjiStream0)) || kanjiStream0[id].text == nil {
+		return 0
+	}
+	s := &kanjiStream0[id]
+	for _, c := range b {
+		*kanjiTextAt(s) = c
+		s.n++
+	}
+	*kanjiTextAt(s) = 0
+	return s.n
+}
+
+// kanjiAdd adds the text at str to window id, a %% as one % when percent
+// is set.
+func kanjiAdd(id int32, str *byte, percent bool) int32 {
+	s := &kanjiStream0[id]
 	if s.text == nil {
 		return -1
 	}
 	if s.max < s.n {
 		return -1
 	}
-	text := unsafe.Slice(s.text, 1025)
+	// The window's size is checked before the text is added, not after:
+	// the text goes in whole and the new count comes back even past the
+	// size, and nothing checks the end of the pool: past it the text runs
+	// on into the packets (spec 13, KanjiFntPrint).
 	for p := str; *p != 0; p = (*byte)(unsafe.Add(unsafe.Pointer(p), 1)) {
 		c := *p
-		if c == '%' && *(*byte)(unsafe.Add(unsafe.Pointer(p), 1)) == '%' {
+		if percent && c == '%' && *(*byte)(unsafe.Add(unsafe.Pointer(p), 1)) == '%' {
 			p = (*byte)(unsafe.Add(unsafe.Pointer(p), 1))
 		}
-		text[s.n] = c
+		*kanjiTextAt(s) = c
 		s.n++
-		if s.n > s.max {
-			return -1
-		}
 	}
-	text[s.n] = 0
+	*kanjiTextAt(s) = 0
 	return s.n
+}
+
+// kanjiTextAt returns where stream s's next byte of text goes.
+func kanjiTextAt(s *kanjiStream) *byte {
+	return (*byte)(unsafe.Add(unsafe.Pointer(s.text), s.n))
 }
 
 // KanjiFntFlush draws window id's text, the first window for an id that
