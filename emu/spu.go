@@ -42,7 +42,11 @@ const (
 // access anywhere in the range finds what psxe would. The voices' playback
 // state comes after that and is kept separately here.
 type spu struct {
-	regs   [0x400]byte
+	regs [0x400]byte
+
+	// hook, when set, sees every register write: its offset from
+	// 0x1F801C00 and value (PROTOTYPE: for comparing two runs).
+	hook   func(off, v uint32)
 	ram    [spuRAMSize]byte
 	voices [spuVoiceCount]voice
 	ic     *ic
@@ -132,12 +136,19 @@ func (s *spu) Read16(off uint32) uint16 {
 }
 
 func (s *spu) Write32(off, v uint32) {
+	if s.hook != nil {
+		s.hook(off, v)
+		s.hook(off+2, v>>16)
+	}
 	if !s.special(off, v) {
 		s.put32(off, v)
 	}
 }
 
 func (s *spu) Write16(off uint32, v uint16) {
+	if s.hook != nil {
+		s.hook(off, uint32(v))
+	}
 	if s.special(off, uint32(v)) {
 		return
 	}

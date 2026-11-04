@@ -660,3 +660,20 @@ func (m *Machine) writeTrace() error {
 		Writes: m.writes,
 	})
 }
+
+// OnGP0 calls f with every word written to GP0 from now on, or stops
+// calling anything when f is nil. PROTOTYPE: for comparing command streams.
+func (m *Machine) OnGP0(f func(uint32)) { m.gpu.hook = f }
+
+// OnGP1 calls f with every word written to GP1 from now on, or stops
+// calling anything when f is nil. PROTOTYPE: for comparing command streams.
+func (m *Machine) OnGP1(f func(uint32)) { m.gpu.hook1 = f }
+
+// OnSPU calls f with every SPU register write from now on, as the
+// register's offset from 0x1F801C00 and the halfword written (a word
+// write is two), or stops calling anything when f is nil. PROTOTYPE: for
+// comparing two runs.
+func (m *Machine) OnSPU(f func(off, v uint32)) { m.spu.hook = f }
+
+// SPURAM returns the SPU's sound memory. PROTOTYPE: for comparing runs.
+func (m *Machine) SPURAM() []byte { return m.spu.ram[:] }
