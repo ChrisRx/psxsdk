@@ -52,6 +52,13 @@ type gpu struct {
 	polygons     uint64
 	polygonKinds [8]uint64
 
+	// hook, when set, sees every word written to GP0 (PROTOTYPE: for
+	// comparing the command streams of two runs).
+	hook func(uint32)
+
+	// hook1, when set, sees every word written to GP1 (PROTOTYPE).
+	hook1 func(uint32)
+
 	state         int
 	buf           [16]uint32
 	bufIndex      int
@@ -196,11 +203,17 @@ func (g *gpu) Write32(off, v uint32) {
 	case 0:
 		g.gp0(v)
 	case 4:
+		if g.hook1 != nil {
+			g.hook1(v)
+		}
 		g.gp1(v)
 	}
 }
 
 func (g *gpu) gp0(v uint32) {
+	if g.hook != nil {
+		g.hook(v)
+	}
 	switch g.state {
 	case gpuRecvCmd:
 		g.bufIndex = 0
