@@ -19,12 +19,15 @@ var video struct {
 }
 
 // SetVideoMode sets the video mode GsInitGraph sets the display to,
-// 0 for NTSC, the default, or 1 for PAL, and returns the mode before.
+// 0 for NTSC, the default, or 1 for PAL, and returns the mode before. It sets
+// the rate sequences open at to the new mode's, whatever SsSetTickMode set
+// (probe spec/probes/tickrate).
 //
 //export SetVideoMode
 func SetVideoMode(mode int32) int32 {
 	old := video.mode
 	video.mode = mode
+	tickRate = videoRate()
 	return old
 }
 
@@ -65,16 +68,22 @@ var vsync struct {
 //export VSyncCallback
 func VSyncCallback(f uintptr) {
 	libStart()
+	// The kernel loads gp from the exit buffer on its way to the handler,
+	// and a C function finds its small data through it.
+	intr.exit.gp = readGP()
 	volatile.StoreUint32(&vsync.callback, uint32(f))
 }
 
 // VSync waits for the vertical blank. With mode 0 it waits for the next
-// one; with a mode n above 1, until n have passed since the last VSync
-// returned; with mode 1 it does not wait. Those return the horizontal
-// lines from the last VSync's return to this call, before any wait: the
-// time the program took, as offscr's readout shows (45 lines, not a
-// frame's 263). A negative mode returns the vertical blanks since the
-// library started, without waiting.
+// one; with a mode n above 1, until n have passed since the last waiting
+// VSync returned, and for the next one if they already have, so it always
+// waits for one (probe spec/probes/vsynclate); with mode 1 it does not wait.
+// Those return the horizontal lines from the last waiting VSync's return to
+// this call, before any wait: the time the program took, as offscr's readout
+// shows (45 lines, not a frame's 263). Only a mode that waits moves that start,
+// so two VSync(1) in a row read about the same (probe spec/probes/vsyncone). A
+// negative mode returns the vertical blanks since the library started, without
+// waiting.
 //
 //export VSync
 func VSync(mode int32) int32 {
@@ -87,10 +96,16 @@ func VSync(mode int32) int32 {
 	// that resets the counter in between sees a large count.
 	lines := (lineCount.Get() - vsync.lines) & 0xffff
 	switch {
+	case mode == 1:
+		return int32(lines)
 	case mode == 0:
 		waitBlanks(now + 1)
-	case mode > 1:
-		waitBlanks(vsync.last + uint32(mode))
+	default:
+		target := vsync.last + uint32(mode)
+		if int32(target-now) <= 0 {
+			target = now + 1
+		}
+		waitBlanks(target)
 	}
 	vsync.last = volatile.LoadUint32(&vsync.blanks)
 	vsync.lines = lineCount.Get() & 0xffff

@@ -30,15 +30,21 @@ var reverbType int16
 
 // SsUtSetReverbType sets the reverb to one of the presets with its depth
 // at zero, turning it off for SS_REV_TYPE_OFF, and returns the type, or -1
-// for none.
+// for none. A negative type names the preset of its size, and is what
+// SsUtGetReverbType reports with bit 8 set (spec 23).
 //
 //export SsUtSetReverbType
-func SsUtSetReverbType(t int16) int16 {
+func SsUtSetReverbType(t int16) int32 {
 	soundStart()
+	kept := t
+	if t < 0 {
+		t = -t
+		kept = t | reverbNegative
+	}
 	if t < 0 || int(t) >= len(reverbTypes) {
 		return -1
 	}
-	reverbType = t
+	reverbType = kept
 	if t == 0 {
 		spuSet(spuCtrl, spuGet(spuCtrl)&^spuReverbOn)
 	}
@@ -49,13 +55,16 @@ func SsUtSetReverbType(t int16) int16 {
 		spuSet(spuRevRegs+uint32(i)*2, r)
 	}
 	spuSet(spuRevBase, p.base)
-	return t
+	return int32(t)
 }
+
+// reverbNegative marks a type SsUtSetReverbType was given as a negative.
+const reverbNegative = 1 << 8
 
 // SsUtGetReverbType returns the type SsUtSetReverbType last set.
 //
 //export SsUtGetReverbType
-func SsUtGetReverbType() int16 { return reverbType }
+func SsUtGetReverbType() int32 { return int32(reverbType) }
 
 // SsUtReverbOn turns the reverb on.
 //
@@ -63,6 +72,7 @@ func SsUtGetReverbType() int16 { return reverbType }
 func SsUtReverbOn() {
 	soundStart()
 	spuSet(spuCtrl, spuGet(spuCtrl)|spuReverbOn)
+	pace(ssUtReverbOnPad)
 }
 
 // SsUtReverbOff turns the reverb off.
@@ -80,7 +90,19 @@ func SsUtSetReverbDepth(l, r int16) {
 	soundStart()
 	spuSet(spuRevL, uint16(int32(l)*0x7fff/127))
 	spuSet(spuRevR, uint16(int32(r)*0x7fff/127))
+	pace(ssUtSetReverbDepthPad)
 }
+
+// The rest of these calls' cycles on Sony's, for spec 21: SsUtReverbOn's 137,
+// SsUtSetReverbDepth's 248, SsUtSetReverbDelay's 827 and SsUtSetReverbFeedback's
+// 782, and 188 for either on a type they write nothing for.
+const (
+	ssUtReverbOnPad          = 98
+	ssUtSetReverbDepthPad    = 158
+	ssUtSetReverbDelayPad    = 746
+	ssUtSetReverbFeedbackPad = 722
+	ssUtSetReverbNoTypePad   = 146
+)
 
 // The echo and delay types are the ones whose delay and feedback can be
 // set; for the others SsUtSetReverbDelay and SsUtSetReverbFeedback write
@@ -99,6 +121,7 @@ const (
 func SsUtSetReverbDelay(d int16) {
 	soundStart()
 	if reverbType != revTypeEcho && reverbType != revTypeDelay {
+		pace(ssUtSetReverbNoTypePad)
 		return
 	}
 	u := int32(d) * 4096 / 127
@@ -108,6 +131,7 @@ func SsUtSetReverbDelay(d int16) {
 	spuSet(0x1e0, uint16(u+5))
 	spuSet(0x1f4, uint16(u+4))
 	spuSet(0x1f6, uint16(u+2))
+	pace(ssUtSetReverbDelayPad)
 }
 
 // SsUtSetReverbFeedback sets the echo and delay types' feedback, 0 to
@@ -118,7 +142,9 @@ func SsUtSetReverbDelay(d int16) {
 func SsUtSetReverbFeedback(f int16) {
 	soundStart()
 	if reverbType != revTypeEcho && reverbType != revTypeDelay {
+		pace(ssUtSetReverbNoTypePad)
 		return
 	}
 	spuSet(0x1ce, uint16(int32(f)*0x8100/127))
+	pace(ssUtSetReverbFeedbackPad)
 }

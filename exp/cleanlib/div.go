@@ -59,11 +59,41 @@ type divCorner struct {
 // points its cut makes, the middles of the edges and a quad's center.
 // The cutting goes depth first, so a level's points stay put while the
 // levels under it are cut. The last level's points go straight from the
-// registers into its leaves and are not kept.
+// registers into its leaves and are not kept. divVerts is the addresses of
+// the polygon's vertices, as GsSortObject4 hands them to subdivide.
 var (
-	divRoot [4]divCorner
-	divPts  [divMax][5]divCorner
+	divRoot  [4]divCorner
+	divPts   [divMax][5]divCorner
+	divVerts [4]uintptr
 )
+
+// divPiece is the piece being cut at a level: its corners, and how many of the
+// four pieces its cut makes have been cut. The cutting is a loop over these,
+// not recursion, since a program may keep its stack in the 1 KB scratchpad.
+type divPiece struct {
+	a, b, c, e *divCorner
+	cuts       int
+}
+
+// divPieces holds the piece being cut at each level, level l at l-1.
+var divPieces [divMax]divPiece
+
+// divUp goes up from level l to the nearest level with a piece of its cut left
+// to go through, up to top, and counts that one: it returns the level and
+// how many have gone before it, or 0 for the level when none is left.
+//
+//go:inline
+func divUp(l, top int) (int, int) {
+	for l < top {
+		l++
+		p := &divPieces[l-1]
+		p.cuts++
+		if p.cuts < 4 {
+			return l, p.cuts
+		}
+	}
+	return 0, 0
+}
 
 // avg2 returns the bytes of the colors a and b averaged, each rounded
 // down, and avg4 those of four.
@@ -163,7 +193,7 @@ type divider struct {
 	out  uintptr
 	head uint32    // the entry's first packet, the piece linked last
 	col  uint32    // the first color word, or for a gouraud kind its code
-	uvhi [4]uint32 // the high halves of the texture words: CBA and TSB
+	uvhi [2]uint32 // the high halves of the first two texture words: CBA and TSB
 
 	// The screen rectangle, as a screen point word compares: x shifted
 	// up to the top half against xlo and xhi, the word itself against
@@ -177,10 +207,11 @@ type divider struct {
 var cut divider
 
 // subdivide cuts the polygon whose packet, made as without subdivision,
-// is at out, whose vertices are at verts and which sorts into the
+// is at out, whose vertices are at divVerts and which sorts into the
 // ordering table entry tag, levels times, and links the pieces into tag
-// from out on. It returns where the next packet goes.
-func subdivide[K polyKind](out uintptr, verts *[4]uintptr, tag *uint32, levels int) uintptr {
+// from out on, with code in the top byte of each one's first color. It returns
+// where the next packet goes.
+func subdivide[K polyKind](out uintptr, tag *uint32, levels int, code uint32) uintptr {
 	var k K
 	n := k.corners()
 	stride, _ := layout[K]()
@@ -188,20 +219,20 @@ func subdivide[K polyKind](out uintptr, verts *[4]uintptr, tag *uint32, levels i
 	cut = divider{
 		out:  out,
 		head: *tag & 0xffffff,
-		col:  word(out, 1),
+		col:  code,
 		xlo:  (gteOFX - w) << 16,
 		xhi:  (gteOFX + w) << 16,
 		ylo:  (gteOFY - h) << 16,
 		yhi:  (gteOFY + h + 1) << 16,
 		near: uint32(gteH >> 1),
 	}
-	if k.gouraud() {
-		cut.col &= 0xff000000
+	if !k.gouraud() {
+		cut.col |= word(out, 1) & 0xffffff
 	}
 	storeRootSZ(n)
 	for i := range n {
 		p := &divRoot[i]
-		v := verts[i]
+		v := divVerts[i]
 		xy := word(v, 0)
 		p.x, p.y, p.z = int32(int16(xy)), int32(int16(xy>>16)), int32(int16(word(v, 1)))
 		p.sxy = word(out, 2+i*stride)
@@ -210,16 +241,23 @@ func subdivide[K polyKind](out uintptr, verts *[4]uintptr, tag *uint32, levels i
 		}
 		if k.textured() {
 			uv := word(out, 3+i*stride)
-			p.uv, cut.uvhi[i] = uv&0xffff, uv&^0xffff
+			p.uv = uv & 0xffff
+			// A piece has a palette and a texture page in its first two
+			// corners only.
+			if i < 2 {
+				cut.uvhi[i] = uv &^ 0xffff
+			}
 		}
 	}
 	if levels > divMax {
 		levels = divMax
 	}
+	top := &divPieces[levels-1]
+	top.a, top.b, top.c, top.e = &divRoot[0], &divRoot[1], &divRoot[2], &divRoot[3]
 	if n == 4 {
-		divQuad[K](&divRoot[0], &divRoot[1], &divRoot[2], &divRoot[3], levels)
+		divQuad[K](levels)
 	} else {
-		divTri[K](&divRoot[0], &divRoot[1], &divRoot[2], levels)
+		divTri[K](levels)
 	}
 	*tag = *tag&0xff000000 | cut.head
 	return cut.out
@@ -266,54 +304,75 @@ func offScreen(a, b, c, e *divCorner) bool {
 	return ya >= hi && yb >= hi && yc >= hi && ye >= hi
 }
 
-// divTri cuts the triangle a, b, c levels more times. Its pieces are each
-// corner with the middles of its edges to the next corner and the
-// previous one, then the middle one of the three middles; they are cut
-// in that order, but at the last level the leaves are linked second,
-// fourth, first and third. The last level's points are not kept: its
-// leaves are written from the registers (lastTri).
-func divTri[K polyKind](a, b, c *divCorner, levels int) {
-	if drop(a, b, c, c) {
-		return
-	}
+// divTri cuts the triangle at top's level of divPieces down to the last
+// level. A triangle's pieces are each corner with the middles of its edges to
+// the next corner and the previous one, then the middle one of the three
+// middles; they are cut in that order, but at the last level the leaves are
+// linked second, fourth, first and third. The last level's points are not
+// kept: its leaves are written from the registers (lastTri).
+func divTri[K polyKind](top int) {
 	var k K
-	ax, ay, az := a.x, a.y, a.z
-	bx, by, bz := b.x, b.y, b.z
-	cx, cy, cz := c.x, c.y, c.z
-	abx, aby, abz := (ax+bx)>>1, (ay+by)>>1, (az+bz)>>1
-	bcx, bcy, bcz := (bx+cx)>>1, (by+cy)>>1, (bz+cz)>>1
-	cax, cay, caz := (cx+ax)>>1, (cy+ay)>>1, (cz+az)>>1
-	rtpt(vxy(abx, aby), uint32(abz), vxy(bcx, bcy), uint32(bcz), vxy(cax, cay), uint32(caz))
-	// The GTE works while the colors and texture coordinates are made.
-	var abuv, bcuv, cauv, abcol, bccol, cacol uint32
-	if k.textured() {
-		auv, buv, cuv := a.uv, b.uv, c.uv
-		abuv, bcuv, cauv = avgUV2(auv, buv), avgUV2(buv, cuv), avgUV2(cuv, auv)
+	l := top
+	for {
+		p := &divPieces[l-1]
+		a, b, c := p.a, p.b, p.c
+		if !drop(a, b, c, c) {
+			ax, ay, az := a.x, a.y, a.z
+			bx, by, bz := b.x, b.y, b.z
+			cx, cy, cz := c.x, c.y, c.z
+			abx, aby, abz := (ax+bx)>>1, (ay+by)>>1, (az+bz)>>1
+			bcx, bcy, bcz := (bx+cx)>>1, (by+cy)>>1, (bz+cz)>>1
+			cax, cay, caz := (cx+ax)>>1, (cy+ay)>>1, (cz+az)>>1
+			rtpt(vxy(abx, aby), uint32(abz), vxy(bcx, bcy), uint32(bcz), vxy(cax, cay), uint32(caz))
+			// The GTE works while the colors and texture coordinates are made.
+			var abuv, bcuv, cauv, abcol, bccol, cacol uint32
+			if k.textured() {
+				auv, buv, cuv := a.uv, b.uv, c.uv
+				abuv, bcuv, cauv = avgUV2(auv, buv), avgUV2(buv, cuv), avgUV2(cuv, auv)
+			}
+			if k.gouraud() {
+				acol, bcol, ccol := a.col, b.col, c.col
+				abcol, bccol, cacol = avg2(acol, bcol), avg2(bcol, ccol), avg2(ccol, acol)
+			}
+			if l == 1 {
+				lastTri[K](a, b, c, abuv, bcuv, cauv, abcol, bccol, cacol)
+			} else {
+				m := &divPts[l-1]
+				ab, bc, ca := &m[0], &m[1], &m[2]
+				ab.x, ab.y, ab.z = abx, aby, abz
+				bc.x, bc.y, bc.z = bcx, bcy, bcz
+				ca.x, ca.y, ca.z = cax, cay, caz
+				if k.textured() {
+					ab.uv, bc.uv, ca.uv = abuv, bcuv, cauv
+				}
+				if k.gouraud() {
+					ab.col, bc.col, ca.col = abcol, bccol, cacol
+				}
+				storeProjected(ab, bc, ca)
+				p.cuts = 0
+				l--
+				q := &divPieces[l-1]
+				q.a, q.b, q.c = a, ab, ca
+				continue
+			}
+		}
+		up, cuts := divUp(l, top)
+		if up == 0 {
+			return
+		}
+		l = up - 1
+		p = &divPieces[up-1]
+		m := &divPts[up-1]
+		q := &divPieces[l-1]
+		switch cuts {
+		case 1:
+			q.a, q.b, q.c = p.b, &m[1], &m[0]
+		case 2:
+			q.a, q.b, q.c = p.c, &m[2], &m[1]
+		default:
+			q.a, q.b, q.c = &m[0], &m[1], &m[2]
+		}
 	}
-	if k.gouraud() {
-		acol, bcol, ccol := a.col, b.col, c.col
-		abcol, bccol, cacol = avg2(acol, bcol), avg2(bcol, ccol), avg2(ccol, acol)
-	}
-	if levels == 1 {
-		lastTri[K](a, b, c, abuv, bcuv, cauv, abcol, bccol, cacol)
-		return
-	}
-	m := &divPts[levels-1]
-	ab, bc, ca := &m[0], &m[1], &m[2]
-	ab.x, ab.y, ab.z = abx, aby, abz
-	bc.x, bc.y, bc.z = bcx, bcy, bcz
-	ca.x, ca.y, ca.z = cax, cay, caz
-	if k.textured() {
-		ab.uv, bc.uv, ca.uv = abuv, bcuv, cauv
-	}
-	if k.gouraud() {
-		ab.col, bc.col, ca.col = abcol, bccol, cacol
-	}
-	storeProjected(ab, bc, ca)
-	divTri[K](a, ab, ca, levels-1)
-	divTri[K](b, bc, ab, levels-1)
-	divTri[K](c, ca, bc, levels-1)
-	divTri[K](ab, bc, ca, levels-1)
 }
 
 // lastTri writes the four leaves of the triangle a, b, c whose middles
@@ -334,61 +393,82 @@ func lastTri[K polyKind](a, b, c *divCorner, abuv, bcuv, cauv, abcol, bccol, cac
 	cut.out, cut.head = l.out, l.head
 }
 
-// divQuad cuts the quad a, b, c, e (corners in packet order, so round a, b,
-// e, c) levels more times. Its pieces are each corner with the middles
-// of its edges to the next corner and the previous one, and the quad's
-// center, made and linked corner by corner. As for a triangle, the last
-// level's points are not kept (lastQuad).
-func divQuad[K polyKind](a, b, c, e *divCorner, levels int) {
-	if drop(a, b, c, e) {
-		return
-	}
+// divQuad cuts the quad at top's level of divPieces down to the last level,
+// each quad's corners a, b, c, e being in packet order, so round a, b, e, c. A
+// quad's pieces are each corner with the middles of its edges to the next
+// corner and the previous one, and the quad's center, made and linked corner by
+// corner. As for a triangle, the last level's points are not kept (lastQuad).
+func divQuad[K polyKind](top int) {
 	var k K
-	ax, ay, az := a.x, a.y, a.z
-	bx, by, bz := b.x, b.y, b.z
-	cx, cy, cz := c.x, c.y, c.z
-	ex, ey, ez := e.x, e.y, e.z
-	abx, aby, abz := (ax+bx)>>1, (ay+by)>>1, (az+bz)>>1
-	bex, bey, bez := (bx+ex)>>1, (by+ey)>>1, (bz+ez)>>1
-	ecx, ecy, ecz := (ex+cx)>>1, (ey+cy)>>1, (ez+cz)>>1
-	rtpt(vxy(abx, aby), uint32(abz), vxy(bex, bey), uint32(bez), vxy(ecx, ecy), uint32(ecz))
-	// The GTE works while the rest is made.
-	cax, cay, caz := (cx+ax)>>1, (cy+ay)>>1, (cz+az)>>1
-	mx, my, mz := (ax+bx+cx+ex)>>2, (ay+by+cy+ey)>>2, (az+bz+cz+ez)>>2
-	if levels == 1 {
-		lastQuad[K](a, b, c, e, vxy(cax, cay), uint32(caz), vxy(mx, my), uint32(mz))
-		return
+	l := top
+	for {
+		p := &divPieces[l-1]
+		a, b, c, e := p.a, p.b, p.c, p.e
+		if !drop(a, b, c, e) {
+			ax, ay, az := a.x, a.y, a.z
+			bx, by, bz := b.x, b.y, b.z
+			cx, cy, cz := c.x, c.y, c.z
+			ex, ey, ez := e.x, e.y, e.z
+			abx, aby, abz := (ax+bx)>>1, (ay+by)>>1, (az+bz)>>1
+			bex, bey, bez := (bx+ex)>>1, (by+ey)>>1, (bz+ez)>>1
+			ecx, ecy, ecz := (ex+cx)>>1, (ey+cy)>>1, (ez+cz)>>1
+			rtpt(vxy(abx, aby), uint32(abz), vxy(bex, bey), uint32(bez), vxy(ecx, ecy), uint32(ecz))
+			// The GTE works while the rest is made.
+			cax, cay, caz := (cx+ax)>>1, (cy+ay)>>1, (cz+az)>>1
+			mx, my, mz := (ax+bx+cx+ex)>>2, (ay+by+cy+ey)>>2, (az+bz+cz+ez)>>2
+			if l == 1 {
+				lastQuad[K](a, b, c, e, vxy(cax, cay), uint32(caz), vxy(mx, my), uint32(mz))
+			} else {
+				m := &divPts[l-1]
+				ab, be, ec, ca, mid := &m[0], &m[1], &m[2], &m[3], &m[4]
+				ab.x, ab.y, ab.z = abx, aby, abz
+				be.x, be.y, be.z = bex, bey, bez
+				ec.x, ec.y, ec.z = ecx, ecy, ecz
+				ca.x, ca.y, ca.z = cax, cay, caz
+				mid.x, mid.y, mid.z = mx, my, mz
+				storeProjected(ab, be, ec)
+				rtpt(vxy(cax, cay), uint32(caz), vxy(mx, my), uint32(mz), vxy(mx, my), uint32(mz))
+				if k.textured() {
+					auv, buv, cuv, euv := a.uv, b.uv, c.uv, e.uv
+					ab.uv = avgUV2(auv, buv)
+					be.uv = avgUV2(buv, euv)
+					ec.uv = avgUV2(euv, cuv)
+					ca.uv = avgUV2(cuv, auv)
+					mid.uv = avgUV4(auv, buv, cuv, euv)
+				}
+				if k.gouraud() {
+					acol, bcol, ccol, ecol := a.col, b.col, c.col, e.col
+					ab.col = avg2(acol, bcol)
+					be.col = avg2(bcol, ecol)
+					ec.col = avg2(ecol, ccol)
+					ca.col = avg2(ccol, acol)
+					mid.col = avg4(acol, bcol, ccol, ecol)
+				}
+				storeProjected2(ca, mid)
+				p.cuts = 0
+				l--
+				q := &divPieces[l-1]
+				q.a, q.b, q.c, q.e = a, ab, ca, mid
+				continue
+			}
+		}
+		up, cuts := divUp(l, top)
+		if up == 0 {
+			return
+		}
+		l = up - 1
+		p = &divPieces[up-1]
+		m := &divPts[up-1]
+		q := &divPieces[l-1]
+		switch cuts {
+		case 1:
+			q.a, q.b, q.c, q.e = p.b, &m[1], &m[0], &m[4]
+		case 2:
+			q.a, q.b, q.c, q.e = p.c, &m[3], &m[2], &m[4]
+		default:
+			q.a, q.b, q.c, q.e = p.e, &m[2], &m[1], &m[4]
+		}
 	}
-	m := &divPts[levels-1]
-	ab, be, ec, ca, mid := &m[0], &m[1], &m[2], &m[3], &m[4]
-	ab.x, ab.y, ab.z = abx, aby, abz
-	be.x, be.y, be.z = bex, bey, bez
-	ec.x, ec.y, ec.z = ecx, ecy, ecz
-	ca.x, ca.y, ca.z = cax, cay, caz
-	mid.x, mid.y, mid.z = mx, my, mz
-	storeProjected(ab, be, ec)
-	rtpt(vxy(cax, cay), uint32(caz), vxy(mx, my), uint32(mz), vxy(mx, my), uint32(mz))
-	if k.textured() {
-		auv, buv, cuv, euv := a.uv, b.uv, c.uv, e.uv
-		ab.uv = avgUV2(auv, buv)
-		be.uv = avgUV2(buv, euv)
-		ec.uv = avgUV2(euv, cuv)
-		ca.uv = avgUV2(cuv, auv)
-		mid.uv = avgUV4(auv, buv, cuv, euv)
-	}
-	if k.gouraud() {
-		acol, bcol, ccol, ecol := a.col, b.col, c.col, e.col
-		ab.col = avg2(acol, bcol)
-		be.col = avg2(bcol, ecol)
-		ec.col = avg2(ecol, ccol)
-		ca.col = avg2(ccol, acol)
-		mid.col = avg4(acol, bcol, ccol, ecol)
-	}
-	storeProjected2(ca, mid)
-	divQuad[K](a, ab, ca, mid, levels-1)
-	divQuad[K](b, be, ab, mid, levels-1)
-	divQuad[K](c, ca, ec, mid, levels-1)
-	divQuad[K](e, ec, be, mid, levels-1)
 }
 
 // lastQuad writes the four leaves of the quad a, b, c, e whose first three
@@ -430,7 +510,7 @@ type leafer struct {
 	out  uintptr
 	head uint32
 	col  uint32
-	uvhi [4]uint32
+	uvhi [2]uint32
 }
 
 //go:inline
@@ -463,7 +543,7 @@ func leafTri[K polyKind](l *leafer, s0, s1, s2, u0, u1, u2, c0, c1, c2 uint32) {
 	if k.textured() {
 		set(out, 3, l.uvhi[0]|u0)
 		set(out, 3+s, l.uvhi[1]|u1)
-		set(out, 3+2*s, l.uvhi[2]|u2)
+		set(out, 3+2*s, u2)
 	}
 	set(out, 0, uint32(plen)<<24|l.head)
 	l.head = uint32(out) & 0xffffff
@@ -490,8 +570,8 @@ func leafQuad[K polyKind](l *leafer, s0, s1, s2, s3, u0, u1, u2, u3, c0, c1, c2,
 	if k.textured() {
 		set(out, 3, l.uvhi[0]|u0)
 		set(out, 3+s, l.uvhi[1]|u1)
-		set(out, 3+2*s, l.uvhi[2]|u2)
-		set(out, 3+3*s, l.uvhi[3]|u3)
+		set(out, 3+2*s, u2)
+		set(out, 3+3*s, u3)
 	}
 	set(out, 0, uint32(plen)<<24|l.head)
 	l.head = uint32(out) & 0xffffff

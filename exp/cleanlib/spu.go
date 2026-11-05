@@ -97,14 +97,12 @@ type sndVoice struct {
 	// What the voice plays, for a note off or SsUtKeyOff to find it:
 	// the sequence that owns it (-1 for SsUtKeyOn), its channel, note,
 	// bank (-1 while the voice has no record: never taken, or since
-	// SsUtAllKeyOff), program and tone, and the volumes SsUtKeyOn was
-	// given.
-	seq         int8
-	channel     uint8
-	note        int16 // as it was given, whole: SsUtKeyOn's may be any
-	vab, prog   int16
-	tone        int16
-	left, right int16
+	// SsUtAllKeyOff), program and tone.
+	seq       int8
+	channel   uint8
+	note      int16 // as it was given, whole: SsUtKeyOn's may be any
+	vab, prog int16
+	tone      int16
 	// vel is a sequence's note's velocity, for its controllers to work
 	// the volume out again; changed is set once SsUtChangePitch has moved
 	// the voice (SsUtPitchBend then accepts any note), and stays.
@@ -154,9 +152,16 @@ var snd struct {
 // writes and delay loops are the reference's, in its order (spec 08): the
 // timing of what follows (the first tick, a CD read) depends on them.
 func soundStart() {
-	if snd.started {
-		return
+	if !snd.started {
+		soundBegin()
 	}
+}
+
+// soundBegin is soundStart's work, apart so that a call after the start costs
+// no stack.
+//
+//go:noinline
+func soundBegin() {
 	cd.start()
 	// 1.
 	dmaPriority.Set(dmaPriority.Get() | dmaSPUEnable)
@@ -221,6 +226,9 @@ func soundStart() {
 	spinCycles(startCtrl)
 	dmaInterrupt.Get()
 	dmaInterrupt.Set(dicrMaster | dicrSPUEnable)
+	if resident {
+		spinCycles(residentSoundPad)
+	}
 	ev := libps_biosB(biosOpenEvent, spuEventClass, 0x20, evModeNoIntr, 0)
 	libps_biosB(biosEnableEvent, uintptr(ev), 0, 0, 0)
 	spinCycles(startEvent)
@@ -269,6 +277,9 @@ func soundStart() {
 	memInit()
 	spinCycles(startSeqs)
 	spuCount(1000)
+	if resident {
+		spinCycles(residentSoundEndPad)
+	}
 	// The controllers' and the vertical blank's acknowledgement handed to
 	// the kernel and back, each with the interrupts masked.
 	m := iMask.Get()
@@ -628,7 +639,11 @@ func SsSetMVol(l, r int16) {
 	soundStart()
 	spuSet(spuMainL, uint16(int32(l)*129)&0x7fff)
 	spuSet(spuMainR, uint16(int32(r)*129)&0x7fff)
+	pace(ssSetMVolPad)
 }
+
+// ssSetMVolPad is the rest of SsSetMVol's 178 cycles (spec 21).
+const ssSetMVolPad = 110
 
 // SsSetSerialAttr turns the CD's audio into the mix (SS_MIX) or the
 // reverb (SS_REV) on or off.
@@ -720,11 +735,15 @@ func SsGetMute() uint8 {
 }
 
 // SsGetSerialAttr returns 1 if the CD audio's attribute attr, SS_MIX (0)
-// or SS_REV (1), is on in SPUCNT, and 0 if not.
+// or SS_REV (1), is on in SPUCNT, and 0 if not. With any other attribute, or
+// a part s above 1, it returns 1 (spec 23).
 //
 //export SsGetSerialAttr
 func SsGetSerialAttr(s, attr uint8) uint8 {
 	soundStart()
+	if s > 1 || attr > 1 {
+		return 1
+	}
 	bit := uint16(1)
 	if attr == 1 {
 		bit = 4

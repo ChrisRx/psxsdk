@@ -2,7 +2,11 @@
 
 package cleanlib
 
-import "unsafe"
+import (
+	"unsafe"
+
+	"go.chrisrx.dev/psx/internal/volatile"
+)
 
 // The controllers, which the kernel's driver reads every vertical blank.
 
@@ -28,28 +32,44 @@ var pads struct {
 // right after any call, the driver running or not).
 //
 //export GetPadBuf
+//go:noinline
 func GetPadBuf(buf1, buf2 **uint8) {
 	padStart()
-	for i := range pads.buf {
-		for j := range pads.buf[i] {
-			pads.buf[i][j] = 0xffffffff
-		}
+	words := (*[2 * (padSize + 3) / 4]uint32)(unsafe.Pointer(&pads.buf))
+	for i := range words {
+		volatile.StoreUint32(&words[i], 0xffffffff)
 	}
 	*buf1, *buf2 = (*uint8)(unsafe.Pointer(&pads.buf[0])), (*uint8)(unsafe.Pointer(&pads.buf[1]))
+	pace(getPadBufPad)
 }
+
+// getPadBufPad is the rest of GetPadBuf's 834 cycles (spec 21).
+const getPadBufPad = 734
 
 // padStart starts the kernel's controller driver, once: from the
 // library's start-up (startup), or from GetPadBuf or the card driver's
 // start in a program that uses them before any ResetGraph.
 func padStart() {
-	if pads.started {
-		return
+	if !pads.started {
+		padBegin()
 	}
+}
+
+// padBegin is padStart's work, apart so that a call after the start costs no
+// stack.
+//
+//go:noinline
+func padBegin() {
 	b0 := unsafe.Pointer(&pads.buf[0])
 	b1 := unsafe.Pointer(&pads.buf[1])
 	libStart()
 	pads.started = true
 	libps_biosB(biosInitPad, uintptr(b0), padSize, uintptr(b1), padSize)
+	// Sony's routine leaves the reading to the card driver, which comes next
+	// on the resident image (spec 07, step 3, and spec 21).
+	if resident {
+		return
+	}
 	libps_biosB(biosStartPad, 0, 0, 0, 0)
 	// The driver would acknowledge the vertical blank itself, before the
 	// library's handler counted it.

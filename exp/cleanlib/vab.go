@@ -177,10 +177,14 @@ func memFree(addr, size uint32) {
 }
 
 // SsVabTransfer opens the bank whose header is at vh and sends its
-// samples, at vb, to sound memory. It returns the bank's id, or -1.
+// samples, at vb, to sound memory. It returns the bank's id, or -1. The
+// result is a whole word here and in the other sound calls, though the C
+// headers say short: a Go int16 comes back with the high half of v0 clear,
+// where Sony's -1 is all 32 bits (spec 23). The header has to be on a word
+// boundary, as Sony's does: at an offset of 2 its call never returns.
 //
 //export SsVabTransfer
-func SsVabTransfer(vh, vb *uint8, vabid, mode int16) int16 {
+func SsVabTransfer(vh, vb *uint8, vabid, mode int16) int32 {
 	soundStart()
 	h := unsafe.Pointer(vh)
 	if *(*uint32)(h) != vabMagic {
@@ -244,8 +248,13 @@ func SsVabTransfer(vh, vb *uint8, vabid, mode int16) int16 {
 	if state != 0 {
 		ExitCriticalSection()
 	}
-	return int16(id)
+	spinCycles(ssVabTransferPad)
+	return int32(id)
 }
+
+// ssVabTransferPad is what SsVabTransfer's mean of 25,200 cycles has over the
+// work here (spec 21).
+const ssVabTransferPad = 13800
 
 // The SPU's DMA channel, 4.
 var (

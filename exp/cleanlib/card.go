@@ -77,6 +77,9 @@ func cardStart() {
 	for i, spec := range cardSpecs {
 		card.hw[i] = libps_biosB(biosOpenEvent, cardHwClass, spec, evModeNoIntr, 0)
 	}
+	if resident {
+		spinCycles(residentCardPad)
+	}
 	libps_biosB(biosInitCard, 1, 0, 0, 0)
 	libps_biosB(biosStartCard, 0, 0, 0, 0)
 	libps_biosA(biosBuInit, 0, 0, 0, 0)
@@ -128,6 +131,16 @@ func cardClear() {
 //
 //export TestCard
 func TestCard(slot int32) int32 {
+	r := testCard(slot)
+	spinCycles(testCardPad)
+	return r
+}
+
+// testCardPad is the rest of TestCard's time: 1,327,126 cycles on the first call of
+// scee-topten-hover (spec 23).
+const testCardPad = 22000
+
+func testCard(slot int32) int32 {
 	cardStart()
 	port := uintptr(slot) << 4
 	libps_biosA(biosCardInfo, port, 0, 0, 0)

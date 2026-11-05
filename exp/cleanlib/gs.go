@@ -63,10 +63,20 @@ var psdIDX int32
 var psdCNT uint32
 
 //go:extern PSDOFSX
-var psdOFSX int32
+var psdOFSX [2]int16
 
 //go:extern PSDOFSY
-var psdOFSY int32
+var psdOFSY [2]int16
+
+// The display buffers are the library's variables, which a program may read
+// and write and the next call then goes by (probe spec/probes/gspsd): PSDIDX
+// is the buffer drawn into, and PSDOFSX and PSDOFSY hold each buffer's x and y.
+
+// activeBuf returns the buffer drawn into.
+func activeBuf() int { return int(psdIDX & 1) }
+
+// bufCorner returns the top left of buffer i.
+func bufCorner(i int) (x, y int16) { return psdOFSX[i&1], psdOFSY[i&1] }
 
 // GsInitGraph's intmode bits.
 const (
@@ -82,10 +92,6 @@ type display struct {
 	// (GsOFSGPU) or the packets do (GsOFSGTE).
 	ofsGPU bool
 
-	// buf is the top left of each buffer and active the one drawn into.
-	buf    [2][2]int16
-	active int
-
 	// clip is the clipping area GsSetClip2D set, relative to a buffer's
 	// corner, which each buffer drawn into takes.
 	clip RECT
@@ -96,11 +102,15 @@ var gs display
 // GsInitGraph resets the GPU and sets up a display w by h, interlaced if
 // intmode has bit 0 or h is over 256 lines, with the drawing offset in the GPU (GsOFSGPU, bit 2)
 // or the packets (GsOFSGTE). dith turns dithering on, and vrammode 1 is
-// 24-bit color. The display stays off until the first GsSwapDispBuff.
+// 24-bit color. The display stays off until the first GsSwapDispBuff. The GTE
+// is usable from here, with a projection distance of 1000, whether or not
+// GsInit3D follows: a turned sprite's corners come from it.
 //
 //export GsInitGraph
 func GsInitGraph(w, h, intmode, dith, vrammode uint16) {
 	resetGPU()
+	gteEnable()
+	setH(1000)
 	// The environment starts over but for its clipping area, which goes
 	// out as it was (probe spec/probes/gsclip) until draw sets it below.
 	gsDRAWENV = DRAWENV{Clip: gsDRAWENV.Clip, Dtd: uint8(dith)}
@@ -118,10 +128,11 @@ func GsInitGraph(w, h, intmode, dith, vrammode uint16) {
 		width:  int16(w),
 		height: int16(h),
 		ofsGPU: intmode&gsOfsGPU != 0,
-		buf:    [2][2]int16{{0, 0}, {0, int16(h)}},
 		clip:   RECT{W: int16(w), H: int16(h)},
 	}
 	position = GsPOSITION{}
+	psdCNT = 1
+	psdOFSX, psdOFSY = [2]int16{}, [2]int16{}
 	gsIDMATRIX = identity()
 	gsIDMATRIX2 = identity()
 	// GsIDMATRIX2 scales y by the screen's aspect against 4:3, a half
@@ -129,11 +140,14 @@ func GsInitGraph(w, h, intmode, dith, vrammode uint16) {
 	gsIDMATRIX2.M[1][1] = int16(4096 * 4 * int32(h) / (3 * int32(w)))
 	// In the GsOFSGPU mode the GTE's screen offset goes back to 0, as
 	// GsInit3D sets it (probe spec/probes/gsclip).
-	if gs.ofsGPU && gteOn {
+	if gs.ofsGPU {
 		setOFX(0)
 		setOFY(0)
 	}
 	gs.draw(0)
+	if resident {
+		spinCycles(residentInitGraphPad)
+	}
 }
 
 // interlace is 1 for an interlaced display: one asked for, or one taller
@@ -190,6 +204,40 @@ func startup() {
 	padStart()
 	soundStart()
 	cardStart()
+}
+
+// resident says this library is laid out as the resident image, which Startup
+// alone sets. The start of such a program is timed against Sony's routine (spec
+// 21, "Start-up"), whereas a linked-in library's first ResetGraph does this work
+// and has its time from the reference.
+var resident bool
+
+// What the resident image's start spends past its work, in cycles, so that the
+// kernel calls come when they do on Sony's (spec 21, "Start-up"), which on some
+// programs decides the vertical blank they land on. They are spent where the
+// work is that they stand for: before the first kernel call, before the sound
+// system's event, at the sound system's end and before the card driver.
+// GsInitGraph's is the 30,000 by which Sony's call is longer, every call.
+const (
+	residentEntryPad     = 6000
+	residentSoundPad     = 63000
+	residentSoundEndPad  = 13000
+	residentCardPad      = 1500
+	residentInitGraphPad = 30000
+)
+
+// Startup is the resident library's init routine for a library laid out as
+// the image, which a program built for it calls before its own start-up
+// (spec 15): spec 07's steps 1 to 6, in their order, and the tick mode the
+// routine leaves. A program's own ResetGraph(0) after it starts nothing. The
+// linked-in target does not call it, and starts these at the first ResetGraph.
+func Startup() {
+	resident = true
+	spinCycles(residentEntryPad)
+	libStart()
+	SetDispMask(0)
+	ResetGraph(0)
+	SsSetTickMode(5)
 }
 
 // resetLine is the line ResetGraph prints, with the reference's own table
@@ -302,18 +350,15 @@ func identity() MATRIX {
 // draw makes buffer i the one drawn into: it moves the clipping to it,
 // installing the environment, and then the drawing offset.
 func (d *display) draw(i int) {
-	d.active = i
+	psdIDX = int32(i)
 	d.clipTo()
 	d.offset()
-	x, y := d.buf[i][0], d.buf[i][1]
-	psdIDX = int32(i)
-	psdOFSX, psdOFSY = int32(x), int32(y)
 }
 
 // clipTo sets the drawing area to the clipping area GsSetClip2D set, from
 // the corner of the buffer drawn into, and installs the environment.
 func (d *display) clipTo() {
-	x, y := d.buf[d.active][0], d.buf[d.active][1]
+	x, y := bufCorner(activeBuf())
 	c := d.clip
 	gsDRAWENV.Clip = RECT{X: x + c.X, Y: y + c.Y, W: c.W, H: c.H}
 	gsDRAWENV.put()
@@ -326,12 +371,12 @@ func (d *display) clipTo() {
 // origin: what is sorted now is drawn after the next swap, into that
 // buffer.
 func (d *display) offset() {
-	x, y := d.buf[d.active][0], d.buf[d.active][1]
+	x, y := bufCorner(activeBuf())
 	if !d.ofsGPU {
 		if !gteOn {
 			return
 		}
-		x, y = d.buf[1-d.active][0], d.buf[1-d.active][1]
+		x, y = bufCorner(1 - activeBuf())
 		setOFX((int32(x) + int32(position.Offx)) << 16)
 		setOFY((int32(y) + int32(position.Offy)) << 16)
 		return
@@ -344,19 +389,20 @@ func (d *display) offset() {
 // GsDefDispBuff places buffer 0 at x0, y0 and buffer 1 at x1, y1 in video
 // memory. The buffer drawn into stays the one it was (buffer 0 after
 // GsInitGraph), its clipping and offset moved to its new place; a
-// GsSortClear packet sorted before keeps the old clip (probe
+// GsSortClear packet sorted before keeps the old place (probe
 // spec/probes/sortclear).
 //
 //export GsDefDispBuff
 func GsDefDispBuff(x0, y0, x1, y1 uint16) {
-	gs.buf = [2][2]int16{{int16(x0), int16(y0)}, {int16(x1), int16(y1)}}
-	gs.draw(gs.active)
+	psdOFSX = [2]int16{int16(x0), int16(x1)}
+	psdOFSY = [2]int16{int16(y0), int16(y1)}
+	gs.draw(activeBuf())
 }
 
 // GsGetActiveBuff returns the buffer being drawn into, 0 or 1.
 //
 //export GsGetActiveBuff
-func GsGetActiveBuff() int32 { return int32(gs.active) }
+func GsGetActiveBuff() int32 { return int32(activeBuf()) }
 
 // GsSwapDispBuff shows the buffer just drawn, turning the display on, and
 // makes the other the one drawn into.
@@ -364,8 +410,8 @@ func GsGetActiveBuff() int32 { return int32(gs.active) }
 //export GsSwapDispBuff
 //go:noinline
 func GsSwapDispBuff() {
-	shown := gs.active
-	gsDISPENV.Disp.X, gsDISPENV.Disp.Y = gs.buf[shown][0], gs.buf[shown][1]
+	shown := activeBuf()
+	gsDISPENV.Disp.X, gsDISPENV.Disp.Y = bufCorner(shown)
 	// As PutDispEnv puts it, writing the screen area and the mode only
 	// when they changed, then the display turned on.
 	gsDISPENV.put()
@@ -384,16 +430,14 @@ func GsSwapDispBuff() {
 //go:noinline
 func GsSetWorkBase(p unsafe.Pointer) {
 	gsOUT_PACKET_P = p
-	// The call, the store and the return are 8 of Sony's cycles.
-	space((setWorkBasePad - 8) / 2)
 }
 
 // packet takes n words from the packet area for a packet, its link word
 // and n-1 words of commands, and advances the area past them.
 func packet(n int) []uint32 {
-	p := gsOUT_PACKET_P
-	gsOUT_PACKET_P = unsafe.Add(p, 4*n)
-	return unsafe.Slice((*uint32)(p), n)
+	p := at((*uint32)(gsOUT_PACKET_P))
+	gsOUT_PACKET_P = unsafe.Add(unsafe.Pointer(p), 4*n)
+	return unsafe.Slice(p, n)
 }
 
 // otEnd is the packet every cleared ordering table ends in, after its
@@ -404,24 +448,26 @@ var otEnd = [5]uint32{4<<24 | endOfList}
 // GsClearOt empties ot, whose Length and Org the program set: it links the
 // 1<<Length entries from the last to the first, which leads to otEnd and
 // the end of the list, and points Tag at the last. It keeps offset and
-// point in the table.
+// point in the table. An Org of null is a table at address 0 like any other,
+// and with a Length of 0 Tag is null (spec 20).
 //
 //export GsClearOt
 //go:noinline
 func GsClearOt(offset, point uint16, ot *GsOT) {
-	n := 1 << ot.Length
-	tags := unsafe.Slice(ot.Org, n)
+	ot = at(ot)
+	n := uint32(1) << (ot.Length & 31)
+	last := unsafe.Pointer(uintptr(unsafe.Pointer(ot.Org)) + 4*uintptr(n) - 4)
 	// DMA channel 6 links the table, each entry to the one before, as
 	// the reference does it; then the first goes to otEnd.
 	dmaPriority.Set(dmaPriority.Get() | dmaOTCEnable)
-	dmaOTCAddr.Set(physical(unsafe.Pointer(&tags[n-1])))
-	dmaOTCBlock.Set(uint32(n))
+	dmaOTCAddr.Set(physical(last))
+	dmaOTCBlock.Set(n)
 	dmaOTCControl.Set(dmaOTCStart)
 	for dmaOTCControl.Get()&dmaBusy != 0 {
 	}
-	tags[0] = physical(unsafe.Pointer(&otEnd))
+	*at(ot.Org) = physical(unsafe.Pointer(&otEnd))
 	ot.Offset, ot.Point = uint32(offset), uint32(point)
-	ot.Tag = &tags[n-1]
+	ot.Tag = (*uint32)(last)
 	// Sony's times its wait for the channel, with a time read (spec 08).
 	pace(clearOtPad)
 }
@@ -444,21 +490,28 @@ const (
 // spec/probes/gsclip).
 var clearPackets [2][4]uint32
 
-// GsSortClear sorts a fill of the drawing area with the color r, g, b
+// GsSortClear sorts a fill of the buffer drawn into with the color r, g, b
 // into the entry Tag points to, the one drawn first, before whatever that
-// entry held: the buffer drawn into's own packet, the 02h fill alone.
-// Tag is left as it is, and a primitive sorted into that entry after is
-// drawn before the fill.
+// entry held: that buffer's own packet, the 02h fill alone. Its size is the
+// screen's as GsInitGraph was given it, half as wide again in 24-bit color,
+// whatever the clip says (spec 20). Tag is left as it is, and a primitive
+// sorted into that entry after is drawn before the fill. A null ot is the GsOT
+// at address 0, and a null Tag the word there.
 //
 //export GsSortClear
 //go:noinline
 func GsSortClear(r, g, b uint8, ot *GsOT) {
-	clip := gsDRAWENV.Clip
-	p := clearPackets[gs.active][:]
+	ot = at(ot)
+	x, y := bufCorner(activeBuf())
+	w := gs.width
+	if gsDISPENV.Isrgb24 != 0 {
+		w = w * 3 / 2
+	}
+	p := clearPackets[activeBuf()][:]
 	p[1] = 0x02000000 | uint32(b)<<16 | uint32(g)<<8 | uint32(r)
-	p[2] = pair(clip.X, clip.Y)
-	p[3] = pair(clip.W, clip.H)
-	link(ot.Tag, p)
+	p[2] = pair(x, y)
+	p[3] = pair(w, gs.height)
+	link(at(ot.Tag), p)
 	pace(sortClearPad)
 }
 
@@ -468,7 +521,8 @@ func GsSortClear(r, g, b uint8, ot *GsOT) {
 //export GsDrawOt
 //go:noinline
 func GsDrawOt(ot *GsOT) {
-	sendList(unsafe.Pointer(ot.Tag))
+	// Through at, since a request of 0 is an environment's (request).
+	sendList(unsafe.Pointer(at(at(ot).Tag)))
 	pace(drawOtPad)
 }
 
@@ -512,13 +566,13 @@ func ResetGraph(mode int32) int32 {
 func GsSetOffset(x, y int32) {
 	if !gs.ofsGPU {
 		if gteOn {
-			bx, by := int32(gs.buf[1-gs.active][0]), int32(gs.buf[1-gs.active][1])
-			setOFX((bx + x) << 16)
-			setOFY((by + y) << 16)
+			bx, by := bufCorner(1 - activeBuf())
+			setOFX((int32(bx) + x) << 16)
+			setOFY((int32(by) + y) << 16)
 		}
 		return
 	}
-	bx, by := gs.buf[gs.active][0], gs.buf[gs.active][1]
+	bx, by := bufCorner(activeBuf())
 	gsDRAWENV.Ofs = [2]int16{bx + int16(x), by + int16(y)}
 	gsDRAWENV.put()
 }
@@ -528,7 +582,7 @@ func GsSetOffset(x, y int32) {
 //
 //export GsSetClip
 func GsSetClip(clip *RECT) {
-	bx, by := gs.buf[gs.active][0], gs.buf[gs.active][1]
+	bx, by := bufCorner(activeBuf())
 	gsDRAWENV.Clip = RECT{X: bx + clip.X, Y: by + clip.Y, W: clip.W, H: clip.H}
 	gsDRAWENV.put()
 }

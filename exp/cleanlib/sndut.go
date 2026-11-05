@@ -56,7 +56,7 @@ func startVoice(v int, b *vab, t *vabTone, note, fine int, l, r, addr uint16, no
 // starts silent: its volumes are 0 until SsUtSetVVol.
 //
 //export SsUtKeyOn
-func SsUtKeyOn(vabid, prog, tone, note, fine, l, r int16) int16 {
+func SsUtKeyOn(vabid, prog, tone, note, fine, l, r int16) int32 {
 	soundStart()
 	if vabid < 0 || vabid >= vabMax || !vabs[vabid].open || prog < 0 || prog >= vabPrograms || tone < 0 || tone >= vabTones {
 		return -1
@@ -79,7 +79,7 @@ func SsUtKeyOn(vabid, prog, tone, note, fine, l, r int16) int16 {
 	vl, vr := voiceVolume(b, p, t, vol, pan, 127, 127)
 	noise := t.vag == vagNoise
 	if noise {
-		vl, vr, l, r = 0, 0, 0, 0
+		vl, vr = 0, 0
 	}
 	state := EnterCriticalSection()
 	v := allocVoice(t.prior, true)
@@ -92,7 +92,6 @@ func SsUtKeyOn(vabid, prog, tone, note, fine, l, r int16) int16 {
 	sv := &snd.voices[v]
 	sv.seq = -1
 	sv.vab, sv.prog, sv.tone = vabid, prog, tone
-	sv.left, sv.right = l, r
 	startVoice(v, b, t, int(note), int(fine), vl, vr, b.utAddr(int(t.vag)), noise)
 	// Until the next tick reads it, the voice counts as silent, the
 	// first a steal takes; a sequence's note on leaves the last reading.
@@ -100,8 +99,15 @@ func SsUtKeyOn(vabid, prog, tone, note, fine, l, r int16) int16 {
 	if state != 0 {
 		ExitCriticalSection()
 	}
-	return int16(v)
+	pace(ssUtKeyOnPad)
+	return int32(v)
 }
+
+// The rest of SsUtKeyOn's 2,529 cycles and SsUtAllKeyOff's 5,124 (spec 21).
+const (
+	ssUtKeyOnPad     = 734
+	ssUtAllKeyOffPad = 2402
+)
 
 // SsUtKeyOff releases voice at the next tick, and returns 0, when the
 // bank, program, tone and note given are those the voice was keyed on
@@ -114,7 +120,7 @@ func SsUtKeyOn(vabid, prog, tone, note, fine, l, r int16) int16 {
 // note off does (noteKeyOff).
 //
 //export SsUtKeyOff
-func SsUtKeyOff(voice, vabid, prog, tone, note int16) int16 {
+func SsUtKeyOff(voice, vabid, prog, tone, note int16) int32 {
 	soundStart()
 	if voice < 0 || voice >= spuVoices {
 		return -1
@@ -140,39 +146,55 @@ func SsUtKeyOff(voice, vabid, prog, tone, note int16) int16 {
 func SsUtAllKeyOff(mode int16) {
 	soundStart()
 	for v := range snd.voices {
-		parkVoice(uint32(v))
-		sv := &snd.voices[v]
-		sv.keyed, sv.fresh, sv.env, sv.age = false, false, 0, 0
-		sv.seq, sv.vab = -1, -1
-		keyOff(v)
+		dropVoice(v)
 	}
+	pace(ssUtAllKeyOffPad)
 }
 
+// dropVoice is what SsUtAllKeyOff does to voice v, on its own so that the call
+// saves no more than it must.
+//
+//go:noinline
+func dropVoice(v int) {
+	parkVoice(uint32(v))
+	sv := &snd.voices[v]
+	sv.keyed, sv.fresh, sv.env, sv.age = false, false, 0, 0
+	sv.seq, sv.vab = -1, -1
+	keyOff(v)
+}
+
+// utVolumeScale is what SsUtSetVVol multiplies a volume by for the SPU's
+// register, and SsUtGetVVol divides by.
+const utVolumeScale = 129
+
 // SsUtSetVVol sets voice's volumes, 0 to 127 each, as they are: no
-// squaring, no bank or tone volume. SsUtGetVVol gives them after it.
+// squaring, no bank or tone volume, from the next tick.
 //
 //export SsUtSetVVol
-func SsUtSetVVol(voice, l, r int16) int16 {
+func SsUtSetVVol(voice, l, r int16) int32 {
 	soundStart()
 	if voice < 0 || voice >= spuVoices {
 		return -1
 	}
 	sv := &snd.voices[voice]
-	sv.setReg(regVolL, uint16(int32(l)*129))
-	sv.setReg(regVolR, uint16(int32(r)*129))
-	sv.left, sv.right = l, r
+	sv.setReg(regVolL, uint16(int32(l)*utVolumeScale))
+	sv.setReg(regVolR, uint16(int32(r)*utVolumeScale))
 	return 0
 }
 
-// SsUtGetVVol returns the volumes SsUtKeyOn or SsUtSetVVol last gave voice.
+// SsUtGetVVol returns voice's volumes as the SPU has them now, over 129:
+// nothing a call has staged since the last tick, and for SsUtKeyOn's volumes
+// what the squaring made of them, 32 for 64 (spec 23).
 //
 //export SsUtGetVVol
-func SsUtGetVVol(voice int16, l, r *int16) int16 {
+func SsUtGetVVol(voice int16, l, r *int16) int32 {
 	soundStart()
 	if voice < 0 || voice >= spuVoices {
 		return -1
 	}
-	*l, *r = snd.voices[voice].left, snd.voices[voice].right
+	r0 := uint32(voice) * 16
+	*l = int16(spuGet(r0+regVolL*2) / utVolumeScale)
+	*r = int16(spuGet(r0+regVolR*2) / utVolumeScale)
 	return 0
 }
 
@@ -196,7 +218,7 @@ func utVoice(voice, vabid, prog int16) *sndVoice {
 // returns 0, or -1 if the voice does not match.
 //
 //export SsUtChangePitch
-func SsUtChangePitch(voice, vabid, prog, oldNote, oldFine, newNote, newFine int16) int16 {
+func SsUtChangePitch(voice, vabid, prog, oldNote, oldFine, newNote, newFine int16) int32 {
 	soundStart()
 	sv := utVoice(voice, vabid, prog)
 	if sv == nil || sv.note != oldNote {
@@ -216,7 +238,7 @@ func SsUtChangePitch(voice, vabid, prog, oldNote, oldFine, newNote, newFine int1
 // returns -1 without writing for a voice of another bank or program.
 //
 //export SsUtPitchBend
-func SsUtPitchBend(voice, vabid, prog, note, b int16) int16 {
+func SsUtPitchBend(voice, vabid, prog, note, b int16) int32 {
 	soundStart()
 	sv := utVoice(voice, vabid, prog)
 	if sv == nil {

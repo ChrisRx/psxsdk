@@ -2,14 +2,19 @@
 
 package cleanlib
 
-import "device"
+import (
+	"device"
+	"unsafe"
+)
 
 // The GTE, the geometry coprocessor the 3D functions do their arithmetic
 // on, reached as yaroze/gte_yaroze.go reaches it: its data registers by
 // name in inline assembly, its commands as words. A control register move
 // needs a fixed register in its encoding, so the value goes through $gp,
-// which the compiled code does not use. Each command is preceded by two
-// nops, as the coprocessor needs after a register load.
+// which the compiled code does not use, and gets its own value back at once:
+// a C program that called the library keeps its small data's base there. Each
+// command is preceded by two nops, as the coprocessor needs after a register
+// load.
 
 // SetRotMatrix and SetTransMatrix load the GTE's rotation matrix and
 // translation from m; ReadFlag returns its FLAG register. The target
@@ -20,6 +25,98 @@ func SetRotMatrix(m *MATRIX)
 
 //export SetTransMatrix
 func SetTransMatrix(m *MATRIX)
+
+// setRotation is SetRotMatrix in line, for a caller that should not need a
+// frame for the call. The words go through $gp, whose load needs its delay
+// slot before the ctc2.
+//
+//go:inline
+func setRotation(m *MATRIX) {
+	device.AsmFull(`.set push
+	.set noat
+	lw $$28, 0({m})
+	nop
+	.word 0x48dc0000
+	lw $$28, 4({m})
+	nop
+	.word 0x48dc0800
+	lw $$28, 8({m})
+	nop
+	.word 0x48dc1000
+	lw $$28, 12({m})
+	nop
+	.word 0x48dc1800
+	lh $$28, 16({m})
+	nop
+	.word 0x48dc2000
+	move $$28, {gp}
+	.set pop`, map[string]interface{}{"gp": readGP(), "m": uintptr(unsafe.Pointer(m))})
+}
+
+// holdRotation stores the GTE's rotation matrix in m's words, as setRotation
+// loads them.
+//
+//go:inline
+func holdRotation(m *MATRIX) {
+	device.AsmFull(`.set push
+	.set noat
+	.word 0x485c0000
+	nop
+	sw $$28, 0({m})
+	.word 0x485c0800
+	nop
+	sw $$28, 4({m})
+	.word 0x485c1000
+	nop
+	sw $$28, 8({m})
+	.word 0x485c1800
+	nop
+	sw $$28, 12({m})
+	.word 0x485c2000
+	nop
+	sw $$28, 16({m})
+	move $$28, {gp}
+	.set pop`, map[string]interface{}{"gp": readGP(), "m": uintptr(unsafe.Pointer(m))})
+}
+
+// setTranslation is SetTransMatrix in line, as setRotation is SetRotMatrix.
+//
+//go:inline
+func setTranslation(m *MATRIX) {
+	device.AsmFull(`.set push
+	.set noat
+	lw $$28, 20({m})
+	nop
+	.word 0x48dc2800
+	lw $$28, 24({m})
+	nop
+	.word 0x48dc3000
+	lw $$28, 28({m})
+	nop
+	.word 0x48dc3800
+	move $$28, {gp}
+	.set pop`, map[string]interface{}{"gp": readGP(), "m": uintptr(unsafe.Pointer(m))})
+}
+
+// readGP returns gp, as the library's caller set it.
+//
+//go:inline
+func readGP() uint32 {
+	return uint32(device.AsmFull(`.set push
+	.set noat
+	move {}, $$28
+	.set pop`, nil))
+}
+
+// setGP puts back what readGP returned.
+//
+//go:inline
+func setGP(gp uint32) {
+	device.AsmFull(`.set push
+	.set noat
+	move $$28, {gp}
+	.set pop`, map[string]interface{}{"gp": gp})
+}
 
 // gteOn is set once gteEnable has run.
 var gteOn bool
@@ -58,7 +155,8 @@ func setOFX(v int32) {
 	.set noat
 	move $$28, {v}
 	.word 0x48dcc000
-	.set pop`, map[string]interface{}{"v": v})
+	move $$28, {gp}
+	.set pop`, map[string]interface{}{"gp": readGP(), "v": v})
 }
 
 func setOFY(v int32) {
@@ -67,7 +165,8 @@ func setOFY(v int32) {
 	.set noat
 	move $$28, {v}
 	.word 0x48dcc800
-	.set pop`, map[string]interface{}{"v": v})
+	move $$28, {gp}
+	.set pop`, map[string]interface{}{"gp": readGP(), "v": v})
 }
 
 func setH(v int32) {
@@ -76,7 +175,8 @@ func setH(v int32) {
 	.set noat
 	move $$28, {v}
 	.word 0x48dcd000
-	.set pop`, map[string]interface{}{"v": v})
+	move $$28, {gp}
+	.set pop`, map[string]interface{}{"gp": readGP(), "v": v})
 }
 
 func setZSF3(v int32) {
@@ -84,7 +184,8 @@ func setZSF3(v int32) {
 	.set noat
 	move $$28, {v}
 	.word 0x48dce800
-	.set pop`, map[string]interface{}{"v": v})
+	move $$28, {gp}
+	.set pop`, map[string]interface{}{"gp": readGP(), "v": v})
 }
 
 func setZSF4(v int32) {
@@ -92,7 +193,8 @@ func setZSF4(v int32) {
 	.set noat
 	move $$28, {v}
 	.word 0x48dcf000
-	.set pop`, map[string]interface{}{"v": v})
+	move $$28, {gp}
+	.set pop`, map[string]interface{}{"gp": readGP(), "v": v})
 }
 
 // rotate multiplies the vector x, y, z by the GTE's rotation matrix with
@@ -101,6 +203,44 @@ func setZSF4(v int32) {
 //
 //go:inline
 func rotate(x, y, z int16) (int16, int16, int16) {
+	mvmva(x, y, z)
+	return ir1(), ir2(), ir3()
+}
+
+// ir1, ir2 and ir3 return what the last multiply left in IR1 to IR3.
+//
+//go:inline
+func ir1() int16 {
+	return int16(device.AsmFull(`.set push
+	.set noat
+	mfc2 {}, $$9
+	nop
+	.set pop`, nil))
+}
+
+//go:inline
+func ir2() int16 {
+	return int16(device.AsmFull(`.set push
+	.set noat
+	mfc2 {}, $$10
+	nop
+	.set pop`, nil))
+}
+
+//go:inline
+func ir3() int16 {
+	return int16(device.AsmFull(`.set push
+	.set noat
+	mfc2 {}, $$11
+	nop
+	.set pop`, nil))
+}
+
+// mvmva runs that multiply and leaves its results in the registers: MAC1 to
+// MAC3 hold each sum of products shifted right by 12, unsaturated.
+//
+//go:inline
+func mvmva(x, y, z int16) {
 	device.AsmFull(`.set push
 	.set noat
 	mtc2 {a}, $$0
@@ -109,19 +249,80 @@ func rotate(x, y, z int16) (int16, int16, int16) {
 	nop
 	.word 0x4a486012
 	.set pop`, map[string]interface{}{"a": uint32(uint16(x)) | uint32(uint16(y))<<16, "b": int32(z)})
-	return int16(device.AsmFull(`.set push
+}
+
+// mvmvaWhole is mvmva without the shift: MAC1 to MAC3 hold each sum of products,
+// wrapping at 32 bits.
+//
+//go:inline
+func mvmvaWhole(x, y, z int16) {
+	device.AsmFull(`.set push
 	.set noat
-	mfc2 {}, $$9
+	mtc2 {a}, $$0
+	mtc2 {b}, $$1
 	nop
-	.set pop`, nil)), int16(device.AsmFull(`.set push
-	.set noat
-	mfc2 {}, $$10
 	nop
-	.set pop`, nil)), int16(device.AsmFull(`.set push
+	.word 0x4a406012
+	.set pop`, map[string]interface{}{"a": uint32(uint16(x)) | uint32(uint16(y))<<16, "b": int32(z)})
+}
+
+// mvmvaAt is mvmva on the vector at v, in memory.
+//
+//go:inline
+func mvmvaAt(v uintptr) {
+	device.AsmFull(`.set push
 	.set noat
-	mfc2 {}, $$11
+	lwc2 $$0, 0({v})
+	lwc2 $$1, 4({v})
+	nop
+	nop
+	.word 0x4a486012
+	.set pop`, map[string]interface{}{"v": v})
+}
+
+// mac1, mac2 and mac3 return what the last multiply left in MAC1 to MAC3, not
+// saturated as rotate's results are.
+//
+//go:inline
+func mac1() int32 {
+	return int32(device.AsmFull(`.set push
+	.set noat
+	mfc2 {}, $$25
 	nop
 	.set pop`, nil))
+}
+
+//go:inline
+func mac2() int32 {
+	return int32(device.AsmFull(`.set push
+	.set noat
+	mfc2 {}, $$26
+	nop
+	.set pop`, nil))
+}
+
+//go:inline
+func mac3() int32 {
+	return int32(device.AsmFull(`.set push
+	.set noat
+	mfc2 {}, $$27
+	nop
+	.set pop`, nil))
+}
+
+// leadingZeros returns how many bits lead the 32-bit v up to its top bit by the
+// GTE's LZCS and LZCR: for a negative v, how many ones.
+//
+//go:inline
+func leadingZeros(v int32) int32 {
+	return int32(device.AsmFull(`.set push
+	.set noat
+	mtc2 {v}, $$30
+	nop
+	nop
+	mfc2 {}, $$31
+	nop
+	.set pop`, map[string]interface{}{"v": v}))
 }
 
 // rtpt transforms three vertices to the screen with RTPT, each given as
@@ -144,6 +345,38 @@ func rtpt(a, b, c, d, e, f uint32) {
 	.set pop`, map[string]interface{}{"a": a, "b": b, "c": c, "d": d, "e": e, "f": f})
 }
 
+// hold and holdWord make the compiler work a value out by here, and not sink it
+// past a wait for the GTE, for which it would then have nothing to do.
+//
+//go:inline
+func hold(v uintptr) {
+	device.AsmFull(`# {v}`, map[string]interface{}{"v": v})
+}
+
+//go:inline
+func holdWord(v uint32) {
+	device.AsmFull(`# {v}`, map[string]interface{}{"v": v})
+}
+
+// rtptAt is rtpt on three vertices in memory, each at its address: loading them
+// straight into the GTE leaves out the moves through registers.
+//
+//go:inline
+func rtptAt(a, b, c uintptr) {
+	device.AsmFull(`.set push
+	.set noat
+	lwc2 $$0, 0({a})
+	lwc2 $$1, 4({a})
+	lwc2 $$2, 0({b})
+	lwc2 $$3, 4({b})
+	lwc2 $$4, 0({c})
+	lwc2 $$5, 4({c})
+	nop
+	nop
+	.word 0x4a280030
+	.set pop`, map[string]interface{}{"a": a, "b": b, "c": c})
+}
+
 // rtps transforms one more vertex with RTPS, pushing the screen point and
 // depth queues.
 //
@@ -159,15 +392,28 @@ func rtps(a, b uint32) {
 	.set pop`, map[string]interface{}{"a": a, "b": b})
 }
 
+// rtpsAt is rtps on a vertex in memory, at its address.
+//
+//go:inline
+func rtpsAt(a uintptr) {
+	device.AsmFull(`.set push
+	.set noat
+	lwc2 $$0, 0({a})
+	lwc2 $$1, 4({a})
+	nop
+	nop
+	.word 0x4a180001
+	.set pop`, map[string]interface{}{"a": a})
+}
+
 // nclip is NCLIP on the three screen points: positive when they turn
-// clockwise on the screen.
+// clockwise on the screen. It takes what the last perspective transformation
+// left, so needs no nops for a register load, as avsz3 and avsz4 need none.
 //
 //go:inline
 func nclip() int32 {
 	return int32(device.AsmFull(`.set push
 	.set noat
-	nop
-	nop
 	.word 0x4b400006
 	mfc2 {}, $$24
 	nop
@@ -181,8 +427,6 @@ func nclip() int32 {
 func avsz3() int32 {
 	return int32(device.AsmFull(`.set push
 	.set noat
-	nop
-	nop
 	.word 0x4b58002d
 	mfc2 {}, $$7
 	nop
@@ -193,8 +437,6 @@ func avsz3() int32 {
 func avsz4() int32 {
 	return int32(device.AsmFull(`.set push
 	.set noat
-	nop
-	nop
 	.word 0x4b68002e
 	mfc2 {}, $$7
 	nop
@@ -268,29 +510,29 @@ func setRGBC(c uint32) {
 	.set pop`, map[string]interface{}{"c": c})
 }
 
-// loadV0 and loadV3 load one vector, or three, each as its two words, x
-// and y then z, into V0, or V0 to V2.
+// loadV0 and loadV3 load one vector, or three, from their addresses into V0, or
+// V0 to V2.
 //
 //go:inline
-func loadV0(a, b uint32) {
+func loadV0(a uintptr) {
 	device.AsmFull(`.set push
 	.set noat
-	mtc2 {a}, $$0
-	mtc2 {b}, $$1
-	.set pop`, map[string]interface{}{"a": a, "b": b})
+	lwc2 $$0, 0({a})
+	lwc2 $$1, 4({a})
+	.set pop`, map[string]interface{}{"a": a})
 }
 
 //go:inline
-func loadV3(a, b, c, d, e, f uint32) {
+func loadV3(a, b, c uintptr) {
 	device.AsmFull(`.set push
 	.set noat
-	mtc2 {a}, $$0
-	mtc2 {b}, $$1
-	mtc2 {c}, $$2
-	mtc2 {d}, $$3
-	mtc2 {e}, $$4
-	mtc2 {f}, $$5
-	.set pop`, map[string]interface{}{"a": a, "b": b, "c": c, "d": d, "e": e, "f": f})
+	lwc2 $$0, 0({a})
+	lwc2 $$1, 4({a})
+	lwc2 $$2, 0({b})
+	lwc2 $$3, 4({b})
+	lwc2 $$4, 0({c})
+	lwc2 $$5, 4({c})
+	.set pop`, map[string]interface{}{"a": a, "b": b, "c": c})
 }
 
 // The lighting commands, on the normals in V0 (the single forms) or V0 to
@@ -373,12 +615,15 @@ func rgb2() uint32 {
 //
 //go:inline
 func flag() uint32 {
-	return uint32(device.AsmFull(`.set push
+	gp := readGP()
+	f := uint32(device.AsmFull(`.set push
 	.set noat
 	.word 0x485cf800
 	nop
 	move {}, $$28
 	.set pop`, nil))
+	setGP(gp)
+	return f
 }
 
 // sxy0, sxy1 and sxy2 return the screen points in SXY0 to SXY2, each y in
