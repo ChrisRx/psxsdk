@@ -5,6 +5,8 @@ package cleanlib
 import (
 	"device"
 	"unsafe"
+
+	"go.chrisrx.dev/psx/internal/volatile"
 )
 
 // Formatted output for C programs (spec 17). The library has three formatters
@@ -403,8 +405,15 @@ func fmtLiteral(dst, f uintptr) (uintptr, uintptr) {
 			return dst, f
 		}
 		if dst == fmtTTY {
-			putchar(int32(c))
-			space(fmtLiteralSpace)
+			// A byte with the top bit set moves no column but for a few, and is Sony's
+			// 570 by going straight to the write.
+			if c >= 0x80 && c != 0xc7 && (c < 0xa4 || c > 0xa6) {
+				volatile.StoreUint8(&ttyChar, c)
+				libps_biosB(biosWrite, 1, uintptr(unsafe.Pointer(&ttyChar)), 1, 0)
+			} else {
+				putchar(int32(c))
+				space(fmtLiteralSpace)
+			}
 		} else {
 			setByte(dst, c)
 			dst++
@@ -415,7 +424,7 @@ func fmtLiteral(dst, f uintptr) (uintptr, uintptr) {
 
 // fmtLiteralSpace is what a literal character to the TTY spends beyond its work, in
 // 2-cycle stores, for Sony's 582 cycles a character, the kernel's write included.
-const fmtLiteralSpace = 8
+const fmtLiteralSpace = 0
 
 // fmtNull is what %s of a null pointer prints under formatter B.
 var fmtNull = [...]byte{'(', 'n', 'u', 'l', 'l', ')', 0}
@@ -976,181 +985,11 @@ func dblTrim(t int32) int32 {
 	return t
 }
 
-// A literal character's pad in libFntPrint, in stores, for Sony's 36 cycles a
-// character (spec 23), and a "%%" pair's, 10 more. Sony's call is some 40 quicker than
-// this one, for the registers a whole formatter saves.
-const (
-	fntPrintCCharSpace    = 5
-	fntPrintCPercentSpace = 10
-)
-
-// libFntPrint is FntPrint for C programs, formatter C. The first word is a
-// stream's id if it is below the count of streams open, and otherwise the format,
-// for stream 0. A formatted byte is a literal byte to the stream's limit: written
-// and counted before the room is checked, so that the one that does not fit
-// lands at text[room] and the print ends with -1 (spec 01). An unknown letter
-// takes no word and makes the width's spaces or one, and the format's own NUL
-// after a percent sign is read as such a letter: the format goes on past it, into
-// whatever follows it, to the next NUL (spec 17).
+// libFntPrint is FntPrint for C programs, formatter C, in the target's assembly: what it
+// does at its edges is said there.
 //
 //export libps_va_FntPrint
-//go:nobounds
-func libFntPrint(args uintptr) int32 {
-	if font.open == 0 {
-		return -1
-	}
-	st := &font.streams[0]
-	f := uintptr(wordAt(args))
-	ap := args + 4
-	if id := uint32(f); id < uint32(font.open) {
-		st = &font.streams[id]
-		f = uintptr(wordAt(args + 4))
-		ap = args + 8
-	}
-	if st.n >= len(st.text) {
-		// As fntRefused, by the format's first byte.
-		if byteAt(f) == 0 {
-			space(fntPrintRefusedEmptySpace)
-		}
-		pace(fntPrintRefusedPad)
-		return -1
-	}
-	// The text's place and its last room are addresses, t and limit.
-	t := uintptr(unsafe.Pointer(unsafe.SliceData(st.text))) + uintptr(st.n)
-	limit := uintptr(unsafe.Pointer(unsafe.SliceData(st.text))) + uintptr(len(st.text)) - 1
-	for {
-		c := byteAt(f)
-		f++
-		if c != '%' || byteAt(f) == '%' {
-			if c == 0 {
-				break
-			}
-			if c == '%' {
-				f++
-				spaceApart(fntPrintCPercentSpace, uint32(f))
-			} else {
-				space(fntPrintCCharSpace)
-			}
-			setByte(t, c)
-			t++
-			if t > limit {
-				goto cut
-			}
-			continue
-		}
-		{
-			fill := byte(' ')
-			if byteAt(f) == '0' {
-				fill = '0'
-			}
-			var width int32
-			for isDigit(byteAt(f)) {
-				width = width*10 + int32(byteAt(f)-'0')
-				f++
-			}
-			conv := byteAt(f)
-			f++
-			var v, shift, flags uint32
-			var src uintptr
-			size := int32(0)
-			switch conv {
-			case 'd':
-				v = wordAt(ap)
-				ap += 4
-				fill = ' '
-				size = 1
-				if int32(v) < 0 {
-					v = -v
-					conv = '-'
-					size = 2
-				}
-				size += digitCount(v, 0) - 1
-			case 'x', 'X':
-				v = wordAt(ap)
-				ap += 4
-				shift = 4
-				if conv == 'X' {
-					flags = fmtUpper
-				}
-				size = digitCount(v, 4)
-			case 'c':
-				v = wordAt(ap)
-				ap += 4
-				fill = ' '
-				size = 1
-			case 's':
-				src = uintptr(wordAt(ap))
-				ap += 4
-				fill = ' '
-				if src == 0 {
-					conv = 0
-					break
-				}
-				for byteAt(src+uintptr(size)) != 0 {
-					space(1)
-					size++
-				}
-			default:
-				conv = 0
-			}
-			if conv == 0 {
-				fill = ' '
-				if width == 0 {
-					width = 1
-				}
-			}
-			for k := width - size; k > 0; k-- {
-				setByte(t, fill)
-				t++
-				if t > limit {
-					goto cut
-				}
-			}
-			switch conv {
-			case 0:
-			case 'c':
-				setByte(t, byte(v))
-				t++
-				if t > limit {
-					goto cut
-				}
-			case 's':
-				for k := int32(0); k < size; k++ {
-					setByte(t, byteAt(src+uintptr(k)))
-					t++
-					if t > limit {
-						goto cut
-					}
-				}
-			default:
-				if conv == '-' {
-					setByte(t, '-')
-					t++
-					if t > limit {
-						goto cut
-					}
-					size--
-				}
-				for k := size - 1; k >= 0; k-- {
-					var d uint32
-					d, v = digitAt(v, k, shift)
-					setByte(t, digitChar(d, flags))
-					t++
-					if t > limit {
-						goto cut
-					}
-				}
-			}
-		}
-	}
-	setByte(t, 0)
-	st.n = int(t - uintptr(unsafe.Pointer(unsafe.SliceData(st.text))))
-	return int32(st.n)
-cut:
-	st.n = int(t - uintptr(unsafe.Pointer(unsafe.SliceData(st.text))))
-	space(fntPrintCutSpace)
-	return -1
-}
+func libFntPrint(args uintptr) int32
 
 // libKanjiFntPrint is KanjiFntPrint for C programs, formatter C again, but for
 // what it makes: numbers in full-width Shift JIS, two bytes a digit, 815Bh for a

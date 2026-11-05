@@ -248,7 +248,7 @@ const (
 	fntPrintPercentSpace      = 1 // "%%", in place of fntPrintChar: 10 more than a character
 	fntPrintCutSpace          = 3 // the print cut at the limit: 20 more
 	fntPrintRefusedEmptySpace = 8 // the empty string on a stream a print has cut: 16 less than an empty print
-	fntFlushEmptySpace        = 11
+	fntFlushEmptySpace        = 4
 	fntNulExitSpace           = 1 // the walk that ends at the NUL
 	fntLimitExitSpace         = 1 // the walk that ends at the limit: 4 more than at the NUL
 	fntGlyphsSpace            = 0

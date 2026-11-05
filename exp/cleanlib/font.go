@@ -57,6 +57,12 @@ type stream struct {
 	packets []uint32
 }
 
+// fontBase is where the font's state is, for FntPrint's assembly: libps_va_FntPrint in the
+// target's assembly, as C calls it.
+//
+//go:extern libps_font_base
+var fontBase uintptr
+
 var font struct {
 	// tpage and clut are the font's texture page and palette, as a packet
 	// gives them, and u, v its place in the page.
@@ -116,6 +122,7 @@ var font struct {
 //
 //export FntLoad
 func FntLoad(tx, ty int32) {
+	fontBase = uintptr(unsafe.Pointer(&font))
 	// The palette is transparent for index 0 and white for index 1, which
 	// the font draws with; the rest are unused.
 	var clut [8]uint32
@@ -338,9 +345,10 @@ func FntFlush(id int32) *uint32 {
 //
 //go:nobounds
 func (st *stream) flush() {
-	// The packets of the flush before may still be waiting in the
-	// drawing queue.
-	if int32(volatile.LoadUint32(&queue.head)-font.sent) < 0 {
+	// The packets of the flush before may still be waiting in the drawing
+	// queue. If they were the last thing started and the GPU's channel is idle
+	// they have gone, whether or not their interrupt has come in.
+	if h := volatile.LoadUint32(&queue.head); int32(h-font.sent) < 0 && (h+1 != font.sent || dmaGPUControl.Get()&dmaBusy != 0) {
 		waitSent()
 	}
 	// The packets are written through a pointer, which could point at

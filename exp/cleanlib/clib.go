@@ -4,8 +4,6 @@ package cleanlib
 
 import (
 	"unsafe"
-
-	"go.chrisrx.dev/psx/internal/volatile"
 )
 
 // The C library's string, memory and number calls (spec 16). They keep the
@@ -409,14 +407,7 @@ func libTolower(c int32) int32 {
 // after it. A null d returns 0, and an n of 0 or below d.
 //
 //export libps_c_memcpy
-//go:nobounds
-func libMemcpy(d, s uintptr, n int32) uintptr {
-	if d == 0 {
-		return 0
-	}
-	copyForward(d, s, n)
-	return d
-}
+func libMemcpy(d, s uintptr, n int32) uintptr
 
 // copyForward copies n bytes from s to d a byte at a time, from the start.
 //
@@ -457,58 +448,25 @@ func libMemmove(d, s uintptr, n int32) uintptr {
 	return d
 }
 
-//export bcopy
-//go:nobounds
-func libBcopy(s, d uintptr, n int32) {
-	if s != 0 {
-		copyForward(d, s, n)
-	}
-}
-
-// memset returns d, but 0 for an n of 0 or below as for a null d.
+// bcopy copies forward by bytes, memset and bzero write n bytes, and memcmp compares a
+// byte before it looks at n, so an n of 0 or below compares one. It goes on while n, less
+// 1 a byte, is above 0, wrapping, so the most negative n runs on until a difference.
+// memset returns d, but 0 for an n of 0 or below as for a null d. All in assembly.
 //
+//export bcopy
+func libBcopy(s, d uintptr, n int32)
+
 //export libps_c_memset
-//go:nobounds
-func libMemset(d uintptr, c, n int32) uintptr {
-	if n <= 0 || d == 0 {
-		return 0
-	}
-	to := cBytes(d)
-	v := byte(c)
-	for i := int32(0); i < n; i++ {
-		// Volatile, or the compiler would call the target's memset for the
-		// loop, at 44 cycles more.
-		volatile.StoreUint8(&to[i], v)
-	}
-	return d
-}
+func libMemset(d uintptr, c, n int32) uintptr
 
 //export bzero
-func libBzero(d uintptr, n int32) {
-	libMemset(d, 0, n)
-}
+func libBzero(d uintptr, n int32)
 
-// memcmp compares a byte before it looks at n, so an n of 0 or below compares
-// one. It goes on while n, less 1 a byte, is above 0, wrapping, so the most
-// negative n runs on until a difference.
-//
 //export libps_c_memcmp
-//go:nobounds
-func libMemcmp(a, b uintptr, n int32) int32 {
-	x, y := cBytes(a), cBytes(b)
-	for i := 0; ; i++ {
-		if d := int32(x[i]) - int32(y[i]); d != 0 {
-			return d
-		}
-		n--
-		if n <= 0 {
-			return 0
-		}
-	}
-}
+func libMemcmp(a, b uintptr, n int32) int32
 
 //export bcmp
-func libBcmp(a, b uintptr, n int32) int32 { return libMemcmp(a, b, n) }
+func libBcmp(a, b uintptr, n int32) int32
 
 //export memchr
 //go:nobounds

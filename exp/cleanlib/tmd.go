@@ -263,36 +263,10 @@ var sorter struct {
 //
 // All of that is in the target's assembly, playstation-yaroze-clean.S, each kind's loop
 // spending Sony's cycles on each way through: its points bad, turned away, or sorted
-// (spec 24). Polygons to cut, and lit triangles with a color for each corner, are left
-// to Go below, which does the same in the same order.
+// (spec 25). Polygons to cut are left to Go below, which does the same in the same order.
 //
 //export GsSortObject4
 func GsSortObject4(obj *GsDOBJ2, ot *GsOT, shift int32, scratch *uint32)
-
-// gsoState is what GsSortObject4's assembly has on its stack for gsoGrad.
-type gsoState struct {
-	verts, norms uintptr
-	org          uintptr
-	shift        uint32
-	out          uintptr
-	light        int
-}
-
-// gsoGrad is gradTriangles for GsSortObject4's assembly: it sorts a run and returns
-// the address after it.
-//
-//export libps_gso_grad
-func gsoGrad(prim uintptr, hdr, n uint32, st *gsoState) uintptr {
-	s := &sorter
-	s.verts, s.norms = st.verts, st.norms
-	s.light = st.light
-	s.org = st.org
-	s.shift = st.shift
-	s.out = st.out
-	prim = gradTriangles(prim, n, hdr)
-	st.out = s.out
-	return prim
-}
 
 // gsoDivided is GsSortObject4 for an attribute that asks for polygons to be cut,
 // from its assembly, which handles the rest (playstation-yaroze-clean.S).
@@ -362,17 +336,9 @@ func gsoDivided(obj *GsDOBJ2, ot *GsOT, shift int32, scratch *uint32) {
 			case modeGouraud | modeQuad:
 				prim = offPolygons[polyG4, polyG4](prim, n, hdr)
 			case modeGouraud | modeTextured:
-				if s.div != 0 {
-					prim = offPolygons[polyGT3, polyGT3](prim, n, hdr)
-				} else {
-					prim = offPolygons[polyGT3, polyFT3](prim, n, hdr)
-				}
+				prim = offPolygons[polyGT3, polyGT3](prim, n, hdr)
 			default:
-				if s.div != 0 {
-					prim = offPolygons[polyGT4, polyGT4](prim, n, hdr)
-				} else {
-					prim = offPolygons[polyGT4, polyFT4](prim, n, hdr)
-				}
+				prim = offPolygons[polyGT4, polyGT4](prim, n, hdr)
 			}
 		default:
 			switch kind {
@@ -423,7 +389,7 @@ func polygons[K polyKind](prim uintptr, count uint32, hdr uint32) uintptr {
 		col = n
 	}
 	vert := 2 * (col + ncol)
-	stride, plen := layout[K]()
+	stride, _ := layout[K]()
 	size := 4 * (1 + col + ncol + 2)
 	verts, out := s.verts, s.out
 	org, shift, div := s.org, s.shift, s.div
@@ -460,7 +426,7 @@ func polygons[K polyKind](prim uintptr, count uint32, hdr uint32) uintptr {
 			d = verts + 8*uintptr(half(body, vert+3))
 		}
 		// Reading FLAG waits for the GTE, so it comes after the copies.
-		errs := flag()
+		flag()
 		if nclip() <= 0 && !bothSides {
 			space(divBackSpace)
 			continue
@@ -469,26 +435,18 @@ func polygons[K polyKind](prim uintptr, count uint32, hdr uint32) uintptr {
 		var z int32
 		if n == 4 {
 			rtpsAt(d)
-			errs |= flag()
+			flag()
 			storeSXY4(out, stride)
 			z = avsz4()
 		} else {
 			z = avsz3()
 		}
 		e := z >> shift
-		if div != 0 {
-			if polyOffScreen[K](out, stride) {
-				continue
-			}
-			divVerts = [4]uintptr{a, b, c, verts + 8*uintptr(half(body, vert+n-1))}
-			out = subdivide[K](out, tagAt(org, e), div, code)
+		if polyOffScreen[K](out, stride) {
 			continue
 		}
-		if errs&gteError != 0 {
-			continue
-		}
-		linkPacket(org, e, out, plen)
-		out += 4 * (plen + 1)
+		divVerts = [4]uintptr{a, b, c, verts + 8*uintptr(half(body, vert+n-1))}
+		out = subdivide[K](out, tagAt(org, e), div, code)
 	}
 	s.out = out
 	return prim
@@ -634,7 +592,7 @@ func litPolygons[K polyKind](prim uintptr, count uint32, hdr uint32) uintptr {
 	code := hdr>>24<<24 | semi
 	size, first, step := litBody[K]()
 	v0 := first + 1
-	stride, plen := layout[K]()
+	stride, _ := layout[K]()
 	verts, norms, out := s.verts, s.norms, s.out
 	org, shift, div := s.org, s.shift, s.div
 	fog := s.light == lightFog
@@ -669,7 +627,7 @@ func litPolygons[K polyKind](prim uintptr, count uint32, hdr uint32) uintptr {
 			d = verts + 8*uintptr(half(body, v0+3*step))
 		}
 		// Reading FLAG waits for the GTE, so it comes after these.
-		errs := flag()
+		flag()
 		if nclip() <= 0 && !bothSides {
 			space(divBackSpace)
 			continue
@@ -678,30 +636,20 @@ func litPolygons[K polyKind](prim uintptr, count uint32, hdr uint32) uintptr {
 		var z int32
 		if n == 4 {
 			rtpsAt(d)
-			errs |= flag()
+			flag()
 			storeSXY4(out, stride)
 			z = avsz4()
 		} else {
 			z = avsz3()
 		}
 		e := z >> shift
-		if div != 0 {
-			if polyOffScreen[K](out, stride) {
-				continue
-			}
-			startColors[K](rgbc, na, nb, nc, fog)
-			storeColors[K](out, norms+8*uintptr(half(body, first+6)), fog)
-			divVerts = [4]uintptr{a, b, c, d}
-			out = subdivide[K](out, tagAt(org, e), div, code)
-			continue
-		}
-		if errs&gteError != 0 {
+		if polyOffScreen[K](out, stride) {
 			continue
 		}
 		startColors[K](rgbc, na, nb, nc, fog)
-		linkPacket(org, e, out, plen)
 		storeColors[K](out, norms+8*uintptr(half(body, first+6)), fog)
-		out += 4 * (plen + 1)
+		divVerts = [4]uintptr{a, b, c, d}
+		out = subdivide[K](out, tagAt(org, e), div, code)
 	}
 	s.out = out
 	return prim
@@ -774,7 +722,7 @@ func offPolygons[B, P polyKind](prim uintptr, count uint32, hdr uint32) uintptr 
 	}
 	size, first, step := litBody[B]()
 	v0 := first + 1
-	stride, plen := layout[P]()
+	stride, _ := layout[P]()
 	verts, out := s.verts, s.out
 	org, shift, div := s.org, s.shift, s.div
 	bothSides := doubleSided[B](hdr, div)
@@ -807,7 +755,7 @@ func offPolygons[B, P polyKind](prim uintptr, count uint32, hdr uint32) uintptr 
 			d = verts + 8*uintptr(half(body, v0+3*step))
 		}
 		// Reading FLAG waits for the GTE, so it comes after the copies.
-		errs := flag()
+		flag()
 		if nclip() <= 0 && !bothSides {
 			space(divBackSpace)
 			continue
@@ -816,26 +764,18 @@ func offPolygons[B, P polyKind](prim uintptr, count uint32, hdr uint32) uintptr 
 		var z int32
 		if n == 4 {
 			rtpsAt(d)
-			errs |= flag()
+			flag()
 			storeSXY4(out, stride)
 			z = avsz4()
 		} else {
 			z = avsz3()
 		}
 		e := z >> shift
-		if div != 0 {
-			if polyOffScreen[P](out, stride) {
-				continue
-			}
-			divVerts = [4]uintptr{a, b, c, d}
-			out = subdivide[P](out, tagAt(org, e), div, code)
+		if polyOffScreen[P](out, stride) {
 			continue
 		}
-		if errs&gteError != 0 {
-			continue
-		}
-		linkPacket(org, e, out, plen)
-		out += 4 * (plen + 1)
+		divVerts = [4]uintptr{a, b, c, d}
+		out = subdivide[P](out, tagAt(org, e), div, code)
 	}
 	s.out = out
 	return prim
