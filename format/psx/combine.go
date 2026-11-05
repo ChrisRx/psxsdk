@@ -53,6 +53,11 @@ func Combine(a, b *File) (*File, error) {
 // run from a disc, or in an emulator, without a loader to put it there. The
 // text section grows to cover data outside it, with zeros between.
 func Embed(f *File, addr uint32, data []byte) error {
+	// RAM is the same RAM through the uncached mirror a program may name
+	// it by, at 0xa0000000, and the image is loaded through the cached one.
+	if addr&0xe0000000 == 0xa0000000 {
+		addr = addr&0x1fffffff | 0x80000000
+	}
 	text := f.Section("text")
 	if text == nil {
 		return fmt.Errorf("executable has no text")
