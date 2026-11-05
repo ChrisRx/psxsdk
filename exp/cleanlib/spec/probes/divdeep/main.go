@@ -109,9 +109,10 @@ func init() {
 	for _, div := range []uint32{0, yaroze.GsDIV1, yaroze.GsDIV2} {
 		add(probe{kind: ft4, shape: flat, div: div, otlen: 12, shift: 9, z: 300, dump: counts})
 	}
-	// Past the table: depth 1024 into a table of 2 entries, at shift 10
-	// (entry 1, the last), 9 (entry 2, the first past), 8 and 0; then a
-	// table of 8 entries at shift 8 (entry 4) and 7 (entry 8).
+	// Past the table: distance 1024, so a quad's depth is 256, into a table
+	// of 2 entries at shift 10 and 9 (entry 0), 8 (entry 1, the last) and 0
+	// (entry 256); then a triangle, depth 255, into a table of 8 entries at
+	// shift 8 (entry 0) and 7 (entry 1).
 	for _, div := range []uint32{0, yaroze.GsDIV1, yaroze.GsDIV2} {
 		for _, sh := range []int32{10, 9, 8, 0} {
 			add(probe{kind: ft4, shape: flat, div: div, otlen: 1, shift: sh, z: 1024, dump: counts})

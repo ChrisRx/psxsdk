@@ -246,9 +246,10 @@ A model of the DIV1 and DIV2 rules applied recursively (quad pieces
 [vi, mid(vi, next), mid(vi, prev), center] in corner order at every
 level; triangles cut P0, P1, P2, middle above the last level and their
 leaves linked P1, middle, P0, P2) predicts every piece of levels 3, 4
-and 5: the corners of all 64, 256 and 1024 pieces of the flat quad
-(2Ch and 39h) and triangle (20h and 24h), and at level 3 every uv and
-color word too. Halving rounds down, as an arithmetic shift: mid =
+and 5: the corners of the flat quad's and triangle's pieces at level 3 (2Ch,
+39h, 20h, 24h), level 4 (2Ch, 39h, 20h) and level 5 (2Ch, 20h), and at
+level 3 the uv words of 2Ch and 24h and the color words of 39h. The
+script did not compare the lit color words of 2Ch, 24h and 20h. Halving rounds down, as an arithmetic shift: mid =
 (a + b) >> 1, center = (a + b + c + d) >> 2. Corners at y -30 give -15,
 then -8 (not -7), then -4; with truncation toward zero half the level
 3 pieces are off by one (cases 1 to 9, checked by a script).
@@ -263,7 +264,7 @@ one GsSortObject4 of one polygon, Sony's library: 2Ch 501, 1451, 3879,
 four times per level from level 2 on (emulator cycles, not hardware).
 The reference library (`--libps go`) matches Sony's packets and entries
 in every case but the field's value 7, where it stops with an index out
-of range in its triangle divider.
+of range.
 
 #### Depth 0 and an entry past the table (with and without subdivision)
 
@@ -285,9 +286,9 @@ Undivided, a polygon is dropped on GTE FLAG bit 31 as before, and in the
 emulator that bit comes with the perspective division's overflow (bit
 17, h >= 2·sz): the flat quad is dropped at 149 and 150 and kept at 151
 with h 300, dropped at 100 and kept at 101 with h 200, dropped at 150
-and kept at 151 with h 301 (cases 76 to 79, 148 to 153). psx-spx
-documents bit 31 as bits 30 to 23 and 18 to 13 only; whether the
-hardware drops at exactly 150 is not checked here. Probe
+and kept at 151 with h 301 (cases 76 to 79, 148 to 153). The
+emulator's mask for bit 31 is bits 30 to 23 and 18 to 13, which includes
+bit 17. All of this is the emulator's GTE; no hardware was run. Probe
 `spec/probes/divnear` repeats the one case each, in the emulator: Sony's
 library drops the undivided flat quad at 149 and at 150 (sz exactly
 h >> 1) and keeps it at 151 with h 300, and under GsDIV1 drops it at
@@ -308,16 +309,18 @@ it would become, when every corner's depth sz is below h >> 1. Observed:
   three at 100 is dropped (167).
 - The three-near-corner quad under GsDIV2 keeps 12 of 16 pieces (case
   119): the piece at the three near corners has depths 100, 100, 100
-  and 125 (its center's, from the model-space midpoints) and is dropped
-  with its four leaves. Under GsDIV1 all four leaves are kept (103):
+  and 125 (its center's) and is dropped with its four leaves. Only the
+  count is observed; which piece goes, and these depths, are inferred
+  from the model and were not printed. Under GsDIV1 all four leaves are kept (103):
   the leaves are not checked, as for the screen rectangle.
 - The floor past the camera adds nothing new: at -200 it keeps 4 of 4
-  under GsDIV1 and 8 of 16 under GsDIV2 (cases 104, 120), the two near
-  pieces going by the screen rectangle (their corners all at y 199, the
-  saturated depth 0 giving 100·2) and every piece of the two far ones
-  having a corner at depth 156 or more; at -300 and beyond the far
-  corners' y pass 120 too and it is dropped whole by the rectangle,
-  undivided or not (105 to 107, 121 to 123).
+  under GsDIV1 and 8 of 16 under GsDIV2 (cases 104, 120), and at -300 and beyond
+  nothing (105 to 107, 121 to 123). Undivided it is dropped at all four
+  distances (88 to 91), which fits the FLAG check. Inference, from depths
+  and y values worked out by hand and not printed: under GsDIV2 at -200
+  the two near pieces go by the screen rectangle (all their corners at y
+  199), and at -300 and beyond the far corners' y pass 120 too, so the
+  rectangle drops the whole polygon.
 - A corner behind the camera counts by its saturated depth, 0. Probe
   `spec/probes/divnear`: the flat quad at 200 with h 300 and one to four
   corners moved to depth -100 (sz saturated to 0), to depth 0 and to
@@ -354,9 +357,13 @@ Probe `spec/probes/ofsgte` (the same flat quad moved out of each edge
 of the screen under GsDIV2, in the GsOFSGTE mode, in each buffer and
 with POSITION at 160, 120, at 0, 0 and at 100, 50, so the GTE's OFX and
 OFY were 160/360, 160/120, 0/240, 0/0, 100/290 and 100/50). The pieces
-dropped are the same as in the GsOFSGPU mode at every position: the far
-half goes at center x 161 and all of it at 201, at y 121 and 151, and
-the same on the negative sides (cases 12 to 552). So the rectangle is
+dropped fit the GsOFSGPU rule above at every position tried: the far
+half goes at center x 161 and all of it at 201, and at y 121 and 151.
+This probe does not run the same sweep in the GsOFSGPU mode; the
+comparison is with that rule. Coverage (cases 12 to 552): +x at all three
+positions, +y at 160, 120 and 100, 50, and -x and -y only at 160, 120 in
+steps of 5, so those two edges are placed within 5 (x between -160 and
+-165, half; y between -120 and -125, half). So the rectangle is
 w/2 and h/2 around the GTE's offset, not around 0 in the GTE's output,
 and POSITION does not move it (inference: the check is on the
 coordinates before the offset, or the offset is taken off; the result

@@ -232,7 +232,11 @@ packets themselves:
 - GsSetOrign then GsSetDrawBuffOffset sends an environment in the
   GsOFSGPU mode and nothing in the GsOFSGTE mode, as above.
 
-The reference library matches in every case. Where the screen rectangle
+The reference library matches in every case: the packets in the TTY, and
+the GPU stream from the first marker to the last. Before the first marker
+Sony's build writes one more group than the reference's (1:03000001,
+0004829c, 1:00000000, 1:10000007) and its TTY has one more ResetGraph
+line; the cause was not looked into. Where the screen rectangle
 sits for subdivision in this mode is in spec 04, "GsOFSGTE".
 
 ### GsSortGLine
