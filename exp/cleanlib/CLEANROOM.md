@@ -68,7 +68,8 @@ summarize them:
 - Profiles of the reference builds (`TestCleanProfile` on a `-ref` or
   `-sony` build): their symbols name the decompiled library's functions.
 - `tests/zz_image_test.go`, and `.build/image/`, `.build/archive/` and any
-  other build output of the library image prototype.
+  other build output of the library image prototype. `.build/instr/` and what
+  `libpsdis score` writes: a score to climb would steer the work toward Sony's code.
 - `exp/cleanlib/image/gen.py`, `exp/cleanlib/image/sonyfont.py`, and the `.ld`,
   `.S`, `.json`, `exports.txt`, `map1.txt` and `sony-cleanfont.exe` files in
   `.build/cleanimage/`: they carry the resident address table or Sony's bytes. Run `exp/cleanlib/image/make.sh` and `regress.sh`, and edit
@@ -78,7 +79,7 @@ summarize them:
 - In `.build/carchive/`, the discs, `.bin` and `ZBOOT.EXE` files of the
   `NAME-sony` and `NAME-clean` directories: Sony's image is in them, and on the
   clean side they hold the original programs, whose code is not to be read either.
-  `summary.txt`, `first.txt`, `first/`, `calls/`, `test.log`, `costs.txt` and `show.png` are fine.
+  `summary.txt`, `first.txt`, `first/`, `calls/`, `text.txt`, `test.log`, `costs.txt` and `show.png` are fine.
 - `~/src/ChrisRx/libps-go-backup/`, `~/.claude/`, and any scratch files of
   other sessions.
 
