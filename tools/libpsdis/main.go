@@ -101,6 +101,7 @@ DIR/libps.txt; -f prints the functions named to standard output.`,
 	f.StringVarP(&out, "out", "o", "", "the directory to write libps.txt into")
 	f.StringArrayVarP(&names, "function", "f", nil, "a function to print; may be repeated")
 	f.StringArrayVarP(&dumps, "dump", "d", nil, "ADDR[:N]: N words of data to print, 16 if not given, each with what it addresses; may be repeated")
+	cmd.AddCommand(scoreCommand())
 	if err := cmd.Execute(); err != nil {
 		os.Exit(1)
 	}
