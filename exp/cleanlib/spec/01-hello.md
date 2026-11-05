@@ -57,12 +57,16 @@ before. It changes the display mode GsInitGraph sets.
 
 **VSync(mode)** needs a vertical blank count, which means handling the
 VBLANK interrupt. Mode 0 waits for the next vertical blank; mode n > 1
-waits until n blanks have passed since the previous VSync call returned;
-mode 1 does not wait. Modes 0, 1 and n > 1 return the horizontal lines
-counted (root counter 1 in hblank mode) since the previous VSync call. A
-negative mode returns the number of vertical blanks since the count
-started, without waiting. hello depends on mode 0 waiting exactly one
-blank.
+waits until n blanks have passed since the previous VSync call returned,
+and for the next blank if they already have, so it always waits for one;
+mode 1 does not wait. With L the count when the last waiting VSync returned and
+C the count at this call, mode n > 1 returns at count max(L + n, C + 1)
+(probe spec/probes/vsynclate). Modes 0, 1 and n > 1 return the horizontal lines
+counted (root counter 1 in hblank mode) since the last waiting VSync returned.
+Mode 1 changes neither count, so two in a row read about the same (probe
+spec/probes/vsyncone). A negative mode returns the number of vertical blanks
+since the count started, without waiting, and changes nothing either. hello
+depends on mode 0 waiting exactly one blank.
 
 **DrawSync(0)** waits until the GPU is idle and its DMA channel (2) is
 done, and returns 0. DrawSync(1) returns at once: 0 when idle, else

@@ -25,6 +25,8 @@ Work is split in two:
 - Public hardware documentation of the PlayStation (GPU, SPU, GTE, CD,
   DMA, interrupts, timers, the kernel's A/B/C function tables), such as
   the No$PSX / psx-spx specifications, from your own knowledge.
+- Public C library sources and their behavior, such as 4.3BSD's printf, from your
+  own knowledge, as a guess to test: Sony's results decide what the spec says.
 - This repository's emulator, `emu/`, which models the hardware.
 - The `yaroze` package's declarations (`yaroze/*.go` and `yaroze/libps.txt`):
   they are the library's public interface, from Sony's headers.
@@ -67,6 +69,16 @@ summarize them:
   `-sony` build): their symbols name the decompiled library's functions.
 - `tests/zz_image_test.go`, and `.build/image/`, `.build/archive/` and any
   other build output of the library image prototype.
+- `exp/cleanlib/image/gen.py`, `exp/cleanlib/image/sonyfont.py`, and the `.ld`,
+  `.S`, `.json`, `exports.txt`, `map1.txt` and `sony-cleanfont.exe` files in
+  `.build/cleanimage/`: they carry the resident address table or Sony's bytes. Run `exp/cleanlib/image/make.sh` and `regress.sh`, and edit
+  `image/main.go` and `image/clib.S` where a spec says to. `.build/cleanimage/missing.txt` and the
+  symbols of `.build/cleanimage/image.elf`, which are the clean library's, are
+  fine, but a PC in Sony's image on the `-cimg` side stays an address.
+- In `.build/carchive/`, the discs, `.bin` and `ZBOOT.EXE` files of the
+  `NAME-sony` and `NAME-clean` directories: Sony's image is in them, and on the
+  clean side they hold the original programs, whose code is not to be read either.
+  `summary.txt`, `first.txt`, `first/`, `calls/`, `test.log`, `costs.txt` and `show.png` are fine.
 - `~/src/ChrisRx/libps-go-backup/`, `~/.claude/`, and any scratch files of
   other sessions.
 
@@ -93,4 +105,5 @@ gets there is not allowed.
 
 `exp/cleanlib/build.sh NAME DIR` builds the main package in `DIR` against
 the clean library onto `.build/NAME/NAME.cue` (with `prog.elf` beside it,
-for symbols). Run it from the repository root.
+for symbols). Run it from the repository root. Spec 15 covers building the
+library as the resident image.
