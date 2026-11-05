@@ -342,6 +342,66 @@ func TestArchiveFirst(t *testing.T) {
 	}
 }
 
+// withoutGlyphs drops the 8 by 8 textured sprites a font sends, which are all that
+// printed figures change: a 74h packet with its texture on a cell of 8.
+func withoutGlyphs(words []uint32) []uint32 {
+	out := make([]uint32, 0, len(words))
+	for i := 0; i < len(words); i++ {
+		if words[i]>>24 == 0x74 && i+2 < len(words) && words[i+2]&0x0707 == 0 {
+			i += 2
+			continue
+		}
+		out = append(out, words[i])
+	}
+	return out
+}
+
+// TestArchiveText compares what the programs in ARCHIVE_TEXT send the GPU over a whole
+// run with the font's glyphs left out, into text.txt: whether a program that prints its
+// timings differs in anything but those, whichever frame each word comes in.
+func TestArchiveText(t *testing.T) {
+	list := strings.Fields(os.Getenv("ARCHIVE_TEXT"))
+	if len(list) == 0 {
+		t.Skip("ARCHIVE_TEXT names the programs")
+	}
+	var mu sync.Mutex
+	reports := map[string]string{}
+	t.Run("programs", func(t *testing.T) {
+		for _, name := range list {
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+				run := func(side string) []uint32 {
+					s := newFirstSide(t, carchive+name+"-"+side+"/"+name+"-"+side+".cue")
+					for {
+						if _, ok := s.next(1200); !ok {
+							return withoutGlyphs(s.words)
+						}
+					}
+				}
+				a, b := run("sony"), run("clean")
+				r := fmt.Sprintf("%s: %d/%d words without glyphs", name, len(a), len(b))
+				for i := range min(len(a), len(b)) {
+					if a[i] != b[i] {
+						from, to := max(i-6, 0), min(i+10, min(len(a), len(b)))
+						r += fmt.Sprintf(", first different at %d\n  sony  %08x\n  clean %08x", i, a[from:to], b[from:to])
+						break
+					}
+				}
+				mu.Lock()
+				defer mu.Unlock()
+				reports[name] = r
+			})
+		}
+	})
+	var all strings.Builder
+	for _, name := range list {
+		all.WriteString(reports[name] + "\n")
+	}
+	if err := os.WriteFile(carchive+"text.txt", []byte(all.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestArchiveWatch runs the side ARCHIVE_SIDE (clean) of ARCHIVE_SHOW up to ARCHIVE_AT
 // frames, stops at the first time the PC is the hex address ARCHIVE_STOP, and logs the
 // registers, the memory at a0 to a3, and return addresses on the stack.
@@ -470,25 +530,50 @@ func programCalls(t *testing.T, name, side string, names map[uint32]string, fram
 	var calls []programCall
 	open, ra, sp := -1, uint32(0), uint32(0)
 	start := m.Frames()
+	seen, printed := -1, len(m.TTY())
 	for steps := frames << 20; int(m.Frames()-start) < frames && steps > 0; steps-- {
 		if m.Machine.Step() != nil {
 			break
 		}
+		// The presses firstSide makes.
+		if f := int(m.Frames() - start); f != seen {
+			seen = f
+			switch f % 240 {
+			case 120:
+				m.Pad(1).Press(emu.ButtonStart | emu.ButtonCross)
+			case 122:
+				m.Pad(1).Release(emu.ButtonStart | emu.ButtonCross)
+			}
+		}
 		pc, r := m.CPU.PC, &m.CPU.R
 		if open >= 0 && pc == ra && r[29] == sp {
 			calls[open].text += fmt.Sprintf(" = %08x", r[2])
+			if n := len(m.TTY()); n != printed {
+				calls[open].text += fmt.Sprintf(" prints %d", n-printed)
+				printed = n
+			}
 			calls[open].left = [3]uint32{r[5], r[6], r[7]}
 			open = -1
 		}
 		if e, ok := names[pc]; ok && open < 0 && r[31] >= programStart {
+			text := fmt.Sprintf("%s(%08x %08x %08x %08x)", e, r[4], r[5], r[6], r[7])
+			// ARCHIVE_CALLS_A0 names entries to show the words at a0 of, a struct they take.
+			if slices.Contains(strings.Split(os.Getenv("ARCHIVE_CALLS_A0"), ","), e) {
+				var w [10]uint32
+				for i := range w {
+					w[i] = m.Read32(r[4] + uint32(i)*4)
+				}
+				text += fmt.Sprintf(" a0 %08x", w)
+			}
 			calls = append(calls, programCall{
 				frame:  m.Frames() - start,
 				cycles: m.CPU.TotalCycles,
-				text:   fmt.Sprintf("%s(%08x %08x %08x %08x)", e, r[4], r[5], r[6], r[7]),
+				text:   text,
 			})
 			open, ra, sp = len(calls)-1, r[31], r[29]
 		}
 	}
+	os.WriteFile(carchive+"calls/"+name+"-"+side+".tty", []byte(m.TTY()), 0o644)
 	return calls
 }
 
