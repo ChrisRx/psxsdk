@@ -212,7 +212,9 @@ The rate (tenths of a tick a blank) is round(res·bpm·10/3600) (3000 on
 PAL), as spec 05. Below a tenth of a tick a blank (res·bpm·10 < 3600)
 the library takes the inverse, 3600·100/(res·bpm·10) rounded down: a
 tempo that slow plays fast. With res 96, SsSetTempo(1) plays 375 tenths
-a blank, (2) 187, (3) 125, and (4) the normal 1.
+a blank, (2) 187, (3) 125, and (4) the normal 1. But such a sequence stops
+advancing after a blank that plays nothing, as spec 15's SsSetTickMode section
+gives in full, so these are not rates that go on.
 
 ### Tempo meta events
 
