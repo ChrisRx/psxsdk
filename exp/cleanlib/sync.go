@@ -123,26 +123,21 @@ func waitBlanks(n uint32) {
 //export GetVideoMode
 func GetVideoMode() int32 { return video.mode }
 
-// The root counters are the kernel's. A counter's spec is RCntCNT0 to
-// RCntCNT3, F2000000h to F2000003h; the kernel takes the counter's number.
+// The root counters, by the registers, in the target's assembly. A counter's spec is
+// RCntCNT0 to RCntCNT3, F2000000h to F2000003h, of which the low half is the counter's
+// number; the third and any past it return 0 and do nothing.
 
 // GetRCnt returns the value of the root counter spec.
 //
 //export GetRCnt
-func GetRCnt(spec uint32) int32 {
-	return libps_biosB(biosGetRCnt, uintptr(spec&3), 0, 0, 0)
-}
+func GetRCnt(spec uint32) int32
 
 // StartRCnt enables the root counter spec's interrupt, returning 1.
 //
 //export StartRCnt
-func StartRCnt(spec uint32) int32 {
-	return libps_biosB(biosStartRCnt, uintptr(spec&3), 0, 0, 0)
-}
+func StartRCnt(spec uint32) int32
 
 // ResetRCnt sets the root counter spec back to 0, returning 1.
 //
 //export ResetRCnt
-func ResetRCnt(spec uint32) int32 {
-	return libps_biosB(biosResetRCnt, uintptr(spec&3), 0, 0, 0)
-}
+func ResetRCnt(spec uint32) int32

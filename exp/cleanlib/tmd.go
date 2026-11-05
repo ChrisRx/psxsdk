@@ -58,46 +58,15 @@ func GsMapModelingData(p *uint32) {
 // mode and flag bytes, and the low half of each run's first header is
 // overwritten with the run's length. The headers of the rest stay as they
 // are. A mode with no size gets its message at each visit, and as it has no
-// size the walk stays on it to the end.
+// size the walk stays on it to the end. In the target's assembly, for its time.
 //
 //export GsLinkObject4
-func GsLinkObject4(table uint32, obj *GsDOBJ2, n int32) {
-	o := (*tmdObject)(unsafe.Pointer(uintptr(table) + uintptr(n)*unsafe.Sizeof(tmdObject{})))
-	obj.Tmd = o
-	o = at(o)
-	prim := uintptr(o.primTop)
-	first := prim
-	run, kind := uint16(0), uint32(0)
-	for left := o.nPrim; left > 0; left-- {
-		k := word(prim, 0) >> 16
-		if k != kind && run != 0 {
-			*(*uint16)(unsafe.Pointer(first)) = run
-			first, run = prim, 0
-		}
-		kind = k
-		run++
-		size := primSize(k>>8, k&0xff)
-		if size == 0 {
-			// The walk stays here: this is the rest of the run.
-			*(*uint16)(unsafe.Pointer(first)) = run + uint16(left-1)
-			printUnassigned(k>>8, left)
-			return
-		}
-		prim += size
-		space(linkPrimSpace)
-		if k>>8&^(modeSemi|modeGouraud) == 0x20 {
-			space(linkFlatSpace)
-		}
-	}
-	if run != 0 {
-		*(*uint16)(unsafe.Pointer(first)) = run
-	}
-}
+func GsLinkObject4(table uint32, obj *GsDOBJ2, n int32)
 
-// printUnassigned prints the message for a mode with no size, n times. It is apart
-// from GsLinkObject4 so that that needs no frame for a call it never makes.
+// printUnassigned prints the message for a mode with no size, n times, for
+// GsLinkObject4's assembly.
 //
-//go:noinline
+//export libps_link_unassigned
 func printUnassigned(mode, n uint32) {
 	for range n {
 		libps_biosA(biosPrintf, uintptr(unsafe.Pointer(unsafe.StringData(primUnassigned))), uintptr(mode), 0, 0)
@@ -107,14 +76,6 @@ func printUnassigned(mode, n uint32) {
 // primUnassigned is what GsLinkObject4 has the kernel print for a mode with no
 // size.
 const primUnassigned = "GPU CODE %02xH not assigned.\n\x00"
-
-// What GsLinkObject4 spends on a primitive beyond its walk, in 2-cycle stores: 56
-// cycles a primitive as on Sony's, and for the two modes that also have to look at the
-// flag for their size, 20h and 30h, 62.
-const (
-	linkPrimSpace = 1
-	linkFlatSpace = 2
-)
 
 // primSize returns the bytes a primitive of the mode and flags takes in a
 // model, or 0 for a mode that is not a polygon GsLinkObject4 knows. The
@@ -300,11 +261,44 @@ var sorter struct {
 // its own for a run, with its layout known when it is compiled. A length of
 // 0, in a model that was never linked, ends the sort.
 //
+// All of that is in the target's assembly, playstation-yaroze-clean.S, each kind's loop
+// spending Sony's cycles on each way through: its points bad, turned away, or sorted
+// (spec 24). Polygons to cut, and lit triangles with a color for each corner, are left
+// to Go below, which does the same in the same order.
+//
 //export GsSortObject4
-func GsSortObject4(obj *GsDOBJ2, ot *GsOT, shift int32, scratch *uint32) {
-	if obj.Attribute&attrHidden != 0 {
-		return
-	}
+func GsSortObject4(obj *GsDOBJ2, ot *GsOT, shift int32, scratch *uint32)
+
+// gsoState is what GsSortObject4's assembly has on its stack for gsoGrad.
+type gsoState struct {
+	verts, norms uintptr
+	org          uintptr
+	shift        uint32
+	out          uintptr
+	light        int
+}
+
+// gsoGrad is gradTriangles for GsSortObject4's assembly: it sorts a run and returns
+// the address after it.
+//
+//export libps_gso_grad
+func gsoGrad(prim uintptr, hdr, n uint32, st *gsoState) uintptr {
+	s := &sorter
+	s.verts, s.norms = st.verts, st.norms
+	s.light = st.light
+	s.org = st.org
+	s.shift = st.shift
+	s.out = st.out
+	prim = gradTriangles(prim, n, hdr)
+	st.out = s.out
+	return prim
+}
+
+// gsoDivided is GsSortObject4 for an attribute that asks for polygons to be cut,
+// from its assembly, which handles the rest (playstation-yaroze-clean.S).
+//
+//export libps_gso_div
+func gsoDivided(obj *GsDOBJ2, ot *GsOT, shift int32, scratch *uint32) {
 	o := obj.Tmd
 	s := &sorter
 	s.verts = uintptr(o.vertTop)
@@ -468,6 +462,7 @@ func polygons[K polyKind](prim uintptr, count uint32, hdr uint32) uintptr {
 		// Reading FLAG waits for the GTE, so it comes after the copies.
 		errs := flag()
 		if nclip() <= 0 && !bothSides {
+			space(divBackSpace)
 			continue
 		}
 		storeSXY(out, stride)
@@ -482,6 +477,9 @@ func polygons[K polyKind](prim uintptr, count uint32, hdr uint32) uintptr {
 		}
 		e := z >> shift
 		if div != 0 {
+			if polyOffScreen[K](out, stride) {
+				continue
+			}
 			divVerts = [4]uintptr{a, b, c, verts + 8*uintptr(half(body, vert+n-1))}
 			out = subdivide[K](out, tagAt(org, e), div, code)
 			continue
@@ -494,6 +492,43 @@ func polygons[K polyKind](prim uintptr, count uint32, hdr uint32) uintptr {
 	}
 	s.out = out
 	return prim
+}
+
+// divLimits is the screen rectangle a cut polygon is dropped against before anything is
+// spent on it, as the divider's limits hold it. updatePlace keeps it.
+var divLimits struct{ xlo, xhi, ylo, yhi int32 }
+
+// polyOffScreen reports whether all of the polygon's points in the packet at out lie off
+// the same side of the screen rectangle: it goes at once, before it is lit, as Sony's.
+//
+//go:inline
+func polyOffScreen[K polyKind](out uintptr, stride uintptr) bool {
+	d := &divLimits
+	s0 := word(out, 2)
+	x0, y0 := int32(s0<<16), int32(s0)
+	if x0 >= d.xlo && x0 <= d.xhi && y0 >= d.ylo && y0 < d.yhi {
+		return false
+	}
+	return polyOffRest[K](out, stride, x0, y0)
+}
+
+// polyOffRest is polyOffScreen past the first corner, off the screen.
+//
+//go:noinline
+func polyOffRest[K polyKind](out uintptr, stride uintptr, x0, y0 int32) bool {
+	var k K
+	d := &divLimits
+	s1, s2 := word(out, 2+stride), word(out, 2+2*stride)
+	s3 := s2
+	if k.corners() == 4 {
+		s3 = word(out, 2+3*stride)
+	}
+	x1, x2, x3 := int32(s1<<16), int32(s2<<16), int32(s3<<16)
+	y1, y2, y3 := int32(s1), int32(s2), int32(s3)
+	return x0 < d.xlo && x1 < d.xlo && x2 < d.xlo && x3 < d.xlo ||
+		x0 > d.xhi && x1 > d.xhi && x2 > d.xhi && x3 > d.xhi ||
+		y0 < d.ylo && y1 < d.ylo && y2 < d.ylo && y3 < d.ylo ||
+		y0 >= d.yhi && y1 >= d.yhi && y2 >= d.yhi && y3 >= d.yhi
 }
 
 // doubleSided reports whether a run of kind K with the header hdr, cut div levels,
@@ -516,6 +551,10 @@ func linkPacket(org uintptr, e int32, out uintptr, plen uintptr) {
 	set(out, 0, uint32(plen)<<24|old&0xffffff)
 	set(t, 0, old&0xff000000|uint32(out)&0xffffff)
 }
+
+// divBackSpace is what a polygon to cut that turns away spends beyond its work, in 2-cycle
+// stores, for Sony's times.
+const divBackSpace = 55
 
 // gteError is the FLAG bits that drop a polygon: any of the
 // perspective transformations erred, a point out of range or a depth too
@@ -632,6 +671,7 @@ func litPolygons[K polyKind](prim uintptr, count uint32, hdr uint32) uintptr {
 		// Reading FLAG waits for the GTE, so it comes after these.
 		errs := flag()
 		if nclip() <= 0 && !bothSides {
+			space(divBackSpace)
 			continue
 		}
 		storeSXY(out, stride)
@@ -646,6 +686,9 @@ func litPolygons[K polyKind](prim uintptr, count uint32, hdr uint32) uintptr {
 		}
 		e := z >> shift
 		if div != 0 {
+			if polyOffScreen[K](out, stride) {
+				continue
+			}
 			startColors[K](rgbc, na, nb, nc, fog)
 			storeColors[K](out, norms+8*uintptr(half(body, first+6)), fog)
 			divVerts = [4]uintptr{a, b, c, d}
@@ -766,6 +809,7 @@ func offPolygons[B, P polyKind](prim uintptr, count uint32, hdr uint32) uintptr 
 		// Reading FLAG waits for the GTE, so it comes after the copies.
 		errs := flag()
 		if nclip() <= 0 && !bothSides {
+			space(divBackSpace)
 			continue
 		}
 		storeSXY(out, stride)
@@ -780,6 +824,9 @@ func offPolygons[B, P polyKind](prim uintptr, count uint32, hdr uint32) uintptr 
 		}
 		e := z >> shift
 		if div != 0 {
+			if polyOffScreen[P](out, stride) {
+				continue
+			}
 			divVerts = [4]uintptr{a, b, c, d}
 			out = subdivide[P](out, tagAt(org, e), div, code)
 			continue
@@ -826,6 +873,7 @@ func gradTriangles(prim uintptr, count uint32, hdr uint32) uintptr {
 		rtptAt(a, b, c)
 		errs := flag()
 		if nclip() <= 0 {
+			space(gradBackSpace)
 			continue
 		}
 		storeSXY(out, 2)
@@ -833,6 +881,7 @@ func gradTriangles(prim uintptr, count uint32, hdr uint32) uintptr {
 		if errs&gteError != 0 {
 			continue
 		}
+		space(gradSortSpace)
 		col0 := word(body, 0)&keep | first
 		if light == lightOff {
 			set(out, 1, col0)
@@ -849,6 +898,13 @@ func gradTriangles(prim uintptr, count uint32, hdr uint32) uintptr {
 	s.out = out
 	return prim
 }
+
+// What gradTriangles spends past its work, in 2-cycle stores, for Sony's times on a
+// polygon: turned away, and sorted.
+const (
+	gradBackSpace = 11
+	gradSortSpace = 10
+)
 
 // lightCorner returns the color rgbc as the normal at n lights it.
 func lightCorner(rgbc uint32, n uintptr, light int) uint32 {

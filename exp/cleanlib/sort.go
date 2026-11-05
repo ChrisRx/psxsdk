@@ -47,14 +47,10 @@ const (
 	attrHidden    = 1 << 31 // not drawn
 )
 
-// What the sorts spend past their work, in 2-cycle stores, for Sony's times:
-// GsSortBoxFill 173 cycles, GsSortLine 170, GsSortFastSprite 95 and GsSortSprite 245
-// on average in the web archive's programs (spec 22).
+// What GsSortLine spends past its work, in 2-cycle stores, for Sony's 170 cycles on
+// average in the web archive's programs (spec 22).
 const (
-	gsSortBoxFillSpace    = 28
-	gsSortLineSpace       = 24
-	gsSortFastSpriteSpace = 2
-	gsSortSpriteSpace     = 9
+	gsSortLineSpace = 24
 )
 
 // semiRate is the semi-transparency rate of an attribute, bits 28 and 29.
@@ -119,23 +115,11 @@ func rgb(code uint32, r, g, b uint8) uint32 {
 	return code<<24 | uint32(b)<<16 | uint32(g)<<8 | uint32(r)
 }
 
-// GsSortBoxFill sorts the filled rectangle bp into ot at depth pri.
+// GsSortBoxFill sorts the filled rectangle bp into ot at depth pri. In the target's
+// assembly, with GsSortSprite and GsSortFastSprite.
 //
 //export GsSortBoxFill
-func GsSortBoxFill(bp *GsBOXF, ot *GsOT, pri uint16) {
-	w := unsafe.Pointer(bp)
-	attr := *(*uint32)(w)
-	if attr&attrHidden != 0 {
-		return
-	}
-	p := packet(5)
-	p[1] = mode(semiRate(attr) << 5)
-	p[2] = (0x60|attr>>29&2)<<24 | wordIn(w, 3)&0xffffff
-	p[3] = placed(wordIn(w, 1))
-	p[4] = wordIn(w, 2)
-	insert(ot, pri, p)
-	space(gsSortBoxFillSpace)
-}
+func GsSortBoxFill(bp *GsBOXF, ot *GsOT, pri uint16)
 
 // wordIn returns the ith word of the structure at p. The 2D sorts copy their fields
 // a word at a time: a structure of a C program holding a uint32 is aligned to it.
@@ -158,14 +142,13 @@ func wordIn(p unsafe.Pointer, i uintptr) uint32 {
 // are each kept to 8 bits: a W of 256 gives a u1 of U-1.
 //
 //export GsSortSprite
-func GsSortSprite(sp *GsSPRITE, ot *GsOT, pri uint16) {
+func GsSortSprite(sp *GsSPRITE, ot *GsOT, pri uint16)
+
+// spriteQuad is the quad of GsSortSprite, from its assembly.
+//
+//export libps_sprite_quad
+func spriteQuad(sp *GsSPRITE, ot *GsOT, pri uint16) {
 	attr := sp.Attribute
-	if attr&attrRotOff != 0 ||
-		attr&(attrHFlip|attrVFlip) == 0 && sp.Rotate == 0 && sp.Scalex == 4096 && sp.Scaley == 4096 {
-		sortSprite(sp, ot, pri, pair(sp.X-sp.Mx, sp.Y-sp.My))
-		space(gsSortSpriteSpace)
-		return
-	}
 	if attr&attrHidden != 0 || sp.W == 0 || sp.H == 0 {
 		return
 	}
@@ -180,14 +163,20 @@ func GsSortSprite(sp *GsSPRITE, ot *GsOT, pri uint16) {
 	sn, cs := int32(0), int32(4096)
 	if sp.Rotate != 0 {
 		// Rotate is in 4096ths of a degree; the sine table's angles are
-		// 4096ths of a turn.
-		a := sp.Rotate / 360
+		// 4096ths of a turn, and it takes them in 16 bits, so that a turn
+		// past 32767 of them is a negative angle.
+		a := int32(int16(sp.Rotate / 360))
 		sn, cs = sin(a), cos(a)
 	}
 	sx, sy := int32(sp.Scalex), int32(sp.Scaley)
 	m := &spriteMatrix
 	m.M[0][0], m.M[0][1] = int16(cs*sx>>12), int16(-sn*sy>>12)
 	m.M[1][0], m.M[1][1] = int16(sn*sx>>12), int16(cs*sy>>12)
+	// A scale goes on the third column as 0.
+	m.M[2][2] = 4096
+	if sx != 4096 || sy != 4096 {
+		m.M[2][2] = 0
+	}
 	m.T = [3]int32{int32(sp.X), int32(sp.Y), gteH}
 	SetRotMatrix(m)
 	SetTransMatrix(m)
@@ -213,24 +202,31 @@ func GsSortSprite(sp *GsSPRITE, ot *GsOT, pri uint16) {
 	p[8] = spriteCorner(x1, y1)
 	p[9] = v1<<8 | u1
 	insert(ot, pri, p)
-	if sp.Rotate == 0 && sx == 4096 && sy == 4096 {
+	scaled := sx != 4096 || sy != 4096
+	switch {
+	case sp.Rotate != 0 && scaled:
+		pace(spriteBothPad)
+	case sp.Rotate != 0:
+		pace(spriteTurnPad)
+	case scaled:
+		pace(spriteScalePad)
+	default:
 		pace(spriteFlipPad)
-	} else {
-		pace(spriteQuadPad)
 	}
 }
 
-// The rest of a quad sprite's time: Sony's 650 cycles with only a flip, 792 with a
-// scale and 870 with a turn.
+// The rest of a quad sprite's time, by what makes it a quad, for Sony's times.
 const (
-	spriteFlipPad = 66
-	spriteQuadPad = 200
+	spriteFlipPad  = 48
+	spriteTurnPad  = 186
+	spriteScalePad = 192
+	spriteBothPad  = 336
 )
 
 // spriteMatrix is GsSortSprite's turn. As a local it would take a matrix of a
-// program's small stack. Its third row and column stay those of the identity: a
-// corner's z is 0, and its depth the projection distance.
-var spriteMatrix = MATRIX{M: [3][3]int16{{}, {}, {0, 0, 4096}}}
+// program's small stack. Its third row and column stay those of the identity, but
+// for the last element: a corner's z is 0, and its depth the projection distance.
+var spriteMatrix MATRIX
 
 // spriteCorner returns the screen point of the corner at x, y from a sprite's
 // point, through the matrix in the GTE.
@@ -239,39 +235,6 @@ var spriteMatrix = MATRIX{M: [3][3]int16{{}, {}, {0, 0, 4096}}}
 func spriteCorner(x, y int16) uint32 {
 	rtps(pair(x, y), 0)
 	return sxy2()
-}
-
-// The words of a GsSPRITE, for sortSprite: X and Y, W and H, Tpage with U and V,
-// Cx and Cy, and the color.
-const (
-	spriteXY = 1 + iota
-	spriteWH
-	spritePageUV
-	spriteCXY
-	spriteRGB
-)
-
-// sortSprite sorts the sprite sp into ot at depth pri with its top left corner at
-// the point word xy.
-//
-//go:inline
-func sortSprite(sp *GsSPRITE, ot *GsOT, pri uint16, xy uint32) {
-	w := unsafe.Pointer(sp)
-	attr := *(*uint32)(w)
-	wh := wordIn(w, spriteWH)
-	if attr&attrHidden != 0 || uint16(wh) == 0 || wh>>16 == 0 {
-		return
-	}
-	pageUV := wordIn(w, spritePageUV)
-	cxy := wordIn(w, spriteCXY)
-	p := packet(6)
-	p[1] = mode(spriteTpage(attr, pageUV))
-	p[2] = (0x64|attr>>29&2|attr>>6&1)<<24 | wordIn(w, spriteRGB)&0xffffff
-	p[3] = placed(xy)
-	// The palette is a halfword made from Cy over Cx's upper bits.
-	p[4] = (cxy>>16<<6|cxy>>4&0x3f)<<16 | pageUV>>16
-	p[5] = wh
-	insert(ot, pri, p)
 }
 
 // spriteClut is a sprite's palette as a packet takes it, in a halfword.
@@ -292,9 +255,26 @@ func spriteTpage(attr, tpage uint32) uint32 {
 // unscaled, with its top left corner at X, Y: it ignores Mx and My.
 //
 //export GsSortFastSprite
-func GsSortFastSprite(sp *GsSPRITE, ot *GsOT, pri uint16) {
-	sortSprite(sp, ot, pri, wordIn(unsafe.Pointer(sp), spriteXY))
-	space(gsSortFastSpriteSpace)
+func GsSortFastSprite(sp *GsSPRITE, ot *GsOT, pri uint16)
+
+// gsPlace is what the sorts in assembly add to a point: x and y of the GTE's screen
+// offset in the GsOFSGTE mode, nothing in the GsOFSGPU mode.
+//
+//go:extern libps_place
+var gsPlace uint32
+
+// updatePlace sets gsPlace, and the rectangle a polygon to cut is dropped against
+// (tmd.go), after the mode, the screen or the offset changes.
+func updatePlace() {
+	w, h := int32(gs.width)/2, int32(gs.height)/2
+	d := &divLimits
+	d.xlo, d.xhi = (gteOFX-w)<<16, (gteOFX+w)<<16
+	d.ylo, d.yhi = (gteOFY-h)<<16, (gteOFY+h+1)<<16
+	if gs.ofsGPU {
+		gsPlace = 0
+		return
+	}
+	gsPlace = pair(int16(gteOFX), int16(gteOFY))
 }
 
 // GsLINE is a straight line in one color.

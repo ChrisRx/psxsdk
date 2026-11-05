@@ -151,6 +151,7 @@ var (
 
 func setOFX(v int32) {
 	gteOFX = v >> 16
+	updatePlace()
 	device.AsmFull(`.set push
 	.set noat
 	move $$28, {v}
@@ -161,6 +162,7 @@ func setOFX(v int32) {
 
 func setOFY(v int32) {
 	gteOFY = v >> 16
+	updatePlace()
 	device.AsmFull(`.set push
 	.set noat
 	move $$28, {v}

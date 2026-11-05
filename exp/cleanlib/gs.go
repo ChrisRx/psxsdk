@@ -130,6 +130,7 @@ func GsInitGraph(w, h, intmode, dith, vrammode uint16) {
 		ofsGPU: intmode&gsOfsGPU != 0,
 		clip:   RECT{W: int16(w), H: int16(h)},
 	}
+	updatePlace()
 	position = GsPOSITION{}
 	psdCNT = 1
 	psdOFSX, psdOFSY = [2]int16{}, [2]int16{}

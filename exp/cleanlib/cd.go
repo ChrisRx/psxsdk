@@ -94,7 +94,7 @@ const (
 	controlReturn = 102
 	// CdReadSync: its time reads 76 and 110 cycles apart, and its return
 	// 106 after the check, 476 cycles a call in all.
-	syncRead1  = 60
+	syncRead1  = 48
 	syncRead2  = 80
 	syncReturn = 60
 	// CdControlF and CdSync and CdReady with something to report, past their own
@@ -104,7 +104,7 @@ const (
 	// CdRead: its time read 114 cycles from the call, its look at the
 	// drive 144 after that, its watch 344 after the common delay is put
 	// back, its time read 86 after ReadN and its return 66 after that.
-	readEntry  = 70
+	readEntry  = 58
 	readAsk    = 110
 	readSend   = 228
 	readSent   = 72
@@ -122,7 +122,7 @@ const (
 	// longer than the clean library on the sector itself; pauseReturn
 	// and pauseAfter: after Pause's first answer, its event 662 cycles
 	// from the cause read and the handler's return 1,496.
-	pauseRest   = 672
+	pauseRest   = 660
 	pauseReturn = 60
 	pauseAfter  = 240
 
@@ -240,6 +240,15 @@ type cdDriver struct {
 
 	// loc is the position the last Setloc sent.
 	loc [4]uint8
+
+	// The last read, for CdReadSync to make again: its sectors and first
+	// address, the mode it was asked for, whether one has run, and the blank
+	// it ended on.
+	againN    int32
+	againBuf  *uint32
+	againMode int32
+	again     bool
+	endBlank  uint32
 
 	// next is the sector after the last CdReadFile read, for one that
 	// carries on.
@@ -602,6 +611,7 @@ func (c *cdDriver) pause() (ev uintptr) {
 	// The time the read ended, then the time once more, as Sony's
 	// library reads it before the Pause.
 	volatile.StoreUint32(&c.ended, cdNow())
+	volatile.StoreUint32(&c.endBlank, volatile.LoadUint32(&vsync.blanks))
 	cdNow()
 	spinCycles(pauseRest)
 	c.send(cdlPause, nil, cdPauseEv, true)
@@ -999,6 +1009,7 @@ func CdRead(sectors int32, buf *uint32, mode int32) int32 {
 	if sectors <= 0 {
 		return 0
 	}
+	cd.againN, cd.againBuf, cd.againMode, cd.again = sectors, buf, mode, true
 	// The drive reads whole sectors, less their sync, so that each
 	// sector's header comes too, unless the mode asks for that already.
 	spinCycles(readEntry)
@@ -1042,6 +1053,11 @@ func CdRead(sectors int32, buf *uint32, mode int32) int32 {
 // sectors still to come. Either returns -1 if the drive reported an
 // error. result, if not nil, receives the drive's last status.
 //
+// A call more than a second of blanks after the last read ended makes that read
+// again before anything else, whatever came since, and this call and the next report
+// on it (probed: the library's own reads of directories count, and polling in
+// between does not put it off).
+//
 //export CdReadSync
 //go:noinline
 func CdReadSync(mode int32, result *uint8) int32 {
@@ -1051,6 +1067,10 @@ func CdReadSync(mode int32, result *uint8) int32 {
 	// drive's interrupt lands in returns what it was before, as Sony's
 	// do.
 	failed, left := volatile.LoadUint32(&cd.readErr), volatile.LoadUint32(&cd.count)
+	if left == 0 && cd.again && volatile.LoadUint32(&vsync.blanks)-volatile.LoadUint32(&cd.endBlank) > cdReadStale {
+		cd.readAgain()
+		failed, left = volatile.LoadUint32(&cd.readErr), volatile.LoadUint32(&cd.count)
+	}
 	cdNow()
 	spinCycles(syncRead1)
 	cdNow()
@@ -1072,6 +1092,25 @@ func CdReadSync(mode int32, result *uint8) int32 {
 		}
 		failed, left = volatile.LoadUint32(&cd.readErr), volatile.LoadUint32(&cd.count)
 	}
+}
+
+// cdReadStale is how many blanks after a read's end CdReadSync makes it again: 60
+// frames gives no read, 62 does.
+const cdReadStale = 60
+
+// readAgain makes the last read again from where its Setloc said: the drive is
+// paused and waited for to its second answer, and the position and mode set anew.
+//
+//go:noinline
+func (c *cdDriver) readAgain() {
+	c.control(cdlPause, nil, nil)
+	watch.begin(cdNoLimit)
+	for volatile.LoadUint32(&c.second) != 0 {
+		watch.check()
+	}
+	c.control(cdlSetloc, &c.loc[0], nil)
+	c.mode = ^uint8(0)
+	CdRead(c.againN, c.againBuf, c.againMode)
 }
 
 // CdReadFile starts reading the file named file, an absolute path such as

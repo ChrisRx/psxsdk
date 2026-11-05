@@ -2,6 +2,11 @@
 # Each .globl names a resident entry point (see spec 15).
 	.set noreorder
 	.set noat
+
+# The routines the linked-in target has too.
+#define CLEAN_LIBRARY_ONLY
+#include "playstation-yaroze-clean.S"
+
 	.text
 
 # setjmp(buf) saves ra, sp, fp, s0 to s7 and gp, twelve words, and returns 0. It
