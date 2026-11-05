@@ -29,6 +29,9 @@ import (
 //     shift whose rounding half is a 32-bit quantity.
 //   - Comparisons put the bit patterns in order as sign and magnitude,
 //     with the two zeros equal.
+//   - A result that overflows, in the sense of the bullet above or by a
+//     conversion to an integer past its range, reports it through _err_math.
+//     Underflow and a quotient by zero do not.
 
 const (
 	dSign     = 1 << 63
@@ -67,6 +70,7 @@ func dPack(s uint64, e int, m uint64, halfUp bool) uint64 {
 		e++
 	}
 	if e >= dExpMax {
+		errMath(mathERANGE)
 		return s | dInf
 	}
 	return s | uint64(int64(e))<<dFracBits | m&dFracMask
@@ -188,18 +192,26 @@ func dMul(a, b uint64) uint64 {
 }
 
 func dDiv(a, b uint64) uint64 {
+	r, _ := dDivQuotient(a, b)
+	return r
+}
+
+// dDivQuotient is dDiv, also returning the quotient's bits to two below the last
+// place, for what they say of the time Sony's takes, or 0 when one of them is zero.
+func dDivQuotient(a, b uint64) (uint64, uint64) {
 	s := (a ^ b) & dSign
 	if dIsZero(b) {
-		return s | (dSign - 1)
+		return s | (dSign - 1), 0
 	}
 	if dIsZero(a) {
-		return s
+		return s, 0
 	}
 	_, ea, ma := dUnpack(a)
 	_, eb, mb := dUnpack(b)
 	// The quotient with guard bits below the last place, the remainder
 	// kept as a sticky bit.
 	q, r := bits.Div64(ma>>(64-dFracBits-guard), ma<<(dFracBits+guard), mb)
+	whole := q >> (guard - 2)
 	if r != 0 {
 		q |= 1
 	}
@@ -212,9 +224,10 @@ func dDiv(a, b uint64) uint64 {
 			e++
 		}
 		if e >= dExpMax {
-			return s | dInf
+			errMath(mathERANGE)
+			return s | dInf, whole
 		}
-		return s | uint64(e)<<dFracBits | m&dFracMask
+		return s | uint64(e)<<dFracBits | m&dFracMask, whole
 	}
 	// Too small for a normal number: a denormal. The significand with
 	// one guard bit below it gets a half added at the shortfall's bit and
@@ -226,11 +239,11 @@ func dDiv(a, b uint64) uint64 {
 	// zero.
 	sh := 1 - e
 	if sh >= 63 {
-		return s
+		return s, whole
 	}
 	y := q >> (guard - 1)
 	m := (y + uint64(uint32(1)<<(uint(sh)&31))) >> uint(sh+1)
-	return s | m&^dHidden
+	return s | m&^dHidden, whole
 }
 
 // dCompare orders a and b as sign and magnitude, the zeros equal: -1,
@@ -285,6 +298,7 @@ func dFix(a uint64) int32 {
 	case e < 1023:
 		v = 0
 	case e >= 1023+31:
+		errMath(mathERANGE)
 		v = 1 << 31
 	default:
 		v = int64(m >> (1023 + dFracBits - e))
@@ -307,16 +321,12 @@ func dFloat(i int32) uint64 {
 		return 0
 	}
 	var s uint64
-	v := uint64(i)
+	v := uint32(i)
 	if i < 0 {
-		s, v = dSign, uint64(-int64(i))
+		s, v = dSign, -v
 	}
-	e := 1023 + dFracBits
-	for v < dHidden {
-		v <<= 1
-		e--
-	}
-	return s | uint64(e)<<dFracBits | v&dFracMask
+	n := bits.LeadingZeros32(v)
+	return s | uint64(1023+31-n)<<dFracBits | uint64(v)<<(n+21)&dFracMask
 }
 
 func f2u(x float64) uint64 { return math.Float64bits(x) }
@@ -387,6 +397,7 @@ func sPack(s uint32, e int, m uint64, halfUp bool) uint32 {
 		e++
 	}
 	if e >= sExpMax {
+		errMath(mathERANGE)
 		return s | sInf
 	}
 	return s | uint32(int32(e))<<sFracBits | uint32(m)&sFracMask
@@ -463,6 +474,7 @@ func sMul(a, b uint32) uint32 {
 		m = (t + 0x40) >> 7
 	}
 	if e >= sExpMax {
+		errMath(mathERANGE)
 		return s | sInf
 	}
 	return s | uint32(int32(e))<<sFracBits | m&sFracMask
@@ -481,7 +493,17 @@ func sDiv(a, b uint32) uint32 {
 	}
 	_, ea, ma := sUnpack(a)
 	_, eb, mb := sUnpack(b)
-	q, r := bits.Div64(0, ma<<(sFracBits+sGuard), mb)
+	// The quotient of ma<<29 by mb, by the CPU's own division a few bits at a time,
+	// as the remainder is under 24 bits.
+	d := uint32(mb)
+	w := uint32(ma) / d
+	r := uint32(ma) % d
+	for _, k := range [...]uint32{8, 8, 8, sFracBits + sGuard - 24} {
+		r <<= k
+		w = w<<k | r/d
+		r %= d
+	}
+	q := uint64(w)
 	if r != 0 {
 		q |= 1
 	}
@@ -494,6 +516,7 @@ func sDiv(a, b uint32) uint32 {
 			e++
 		}
 		if e >= sExpMax {
+			errMath(mathERANGE)
 			return s | sInf
 		}
 		return s | uint32(e)<<sFracBits | uint32(m)&sFracMask
@@ -529,6 +552,7 @@ func sTrunc(a uint64) uint32 {
 	s := uint32(a>>63) << 31
 	e := int(a>>dFracBits&dExpMax) - 1023 + 127
 	if e >= sExpMax {
+		errMath(mathERANGE)
 		return s | sInf
 	}
 	y := uint32((a&dFracMask | dHidden) >> (dFracBits - sFracBits - 1))
@@ -540,6 +564,7 @@ func sTrunc(a uint64) uint32 {
 		r >>= 1
 		e++
 		if e >= sExpMax {
+			errMath(mathERANGE)
 			return s | sInf
 		}
 	}

@@ -56,9 +56,11 @@ func parseFloat(at func(int) byte) (float64, int) {
 		scale += e
 	}
 	if scale > 255 {
+		errMath(mathERANGE)
 		return u2f(dInf), i
 	}
 	if scale < -255 {
+		errMath(mathERANGE)
 		return 0, i
 	}
 	n := scale

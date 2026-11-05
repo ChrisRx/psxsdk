@@ -126,6 +126,64 @@ func glyphFor(c uint16, user bool) (uintptr, glyphKind) {
 	return 0, glyphBadSJIS
 }
 
+// nonKanjiExtra lists the assigned cells of Krom2RawAdd2's second range, in its
+// order, which come before the ROM's non-kanji cells (spec 18).
+var nonKanjiExtra = [][2]uint16{
+	{0x8540, 0x8544}, {0x8546, 0x8546}, {0x8548, 0x8549}, {0x854b, 0x854b},
+	{0x8550, 0x855b}, {0x85a0, 0x85ac}, {0x85b0, 0x85bc}, {0x8640, 0x8641},
+	{0x8643, 0x8643}, {0x8645, 0x8645}, {0x8647, 0x8648}, {0x864a, 0x864c},
+	{0x864e, 0x864f}, {0x8660, 0x866f}, {0x869f, 0x86b6}, {0x86b8, 0x86f5},
+	{0x8740, 0x875a}, {0x875c, 0x8762}, {0x8764, 0x8796},
+}
+
+// rangeIndex returns the place of c among the cells the ranges list.
+func rangeIndex(ranges [][2]uint16, c uint16) (uint32, bool) {
+	i := uint32(0)
+	for _, r := range ranges {
+		if c < r[0] {
+			break
+		}
+		if c <= r[1] {
+			return i + uint32(c-r[0]), true
+		}
+		i += uint32(r[1]-r[0]) + 1
+	}
+	return 0, false
+}
+
+// kromKernel is the kernel's address of the glyph for code.
+func kromKernel(code uint16) uint32 {
+	return uint32(libps_biosB(biosKrom2RawAdd, uintptr(code), 0, 0, 0))
+}
+
+// libKrom2RawAdd2 returns the address of the glyph for the low 16 bits of code,
+// with the kernel giving only the bases, or the blank, the full-width space, for
+// a code with no glyph. Unlike Krom2Tim's glyphFor it does not widen single
+// bytes, and a kanji code with a bad trail byte is a blank.
+//
+//export Krom2RawAdd2
+func libKrom2RawAdd2(code uint32) uint32 {
+	c := uint16(code)
+	switch {
+	case c >= 0x8140 && c <= 0x84be:
+		base := kromKernel(0x8140)
+		if i, ok := rangeIndex(nonKanji, c); ok {
+			return base + i*romGlyph
+		}
+	case c >= 0x8540 && c <= 0x8796:
+		base := kromKernel(0x8140)
+		if i, ok := rangeIndex(nonKanjiExtra, c); ok {
+			return base - 0x2000 + i*romGlyph
+		}
+	case c >= 0x889f && c <= 0x9872:
+		base := kromKernel(0x889f)
+		if row, cell, ok := jisCell(c); ok {
+			return base + uint32((row-16)*94+cell-1)*romGlyph
+		}
+	}
+	return kromKernel(0x8140)
+}
+
 // jisCell returns the JIS row and cell, from 1, of the two-byte Shift JIS
 // code c, and whether its trail byte is one Shift JIS uses.
 func jisCell(c uint16) (row, cell int, ok bool) {
@@ -195,8 +253,33 @@ func putGlyph(pix []uint32, cols, col, row int, addr uintptr) {
 //
 //export Krom2Tim
 func Krom2Tim(sjis *byte, taddr *uint32, dx, dy, cx, cy int32, fg, bg uint32) int32 {
-	return krom2Tim(sjis, taddr, dx, dy, cx, cy, fg, bg, false)
+	r, shape := krom2Tim(sjis, taddr, dx, dy, cx, cy, fg, bg, false)
+	if r == 0 {
+		spinCycles(krom2TimPad + krom2TimCellPad*shape.cells + krom2TimBlankPad*(shape.reached-shape.glyphs) - krom2TimGlyphBack*shape.glyphs)
+	}
+	return r
 }
+
+// kromShape is what a string made of a TIM, for Krom2Tim's time: the image's
+// cells, the cells the string's characters and newlines went past, and the
+// glyphs among them.
+type kromShape struct {
+	cells   uint32
+	reached uint32
+	glyphs  uint32
+}
+
+// The rest of Krom2Tim's time. Sony's is 610,500 cycles, 2,050 for each cell of the
+// image, 2,225 for each it reached, and 875 for each glyph (probe: 1 to 33 characters,
+// with and without newlines), against the work here of 1,035 a cell and 3,180 a
+// glyph. The figure for a glyph comes off two-byte and one-byte characters alike. The
+// first frame's vertical blank goes on top of the pad.
+const (
+	krom2TimPad       = 595000
+	krom2TimCellPad   = 1015
+	krom2TimBlankPad  = 2225
+	krom2TimGlyphBack = 100
+)
 
 // Krom2Tim2 is Krom2Tim reading the string as user-defined characters: a
 // two-byte code the font has no glyph for is a blank cell, and a byte that
@@ -205,10 +288,11 @@ func Krom2Tim(sjis *byte, taddr *uint32, dx, dy, cx, cy int32, fg, bg uint32) in
 //
 //export Krom2Tim2
 func Krom2Tim2(sjis *byte, taddr *uint32, dx, dy, cx, cy int32, fg, bg uint32) int32 {
-	return krom2Tim(sjis, taddr, dx, dy, cx, cy, fg, bg, true)
+	r, _ := krom2Tim(sjis, taddr, dx, dy, cx, cy, fg, bg, true)
+	return r
 }
 
-func krom2Tim(s *byte, taddr *uint32, dx, dy, cx, cy int32, fg, bg uint32, user bool) int32 {
+func krom2Tim(s *byte, taddr *uint32, dx, dy, cx, cy int32, fg, bg uint32, user bool) (int32, kromShape) {
 	// The first pass checks the characters and lays them out: they fill
 	// rows of 16 cells, and a newline starts the next row. The image is
 	// as wide as the characters up to 16 cells, or 16 with a newline, and
@@ -226,11 +310,11 @@ func krom2Tim(s *byte, taddr *uint32, dx, dy, cx, cy int32, fg, bg uint32, user 
 		switch _, kind := glyphFor(c, user); kind {
 		case glyphBadSJIS:
 			ttyPrintf("bad sjis code 0x%x\n", uint32(c), 0)
-			return -1
+			return -1, kromShape{}
 		case glyphBadHankaku:
 			if !user {
 				ttyPrintf("bad hankaku code 0x%x\n", uint32(c), 0)
-				return -1
+				return -1, kromShape{}
 			}
 			result = -1
 		}
@@ -271,7 +355,11 @@ func krom2Tim(s *byte, taddr *uint32, dx, dy, cx, cy int32, fg, bg uint32, user 
 		}
 		at = at.past(c)
 	}
-	return result
+	return result, kromShape{
+		cells:   uint32(cols * rows),
+		reached: uint32(at.y*kanjiRow + at.x),
+		glyphs:  uint32(count),
+	}
 }
 
 const (
@@ -311,6 +399,9 @@ type kanjiStream struct {
 	n     int32
 	off   int
 	count int32
+
+	// end is where the text's NUL is, where the next print goes on.
+	end int
 }
 
 var kanji kanjiState
@@ -320,6 +411,11 @@ type kanjiState struct {
 	streams [kanjiStreams]kanjiStream
 	open    int // streams opened since KanjiFntClose
 	used    int // the n values of the open streams, added up
+
+	// opened is set by the first KanjiFntOpen. KanjiFntClose only lets the
+	// next open start over: stream 0 goes on taking prints and flushing until
+	// then (probe spec/probes/cfntclose).
+	opened bool
 
 	// pool holds the streams' texts, each ended by a NUL, and quads, right
 	// after it and part of one block with it, the flushes' packets, a
@@ -375,8 +471,11 @@ func KanjiFntOpen(x, y, w, h, dx, dy, cx, cy, isbg, n int32) int32 {
 	loadImage(RECT{X: int16(cx), Y: int16(cy), W: 16, H: 1}, unsafe.Pointer(&kanjiClut[0]))
 	id := kanji.open
 	if id == kanjiStreams || kanji.used+int(n) > kanjiPoolOpen {
+		spinCycles(kanjiFntOpenPad)
 		return -1
 	}
+	// Sony's takes longer by the characters the stream has room for.
+	spinCycles(kanjiFntOpenCharPad * uint32(max(n, 0)))
 	// A negative sum puts the stream at the pool's start: where Sony's
 	// puts it was not probed, and its memory before the pool is not the
 	// clean library's to overwrite.
@@ -389,14 +488,24 @@ func KanjiFntOpen(x, y, w, h, dx, dy, cx, cy, isbg, n int32) int32 {
 		isbg:  isbg != 0,
 		n:     n,
 		off:   off,
+		end:   off,
 	}
 	kanji.pool[off] = 0
 	kanji.used += int(n)
 	kanji.open++
+	kanji.opened = true
+	spinCycles(kanjiFntOpenPad)
 	return int32(id)
 }
 
-// KanjiFntClose closes every Kanji stream.
+// The rest of KanjiFntOpen's 67,200 cycles, refused or not, and of its 48 more for
+// each character the stream has room for: 91,880 at the 512 most programs ask for.
+const (
+	kanjiFntOpenPad     = 66400
+	kanjiFntOpenCharPad = 48
+)
+
+// KanjiFntClose has the next KanjiFntOpen start over from the first stream.
 //
 //export KanjiFntClose
 func KanjiFntClose() {
@@ -405,7 +514,7 @@ func KanjiFntClose() {
 
 // KanjiFntPrint appends the string s to stream 0, the first opened, and
 // returns the count of what the stream holds, or -1 without appending if
-// no stream is open or the count is already past the stream's n. The
+// no stream was ever opened or the count is already past the stream's n. The
 // count is of bytes, with the text a conversion makes counted twice, as
 // Sony's library counts it. The pool's end stops nothing: the text runs on
 // into the packets after it. Percent directives are formatted as printf
@@ -414,7 +523,7 @@ func KanjiFntClose() {
 //
 //export KanjiFntPrint
 func KanjiFntPrint(s *byte) int32 {
-	if kanji.open == 0 {
+	if !kanji.opened {
 		return -1
 	}
 	st := &kanji.streams[0]
@@ -422,10 +531,7 @@ func KanjiFntPrint(s *byte) int32 {
 		return -1
 	}
 	// The text goes on at its NUL, whatever the count says.
-	end := st.off
-	for end < kanjiBlock-1 && *kanji.textByte(end) != 0 {
-		end++
-	}
+	end := st.end
 	var added int32
 	for p := unsafe.Pointer(s); ; p = unsafe.Add(p, 1) {
 		c := *(*byte)(p)
@@ -457,6 +563,7 @@ func KanjiFntPrint(s *byte) int32 {
 		}
 	}
 	*kanji.textByte(end) = 0
+	st.end = end
 	st.count += added
 	return st.count
 }
@@ -490,20 +597,26 @@ func (k *kanjiState) put(i int, c byte) int {
 // KanjiFntFlush draws stream id's text, stream 0's for an id that is not
 // open, empties the stream and returns the ordering table it draws
 // through. It returns nil, drawing nothing and leaving the text, if no
-// stream is open or the text, up to where the window's end stops it, has
+// stream was ever opened or the text, up to where the window's end stops it, has
 // a character the font cannot draw, or more than 301 characters: Sony's
 // library breaks at the 302nd, which here counts as one the font has not.
 //
 //export KanjiFntFlush
 func KanjiFntFlush(id int32) *uint32 {
-	if kanji.open == 0 {
+	if !kanji.opened {
 		return nil
 	}
 	if id < 0 || int(id) >= kanji.open {
 		id = 0
 	}
-	return kanji.streams[id].flush()
+	r := kanji.streams[id].flush()
+	spinCycles(kanjiFntFlushPad)
+	return r
 }
+
+// kanjiFntFlushPad is what KanjiFntFlush's mean of 98,800 cycles has over the
+// work here (spec 21).
+const kanjiFntFlushPad = 11532
 
 // flush lays the stream's text out, loads its glyph image and queues the
 // packets that draw it. The packets are built after the text is read, since
@@ -598,6 +711,7 @@ func (st *kanjiStream) flush() *uint32 {
 	sendList(unsafe.Pointer(&kanji.ot))
 	kanji.sent = volatile.LoadUint32(&queue.tail)
 	st.count = 0
+	st.end = st.off
 	kanji.pool[st.off] = 0
 	return &kanji.ot
 }
