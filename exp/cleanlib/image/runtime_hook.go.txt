@@ -1,0 +1,11 @@
+
+// libpsImageStart starts the runtime of a library laid out as the resident
+// image: the heap and the package initializers, with no main to call. The
+// program the image serves has its own.
+//
+//export libps_image_start
+func libpsImageStart() {
+	initRand()
+	initHeap()
+	initAll()
+}

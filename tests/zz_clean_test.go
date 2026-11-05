@@ -234,6 +234,12 @@ func TestClean(t *testing.T) {
 	frames := min(len(ref.spu), len(cl.spu))
 	compare(r, "SPU", "frame", [][]spuWord{slices.Concat(ref.spu[:frames]...)}, [][]spuWord{slices.Concat(cl.spu[:frames]...)})
 	compare(&logger{t}, "SPU", "frame", ref.spu, cl.spu)
+	if os.Getenv("PSX_CLEAN_REF") == "cimg" {
+		// On the retail BIOS the boot sound's reverb leaves samples here,
+		// up to the moment the library's start-up stops it.
+		clear(ref.ram[0x70000:])
+		clear(cl.ram[0x70000:])
+	}
 	if n := countDiff(ref.ram, cl.ram); n > 0 {
 		r.Errorf("%d bytes of sound memory differ", n)
 	}
