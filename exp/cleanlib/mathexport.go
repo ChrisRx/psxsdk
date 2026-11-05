@@ -2,6 +2,8 @@
 
 package cleanlib
 
+import "math/bits"
+
 // The C names of the math calls and of the software floating point
 // helpers. The helpers take and return the bits, which the o32 soft-float
 // convention passes as it does a double: in a register pair.
@@ -66,6 +68,54 @@ func cmpGreater(a, b uint64) int32 {
 //export __fixdfsi
 func softFixdfsi(a uint64) int32 { return dFix(a) }
 
+// Programs reach the arithmetic through the entries below, which take as long
+// as Sony's on what they are given (spec 21). The library's own arithmetic,
+// the compiler's calls of __muldf3 and the rest above, stays as quick as it is:
+// the math calls are paced as a whole. Sony's figures are much the same for any
+// two nonzero values, 3,900 for a product, and small for a zero: 90 and 48. A
+// quotient goes by its bits, as a probe of 378 divisions found: 10,680 and 260 for
+// each one bit of the quotient to two places below its last, all within 340.
+const (
+	programMulPad     = 3602
+	programMulZeroPad = 38
+	programDivPad     = 400
+	programDivBitPad  = 260
+	programFixPad     = 290
+	programFixZeroPad = 14
+	programFloatPad   = 302
+)
+
+//export libps_c___muldf3
+func programMuldf3(a, b uint64) uint64 {
+	r := dMul(a, b)
+	if dIsZero(a) || dIsZero(b) {
+		pace(programMulZeroPad)
+	} else {
+		pace(programMulPad)
+	}
+	return r
+}
+
+//export libps_c___divdf3
+func programDivdf3(a, b uint64) uint64 {
+	r, q := dDivQuotient(a, b)
+	if q != 0 {
+		spinCycles(programDivPad + programDivBitPad*uint32(bits.OnesCount64(q)))
+	}
+	return r
+}
+
+//export libps_c___fixdfsi
+func programFixdfsi(a uint64) int32 {
+	r := dFix(a)
+	if dIsZero(a) {
+		pace(programFixZeroPad)
+	} else {
+		pace(programFixPad)
+	}
+	return r
+}
+
 // __floatsidf never returns for the most negative integer, as Sony's.
 //
 //export __floatsidf
@@ -75,6 +125,17 @@ func softFloatsidf(i int32) uint64 {
 		}
 	}
 	return dFloat(i)
+}
+
+// Sony's takes 450 cycles for any integer but 0.
+//
+//export libps_c___floatsidf
+func programFloatsidf(i int32) uint64 {
+	r := softFloatsidf(i)
+	if i != 0 {
+		pace(programFloatPad)
+	}
+	return r
 }
 
 // Single precision: the same arithmetic on 24-bit significands, worked
@@ -98,14 +159,66 @@ func softDivsf3(a, b uint32) uint32 { return sDiv(a, b) }
 //export _get_errno
 func getErrno() int32 { return libps_biosB(biosGetErrno, 0, 0, 0, 0) }
 
+// sqrt, sin and cos take as long as Sony's, which get there by the long way
+// around (spec 21, "Costs"). The pads are in the entries alone, so that asin
+// and the others that use them inside cost what they did. Sony's sin and cos go
+// up and down by some 10,000 cycles with the argument, in no plain way; these are the
+// means over a probe's 2,000 arguments, a sign making no difference.
+const (
+	sinZeroPad  = 6600   // Sony's 7,500 at 0
+	sinNearPad  = 132900 // 266,700 below pi/2
+	sinFarPad   = 143100 // and 279,000 from there
+	cosTinyPad  = 118100 // Sony's 254,300 at 0 and below about 1e-18
+	cosNearPad  = 134600 // 268,800 below pi
+	cosFarPad   = 145400 // and 281,000 from there
+	sqrtBasePad = 140500 // Sony's about 205,000, less the 54,500 of the work and a blank's
+	sqrtExpPad  = 20000  // and 20,000 for each power of two from 1
+
+	// The bits of pi/2 and pi, and of the 2^-60 where cos stops being tiny.
+	bitsHalfPi = 0x3ff921fb54442d18
+	bitsPi     = 0x400921fb54442d18
+	bitsTiny   = (1023 - 60) << dFracBits
+)
+
 //export sqrt
-func libSqrt(x float64) float64 { return mathSqrt(x) }
+func libSqrt(x float64) float64 {
+	r := mathSqrt(x)
+	// Nothing to spend on 0, on 1, whose Sony's is quicker, or below 0, not
+	// measured.
+	if b := f2u(x); b != 0 && b != 1023<<dFracBits && b&dSign == 0 {
+		e := int(b>>dFracBits&dExpMax) - 1023
+		spinCycles(sqrtBasePad + sqrtExpPad*uint32(max(e, -e)))
+	}
+	return r
+}
 
 //export sin
-func libSin(x float64) float64 { return mathSin(x) }
+func libSin(x float64) float64 {
+	r := mathSin(x)
+	switch size := f2u(x) &^ dSign; {
+	case dIsZero(size):
+		spinCycles(sinZeroPad)
+	case size < bitsHalfPi:
+		spinCycles(sinNearPad)
+	default:
+		spinCycles(sinFarPad)
+	}
+	return r
+}
 
 //export cos
-func libCos(x float64) float64 { return mathCos(x) }
+func libCos(x float64) float64 {
+	r := mathCos(x)
+	switch size := f2u(x) &^ dSign; {
+	case size < bitsTiny:
+		spinCycles(cosTinyPad)
+	case size < bitsPi:
+		spinCycles(cosNearPad)
+	default:
+		spinCycles(cosFarPad)
+	}
+	return r
+}
 
 //export tan
 func libTan(x float64) float64 { return mathTan(x) }

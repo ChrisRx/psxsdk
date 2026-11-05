@@ -40,11 +40,10 @@ var libpsIntrEntry [0]byte
 
 // The kernel functions the library calls.
 const (
-	biosRand          = 0x2f // A0: the C library's rand
 	biosGPUCommand    = 0x49 // A0: writes a word to GP0
-	biosSrand         = 0x30 // A0: and srand
 	biosCdRemove      = 0x72 // A0: removes the kernel's CD-ROM handlers
 	biosFlushCache    = 0x44 // A0: empties the instruction cache
+	biosPrintf        = 0x3f // A0: the kernel's printf
 	biosGetRCnt       = 0x03 // B0: reads a root counter
 	biosStartRCnt     = 0x04 // B0: enables a root counter's interrupt
 	biosResetRCnt     = 0x06 // B0: sets a root counter back to 0
@@ -54,6 +53,7 @@ const (
 	biosSetCustomExit = 0x19 // B0: where the kernel goes after an interrupt
 	biosPutchar       = 0x3d // B0: writes a character to the TTY (not used: putchar goes through write, as Sony's does)
 	biosWrite         = 0x35 // B0: writes to an open file
+	biosKrom2RawAdd   = 0x51 // B0: a Shift JIS code's glyph in the ROM font
 	biosClearRCnt     = 0x0a // C0: whether the kernel acknowledges a counter
 )
 
@@ -71,21 +71,6 @@ const (
 	irqCD     = 1 << 2
 	irqDMA    = 1 << 3
 )
-
-// heap is the area InitHeap gave the library's allocator.
-var heap struct {
-	head unsafe.Pointer
-	size uint32
-}
-
-// InitHeap gives the library's allocator the size bytes at head. The
-// runtime calls it before main with the area between the program and the
-// Go heap.
-//
-//export InitHeap
-func InitHeap(head unsafe.Pointer, size uint32) {
-	heap.head, heap.size = head, size
-}
 
 // EnterCriticalSection turns interrupts off through the kernel. It returns
 // 1 if they were on, and 0 if they were already off.
@@ -141,7 +126,7 @@ func ExitCriticalSection() {
 }
 
 // putchar writes c to the TTY through the kernel's write(1, &c, 1) and
-// returns c. A "\n" goes as "\r" then "\n" (the kernel's write adds a
+// returns what the write returned. A "\n" goes as "\r" then "\n" (the kernel's write adds a
 // "\r" of its own before a "\n", so a line ends "\r\r\n" on the TTY).
 //
 // Sony's putchar does the same (iotrace of the seqhdr probe built on
@@ -151,28 +136,57 @@ func ExitCriticalSection() {
 // 4,182: through it a long line printed ten percent slower and the
 // program's next calls fell a frame behind Sony's. Between write's return
 // and the next call Sony's library and the program's print loop spend 68
-// to 84 cycles (76 the most often, 76 on average); the spin and the
-// spaces after it stand for what putchar's own work leaves of that (a
-// spin's turn is 12 cycles, a space 2). Sony's "\r" and "\n" are 28
-// cycles apart; here about 32.
+// to 84 cycles (76 the most often, 76 on average); keeping the column takes
+// that time here, with no pad. Sony's "\r" and "\n" are 28
+// cycles apart; here about 32. A tab goes as spaces, by ttyColumn. Only the low
+// byte of c counts.
 //
 //export putchar
 func putchar(c int32) int32 {
-	spin(putcharGlue)
-	space(putcharSpace)
-	if c == '\n' {
-		volatile.StoreUint8(&ttyChar, '\r')
-		libps_biosB(biosWrite, 1, uintptr(unsafe.Pointer(&ttyChar)), 1, 0)
+	b := byte(c)
+	if b >= ' ' && b <= '~' {
+		ttyColumn++
+	} else if putcharOther(b) {
+		return putcharLast
 	}
-	volatile.StoreUint8(&ttyChar, byte(c))
-	libps_biosB(biosWrite, 1, uintptr(unsafe.Pointer(&ttyChar)), 1, 0)
-	return c
+	volatile.StoreUint8(&ttyChar, b)
+	return libps_biosB(biosWrite, 1, uintptr(unsafe.Pointer(&ttyChar)), 1, 0)
 }
 
-const (
-	putcharGlue  = 1
-	putcharSpace = 3
-)
+// putcharLast is what the last write of a tab returned, for putchar to return.
+var putcharLast int32
+
+// putcharOther does what comes before the write of a byte that is not plain text,
+// or for a tab all of it, when it reports true. It is apart from putchar so that
+// the plain text, what a program mostly prints, saves no registers for its loop.
+//
+//go:noinline
+func putcharOther(b byte) bool {
+	switch {
+	case b == '\n':
+		ttyColumn = 0
+		volatile.StoreUint8(&ttyChar, '\r')
+		libps_biosB(biosWrite, 1, uintptr(unsafe.Pointer(&ttyChar)), 1, 0)
+	case b == '\t':
+		// As spaces to the next stop of 8, always at least one.
+		for {
+			volatile.StoreUint8(&ttyChar, ' ')
+			putcharLast = libps_biosB(biosWrite, 1, uintptr(unsafe.Pointer(&ttyChar)), 1, 0)
+			ttyColumn++
+			if ttyColumn&7 == 0 {
+				return true
+			}
+		}
+	case b >= 0xa4 && b <= 0xa6 || b == 0xc7:
+		ttyColumn++
+	}
+	return false
+}
+
+// ttyColumn is the column putchar has reached, for a tab: only its own printing
+// characters move it, and only a newline sets it back. Backspace and a carriage
+// return leave it, and write and putc go around it (probe spec/probes/ctab).
+var ttyColumn uint32
 
 // ttyPrintf prints format to the TTY (file 1) as the reference library's
 // printf does: formatting as it goes, one character a call to the
@@ -327,9 +341,16 @@ var intr struct {
 // other entry points that need it call it too, for a program that starts
 // without ResetGraph.
 func libStart() {
-	if intr.started {
-		return
+	if !intr.started {
+		libBegin()
 	}
+}
+
+// libBegin is libStart's work, apart so that a call after the start costs no
+// stack.
+//
+//go:noinline
+func libBegin() {
 	intr.started = true
 	EnterCriticalSection()
 	intr.exit = exitBuf{
@@ -399,18 +420,24 @@ func libps_interrupt() {
 	}
 }
 
-// rand returns the kernel's next pseudo-random number, from 0 to 32767.
+// randState is rand's state, 0 until srand. The kernel has a rand and a srand,
+// A0h 2Fh and 30h, which the library does not call: a retail kernel's sequence
+// starts elsewhere (probe spec/probes/crand, and Terra Incognita's scenery).
+var randState uint32
+
+// rand returns the next pseudo-random number, from 0 to 32767.
 //
 //export rand
 func rand() int32 {
-	return libps_biosA(biosRand, 0, 0, 0, 0)
+	randState = randState*1103515245 + 12345
+	return int32(randState >> 16 & 0x7fff)
 }
 
-// srand seeds the kernel's rand.
+// srand seeds rand.
 //
 //export srand
 func srand(seed uint32) {
-	libps_biosA(biosSrand, uintptr(seed), 0, 0, 0)
+	randState = seed
 }
 
 // callC calls the C function at f, which takes no arguments, as a Go

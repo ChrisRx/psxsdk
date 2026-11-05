@@ -2,6 +2,8 @@
 
 package cleanlib
 
+import "go.chrisrx.dev/psx/internal/volatile"
+
 // The double precision math calls, worked out from Sony's results (spec
 // 12 has the rules, one heading per family) in the library's own
 // arithmetic (softfloat.go). sqrt and floor are the Seventh Edition Unix
@@ -13,6 +15,38 @@ package cleanlib
 // the order written; negation, which the compiler would do on the sign
 // bit alone, goes through neg, and a quotient the compiler would turn
 // into a product through div, as the library's own do.
+
+// math_errno is the one word the library reports a math error in: a variable a
+// program reads by name, and only the program clears. The library only writes
+// it, so a plain store would go, and the variable with it, at link time.
+
+//go:extern math_errno
+var mathErrno uint32
+
+// The two codes that also deliver a kernel event.
+const (
+	mathEDOM   = 33
+	mathERANGE = 34
+
+	mathEventClass = 0xf4000002
+	mathEventEDOM  = 0x0301
+	mathEventRange = 0x0302
+)
+
+// errMath is the one way the library reports a math error (spec 17): it sets
+// math_errno to code, and for 33 and 34 alone delivers an event.
+//
+//export _err_math
+func errMath(code int32) int32 {
+	volatile.StoreUint32(&mathErrno, uint32(code))
+	switch code {
+	case mathEDOM:
+		libps_biosB(biosDeliverEvent, mathEventClass, mathEventEDOM, 0, 0)
+	case mathERANGE:
+		libps_biosB(biosDeliverEvent, mathEventClass, mathEventRange, 0, 0)
+	}
+	return 0
+}
 
 func neg(x float64) float64   { return u2f(dNeg(f2u(x))) }
 func toInt(x float64) int32   { return dFix(f2u(x)) }
@@ -100,6 +134,9 @@ func mathCeil(d float64) float64 { return neg(mathFloor(neg(d))) }
 // sqrt: Newton's iteration from a first guess half way between 1 and
 // the argument's mantissa, with the exponent halved.
 func mathSqrt(arg float64) float64 {
+	if arg < 0 {
+		errMath(mathEDOM)
+	}
 	if arg <= 0 {
 		return 0
 	}
@@ -251,6 +288,7 @@ func mathAtan(x float64) float64 {
 
 func mathAsin(x float64) float64 {
 	if x > 1 || x < -1 {
+		errMath(mathEDOM)
 		return 0
 	}
 	return mathAtan(div(x, mathSqrt(1-x*x)))
@@ -258,6 +296,7 @@ func mathAsin(x float64) float64 {
 
 func mathAcos(x float64) float64 {
 	if x > 1 || x < -1 {
+		errMath(mathEDOM)
 		return 0
 	}
 	return pio2 - mathAsin(x)
@@ -266,6 +305,10 @@ func mathAcos(x float64) float64 {
 // mathAtan2: asin of y over the hypotenuse, moved to the left half plane
 // for a negative x. Matched only as far as hypot is (spec 12).
 func mathAtan2(y, x float64) float64 {
+	if x == 0 && y == 0 {
+		errMath(mathEDOM)
+		return 0
+	}
 	h := mathHypot(x, y)
 	if h == 0 {
 		return 0
@@ -364,10 +407,17 @@ const (
 
 func mathLog(x float64) float64 {
 	if x < 0 {
+		errMath(mathEDOM)
 		return 0
 	}
 	if x == 0 {
+		errMath(mathERANGE)
 		return 0
+	}
+	// A number near the ends of the range reports a range error, though the
+	// result that follows is the usual one.
+	if field := f2u(x) >> dFracBits & dExpMax; field < 512 || field >= 1535 {
+		errMath(mathERANGE)
 	}
 	f, n := splitBits(x)
 	// At the two ends of the exponent field Sony's split goes its own way
@@ -404,12 +454,6 @@ func mathLog(x float64) float64 {
 }
 
 func mathLog10(arg float64) float64 {
-	if arg < 0 {
-		return 0
-	}
-	if arg == 0 {
-		return 0
-	}
 	return mathLog(arg) / ln10
 }
 
@@ -418,6 +462,7 @@ func mathLog10(arg float64) float64 {
 func mathPow(x, y float64) float64 {
 	if x == 0 {
 		if y <= 0 {
+			errMath(mathEDOM)
 			return 1
 		}
 		return 0
@@ -430,6 +475,7 @@ func mathPow(x, y float64) float64 {
 		return powInt(x, n)
 	}
 	if x < 0 {
+		errMath(mathEDOM)
 		return 0
 	}
 	return mathExp(y * mathLog(x))
@@ -448,8 +494,13 @@ func powInt(x float64, n int32) float64 {
 		if n&1 != 0 {
 			p *= b
 		}
-		b *= b
 		n >>= 1
+		// Not squared past the top bit, as math_errno shows: pow(2, 1000)
+		// reports no overflow. By name, since the compiler would otherwise
+		// work the plain product out whether it is used or not.
+		if n > 0 {
+			b = mul(b, b)
+		}
 	}
 	return p
 }
@@ -493,6 +544,11 @@ func mathHypot(x, y float64) float64 {
 	p, q := abs(x), abs(y)
 	if p < q {
 		p, q = q, u2f(sExtend(sTrunc(f2u(p))))
+	}
+	// A zero q runs no step, as math_errno shows: its quotient by a zero p
+	// would report an overflow in the narrowing.
+	if dIsZero(f2u(q)) {
+		return p
 	}
 	const four = 0x40800000
 	for range 3 {

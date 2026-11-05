@@ -28,3 +28,4 @@ VAR(GsDISPON, 4);
 VAR(GsTON, 4);
 VAR(GsLIGHT_MODE, 4);
 VAR(GsNDIV, 4);
+VAR(math_errno, 4);
