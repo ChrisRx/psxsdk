@@ -101,6 +101,11 @@ type CPU struct {
 	// and its result read free.
 	gteDone uint64
 
+	// GTEHook, if set, sees each GTE instruction as it is reached, before any
+	// wait, at the cycle it is reached: a command whole, and for a move, load or
+	// store only the GTE's side of it, not the CPU register or address.
+	GTEHook func(op uint32, cycle uint64)
+
 	// Excode is the exception the last step took, or NoException.
 	Excode uint8
 

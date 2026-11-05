@@ -87,6 +87,9 @@ func (c *CPU) execute() (cycles uint32, ok bool) {
 		}
 	case 0x12:
 		// Every GTE instruction waits for the command in flight first.
+		if c.GTEHook != nil {
+			c.GTEHook(gteSide(c.Opcode), c.TotalCycles+uint64(c.LastCycles))
+		}
 		wait := c.gteWait()
 		switch c.rs() {
 		case 0x00: // mfc2
@@ -130,10 +133,16 @@ func (c *CPU) execute() (cycles uint32, ok bool) {
 		// pending load first.
 		c.exception(ExcCpU)
 	case 0x32:
+		if c.GTEHook != nil {
+			c.GTEHook(gteSide(c.Opcode), c.TotalCycles+uint64(c.LastCycles))
+		}
 		wait := c.gteWait()
 		c.opLWC2()
 		return 2 + wait, true
 	case 0x3a:
+		if c.GTEHook != nil {
+			c.GTEHook(gteSide(c.Opcode), c.TotalCycles+uint64(c.LastCycles))
+		}
 		wait := c.gteWait()
 		c.opSWC2()
 		return 2 + wait, true
@@ -141,6 +150,19 @@ func (c *CPU) execute() (cycles uint32, ok bool) {
 		return 0, false
 	}
 	return 2, true
+}
+
+// gteSide keeps what of a GTE instruction is the GTE's: all of a command, the
+// operation and GTE register of a move, and the operation and GTE register of a load
+// or store.
+func gteSide(op uint32) uint32 {
+	switch {
+	case op>>26 != 0x12:
+		return op & 0xfc1f0000
+	case op&(1<<25) != 0:
+		return op
+	}
+	return op &^ 0x001f0000
 }
 
 // gteWait is how long the CPU waits for the GTE command in flight at a

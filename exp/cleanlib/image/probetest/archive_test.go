@@ -496,6 +496,64 @@ var watchConds = map[string]func(m *emutest.Machine) bool{
 	"nil": func(m *emutest.Machine) bool { return m.CPU.R[4] == 0 },
 }
 
+// busTrace records what a program does at the devices and the GTE from when on is set:
+// each I/O register access and each GTE instruction, with the cycle. It shows no PC and
+// no instruction beyond what the GTE sees.
+type busTrace struct {
+	m     *emutest.Machine
+	on    bool
+	lines []byte
+}
+
+func newBusTrace(m *emutest.Machine) *busTrace {
+	b := &busTrace{m: m}
+	m.OnBus(func(addr uint32, size int, v uint32, write bool) {
+		if !b.on || addr&0x1fffffff < 0x1f801000 || addr&0x1fffffff >= 0x1f803000 {
+			return
+		}
+		dir := "r"
+		if write {
+			dir = "w"
+		}
+		b.lines = fmt.Appendf(b.lines, "io %s %08x %d %08x cyc %d\n", dir, addr&0x1fffffff, size, v, m.CPU.TotalCycles)
+	})
+	m.OnGTE(func(op uint32, cycle uint64) {
+		if b.on {
+			b.lines = fmt.Appendf(b.lines, "gte %08x cyc %d\n", op, cycle)
+		}
+	})
+	return b
+}
+
+// TestArchiveBus writes what the programs in ARCHIVE_BUS, each NAME:FROM:TO in frames from
+// "Execute !", do at the devices and the GTE, into calls/NAME-SIDE.bus. The pad is pressed
+// as TestArchive presses it.
+func TestArchiveBus(t *testing.T) {
+	list := strings.Fields(os.Getenv("ARCHIVE_BUS"))
+	if len(list) == 0 {
+		t.Skip("ARCHIVE_BUS names the programs")
+	}
+	if err := os.MkdirAll(carchive+"calls", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, spec := range list {
+		f := strings.Split(spec, ":")
+		from, _ := strconv.Atoi(f[1])
+		to, _ := strconv.Atoi(f[2])
+		for _, side := range []string{"sony", "clean"} {
+			s := newFirstSide(t, carchive+f[0]+"-"+side+"/"+f[0]+"-"+side+".cue")
+			b := newBusTrace(s.m)
+			for s.frame < to {
+				b.on = s.frame >= from
+				s.next(s.frame + 1)
+			}
+			if err := os.WriteFile(carchive+"calls/"+f[0]+"-"+side+".bus", b.lines, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
 // entryNames names the library's entry points, from the image's first link.
 func entryNames() map[uint32]string {
 	names := map[uint32]string{}
