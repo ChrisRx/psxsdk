@@ -23,6 +23,10 @@
 // go.chrisrx.dev/psx/internal/toolchain says how. YAROZE_WASM names another
 // compiler to use in place of the embedded one, for working on it.
 //
+// A directory of C sources with no Go in it is built as a C project from the
+// SDK, by the compiler with clang, which is downloaded the first time from
+// where wasm/full.json says (package go.chrisrx.dev/psx/internal/cproject).
+//
 // yaroze generate is discgen, for go:generate, and yaroze iso is mkdisc with
 // all of its flags. The converters are here too, each the tool of its name:
 // tim is png2tim, tmd obj2tmd, vag wav2vag, vab mkvab, seq smf2seq, scene
@@ -42,9 +46,12 @@ var (
 	compiler []byte
 	//go:embed wasm/sysroot.tar.gz
 	sysroot []byte
+	//go:embed wasm/full.json
+	full []byte
 )
 
 func main() {
 	toolchain.Embed(compiler, sysroot)
+	toolchain.EmbedFull(full)
 	yarozecmd.Main("yaroze")
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -95,31 +96,49 @@ func (r *wasmtimeRuntime) build(ctx context.Context, b *Build, args []string) er
 	return nil
 }
 
-// compile has the command's compiled module there, by way of a file beside
-// it, so that a compilation cut short is never run.
+// compile has the command's compiled module there.
 func (r *wasmtimeRuntime) compile(b *Build) error {
-	if _, err := os.Stat(r.cwasm); err == nil {
+	return r.precompile(b.Stderr, b.logf, filepath.Join(r.w.dir, "tinygo.wasm"), r.cwasm)
+}
+
+// precompile has the command compile module to cwasm, unless that is done,
+// by way of a file beside it, so that a compilation cut short is never run.
+func (r *wasmtimeRuntime) precompile(stderr io.Writer, logf func(string, ...any), module, cwasm string) error {
+	if _, err := os.Stat(cwasm); err == nil {
 		return nil
 	}
 	start := time.Now()
-	f, err := os.CreateTemp(r.w.dir, "wasmtime-*.cwasm.tmp")
+	f, err := os.CreateTemp(filepath.Dir(cwasm), "wasmtime-*.cwasm.tmp")
 	if err != nil {
 		return err
 	}
 	f.Close()
-	cmd := exec.Command(r.path, "compile", "-o", f.Name(), filepath.Join(r.w.dir, "tinygo.wasm"))
-	cmd.Stdout = b.Stderr
-	cmd.Stderr = b.Stderr
+	cmd := exec.Command(r.path, "compile", "-o", f.Name(), module)
+	cmd.Stdout = stderr
+	cmd.Stderr = stderr
 	if err := cmd.Run(); err != nil {
 		os.Remove(f.Name())
 		return fmt.Errorf("wasmtime compile: %w", err)
 	}
-	if err := os.Rename(f.Name(), r.cwasm); err != nil {
+	if err := os.Rename(f.Name(), cwasm); err != nil {
 		os.Remove(f.Name())
 		return err
 	}
-	b.logf("wasm: wasmtime %s compiled the module in %s", r.version, since(start))
+	logf("wasm: wasmtime %s compiled %s in %s", r.version, filepath.Base(module), since(start))
 	return nil
+}
+
+// runCommand runs a wasmtime command line, writing its output to stderr.
+func runCommand(ctx context.Context, stderr io.Writer, path string, args []string) error {
+	cmd := exec.CommandContext(ctx, path, args...)
+	cmd.Stdout = stderr
+	cmd.Stderr = stderr
+	err := cmd.Run()
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		return fmt.Errorf("exited with %d", exit.ExitCode())
+	}
+	return err
 }
 
 func (r *wasmtimeRuntime) close(ctx context.Context) {}

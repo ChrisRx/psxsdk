@@ -67,6 +67,24 @@ In the repository, `task play NAME=check` builds an example and plays it, with f
 
 The window is drawn with [Ebitengine](https://ebitengine.org), which loads X11, OpenGL and ALSA at run time rather than linking against them, so `yaroze` still builds with nothing but Go. On Linux the libraries must be on the loader's path to run it, which the Nix development shell does.
 
+## C projects
+
+`build`, `disc` and `run` also take a directory of C sources with no Go in it, such as a project from the Net Yaroze websites, laid out as the SDK left it:
+
+```bash
+yaroze run ./chap1/3       # main.c, Makefile and auto, as they came
+```
+
+The `Makefile` is read, not run, for the link address (`-Ttext`), the `-D` and `-I` flags, and the objects of the program `auto` loads, or else of the first thing `all` makes. With no `Makefile`, every `.c` file in the directory is built and the program is linked at 0x80140000. Each `local dload` line in `auto` puts that file in the executable at its address, as `--load` does.
+
+The sources are copied first, with what a DOS compiler took for granted spelled out for a current one: line ends, the 0x1A that ended a DOS file, includes in any case and with backslashes, a Shift-JIS character whose second byte is a backslash, and a string running over several lines. They compile as gnu89 against headers written for this repository from the [Library Reference](../manuals/index.md), which have every struct, constant and function of the SDK's in the same layout, and link against the resident library at its fixed addresses, as the SDK's did.
+
+The shipped compiler has no clang, so the first C build downloads the one that does, 28MB, from `files.yaroze.dev`, checks it against a hash built into `yaroze`, and keeps it in the cache directory. A Go program never needs it, and neither does the playground. `YAROZE_CC` names a `tinygo-full.wasm` on disk to use instead.
+
+Of the 173 projects on the websites with an `auto` file and C source, 154 build. 95 of those came with an executable to compare after 1500 frames with no input: 75 draw the same video memory, byte for byte, 19 differ by under half a percent, and the other's source is not what its executable was built from. The same 154 build with a current GCC and Sony's headers. 134 of them match it with and without input, and the global variables of all of them have the same sizes and contents. Of the 20 that differ, the three that differ by more than half a percent run the same logic at another speed or draw different random numbers, since C does not say which of `f(rand(), rand())` is called first. Most of the 19 that do not build need a file that is not in the archive, a header or another library, or name a precompiled `.o` with no source.
+
+Old code leans on what GCC happened to do, so a C build keeps to that: every variable is word aligned, since the library stores words into a `PACKET` array of bytes, a local starts at zero rather than being undefined, and the optimizer makes no assumptions about aliasing, overflow or null pointers. `--hot`, `--target` and `--tags` are for Go packages.
+
 ## The compiler
 
 The compiler is the one the [playground](/play/) runs in the browser: TinyGo compiled to WebAssembly ([how it is built](../architecture/compiler.md)), so it needs no tinygo command, no go command and no C toolchain. It has no clang, so the target's C and assembly come compiled in its sysroot's cache, and it builds only at the optimization levels the cache holds: `yaroze`'s own sysroot holds z and 2. It reads the program and the modules it uses from the host's file system. The compiler and its sysroot are committed under `cmd/yaroze/wasm`, which `task yaroze` refreshes, building `.build/yaroze` as well, and are unpacked once into the cache directory, keyed by the build. `YAROZE_WASM` names a directory holding another `tinygo.wasm` and `sysroot.tar.gz`, as the site's `play/` directory does, to build with that compiler instead, for working on it; the playground's sysroot holds only z, which keeps it small for the browser, so a build with it is at `-opt=z` unless `--opt` asks for a level it cannot build at, which is an error.

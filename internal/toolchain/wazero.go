@@ -113,7 +113,7 @@ func (r *wazeroRuntime) load(ctx context.Context, b *Build) error {
 	// The first compilation of the module is most of a minute on one
 	// thread, which is wazero's default, and the cache makes it once.
 	start = time.Now()
-	compiled, err := rt.CompileModule(experimental.WithCompilationWorkers(ctx, runtime.GOMAXPROCS(0)), module)
+	compiled, err := rt.CompileModule(compileWorkers(ctx), module)
 	if err != nil {
 		rt.Close(ctx)
 		return fmt.Errorf("compiling tinygo.wasm: %w", err)
@@ -238,6 +238,11 @@ func (r *wazeroRuntime) unload(ctx context.Context) {
 }
 
 func (r *wazeroRuntime) close(ctx context.Context) { r.unload(ctx) }
+
+// compileWorkers has a compilation use every thread.
+func compileWorkers(ctx context.Context) context.Context {
+	return experimental.WithCompilationWorkers(ctx, runtime.GOMAXPROCS(0))
+}
 
 // A switchWriter writes to whichever writer it holds: the module's output
 // goes to the build being made.

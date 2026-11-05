@@ -57,7 +57,7 @@ func (f *buildFlags) patch(ctx context.Context, pkg, base string, at uint32, out
 		Stderr:  os.Stderr,
 		Log:     f.logf,
 	}
-	return f.finish(ctx, c, b, "", out)
+	return f.finish(ctx, func(ctx context.Context) error { return c.Compile(ctx, b) }, b.Output, "", out)
 }
 
 func patchCommand() *cobra.Command {

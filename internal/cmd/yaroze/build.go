@@ -3,6 +3,7 @@ package yaroze
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.chrisrx.dev/psx/internal/cmd/mkdisc"
+	"go.chrisrx.dev/psx/internal/cproject"
 	"go.chrisrx.dev/psx/internal/flags"
 	"go.chrisrx.dev/psx/internal/toolchain"
 	"go.chrisrx.dev/psx/link"
@@ -96,6 +98,9 @@ func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
 		return err
 	}
 	defer os.RemoveAll(tmp)
+	if cproject.Is(pkg) {
+		return f.buildC(ctx, c, pkg, tmp, exe, elf)
+	}
 	b := &toolchain.Build{
 		Package: pkg,
 		Opt:     f.opt,
@@ -106,17 +111,55 @@ func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
 		Stderr:  os.Stderr,
 		Log:     f.logf,
 	}
-	return f.finish(ctx, c, b, exe, elf)
+	return f.finish(ctx, func(ctx context.Context) error { return c.Compile(ctx, b) }, b.Output, exe, elf)
 }
 
-// finish compiles b and writes its outputs, as build does.
-func (f *buildFlags) finish(ctx context.Context, c *toolchain.Wasm, b *toolchain.Build, exe, elf string) error {
-	if err := c.Compile(ctx, b); err != nil {
+// buildC compiles the C project in dir, as build does a package: the
+// sources as Prepare leaves them, linked where the Makefile says, with what
+// auto loads put in the executable.
+func (f *buildFlags) buildC(ctx context.Context, c *toolchain.Wasm, dir, tmp, exe, elf string) error {
+	if f.hot || f.target != "" || len(f.tags) > 0 {
+		return errors.New("--hot, --target and --tags are for Go packages, and this is a C project")
+	}
+	p, err := cproject.Read(dir)
+	if err != nil {
+		return err
+	}
+	for _, name := range p.Missing {
+		fmt.Fprintf(os.Stderr, "yaroze: auto loads %s, which is not there\n", name)
+	}
+	for _, l := range p.Loads {
+		data, err := os.ReadFile(l.File)
+		if err != nil {
+			return err
+		}
+		f.loads = append(f.loads, link.Load{Addr: l.Addr, Data: data})
+	}
+	sources, err := p.Prepare(filepath.Join(tmp, "src"), toolchain.HasHeader)
+	if err != nil {
+		return err
+	}
+	b := &toolchain.CBuild{
+		Sources: sources,
+		Defines: p.Defines,
+		Addr:    p.Addr,
+		Opt:     f.opt,
+		Output:  filepath.Join(tmp, "prog.elf"),
+		Stderr:  os.Stderr,
+		Log:     f.logf,
+	}
+	return f.finish(ctx, func(ctx context.Context) error { return c.CompileC(ctx, b) }, b.Output, exe, elf)
+}
+
+// finish compiles with compile, which writes the ELF to output, and writes
+// the outputs, as build does.
+func (f *buildFlags) finish(ctx context.Context, compile func(context.Context) error, output, exe, elf string) error {
+	if err := compile(ctx); err != nil {
 		return err
 	}
 
 	start := time.Now()
-	data, err := os.ReadFile(b.Output)
+	data, err := os.ReadFile(output)
 	if err != nil {
 		return err
 	}
@@ -157,6 +200,10 @@ func buildCommand() *cobra.Command {
 if none is, into a PSX-EXE, which the BIOS of a console or an emulator
 loads and runs: the program with the Net Yaroze library combined in, so it
 needs no boot disc.
+
+The directory may instead hold a C project from the Net Yaroze SDK, with C
+sources and no Go ones, its Makefile and auto file read for how to build it.
+The first such build downloads the compiler with clang, 28MB, once.
 
 -o names the file, the package directory's name with .exe if not given.
 With a name ending in .elf it writes the ELF TinyGo linked instead, with
