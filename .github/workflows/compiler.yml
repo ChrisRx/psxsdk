@@ -1,15 +1,15 @@
 # Builds the playground's compiler, TinyGo compiled to WebAssembly with LLVM
-# linked in, caches it and publishes it as a release (web/compiler/
-# release.sh), named by the recipe's key. It takes a couple of hours, so it
-# runs when the recipe, TinyGo's revision or the PlayStation files laid
-# over it change, or by hand, rather than on every push, and a recipe
-# whose release exists already is downloaded, not built.
+# linked in, caches it and publishes it to R2 (web/compiler/release.sh), named
+# by the recipe's key. It takes a couple of hours, so it runs when the recipe,
+# TinyGo's revision or the PlayStation files laid over it change, or by hand,
+# rather than on every push, and a recipe already on R2, which a local build
+# published first, is downloaded, not built.
 #
 # The site does not wait on it: the Pages workflow builds the playground
 # with the compiler yaroze embeds, cmd/yaroze/wasm/tinygo.wasm.gz. A
-# release made here is what task yaroze refreshes that from, by hand, with
-# the embedded sysroot, after which the next push carries the new compiler
-# to the site and to go run alike.
+# compiler published here is what task yaroze refreshes that from, by hand,
+# with the embedded sysroot, after which the next push carries the new
+# compiler to the site and to go run alike.
 name: Compiler
 
 on:
@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     permissions:
-      contents: write
+      contents: read
       actions: write
     steps:
     - uses: actions/checkout@v4
@@ -46,7 +46,9 @@ jobs:
 
     - name: Publish the compiler
       env:
-        GH_TOKEN: ${{ github.token }}
-        TARGET: ${{ github.sha }}
+        R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+        R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        NO_MANIFEST: 1
       run: web/compiler/release.sh .build/compiler
 

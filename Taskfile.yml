@@ -305,12 +305,13 @@ tasks:
     cmds:
       - web/compiler/build.sh .build/compiler
 
-  # Publishes the compiler in .build/compiler as the release CI downloads
-  # (web/compiler/release.sh), named by the recipe's key, so that pushing a
-  # change to the recipe does not have CI spend hours building it again.
-  # The build has to be of the recipe as it is now, which build.sh records
-  # in .build/compiler/key. The release's tag is made at TARGET, main
-  # unless told otherwise. Needs gh, logged in.
+  # Publishes the compiler in .build/compiler to R2, where CI and yaroze
+  # download it (web/compiler/release.sh), named by the recipe's key, so that
+  # pushing a change to the recipe does not have CI spend hours building it
+  # again. The build has to be of the recipe as it is now, which build.sh
+  # records in .build/compiler/key. Needs the bucket's credentials, in the
+  # environment or in the file R2_ENV names, and writes
+  # cmd/yaroze/wasm/full.json, which yaroze embeds.
   compiler:release:
     cmds:
       - task: compiler:check

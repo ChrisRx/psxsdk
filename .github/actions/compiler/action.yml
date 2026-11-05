@@ -2,23 +2,23 @@ name: Compiler for the playground
 description: >-
   Puts the playground's compiler, TinyGo compiled to WebAssembly, in
   .build/compiler: from the cache when the recipe has not changed, then
-  from the release named by its key, and built otherwise, which takes a
-  couple of hours. Leaves the patched TinyGo tree in .build/compiler/tinygo.
+  from R2 under its key, and built otherwise, which takes a couple of
+  hours. Leaves the patched TinyGo tree in .build/compiler/tinygo.
   Nix must be installed already. The Compiler workflow is its only user;
   the Pages workflow builds the playground with the compiler the
   repository embeds and prepares the tree itself.
 inputs:
   build:
     description: >-
-      Whether to build the compiler when neither the cache nor a release has
-      it, as against only reporting that it is missing.
+      Whether to build the compiler when neither the cache nor R2 has it, as
+      against only reporting that it is missing.
     default: 'true'
 outputs:
   key:
-    description: The compiler's key (web/compiler/key.sh), which names its cache entry and release.
+    description: The compiler's key (web/compiler/key.sh), which names its cache entry and where it is on R2.
     value: ${{ steps.key.outputs.key }}
   found:
-    description: Whether .build/compiler has the compiler, from the cache, a release or a build.
+    description: Whether .build/compiler has the compiler, from the cache, R2 or a build.
     value: ${{ steps.result.outputs.found }}
   built:
     description: Whether the compiler was built here rather than found.
@@ -46,20 +46,27 @@ runs:
       path: .build/compiler/*.wasm
       key: ${{ steps.key.outputs.key }}
 
-  # The cache drops an entry nothing has used for a week, and a release
-  # stays, so a miss looks there before building.
+  # The cache drops an entry nothing has used for a week, and R2 keeps it, so
+  # a miss looks there before building. The full compiler goes up last, so
+  # with it there the others are.
   - name: Download the compiler
     id: release
     if: steps.cache.outputs.cache-hit != 'true'
     shell: bash
     env:
-      GH_TOKEN: ${{ github.token }}
       KEY: ${{ steps.key.outputs.key }}
     run: |
-      if gh release download "$KEY" --repo "$GITHUB_REPOSITORY" --dir .build/compiler --pattern '*.wasm' --clobber; then
+      base=https://files.yaroze.dev/compiler/$KEY
+      # Cloudflare keeps a 404 for hours, so the file's own URL is not asked
+      # for until it is known to be there: see release.sh.
+      if curl -fsI "$base/tinygo-full.wasm.gz?check=$(date +%s)" > /dev/null; then
+        mkdir -p .build/compiler
+        for f in tinygo tinygo-full tinygo-debug; do
+          curl -fsS --retry 3 "$base/$f.wasm.gz" | gunzip > ".build/compiler/$f.wasm"
+        done
         echo "found=true" >> "$GITHUB_OUTPUT"
       else
-        echo "No release $KEY; building the compiler."
+        echo "No compiler $KEY on R2; building it."
       fi
 
   - name: Build the compiler
@@ -75,7 +82,7 @@ runs:
     shell: bash
     env:
       KEY: ${{ steps.key.outputs.key }}
-    run: echo "::notice::No compiler $KEY in the cache or a release, and this workflow does not build it; the Compiler workflow does."
+    run: echo "::notice::No compiler $KEY in the cache or on R2, and this workflow does not build it; the Compiler workflow does."
 
   - name: Save the compiler
     if: steps.cache.outputs.cache-hit != 'true' && (steps.release.outputs.found == 'true' || steps.build.outcome == 'success')
