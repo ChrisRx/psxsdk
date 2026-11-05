@@ -61,7 +61,7 @@ type Machine struct {
 	// spuCycles counts towards the next SPU sample.
 	spuCycles uint32
 
-	// steps counts the steps run, which is the timers' clock.
+	// steps counts the steps run.
 	steps uint64
 
 	// fail is where the devices report an error.
@@ -112,7 +112,7 @@ func New(bios []byte) (*Machine, error) {
 	m.spu = newSPU(m.ic)
 	m.gpu = newGPU(m.ic, m.fail.report)
 	m.dma.gpu = m.gpu
-	m.tmr = &timers{gpu: m.gpu, ic: m.ic, steps: &m.steps, wake: &m.wake}
+	m.tmr = &timers{gpu: m.gpu, ic: m.ic, clock: &m.CPU.TotalCycles, wake: &m.wake}
 	m.gpu.timers = m.tmr
 	m.cd = newCDROM(m.ic, cycles, &m.wake, m.fail.report)
 	m.sio = newSIO0(m.ic, cycles, &m.wake, [2]*Pad{newDigitalPad(), nil})
@@ -458,8 +458,8 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 	// Otherwise it runs steps itself until one leaves the devices
 	// something to do, keeping the clocks below up to date as it goes.
 	k := cpu.Clock{
-		Steps: &m.steps, StepsDue: &tmr.due,
-		Due:   [3]*uint64{&cd.due, &sio.due, &sio1.due},
+		Steps: &m.steps,
+		Due:   [4]*uint64{&cd.due, &sio.due, &sio1.due, &tmr.due},
 		Video: &gpu.cycles, VideoEdge: &gpu.edge, VideoRate: gpuCyclesPerCPU,
 		Sample: &m.spuCycles, SampleCycles: spuSampleCycles,
 		Busy: &dma.active,
@@ -551,8 +551,8 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 			sio1.update()
 		}
 		m.steps++
-		if m.steps >= tmr.due {
-			tmr.update(m.steps)
+		if c.TotalCycles >= tmr.due {
+			tmr.update(c.TotalCycles)
 		}
 		dma.update()
 

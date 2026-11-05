@@ -217,11 +217,11 @@ func (c *CPU) exception(code uint32) {
 // that it only hands back to the machine when one does. The pointers are
 // into the devices' own state, so Run sees any change a step makes to them.
 type Clock struct {
-	// Steps counts the steps. Run stops at StepsDue.
-	Steps, StepsDue *uint64
+	// Steps counts the steps.
+	Steps *uint64
 
 	// Run stops when TotalCycles reaches any of Due.
-	Due [3]*uint64
+	Due [4]*uint64
 
 	// Video advances by VideoRate for each cycle, rounded to a float32 at
 	// every step. Run stops at the step that would take it to VideoEdge.
@@ -269,21 +269,20 @@ func (c *CPU) Step() { c.Run(1, nil) }
 // costs a good deal under wasm.
 func (c *CPU) Run(n uint64, k *Clock) uint64 {
 	// The step at which the devices next have something to do: due in
-	// cycles, for the drive, the pad, the serial port and the SPU's sample,
-	// and stepsDue in steps, for the timers, or straight away while DMA is
-	// busy.
+	// cycles, for the drive, the pad, the serial port, the timers and the
+	// SPU's sample, and stepsDue in steps, straight away while DMA is busy.
 	var total0, due, stepsDue uint64
 	if n > 1 {
 		total0 = c.TotalCycles
-		due = min(*k.Due[0], *k.Due[1], *k.Due[2])
+		due = min(*k.Due[0], *k.Due[1], *k.Due[2], *k.Due[3])
 		if *k.Sample < k.SampleCycles {
 			due = min(due, total0+uint64(k.SampleCycles-*k.Sample))
 		} else {
 			due = total0
 		}
-		stepsDue = 1
-		if !*k.Busy && *k.StepsDue > *k.Steps {
-			stepsDue = *k.StepsDue - *k.Steps
+		stepsDue = ^uint64(0)
+		if *k.Busy {
+			stepsDue = 1
 		}
 		*k.Wake = false
 	}
