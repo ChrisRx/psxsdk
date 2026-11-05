@@ -49,12 +49,12 @@ func GsScaleScreen(scale *SVECTOR) {
 }
 
 // gsScaleScreenPad is the rest of GsScaleScreen's 289 cycles (spec 22).
-const gsScaleScreenPad = 74
+const gsScaleScreenPad = 86
 
 // gteMIMefunc moves n vertices at otp by the differences at dfp scaled by
-// p, 4096 being 1: each coordinate becomes o + (d·p >> 12), saturated to
-// 16 bits. The GTE does the arithmetic, with GPL: MAC holds the vertex,
-// IR the difference and IR0 the scale.
+// p, 4096 being 1: each coordinate becomes o plus d·p >> 12 saturated to 16 bits,
+// wrapping at 16 bits. The GTE does the multiply, with GPF: IR holds the difference
+// and IR0 the scale. In assembly.
 //
 //export gteMIMefunc
 func gteMIMefunc(otp, dfp *SVECTOR, n, p int32)

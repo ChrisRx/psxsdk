@@ -70,6 +70,7 @@ func GsInit3D() {
 //export GsSetProjection
 func GsSetProjection(h int32) {
 	setH(h)
+	space(1)
 }
 
 // GsSetView2 makes the view the world-to-screen matrix, GsWSMATRIX: a copy
@@ -78,44 +79,21 @@ func GsSetProjection(h int32) {
 // chain brought up to date first. It returns 0.
 //
 //export GsSetView2
-func GsSetView2(pv *GsVIEW2) int32 {
-	if pv.Super == nil {
-		setWorldScreen(&pv.View)
-		return 0
-	}
-	viewUnder(&pv.View, pv.Super)
-	return 0
-}
+func GsSetView2(pv *GsVIEW2) int32
 
 // wsUnscaled is GsWSMATRIX as the last GsSetRefView2 or GsSetView2 that worked out
 // a view left it, what GsScaleScreen scales.
+//
+//go:extern libps_ws_unscaled
 var wsUnscaled MATRIX
 
-// setWorldScreen makes m the world-to-screen matrix.
-func setWorldScreen(m *MATRIX) {
-	gsWSMATRIX = *m
-	wsUnscaled = *m
-}
-
-// viewInverse is viewUnder's inverse of Super's Workm. As a local it would
-// take a matrix of a program's small stack.
-var viewInverse MATRIX
-
-// viewUnder makes view, in super's coordinates, the world-to-screen matrix.
-func viewUnder(view *MATRIX, super *GsCOORDINATE2) {
-	w, inv := localToWorld(super), &viewInverse
-	for i := range 3 {
-		for j := range 3 {
-			inv.M[i][j] = w.M[j][i]
-		}
-	}
-	// The negation is of each row's result: the rows round down.
-	setRotation(inv)
-	tx, ty, tz := turnLong(w.T[0], w.T[1], w.T[2])
-	inv.T[0], inv.T[1], inv.T[2] = -tx, -ty, -tz
-	compose(view, inv, &gsWSMATRIX)
-	wsUnscaled = gsWSMATRIX
-}
+// viewUnder makes view, in super's coordinates, the world-to-screen matrix, with
+// super's chain brought up to date first: view after the inverse of super's Workm,
+// the rotation transposed and the translation turned by it and negated, each
+// row's result negated since the rows round down. In assembly.
+//
+//export libps_view
+func viewUnder(view *MATRIX, super *GsCOORDINATE2)
 
 // GsInitCoordinate2 makes base a coordinate system under super, or under
 // the world when super is nil, its matrix a copy of GsIDMATRIX, and makes
@@ -146,110 +124,34 @@ func GsInitCoordinate2(super, base *GsCOORDINATE2) {
 //
 // The walk up finds the highest system to work out, and each below that is
 // about to get a new Workm, so until then its Workm holds the way back down:
-// the address of the system under it (downLink).
+// the address of the system under it. In assembly, with GsGetLs and the rest.
 //
 // A null system, the manual's WORLD, is the one at address 0, with its words as
 // they are (spec 20).
-func localToWorld(c *GsCOORDINATE2) *MATRIX {
-	c = at(c)
-	cnt := psdCNT
-	if c.Super != nil && c.Flg == cnt {
-		return &c.Workm
-	}
-	var first *GsCOORDINATE2
-	top := c
-	for up := top.Super; up != nil; up = top.Super {
-		if top.Flg == 0 {
-			first = top
-		}
-		if up.Flg == cnt || up.Super == nil && up.Flg == 0 {
-			first = top
-			top = up
-			break
-		}
-		top = up
-	}
-	if top.Super == nil && (top.Flg == 0 || top.Flg == cnt) {
-		top.Workm = top.Coord
-		top.Flg = cnt
-	}
-	if first != nil {
-		workOut(first, c, cnt)
-	}
-	return &c.Workm
-}
-
-// workOut works out the systems from first down to last, which is under it
-// or the same, and flags them cnt. It is apart from localToWorld since the
-// walk up has to do with no more than a very small frame: a call on a chain
-// that needs no working out is a good part of a frame's calls.
-//
-//go:noinline
-func workOut(first, last *GsCOORDINATE2, cnt uint32) {
-	for n := last; n != first; n = n.Super {
-		*downLink(n.Super) = n
-	}
-	for n := first; ; {
-		below := *downLink(n)
-		compose(&n.Super.Workm, &n.Coord, &n.Workm)
-		n.Flg = cnt
-		if n == last {
-			return
-		}
-		n = below
-	}
-}
-
-// downLink is where a system's Workm holds the way down while localToWorld
-// works its chain out.
-//
-//go:inline
-func downLink(c *GsCOORDINATE2) **GsCOORDINATE2 {
-	return (**GsCOORDINATE2)(unsafe.Pointer(&c.Workm))
-}
 
 // GsGetLs stores in m the transformation from coord's coordinates to the
 // screen: GsWSMATRIX after coord's Workm, once localToWorld has seen to it.
-// Nothing keeps this matrix, so it is worked out at every call.
+// Nothing keeps this matrix, so it is worked out at every call. In assembly.
 //
 //export GsGetLs
-func GsGetLs(coord *GsCOORDINATE2, m *MATRIX) {
-	compose(&gsWSMATRIX, localToWorld(coord), m)
-	pace(gsGetLsPad)
-}
-
-// The rest of GsGetLs's 612 cycles and GsGetLws's 698 (spec 21).
-const (
-	gsGetLsPad  = 62
-	gsGetLwsPad = 50
-)
+func GsGetLs(coord *GsCOORDINATE2, m *MATRIX)
 
 // GsSetLsMatrix loads m into the GTE's rotation and translation, for
-// GsSortObject4 to transform with.
+// GsSortObject4 to transform with. In assembly.
 //
 //export GsSetLsMatrix
-func GsSetLsMatrix(m *MATRIX) {
-	setRotation(m)
-	setTranslation(m)
-}
+func GsSetLsMatrix(m *MATRIX)
 
 // GsGetLw stores in m a copy of coord's Workm, the transformation from its
-// coordinates to the world's, once localToWorld has seen to it.
+// coordinates to the world's, once localToWorld has seen to it. In assembly.
 //
 //export GsGetLw
-func GsGetLw(coord *GsCOORDINATE2, m *MATRIX) {
-	*m = *localToWorld(coord)
-}
+func GsGetLw(coord *GsCOORDINATE2, m *MATRIX)
 
-// GsGetLws stores in lw and ls what GsGetLw and GsGetLs store.
+// GsGetLws stores in lw and ls what GsGetLw and GsGetLs store. In assembly.
 //
 //export GsGetLws
-func GsGetLws(coord *GsCOORDINATE2, lw, ls *MATRIX) {
-	w := localToWorld(coord)
-	*lw = *w
-	compose(&gsWSMATRIX, w, ls)
-	pace(gsGetLwsPad)
-}
+func GsGetLws(coord *GsCOORDINATE2, lw, ls *MATRIX)
 
 // GsRVIEW2 is a view given as a viewpoint, a point it looks at, and a
 // twist about the line between them, in Super's coordinates.
@@ -286,14 +188,6 @@ type GsRVIEW2 struct {
 //
 //export GsSetRefView2
 func GsSetRefView2(pv *GsRVIEW2) int32 {
-	// Points too far out for 16 bits are brought in together.
-	k := uint32(0)
-	for w := magnitude(pv.Vpx) | magnitude(pv.Vpy) | magnitude(pv.Vpz) | magnitude(pv.Vrx) | magnitude(pv.Vry) | magnitude(pv.Vrz); w >= 1<<15; w >>= 1 {
-		k++
-	}
-	k &= 31
-	dx, dy, dz := pv.Vrx>>k-pv.Vpx>>k, pv.Vry>>k-pv.Vpy>>k, pv.Vrz>>k-pv.Vpz>>k
-	l := sqrt0(dx*dx + dy*dy + dz*dz)
 	// A view in the world's coordinates is made in place.
 	m, turn := &gsWSMATRIX, &refTurn
 	if pv.Super != nil {
@@ -302,37 +196,59 @@ func GsSetRefView2(pv *GsRVIEW2) int32 {
 	*m = gsIDMATRIX2
 	if pv.Rz != 0 {
 		rotZ(-pv.Rz/360, turn)
-		mulRotation(m, turn, m)
+		MulMatrix0(m, turn, m)
+		delay(refAfterTwist)
+	} else {
+		delay(refNoTwist)
 	}
+	// Points too far out for 16 bits are brought in together.
+	k := uint32(0)
+	for w := magnitude(pv.Vpx) | magnitude(pv.Vpy) | magnitude(pv.Vpz) | magnitude(pv.Vrx) | magnitude(pv.Vry) | magnitude(pv.Vrz); w >= 1<<15; w >>= 1 {
+		k++
+	}
+	k &= 31
+	dx, dy, dz := pv.Vrx>>k-pv.Vpx>>k, pv.Vry>>k-pv.Vpy>>k, pv.Vrz>>k-pv.Vpz>>k
+	l := sqrt0(dx*dx + dy*dy + dz*dz)
 	if l == 0 {
 		gsWSMATRIX = *m
 		return 1
 	}
+	delay(refSquares)
 	h := sqrt0(dx*dx + dz*dz)
+	cx, sx := int16(h*4096/l), int16(dy*4096/l)
+	turn.M = [3][3]int16{{4096, 0, 0}, {0, cx, -sx}, {0, sx, cx}}
+	MulMatrix0(m, turn, m)
+	delay(refTurnTwo)
 	cy, sy := int16(4096), int16(0)
 	if h != 0 {
 		cy, sy = int16(dz*4096/h), int16(dx*4096/h)
 	}
-	cx, sx := int16(h*4096/l), int16(dy*4096/l)
-	turn.M = [3][3]int16{{4096, 0, 0}, {0, cx, -sx}, {0, sx, cx}}
-	mulRotation(m, turn, m)
 	turn.M = [3][3]int16{{cy, 0, -sy}, {0, 4096, 0}, {sy, 0, cy}}
-	mulRotation(m, turn, m)
-	setRotation(m)
-	m.T[0], m.T[1], m.T[2] = turnLong(-pv.Vpx, -pv.Vpy, -pv.Vpz)
+	MulMatrix0(m, turn, m)
+	refSpot = VECTOR{Vx: -pv.Vpx, Vy: -pv.Vpy, Vz: -pv.Vpz}
+	ApplyMatrixLV(m, &refSpot, (*VECTOR)(unsafe.Pointer(&m.T)))
 	if pv.Super == nil {
 		wsUnscaled = gsWSMATRIX
-		pace(gsSetRefView2Pad)
 		return 0
 	}
 	viewUnder(m, pv.Super)
-	pace(gsSetRefView2Pad)
 	return 0
 }
 
-// gsSetRefView2Pad is the rest of GsSetRefView2's time, 1,878 cycles on average in
-// the web archive's programs (spec 22).
-const gsSetRefView2Pad = 254
+// What GsSetRefView2 spends past its work, in nops, for Sony's times from each thing the
+// GTE sees to the next.
+const (
+	refAfterTwist = 83
+	refNoTwist    = 124
+	refSquares    = 5
+	refTurnTwo    = 19
+)
+
+// delay spends n instructions and the call. In assembly, for what a Go call needs to
+// spend exactly.
+//
+//export libps_delay
+func delay(n uint32)
 
 // magnitude returns the size of v, as an unsigned value for the most negative.
 //
@@ -347,6 +263,9 @@ func magnitude(v int32) uint32 {
 // refView and refTurn are GsSetRefView2's matrices, not locals, which the
 // compiler would put on the heap.
 var refView, refTurn MATRIX
+
+// refSpot is GsSetRefView2's vector to the viewpoint.
+var refSpot VECTOR
 
 // rotZ makes m the rotation by a about z. Its sine and cosine are true to the
 // table in every quarter, unlike RotMatrix's (sin).

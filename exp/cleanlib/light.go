@@ -50,6 +50,7 @@ var lights MATRIX
 //export GsSetFlatLight
 func GsSetFlatLight(id int32, lt *GsF_LIGHT) int32 {
 	x, y, z := lt.Vx, lt.Vy, lt.Vz
+	space(flatLightSpace)
 	d := sqrt0(x*x + y*y + z*z)
 	if d == 0 {
 		return -1
@@ -61,12 +62,16 @@ func GsSetFlatLight(id int32, lt *GsF_LIGHT) int32 {
 		lights.M[2][id] = colorFraction(lt.B)
 	}
 	setColorMatrix(&lights)
+	space(3)
 	pace(gsSetFlatLightPad)
 	return 0
 }
 
 // gsSetFlatLightPad is the rest of GsSetFlatLight's 463 cycles (spec 22).
-const gsSetFlatLightPad = 98
+const gsSetFlatLightPad = 26
+
+// flatLightSpace is the time GsSetFlatLight spends before its square root.
+const flatLightSpace = 36
 
 // colorFraction returns the color byte c as a fraction of 255 in 4.12,
 // rounded down: D0h is D0Dh, 8Ch is 8C8h and FFh is 1000h.
@@ -121,6 +126,7 @@ const sineBeforeSqrt = 970
 //export GsSetAmbient
 func GsSetAmbient(r, g, b int32) {
 	setBK(r>>4<<4, g>>4<<4, b>>4<<4)
+	space(2)
 }
 
 // GsSetLightMode sets the default light mode: 0 lights normally, 1 with
@@ -143,31 +149,16 @@ const badLightMode = "not supported light mode %d\n\x00"
 // turned into the coordinates m maps from: GsLIGHTWSMATRIX times m's
 // rotation. m is normally the local-to-world matrix GsGetLw gives. The
 // GTE's rotation matrix is left as it was: a program may have loaded the matrix
-// to draw with before this call (test-mot001-mot001 does).
+// to draw with before this call (test-mot001-mot001 does). In assembly.
 //
 //export GsSetLightMatrix
-func GsSetLightMatrix(m *MATRIX) {
-	holdRotation(&lightHeld)
-	MulMatrix0(&gsLIGHTWSMATRIX, m, &lightScratch)
-	setLightMatrix(&lightScratch)
-	setRotation(&lightHeld)
-	space(gsSetLightMatrixSpace)
-}
-
-// gsSetLightMatrixSpace is the rest of GsSetLightMatrix's 354 cycles (spec 21), in
-// 2-cycle stores.
-const gsSetLightMatrixSpace = 9
+func GsSetLightMatrix(m *MATRIX)
 
 // SetLightMatrix loads the GTE's light matrix from m's rotation and nothing
 // else: GsSetLightMatrix multiplies first.
 //
 //export SetLightMatrix
 func SetLightMatrix(m *MATRIX) { setLightMatrix(m) }
-
-// lightScratch is GsSetLightMatrix's product, and lightHeld the rotation it puts
-// back. The compiler would put locals on the heap, a little at every call, and
-// nothing gives that back: the image's heap is only 32 KB.
-var lightScratch, lightHeld MATRIX
 
 // GsSetFogParam sets the depth cue: the GTE's DQA and DQB, and its far
 // color from the fog's color, each component times 16.
@@ -176,6 +167,7 @@ var lightScratch, lightHeld MATRIX
 func GsSetFogParam(f *GsFOGPARAM) {
 	setDQ(int32(f.Dqa), f.Dqb)
 	setFC(int32(f.Rfc)<<4, int32(f.Gfc)<<4, int32(f.Bfc)<<4)
+	space(2)
 }
 
 // The GTE's lighting control registers, each loaded with a ctc2 from $gp,
