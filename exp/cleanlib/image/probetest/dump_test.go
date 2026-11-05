@@ -17,7 +17,8 @@ import (
 // a3, ra, how many bytes the TTY held and the cycle count. PROBE_WATCH is a
 // comma-separated list of addresses in hex: each time the PC reaches one, a line
 // "w ADDR a0 a1 a2 a3 ra sp tty cyc" goes in the same file, and "r ADDR v0 v1 tty
-// cyc" when it returns to that ra.
+// cyc" when it returns to that ra. PROBE_BUS, if set, records what the program does at
+// the devices and the GTE, once the TTY holds its text, into PROBE_OUT.bus (busTrace).
 func TestDump(t *testing.T) {
 	disc, out := os.Getenv("PROBE_DISC"), os.Getenv("PROBE_OUT")
 	if disc == "" || out == "" {
@@ -37,7 +38,12 @@ func TestDump(t *testing.T) {
 	var calls []byte
 	last := m.Frames() + uint64(frames)
 	step := 0
+	busMark := os.Getenv("PROBE_BUS")
+	bus := newBusTrace(m)
 	for m.Frames() < last {
+		if busMark != "" && !bus.on && step%256 == 0 && strings.Contains(m.TTY(), busMark) {
+			bus.on = true
+		}
 		switch pc := m.CPU.PC; pc {
 		case 0xa0, 0xb0, 0xc0:
 			r := &m.CPU.R
@@ -63,4 +69,7 @@ func TestDump(t *testing.T) {
 	}
 	os.WriteFile(out+".tty", []byte(m.TTY()), 0o666)
 	os.WriteFile(out+".kernel", calls, 0o666)
+	if busMark != "" {
+		os.WriteFile(out+".bus", bus.lines, 0o666)
+	}
 }

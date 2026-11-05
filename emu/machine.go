@@ -669,6 +669,16 @@ func (m *Machine) OnGP0(f func(uint32)) { m.gpu.hook = f }
 // calling anything when f is nil. PROTOTYPE: for comparing command streams.
 func (m *Machine) OnGP1(f func(uint32)) { m.gpu.hook1 = f }
 
+// OnBus calls f with each access to a device from now on, as Bus.hook says, or
+// stops calling anything when f is nil. PROTOTYPE: for watching a program from
+// outside.
+func (m *Machine) OnBus(f func(addr uint32, size int, v uint32, write bool)) { m.Bus.hook = f }
+
+// OnGTE calls f with each GTE instruction from now on, as CPU.GTEHook says, or
+// stops calling anything when f is nil. PROTOTYPE: for watching a program from
+// outside.
+func (m *Machine) OnGTE(f func(op uint32, cycle uint64)) { m.CPU.GTEHook = f }
+
 // OnSPU calls f with every SPU register write from now on, as the
 // register's offset from 0x1F801C00 and the halfword written (a word
 // write is two), or stops calling anything when f is nil. PROTOTYPE: for
