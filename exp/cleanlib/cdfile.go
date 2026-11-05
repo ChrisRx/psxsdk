@@ -45,6 +45,8 @@ type cdFilesT struct {
 	loaded bool
 	dirs   [cdMaxDirs]cdDir
 	ndirs  int
+	// rec is a path table record, which may cross into the next sector.
+	rec [8 + 32]byte
 
 	// dir is the sector of the listing in table, 0 for none, and n how
 	// many of table's entries it filled. The rest keep what earlier
@@ -253,6 +255,9 @@ func (f *cdFilesT) listing(dir int) bool {
 	return true
 }
 
+// dots holds the names of a listing's first two records.
+var dots = [...]byte{'.', '.'}
+
 // fill puts the records of the listing in cd.dir, read from sector, into
 // the table: each one's first sector, length and name. The name is copied
 // whole as a C string, its NUL included, over what the entry held: a name
@@ -276,9 +281,9 @@ func (f *cdFilesT) fill(sector uint32) {
 		name := rec[33 : 33+int(rec[32])]
 		switch {
 		case len(name) == 1 && name[0] == 0:
-			name = []byte(".")
+			name = dots[:1]
 		case len(name) == 1 && name[0] == 1:
-			name = []byte("..")
+			name = dots[:2]
 		}
 		dst := all[uintptr(unsafe.Pointer(&e.Name[0]))-uintptr(unsafe.Pointer(&f.table[0])):]
 		n := copy(dst, name)
@@ -298,7 +303,7 @@ func (c *cdDriver) loadPathTable() bool {
 	size, sector := le32(pvd[132:]), le32(pvd[140:])
 	f := &cdFiles
 	f.ndirs = 0
-	var rec [8 + 32]byte // a record may cross into the next sector
+	rec := &f.rec
 	have, off := 0, uint32(0)
 	for s := uint32(0); s*sectorSize < size; s++ {
 		if !c.readDir(sector + s) {

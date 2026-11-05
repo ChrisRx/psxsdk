@@ -54,6 +54,18 @@ const (
 // 24 bits of the address.
 func physical(p unsafe.Pointer) uint32 { return uint32(uintptr(p)) & 0xffffff }
 
+// at returns p as an address Go can reach whatever it holds. A C program's null
+// pointer is address 0, which is RAM, the kernel's first words: the resident
+// library reads and writes it as any other, and the program goes on (spec 20,
+// "Address 0 is memory"). A Go nil stops with a panic, and the same word at
+// 80000000h does not. Setting the top bit moves only addresses below it, each to
+// its mirror, so no test is needed.
+//
+//go:inline
+func at[T any](p *T) *T {
+	return (*T)(unsafe.Pointer(uintptr(unsafe.Pointer(p)) | 0x80000000))
+}
+
 // endOfList is the link that ends a packet list.
 const endOfList = 0xffffff
 
@@ -172,20 +184,18 @@ func drawNext() {
 // measured on the same probe. The paced calls are not inlined, so that
 // each costs the same from every caller, as a call of Sony's does.
 const (
-	loadImagePad       = 242  // LoadImage, with the sizes' pads below
+	loadImagePad       = 182  // LoadImage, with the sizes' pads below
 	storeImagePad      = 242  // StoreImage, with the sizes' pads below
 	clearImagePad      = 50   // ClearImage, a rectangle (60h): 730
 	clearFillPad       = 98   // ClearImage, a fill (02h): 586, measured the same way
-	drawSyncPad        = 14   // DrawSync(0): 204
-	setWorkBasePad     = 14   // GsSetWorkBase: 14, spec 08
-	clearOtPad         = 194  // GsClearOt: 286
-	sortClearPad       = 74   // GsSortClear: 178
+	clearOtPad         = 158  // GsClearOt: 272 on average in the web archive (spec 22)
+	sortClearPad       = 14   // GsSortClear: 162 in the same
 	drawOtPad          = 26   // GsDrawOt: 390
 	fntPrintPad        = 14   // FntPrint, with fntPrintSpace: 182 plus 50 a character
 	fntPrintEmptyPad   = 38   // FntPrint of "", with fntPrintEmptySpace: 168
 	fntPrintRefusedPad = 26   // FntPrint on a stream a print has cut
 	putDrawEnvPad      = 1250 // PutDrawEnv: 1,946
-	swapDispBuffPad    = 410  // GsSwapDispBuff, over its two PutDrawEnv: 4,680
+	swapDispBuffPad    = 290  // GsSwapDispBuff, over its two PutDrawEnv: 4,611 in the same
 
 	// MoveImage (460) takes 466 in the clean library by itself, so it has
 	// no pad. FntFlush is paced by the character, below.
@@ -238,11 +248,11 @@ const (
 	fntPrintPercentSpace      = 1 // "%%", in place of fntPrintChar: 10 more than a character
 	fntPrintCutSpace          = 3 // the print cut at the limit: 20 more
 	fntPrintRefusedEmptySpace = 8 // the empty string on a stream a print has cut: 16 less than an empty print
-	fntFlushEmptySpace        = 25
+	fntFlushEmptySpace        = 11
 	fntNulExitSpace           = 1 // the walk that ends at the NUL
 	fntLimitExitSpace         = 1 // the walk that ends at the limit: 4 more than at the NUL
-	fntGlyphsSpace            = 6
-	fntNoGlyphSpace           = 12 // more than fntGlyphsSpace by what setting the first sprite's link costs
+	fntGlyphsSpace            = 0
+	fntNoGlyphSpace           = 6 // more than fntGlyphsSpace by what setting the first sprite's link costs
 	fntGlyphSpace             = 35
 	fntSpaceSpace             = 4
 	fntTabSpace               = 5
@@ -302,8 +312,9 @@ func submit(list uintptr, env []uint32) {
 }
 
 // enqueue is submit with the index of env's words to restore, or 0 (see
-// request).
-func enqueue(list uintptr, env []uint32, restore uint32) {
+// request). It reports whether the request started at once, nothing being
+// ahead of it, for the image calls that then clip the caller's rectangle.
+func enqueue(list uintptr, env []uint32, restore uint32) bool {
 	libStart()
 	for queued() >= queueLen {
 		pollQueue()
@@ -321,7 +332,9 @@ func enqueue(list uintptr, env []uint32, restore uint32) {
 	if queueFree() {
 		drawNext()
 	}
+	atOnce := queue.head+1 == queue.tail
 	queueLeave(m)
+	return atOnce
 }
 
 // startHead starts the GPU's DMA channel on the request at the queue's
@@ -380,7 +393,6 @@ func DrawSync(mode int32) int32 {
 		// GPUSTAT.
 		drawWatch.mark(drawNoLimit)
 		drain()
-		pace(drawSyncPad)
 		return 0
 	}
 	pollQueue()
@@ -404,11 +416,14 @@ func sendList(p unsafe.Pointer) {
 // and the GPU free. It returns I_MASK for queueLeave. Sony's library
 // would queue the image behind the drawing; the GPU in the emulator is
 // always free by then, so the clean library waits for the queue instead,
-// with interrupts on.
-func imageEnter() uint32 {
+// with interrupts on. idle reports that it had no need to, which is when
+// Sony's call clips the caller's rectangle (spec 21).
+func imageEnter() (m uint32, idle bool) {
 	libStart()
-	m := queueEnter()
+	m = queueEnter()
+	idle = true
 	for !queueFree() || queued() > queue.running {
+		idle = false
 		iMask.Set(m)
 		drain()
 		m = queueEnter()
@@ -420,16 +435,23 @@ func imageEnter() uint32 {
 	drawWatch.mark(drawNoLimit)
 	for gp1.Get()&gpuStatReady == 0 {
 	}
-	return m
+	return m, idle
 }
 
 // loadImage copies the image at p, of 16-bit pixels, into the rectangle r
 // of video memory. As the reference library does, the CPU writes the
 // words that do not make a whole block of 16, from the start of the
 // image, and DMA the rest, which goes on after it returns: the next call
-// that uses the GPU waits for it.
-func loadImage(r RECT, p unsafe.Pointer) {
-	m := imageEnter()
+// that uses the GPU waits for it. A size that comes to nothing sends nothing.
+// It reports whether the queue was idle when it came.
+func loadImage(r RECT, p unsafe.Pointer) bool {
+	r.W, r.H = imageSize(r)
+	m, idle := imageEnter()
+	if r.W == 0 || r.H == 0 {
+		queueLeave(m)
+		pace(loadImagePad)
+		return idle
+	}
 	gp1.Set(gp1DMAOff)
 	gp0.Set(0x01000000) // clear the texture cache
 	gp0.Set(0xa0000000)
@@ -438,7 +460,7 @@ func loadImage(r RECT, p unsafe.Pointer) {
 	words := (int(r.W)*int(r.H) + 1) / 2
 	const block = 16
 	head := words % block
-	data := unsafe.Slice((*uint32)(p), head)
+	data := unsafe.Slice(at((*uint32)(p)), head)
 	for i := range data {
 		gp0.Set(data[i])
 		space(loadImageWordSpace)
@@ -459,6 +481,13 @@ func loadImage(r RECT, p unsafe.Pointer) {
 	}
 	queueLeave(m)
 	pace(loadImagePad)
+	return idle
+}
+
+// imageSize returns the size of an image kept within video memory: a negative
+// width or height counts as 0 (spec 20, "LoadImage and StoreImage sizes").
+func imageSize(r RECT) (w, h int16) {
+	return int16(clamp(int(r.W), 1024)), int16(clamp(int(r.H), 512))
 }
 
 // pair packs two coordinates the way the GPU takes a point or a size: x in
@@ -506,9 +535,16 @@ func (e *DRAWENV) put() {
 	c[5] = 0xe6000000
 	n := uint32(6)
 	if e.Isbg != 0 {
-		c[6] = 0x02000000 | uint32(e.B0)<<16 | uint32(e.G0)<<8 | uint32(e.R0)
+		// By ClearImage's rule: the size kept to what the GPU takes, and
+		// a fill where x and the width allow it, a rectangle elsewhere.
+		w, h := int16(clamp(int(e.Clip.W), 1023)), int16(clamp(int(e.Clip.H), 511))
+		code := uint32(0x60000000)
+		if e.Clip.X%64 == 0 && w%64 == 0 {
+			code = 0x02000000
+		}
+		c[6] = code | uint32(e.B0)<<16 | uint32(e.G0)<<8 | uint32(e.R0)
 		c[7] = pair(e.Clip.X, e.Clip.Y)
-		c[8] = pair(e.Clip.W, e.Clip.H)
+		c[8] = pair(w, h)
 		n = 9
 	}
 	e.Dr_env.Tag = n<<24 | endOfList
@@ -671,13 +707,18 @@ func PutDispEnv(env *DISPENV) *DISPENV {
 // and off (03000001h) with 0.
 //
 //export SetDispMask
+//go:noinline
 func SetDispMask(mask int32) {
 	if mask == 0 {
 		gp1.Set(0x03000001)
-		return
+	} else {
+		gp1.Set(0x03000000)
 	}
-	gp1.Set(0x03000000)
+	pace(setDispMaskPad)
 }
+
+// setDispMaskPad is the rest of SetDispMask's 82 cycles (spec 21).
+const setDispMaskPad = 62
 
 // PutDrawEnv installs the drawing environment env, queued with the
 // drawing, until the next PutDrawEnv or GsSwapDispBuff, and returns env.

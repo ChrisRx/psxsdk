@@ -14,7 +14,8 @@ import "unsafe"
 //
 // Time is kept in tenths of a tick. A sequence advances rate tenths a
 // vertical blank, rate being the tempo in whole beats a minute times the
-// resolution over 360 (300 on PAL), rounded; an event plays in the first
+// resolution over 360 (300 on PAL, and otherwise six times the rate
+// SsSetTickMode set), rounded; an event plays in the first
 // blank whose running total has passed it, or, for the first events it
 // plays, reached it. The first blank after SsSeqPlay only starts the
 // sequence.
@@ -27,9 +28,10 @@ import "unsafe"
 // before the events, and SsIsEos reports what the last stage left.
 
 const (
-	seqMax    = 32
-	seqMagic  = 0x53455170 // "pQES" read little-endian
-	seqHeader = 15
+	seqMax     = 32
+	seqMagic   = 'p' // the first byte of "pQES"
+	seqVersion = 1   // the last of the four bytes after it
+	seqHeader  = 15
 
 	// NRPN numbers the SEQ marks loops with.
 	nrpnLoopStart = 20
@@ -59,7 +61,10 @@ type sequence struct {
 	// from.
 	res, bpm       int32
 	rate, acc, due int32
-	stopTicks      uint8
+	// slow is a tempo below a tenth of a tick a blank, and stalled is a slow
+	// sequence that a blank found nothing to play for (see advance).
+	slow, stalled bool
+	stopTicks     uint8
 	// stopReq is SsSeqStop since the last tick.
 	stopReq bool
 
@@ -155,15 +160,16 @@ func (s *sequence) rewind() {
 }
 
 // SsSeqOpen opens the SEQ at addr to play on bank vabid, and returns its
-// id, or -1.
+// id, or -1. A SEQ can be at any byte address (pssoft-bm's is at an odd one),
+// so its header is read by bytes, as its events are. Only the magic's first byte
+// and the version's last are looked at. A SEQ with another first byte is the old
+// format, which plays nothing here, as on Sony's when a probe gave it the same
+// events (spec 23). One of another version is refused, and the slot it was
+// given stays taken.
 //
 //export SsSeqOpen
-func SsSeqOpen(addr *uint32, vabid int16) int16 {
+func SsSeqOpen(addr *uint32, vabid int16) int32 {
 	soundStart()
-	p := unsafe.Pointer(addr)
-	if *(*uint32)(p) != seqMagic {
-		return -1
-	}
 	id := -1
 	for i := range seqs {
 		if !seqs[i].open {
@@ -174,9 +180,19 @@ func SsSeqOpen(addr *uint32, vabid int16) int16 {
 	if id < 0 {
 		return -1
 	}
+	p := unsafe.Pointer(addr)
 	b := (*[seqHeader]uint8)(p)
+	s := &seqs[id]
 	res := int32(b[8])<<8 | int32(b[9])
 	tempo := int32(b[10])<<16 | int32(b[11])<<8 | int32(b[12])
+	if b[0] != seqMagic {
+		ttyPrintf(seqOldFormat, 0, 0)
+		tempo = 0
+	} else if b[7] != seqVersion {
+		ttyPrintf(seqNotSeq, 0, 0)
+		s.open = true
+		return -1
+	}
 	// A tempo of 0 stops Sony's library at a break (a division by it);
 	// here, as in the reference, the sequence holds still until a tempo is
 	// set (spec 10, "SsSetTempo").
@@ -184,7 +200,6 @@ func SsSeqOpen(addr *uint32, vabid int16) int16 {
 	if tempo > 0 {
 		bpm = (60000000 + tempo/2) / tempo
 	}
-	s := &seqs[id]
 	pauseReq := s.pauseReq
 	*s = sequence{
 		pauseReq: pauseReq,
@@ -194,7 +209,6 @@ func SsSeqOpen(addr *uint32, vabid int16) int16 {
 		start:    unsafe.Add(p, seqHeader),
 		res:      res,
 		bpm:      bpm,
-		rate:     seqRate(res, bpm),
 		volL:     127,
 		volR:     127,
 		next:     -1,
@@ -204,28 +218,99 @@ func SsSeqOpen(addr *uint32, vabid int16) int16 {
 		s.chVol[i] = 127
 		s.chPan[i] = 64
 	}
+	s.setRate(seqRate(res, bpm))
 	s.rewind()
 	snd.seqsOpen |= 1 << id
-	return int16(id)
+	pace(ssSeqOpenPad)
+	return int32(id)
+}
+
+// What SsSeqOpen has the kernel print for the two forms it does not play.
+const (
+	seqOldFormat = "This is an old SEQ Data Format.\n"
+	seqNotSeq    = "This is not SEQ Data.\n"
+)
+
+// The rest of SsSeqOpen's 722 cycles, SsSeqPlay's 228 and SsSetTickMode's 87
+// (spec 21).
+const (
+	ssSeqOpenPad     = 350
+	ssSeqPlayPad     = 110
+	ssSetTickModePad = 50
+)
+
+// SsSetTickMode sets the rate, in ticks a second, that a sequence's tempo is
+// worked out against from here on. It does not change how often the tick
+// runs, every vertical blank in every mode, and a sequence already open keeps
+// its timing until a tempo is set (spec 15, "SsSetTickMode"). Modes 0 and 5
+// are the rate of the video mode at this call, 1 is 60, 2 is 240, 3 is 120, 4
+// is 50 and any other is the rate itself. With bit 12 set, the low 12 bits
+// are the mode. A negative mode without it acts as 1.
+//
+//export SsSetTickMode
+func SsSetTickMode(mode int32) {
+	if mode&tickModeLow != 0 {
+		mode &= tickModeLow - 1
+	}
+	switch {
+	case mode == 0, mode == 5:
+		mode = videoRate()
+	case mode == 1, mode < 0:
+		mode = 60
+	case mode == 2:
+		mode = 240
+	case mode == 3:
+		mode = 120
+	case mode == 4:
+		mode = 50
+	}
+	tickRate = mode
+	pace(ssSetTickModePad)
+}
+
+// tickModeLow is the bit of SsSetTickMode's mode that says only the bits
+// below it count.
+const tickModeLow = 1 << 12
+
+// tickRate is the rate SsSetTickMode set, which SetVideoMode sets back to
+// the video mode's.
+var tickRate int32 = 60
+
+// videoRate is the video mode's rate, its vertical blanks a second.
+func videoRate() int32 {
+	if video.mode == modePAL {
+		return 50
+	}
+	return 60
 }
 
 // seqRate is how far a sequence advances a vertical blank, in tenths of
-// a tick, rounded: there are 60 blanks a second on NTSC and 50 on PAL.
-// Below a tenth of a tick a blank the library takes the inverse, blanks a
-// tick, for the rate: a tempo that slow plays fast.
+// a tick, rounded, against the rate SsSetTickMode set. Below a tenth of a
+// tick a blank the library takes the inverse, blanks a tick, for the rate: a
+// tempo that slow plays fast, and stalls (see advance).
 func seqRate(res, bpm int32) int32 {
-	perMinute := int32(60 * 60)
-	if video.mode == modePAL {
-		perMinute = 50 * 60
-	}
+	perMinute := tickRate * 60
 	n := res * bpm * 10
 	if n <= 0 {
 		return 0
 	}
-	if n < perMinute {
+	if seqSlow(res, bpm) {
 		return perMinute * 100 / n
 	}
 	return (n + perMinute/2) / perMinute
+}
+
+// seqSlow reports whether a tempo is below a tenth of a tick a blank.
+func seqSlow(res, bpm int32) bool {
+	n := res * bpm * 10
+	return n > 0 && n < tickRate*60
+}
+
+// setRate sets the sequence's rate, r, from its tempo as it is now.
+func (s *sequence) setRate(r int32) {
+	s.rate = r
+	s.slow = seqSlow(s.res, s.bpm)
+	s.stalled = false
 }
 
 // SsSeqClose closes sequence id, silencing its voices: their volumes go
@@ -283,6 +368,7 @@ func (s *sequence) play(loops int16) {
 // restart goes back to the beginning with nothing played.
 func (s *sequence) restart() {
 	s.pos, s.status, s.acc, s.due = s.start, 0, 0, 0
+	s.stalled = false
 	s.loopPos = nil
 	s.due = s.readDelta() * 10
 }
@@ -305,6 +391,7 @@ func SsSeqPlay(id int16, mode uint8, loops int16) {
 		s.eos = false
 		s.pauseReq = true
 	}
+	pace(ssSeqPlayPad)
 }
 
 // SsPlayBack plays sequence id as SsSeqPlay does, l times or for ever,
@@ -514,7 +601,7 @@ func (s *sequence) takeRequests() {
 		s.tempoReq = 0
 		s.tempoChange = false
 		s.bpm = t
-		s.rate = seqRate(s.res, t)
+		s.setRate(seqRate(s.res, t))
 	}
 	if r := s.tempoNew; r.set {
 		s.tempoNew = tempoRequest{}
@@ -569,33 +656,36 @@ func (s *sequence) tempoTick() {
 		s.tempoChange = false
 	}
 	s.bpm = b
-	s.rate = seqRateDown(s.res, b)
+	s.setRate(seqRateDown(s.res, b))
 }
 
 // seqRateDown is seqRate rounded down.
 func seqRateDown(res, bpm int32) int32 {
-	perMinute := int32(60 * 60)
-	if video.mode == modePAL {
-		perMinute = 50 * 60
-	}
+	perMinute := tickRate * 60
 	n := res * bpm * 10
 	if n <= 0 {
 		return 0
 	}
-	if n < perMinute {
+	if seqSlow(res, bpm) {
 		return perMinute * 100 / n
 	}
 	return n / perMinute
 }
 
-// advance plays the events of a vertical blank.
+// advance plays the events of a vertical blank. A sequence at a tempo below a
+// tenth of a tick a blank goes no further after a blank that plays nothing,
+// until a tempo is set or it starts again (probe spec/probes/tickrate).
 func (s *sequence) advance() {
 	s.tempoTick()
+	if s.stalled {
+		return
+	}
 	s.acc += s.rate
 	// The first events a blank plays may fall exactly on its total; those
 	// after them must fall before it. Events at the same tick as one
 	// played play with it, even when a tempo change has moved the total.
 	if !(s.due <= s.acc) {
+		s.stalled = s.slow
 		return
 	}
 	for s.state == seqPlaying {
@@ -685,7 +775,7 @@ func (s *sequence) tempo(us int32) {
 	}
 	r := seqRate(s.res, s.bpm)
 	s.acc += r - s.rate
-	s.rate = r
+	s.setRate(r)
 }
 
 // end is the end of the track: the sequence plays again or ends. At its

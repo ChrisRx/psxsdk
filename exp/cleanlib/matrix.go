@@ -2,7 +2,10 @@
 
 package cleanlib
 
-import "unsafe"
+import (
+	"device"
+	"unsafe"
+)
 
 // Matrices: rotations from angles, translations, and products on the GTE.
 // An angle is in 4096ths of a turn, and a matrix element in 4.12 fixed
@@ -37,6 +40,8 @@ func sin(a int32) int32 {
 }
 
 // sinMag is the sine of the non-negative angle a.
+//
+//go:inline
 func sinMag(a uint32) int32 {
 	i := a & 0x3ff
 	if a&0x400 != 0 {
@@ -59,29 +64,69 @@ func cos(a int32) int32 {
 	return sinMag(m + 1024)
 }
 
+// sinCos returns sin(a) and cos(a) from the table's two entries for the angle
+// within its quarter, each the other's in the next quarter (see sin).
+//
+//go:inline
+func sinCos(a int32) (s, c int32) {
+	m := uint32(a)
+	if a < 0 {
+		m = uint32(-a)
+	}
+	i := m & 0x3ff
+	s, c = int32(sineTable[i]), int32(sineTable[0x3ff-i])
+	if m&0x400 != 0 {
+		s, c = c, -s
+	}
+	if m&0x800 != 0 {
+		s, c = -s, -c
+	}
+	if a < 0 {
+		s = -s
+	}
+	return s, c
+}
+
+// mulShift returns a times b, shifted right by 12, as an element of 4.12. It
+// is a block of its own since the compiler, left to it, keeps products in the
+// HI and LO registers across the sine's branches and so saves them on the stack,
+// which a C program may keep small. Nothing around it may multiply: the
+// compiler does not know that this changes those registers.
+//
+//go:inline
+func mulShift(a, b int32) int32 {
+	return int32(device.AsmFull(`.set push
+	.set noat
+	mult {a}, {b}
+	mflo {}
+	sra {}, {}, 12
+	nop
+	.set pop`, map[string]interface{}{"a": a, "b": b}))
+}
+
 // RotMatrix makes the rotation by the angles in r in m, about Z first,
 // then Y, then X, and returns m. The translation is left alone.
 //
 //export RotMatrix
 func RotMatrix(r *SVECTOR, m *MATRIX) *MATRIX {
-	sx, cx := sin(int32(r.Vx)), cos(int32(r.Vx))
-	sy, cy := sin(int32(r.Vy)), cos(int32(r.Vy))
-	sz, cz := sin(int32(r.Vz)), cos(int32(r.Vz))
+	sx, cx := sinCos(int32(r.Vx))
+	sy, cy := sinCos(int32(r.Vy))
+	sz, cz := sinCos(int32(r.Vz))
 	// m is X times Y times Z, each product of two elements back to 4.12
 	// by an arithmetic shift, which rounds down. The sign goes on the
 	// first factor before the shift, and the products of three take Y
 	// with Z first, then X.
-	a := -sy * cz >> 12
-	b := -sy * sz >> 12
-	m.M[0][0] = int16(cy * cz >> 12)
-	m.M[0][1] = int16(-cy * sz >> 12)
+	a := mulShift(-sy, cz)
+	b := mulShift(-sy, sz)
+	m.M[0][0] = int16(mulShift(cy, cz))
+	m.M[0][1] = int16(mulShift(-cy, sz))
 	m.M[0][2] = int16(sy)
-	m.M[1][0] = int16(cx*sz>>12 - sx*a>>12)
-	m.M[1][1] = int16(cx*cz>>12 + sx*b>>12)
-	m.M[1][2] = int16(-sx * cy >> 12)
-	m.M[2][0] = int16(sx*sz>>12 + cx*a>>12)
-	m.M[2][1] = int16(sx*cz>>12 - cx*b>>12)
-	m.M[2][2] = int16(cx * cy >> 12)
+	m.M[1][0] = int16(mulShift(cx, sz) - mulShift(sx, a))
+	m.M[1][1] = int16(mulShift(cx, cz) + mulShift(sx, b))
+	m.M[1][2] = int16(mulShift(-sx, cy))
+	m.M[2][0] = int16(mulShift(sx, sz) + mulShift(cx, a))
+	m.M[2][1] = int16(mulShift(sx, cz) - mulShift(cx, b))
+	m.M[2][2] = int16(mulShift(cx, cy))
 	return m
 }
 
@@ -110,53 +155,76 @@ func ScaleMatrix(m *MATRIX, v *VECTOR) *MATRIX {
 
 // MulMatrix0 sets the rotation of m2 to that of m0 times that of m1 on the
 // GTE, which it leaves holding m0's, and returns m2. Each element is the
-// sum of three products shifted right by 12. The translations are left
-// alone. m2 may be m1.
+// sum of three products shifted right by 12. The padding halfword becomes 0,
+// and the translations are left alone. m2 may be m0 or m1.
 //
 //export MulMatrix0
 func MulMatrix0(m0, m1, m2 *MATRIX) *MATRIX {
-	SetRotMatrix(m0)
-	var r [3][3]int16
-	for j := range 3 {
-		r[0][j], r[1][j], r[2][j] = rotate(m1.M[0][j], m1.M[1][j], m1.M[2][j])
-	}
-	m2.M = r
+	mulRotation(m0, m1, m2)
 	return m2
 }
 
-// compose returns the transformation b and then a: the rotation a.M times
-// b.M, and the translation a.M times b.T plus a.T. The GTE's rotation
-// matrix is left holding a's.
-func compose(a, b *MATRIX) MATRIX {
-	var m MATRIX
-	MulMatrix0(a, b, &m)
-	t := applyLong(a, b.T)
-	m.T = [3]int32{t[0] + a.T[0], t[1] + a.T[1], t[2] + a.T[2]}
-	return m
+// mulRotation is MulMatrix0's product. a goes into the GTE first, so out may
+// be a or b. It is inlined, as C programs may give these calls little stack.
+//
+//go:inline
+func mulRotation(a, b, out *MATRIX) {
+	setRotation(a)
+	mulLoaded(b, out)
 }
 
-// applyLong multiplies the 32-bit vector v by the rotation of m, each
-// element a sum of three products shifted right by 12.
-func applyLong(m *MATRIX, v [3]int32) [3]int32 {
-	var r [3]int32
-	for i := range 3 {
-		var sum int64
-		for k := range 3 {
-			sum += int64(m.M[i][k]) * int64(v[k])
-		}
-		r[i] = int32(sum >> 12)
+// mulLoaded is mulRotation with a's rotation already in the GTE. Each column of
+// b is read before the same column of out is written.
+//
+//go:inline
+func mulLoaded(b, out *MATRIX) {
+	for j := range 3 {
+		out.M[0][j], out.M[1][j], out.M[2][j] = rotate(b.M[0][j], b.M[1][j], b.M[2][j])
 	}
-	return r
+	*(*uint16)(unsafe.Add(unsafe.Pointer(out), 18)) = 0
 }
 
-// ApplyMatrixLV multiplies the 32-bit vector v0 by the rotation of m into
-// v1, each element a sum of three products shifted right by 12, and
-// returns v1.
+// MulMatrix makes m0's rotation m0 times m1 on the GTE, which it leaves holding
+// m0's old rotation, and returns m0. m0 may be m1.
+//
+//export MulMatrix
+func MulMatrix(m0, m1 *MATRIX) *MATRIX { return MulMatrix0(m0, m1, m0) }
+
+// compose makes out the transformation b and then a: the rotation a.M times
+// b.M as MulMatrix0 makes it, and the translation turnLong's result plus a.T,
+// all of it wrapping. The GTE's rotation matrix is left holding a's, and the
+// rest of it as that last multiply leaves it. Out may be a or b.
+//
+//go:inline
+func compose(a, b, out *MATRIX) {
+	setRotation(a)
+	tx, ty, tz := turnLong(b.T[0], b.T[1], b.T[2])
+	out.T[0], out.T[1], out.T[2] = tx+a.T[0], ty+a.T[1], tz+a.T[2]
+	mulLoaded(b, out)
+}
+
+// turnLong multiplies the vector x, y, z by the GTE's rotation matrix as the
+// coordinate calls do it (spec 19, "Composing"), in two parts: the low 15 bits
+// of each element, whose sums are shifted right by 12, and the 16 bits above
+// them, whose sums wrap at 32 bits before they go up by 3. Bit 31 plays no
+// part. Under 2^30 it is the exact sum over 4096, rounded down.
+//
+//go:inline
+func turnLong(x, y, z int32) (int32, int32, int32) {
+	mvmva(int16(x&0x7fff), int16(y&0x7fff), int16(z&0x7fff))
+	lo1, lo2, lo3 := mac1(), mac2(), mac3()
+	mvmvaWhole(int16(x>>15), int16(y>>15), int16(z>>15))
+	return lo1 + mac1()<<3, lo2 + mac2()<<3, lo3 + mac3()<<3
+}
+
+// ApplyMatrixLV multiplies the 32-bit vector v0 by the rotation of m on the GTE,
+// which it leaves holding m's, into v1, as the coordinate calls multiply (turnLong),
+// and returns v1.
 //
 //export ApplyMatrixLV
 func ApplyMatrixLV(m *MATRIX, v0, v1 *VECTOR) *VECTOR {
-	r := applyLong(m, [3]int32{v0.Vx, v0.Vy, v0.Vz})
-	v1.Vx, v1.Vy, v1.Vz = r[0], r[1], r[2]
+	setRotation(m)
+	v1.Vx, v1.Vy, v1.Vz = turnLong(v0.Vx, v0.Vy, v0.Vz)
 	return v1
 }
 
@@ -166,7 +234,7 @@ func ApplyMatrixLV(m *MATRIX, v0, v1 *VECTOR) *VECTOR {
 //
 //export RotMatrixX
 func RotMatrixX(r int32, m *MATRIX) *MATRIX {
-	s, c := sin(r), cos(r)
+	s, c := sinCos(r)
 	for j := range 3 {
 		a, b := int32(m.M[1][j]), int32(m.M[2][j])
 		m.M[1][j] = int16((c*a - s*b) >> 12)
@@ -213,28 +281,27 @@ func TransposeMatrix(m0, m1 *MATRIX) *MATRIX {
 //
 //export ApplyMatrixSV
 func ApplyMatrixSV(m *MATRIX, v0, v1 *SVECTOR) *VECTOR {
-	SetRotMatrix(m)
-	v1.Vx, v1.Vy, v1.Vz = rotate(v0.Vx, v0.Vy, v0.Vz)
+	setRotation(m)
+	mvmvaAt(uintptr(unsafe.Pointer(v0)))
+	v1.Vx, v1.Vy, v1.Vz = ir1(), ir2(), ir3()
 	return (*VECTOR)(unsafe.Pointer(v1))
 }
 
 // CompMatrix composes m0 and m1 into m2, the transformation m1 and then
 // m0: the rotation m0's times m1's, as MulMatrix0 makes it, and the
 // translation m0's rotation times m1's, each element of which is cut to
-// 16 bits, shifted right by 12, plus m0's. m2 may be m0 or m1. The GTE
-// is left holding m0's rotation. It returns m2.
+// 16 bits, the GTE's vector, shifted right by 12, plus m0's. m2 may be m0 or
+// m1. The GTE is left holding m0's rotation and that translation's last
+// multiply. It returns m2.
 //
 //export CompMatrix
 func CompMatrix(m0, m1, m2 *MATRIX) *MATRIX {
-	var t [3]int32
-	for i := range 3 {
-		var sum int64
-		for k := range 3 {
-			sum += int64(m0.M[i][k]) * int64(int16(m1.T[k]))
-		}
-		t[i] = int32(sum>>12) + m0.T[i]
-	}
-	MulMatrix0(m0, m1, m2)
-	m2.T = t
+	x, y, z := int16(m1.T[0]), int16(m1.T[1]), int16(m1.T[2])
+	tx, ty, tz := m0.T[0], m0.T[1], m0.T[2]
+	mulRotation(m0, m1, m2)
+	mvmva(x, y, z)
+	m2.T[0] = mac1() + tx
+	m2.T[1] = mac2() + ty
+	m2.T[2] = mac3() + tz
 	return m2
 }

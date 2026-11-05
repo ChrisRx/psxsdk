@@ -6,8 +6,8 @@ import "unsafe"
 
 // Fixed backgrounds: a map of 16 by 16 cells drawn as sprites.
 
-// GsBG is a background: a window on the screen showing a map, scrolled,
-// with a brightness.
+// GsBG is a background: a map, scrolled. Its window and brightness fields are
+// the program's own: the library goes by the screen (see below).
 type GsBG struct {
 	Attribute        uint32
 	X, Y             int16
@@ -43,97 +43,144 @@ type GsCELL struct {
 // packet takes it: y in bits 6 to 15, x/16 below.
 //
 //export GetClut
-func GetClut(x, y int32) uint16 {
-	return uint16(y<<6 | x>>4&0x3f)
+func GetClut(x, y int32) uint32 {
+	return uint32(uint16(y<<6 | x>>4&0x3f))
 }
 
-// The work area's layout: for each of the two buffers, a packet that
-// moves the drawing offset by the scroll, one for each cell the window can
-// show, and one that puts the offset back, in the manual's
-// ((W/16+1)*(H/16+2)*6+4) words, after two words of the library's.
+// The work area holds a packet list for each buffer, built once by
+// GsInitFixBg16: the addresses of the two lists, and then for each a head, a
+// packet for each of the screen's cells, and a tail. GsSortFixBg16 fills in a
+// list from the map and links it. The GsBG's window and brightness fields have
+// no effect: everything is sized and placed by the screen, GsInitGraph's W and H
+// (spec 20, "Fixed backgrounds").
 const (
-	bgCellWords = 6 // a cell's packet: link, E1h, 7Ch, point, texture
-	bgHead      = 2
+	bgEndBytes  = 8  // the head and the tail: a link and an E5h
+	bgCellBytes = 20 // a cell's packet: link, E1h, command, point, texture
 )
 
-// GsInitFixBg16 prepares the work area for bg. GsSortFixBg16 builds every
-// packet each time, so there is nothing to prepare.
+// bgScreen returns the cells of a list, across and down.
+func bgScreen() (cols, rows int) {
+	return int(gs.width)/16 + 1, int(gs.height)/16 + 1
+}
+
+// GsInitFixBg16 builds the two lists in work. A list's sprites (7Dh, or 7Fh with
+// the attribute's bit 30 at this call) are placed on the 16-pixel grid of its
+// buffer, that of list 1 a screen's height down whatever GsDefDispBuff said. The
+// cells link on through the list, and its tail to the end until a sort links it.
 //
 //export GsInitFixBg16
 func GsInitFixBg16(bg *GsBG, work *uint32) {
+	cols, rows := bgScreen()
+	code := uint32(0x7d << 24)
+	if bg.Attribute&attrSemi != 0 {
+		code = 0x7f << 24
+	}
+	base := uintptr(unsafe.Pointer(at(work)))
+	p := base + 8
+	for i := range uintptr(2) {
+		set(base, i, uint32(p))
+		set(p, 0, 1<<24|uint32(p+bgEndBytes)&0xffffff)
+		set(p, 1, 0xe5000000)
+		p += bgEndBytes
+		for r := range rows {
+			y := 16*r + int(i)*int(gs.height)
+			for c := range cols {
+				set(p, 0, 4<<24|uint32(p+bgCellBytes)&0xffffff)
+				set(p, 1, 0xe1000000)
+				set(p, 2, code)
+				set(p, 3, pair(int16(16*c), int16(y)))
+				set(p, 4, 0)
+				p += bgCellBytes
+			}
+		}
+		set(p, 0, 1<<24|endOfList)
+		set(p, 1, 0xe5000000)
+		p += bgEndBytes
+	}
+	spinCycles(gsInitFixBg16CellPad * uint32(cols*rows))
 }
 
-// GsSortFixBg16 sorts bg into ot at pri: one 16 by 16 sprite (7Ch) for
-// each cell of a window W/16+1 cells across and H/16+1 down, enough for
-// any scroll, each after the E1h that selects its cell's texture page. The
-// sprites sit on the 16-pixel grid from the window's corner, and the
-// scroll within a cell moves them all by a drawing offset (E5h) set before
-// them and put back after. The cells come from the map at the scroll
-// divided by 16, wrapping around its edges, row by row; an empty cell,
-// FFFFh, draws nothing. The sprites are placed for the buffer the table
-// is drawn into after the coming GsSwapDispBuff. At the normal brightness, 128 in each of R, G
-// and B, the sprites are drawn without it (7Dh). The packets go in the
-// half of work for the buffer drawn into.
+// gsInitFixBg16CellPad is the rest of GsInitFixBg16's time, for each cell of a
+// screen: 31,400 cycles at 320 by 240 (spec 21), 108,600 at 640 by 480.
+const gsInitFixBg16CellPad = 36
+
+// bgFirst returns the first row or column of a map n cells long for the scroll
+// s: the scroll's whole cells, wrapped to be positive. A map of no cells has only
+// its first.
+func bgFirst(s, n int) int {
+	if n == 0 {
+		return 0
+	}
+	return ((s>>4)%n + n) % n
+}
+
+// GsSortFixBg16 fills in the list of the buffer after the coming swap, list 1
+// when buffer 0 is drawn into, and links it into ot at pri plus the table's
+// Offset (the sorts of primitives do not add it), unless the attribute's bit 31 is
+// set. The head moves the drawing offset by the scroll within a cell. Each packet
+// takes its cell from the map at the scroll's whole cells, stepping past the map's
+// end back to 0. An empty cell, FFFFh, has its tag's size set to 0 and its other
+// words left, and the GPU skips it. Any other has a size of 4, and an E1h from the
+// cell's texture page with the attribute's color mode and rate. The tail puts the
+// offset back: in the GsOFSGTE mode to 0, and in the GsOFSGPU mode to that buffer's,
+// with the screen origin.
 //
 //export GsSortFixBg16
 func GsSortFixBg16(bg *GsBG, work *uint32, ot *GsOT, pri uint16) {
-	m := bg.Map
-	if bg.Attribute&attrHidden != 0 || m == nil || m.Ncellw == 0 || m.Ncellh == 0 {
+	attr := bg.Attribute
+	if attr&attrHidden != 0 {
 		return
 	}
-	cols, rows := int(bg.W)/16+1, int(bg.H)/16+1
-	half := (cols*(rows+1)*bgCellWords + 4)
-	base := unsafe.Add(unsafe.Pointer(work), 4*(bgHead+gs.active*half))
-	words := unsafe.Slice((*uint32)(base), half)
-	head, tail := words[0:2], words[2:4]
-	cells := words[4:]
+	cols, rows := bgScreen()
+	j := 1 - activeBuf()
+	head := uintptr(word(uintptr(unsafe.Pointer(at(work))), uintptr(j)))
 
 	sx, sy := int(bg.Scrollx), int(bg.Scrolly)
-	head[1] = 0xe5000000 | uint32(-(sx&15))&0x7ff | (uint32(-(sy&15))&0x7ff)<<11
+	set(head, 1, 0xe5000000|uint32(-(sx&15))&0x7ff|(uint32(-(sy&15))&0x7ff)<<11)
 
-	code := uint32(0x7c)
-	color := uint32(bg.B)<<16 | uint32(bg.G)<<8 | uint32(bg.R)
-	if bg.R == 128 && bg.G == 128 && bg.B == 128 {
-		code, color = 0x7d, 0
-	}
-	// The sprites are placed in the buffer the table will be drawn into,
-	// the one after the coming swap, as the reference places them.
-	draw := gs.buf[1-gs.active]
-	ox, oy := int(draw[0])+int(position.Offx), int(draw[1])+int(position.Offy)
-	x0, y0 := ox+int(bg.X), oy+int(bg.Y)
-	// The offset put back is that buffer's, with the screen origin.
-	tail[1] = 0xe5000000 | uint32(ox)&0x7ff | (uint32(oy)&0x7ff)<<11
+	m := at(bg.Map)
 	nw, nh := int(m.Ncellw), int(m.Ncellh)
-	index := unsafe.Slice(m.Index, nw*nh)
-	base0 := unsafe.Slice(m.Base, 1<<16)
-
-	// The packets are linked from the head through the cells to the tail
-	// and on to what the table's entry held.
-	n := 1 << ot.Length
-	e := &unsafe.Slice(ot.Org, n)[min(int(pri), n-1)]
-	tail[0] = 1<<24 | *e&0xffffff
-	next := physical(unsafe.Pointer(&tail[0]))
-	k := 0
-	// Built from the last cell back, so that each links to the one after.
-	for r := rows - 1; r >= 0; r-- {
-		my := ((sy>>4+r)%nh + nh) % nh
-		for c := cols - 1; c >= 0; c-- {
-			mx := ((sx>>4+c)%nw + nw) % nw
-			i := index[my*nw+mx]
+	index := uintptr(unsafe.Pointer(at(m.Index)))
+	cells := uintptr(unsafe.Pointer(at(m.Base)))
+	page := semiRate(attr)<<5 | (attr>>24&3)<<7
+	col0, row := bgFirst(sx, nw), bgFirst(sy, nh)
+	p := head + bgEndBytes
+	// Stepping past a map's end goes back to 0, and one with no columns has only that.
+	wrap := max(nw, 1)
+	for range rows {
+		line := index + 2*uintptr(row*nw)
+		end := line + 2*uintptr(wrap)
+		next := line + 2*uintptr(col0)
+		for range cols {
+			i := half(next, 0)
 			if i == 0xffff {
-				continue
+				*(*uint8)(unsafe.Pointer(p + 3)) = 0
+			} else {
+				// A cell's first word is U, V and Cba, as the packet takes them.
+				cell := cells + 8*uintptr(i)
+				*(*uint8)(unsafe.Pointer(p + 3)) = 4
+				*(*uint16)(unsafe.Pointer(p + 4)) = uint16(uint32(half(cell, 3))&0x1f | page)
+				set(p, 4, word(cell, 0))
 			}
-			cell := &base0[i]
-			p := cells[k*bgCellWords : k*bgCellWords+5]
-			k++
-			p[0] = 4<<24 | next
-			p[1] = 0xe1000000 | uint32(cell.Tpage)
-			p[2] = code<<24 | color
-			p[3] = pair(int16(x0+16*c), int16(y0+16*r))
-			p[4] = uint32(cell.Cba)<<16 | uint32(cell.V)<<8 | uint32(cell.U)
-			next = physical(unsafe.Pointer(&p[0]))
+			p += bgCellBytes
+			next += 2
+			if next == end {
+				next = line
+			}
+		}
+		if row++; row >= nh {
+			row = 0
 		}
 	}
-	head[0] = 1<<24 | next
-	*e = *e&0xff000000 | physical(unsafe.Pointer(&head[0]))
+
+	back := uint32(0xe5000000)
+	if gs.ofsGPU {
+		bx, by := bufCorner(j)
+		back |= (uint32(bx)+uint32(position.Offx))&0x7ff | ((uint32(by)+uint32(position.Offy))&0x7ff)<<11
+	}
+	set(p, 1, back)
+	ot = at(ot)
+	e := at((*uint32)(unsafe.Pointer(uintptr(unsafe.Pointer(ot.Org)) + 4*(uintptr(pri)+uintptr(ot.Offset)))))
+	set(p, 0, 1<<24|*e&0xffffff)
+	*e = uint32(head) & 0xffffff
 }

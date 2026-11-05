@@ -60,6 +60,8 @@ const (
 	cdlInit    = 0x0a
 	cdlDemute  = 0x0c
 	cdlSetmode = 0x0e
+	cdlGetlocL = 0x10
+	cdlGetlocP = 0x11
 	cdlReadS   = 0x1b
 
 	// The values the memory controller's registers take: the drive's
@@ -95,6 +97,10 @@ const (
 	syncRead1  = 60
 	syncRead2  = 80
 	syncReturn = 60
+	// CdControlF and CdSync and CdReady with something to report, past their own
+	// work: Sony's 540 clocks of a Nop (spec 18) and 410 and 422.
+	controlFRest = 170
+	syncRest     = 110
 	// CdRead: its time read 114 cycles from the call, its look at the
 	// drive 144 after that, its watch 344 after the common delay is put
 	// back, its time read 86 after ReadN and its return 66 after that.
@@ -149,6 +155,11 @@ var cdParams = [32]uint8{
 // Play and ReadS; Play with a nil parameter is sent alone).
 var cdPositioned = [32]bool{cdlPlay: true, cdlReadN: true, 0x15: true, 0x16: true, cdlReadS: true}
 
+// cdMoves marks the commands that send the head somewhere: sending one takes back
+// a sector's response CdReady has not reported, and an error too (probe
+// spec/probes/cdready).
+var cdMoves = [32]bool{cdlPlay: true, 0x04: true, 0x05: true, cdlReadN: true, 0x15: true, 0x16: true, cdlReadS: true}
+
 // cdTries is how many times a command the drive refuses is sent before
 // its error is returned, by CdControl and CdControlB alike (probes
 // spec/probes/cdlimits and cdmore).
@@ -175,6 +186,10 @@ const (
 // volatile loads.
 type cdDriver struct {
 	started bool
+
+	// readPos is readAt's position, kept here since the compiler would put
+	// a local on the heap, which the image's 32 KB never gets back.
+	readPos CdlLOC
 
 	// busy is set while a command waits for its first response, and resp
 	// is that response, n bytes of it, with failed set for an error. raw
@@ -234,6 +249,17 @@ type cdDriver struct {
 	// before its data.
 	header bool
 	head   [3]uint32
+
+	// status is the status byte of the last response that holds one, for
+	// CdStatus. rawReady is what CdReady reports, a sector's response, which
+	// goes here rather than in raw, the last response of a command, what CdSync
+	// reports, and an error's, which goes in both. ready is what CdReady has
+	// to report: 1 for a sector's response since it last asked, 5 for an error. syncError is set by an error until CdSync
+	// has reported it or a command is sent.
+	status    uint8
+	rawReady  [8]uint8
+	ready     uint32
+	syncError uint32
 
 	// dir is where CdReadFile reads the disc's directories.
 	dir [sectorSize / 4]uint32
@@ -311,7 +337,17 @@ func (c *cdDriver) start() {
 	iMask.Set(iMask.Get() | irqCD)
 	ExitCriticalSection()
 	// The reference sends Getstat straight after the line.
+	c.notice()
+	c.reset()
+}
+
+// notice prints the line the drive's reset starts with.
+func (c *cdDriver) notice() {
 	ttyPrintf("addr=%08x\n", 0x8004d724, 0)
+}
+
+// reset resets the drive, unmutes it and sets the volumes.
+func (c *cdDriver) reset() {
 	c.control(cdlGetstat, nil, nil)
 	c.control(cdlInit, nil, nil)
 	c.mode = 0
@@ -352,8 +388,18 @@ func (c *cdDriver) send(com uint8, param *uint8, notify int, inHandler bool) {
 			break
 		}
 	}
+	c.issue(com, param, notify)
+}
+
+// issue writes a command and its parameters to the drive, marking it in flight,
+// whether or not one still is.
+func (c *cdDriver) issue(com uint8, param *uint8, notify int) {
 	volatile.StoreUint32(&c.busy, 1)
 	volatile.StoreUint32(&c.secondFailed, 0)
+	volatile.StoreUint32(&c.syncError, 0)
+	if cdMoves[com&31] {
+		volatile.StoreUint32(&c.ready, 0)
+	}
 	c.com = com
 	c.notify = notify
 	if com == cdlSetloc && param != nil {
@@ -411,17 +457,34 @@ func (c *cdDriver) answer() (ev uintptr) {
 	kind := cdReg3.Get() & 7
 	reading := volatile.LoadUint32(&c.remaining) > 0
 	// The response goes to an 8-byte buffer, its rest zero-filled, a
-	// byte at a time, as Sony's library does.
+	// byte at a time, as Sony's library does. A sector's has one of its
+	// own, since CdSync goes on reporting the command's.
+	raw := &c.raw
+	if kind == 1 {
+		raw = &c.rawReady
+	}
 	n := 0
 	for cdIndex.Get()&cdStatusResponse != 0 {
 		v := cdReg1.Get()
-		if n < len(c.raw) {
-			volatile.StoreUint8(&c.raw[n], v)
+		if n < len(raw) {
+			volatile.StoreUint8(&raw[n], v)
 			n++
 		}
 	}
-	for i := n; i < len(c.raw); i++ {
-		volatile.StoreUint8(&c.raw[i], 0)
+	for i := n; i < len(raw); i++ {
+		volatile.StoreUint8(&raw[i], 0)
+	}
+	// A location's response holds no status.
+	if kind != 3 || c.com != cdlGetlocP && c.com != cdlGetlocL {
+		volatile.StoreUint8(&c.status, volatile.LoadUint8(&raw[0]))
+	}
+	switch kind {
+	case 1:
+		volatile.StoreUint32(&c.ready, 1)
+	case 5:
+		volatile.StoreUint32(&c.syncError, 1)
+		volatile.StoreUint32(&c.ready, 5)
+		c.rawReady = c.raw
 	}
 	// Acknowledged at once, and the drive's interrupts enabled again,
 	// before a sector is taken: the drive keeps the sector in its buffer
@@ -640,6 +703,9 @@ func (c *cdDriver) controlEv(com uint8, param, result *uint8) bool {
 // CdControlB does).
 func (c *cdDriver) command(com uint8, param, result *uint8, notify int) bool {
 	c.start()
+	if cdNeedsParam(com, param) {
+		return false
+	}
 	if cdPositioned[com&31] && param != nil {
 		if !c.insist(cdlSetloc, param, result, min(notify, cdErrors)) {
 			return false
@@ -670,6 +736,12 @@ func (c *cdDriver) commandB(com uint8, param, result *uint8) bool {
 		copy(unsafe.Slice(result, len(c.resp2)), c.resp2[:])
 	}
 	return volatile.LoadUint32(&c.secondFailed) == 0
+}
+
+// cdNeedsParam reports a command that takes parameters called with none, which is
+// not sent at all, and fails (probe spec/probes/cdready).
+func cdNeedsParam(com uint8, param *uint8) bool {
+	return param == nil && cdParams[com&31] != 0
 }
 
 // insist is once, sent again while the drive refuses the command, cdTries
@@ -735,6 +807,155 @@ func CdControlB(com uint8, param, result *uint8) int32 {
 		return 1
 	}
 	return 0
+}
+
+// CdControlF sends the drive the command com without waiting for its response,
+// even with another still outstanding, and returns 1. A position for SeekL,
+// SeekP, ReadN, Play or ReadS goes first as a Setloc, which is waited for as
+// CdControl waits, and if the drive refuses that it returns 0.
+//
+//export CdControlF
+//go:noinline
+func CdControlF(com int32, param *uint8) int32 {
+	cd.start()
+	c := uint8(com)
+	if cdNeedsParam(c, param) {
+		return 0
+	}
+	if cdPositioned[c&31] && param != nil {
+		if !cd.insist(cdlSetloc, param, nil, cdErrors) {
+			return 0
+		}
+		param = nil
+	}
+	if c == cdlSetmode && param != nil {
+		cd.mode = *param
+	}
+	spinCycles(sendEntry + controlFRest)
+	cd.issue(c, param, cdComplete)
+	return 1
+}
+
+// CdStatus returns the status byte of the drive's last response that holds one.
+//
+//export CdStatus
+func CdStatus() int32 { return int32(volatile.LoadUint8(&cd.status)) }
+
+// cdCopyResult copies a response to a program's result, if it passed one.
+//
+//go:noinline
+func cdCopyResult(result *uint8, resp *[8]uint8) {
+	if result != nil {
+		copy(unsafe.Slice(result, len(resp)), resp[:])
+	}
+}
+
+// pending reports whether the last command has answers still to come.
+func (c *cdDriver) pending() bool {
+	return volatile.LoadUint32(&c.busy) != 0 || volatile.LoadUint32(&c.second) != 0
+}
+
+// CdSync reports on the last command sent, by whichever call: 0 if its answers
+// have not all come, which mode 0 alone waits out, 2 if they have, and 5 the first
+// time it is asked after an error. result, if not nil, gets the last response of
+// a command, unless it returns 0.
+//
+//export CdSync
+//go:noinline
+func CdSync(mode int32, result *uint8) int32 {
+	watch.begin(cdNoLimit)
+	for cd.pending() {
+		watch.check()
+		if mode != 0 {
+			return 0
+		}
+	}
+	spinCycles(syncReturn + syncRest)
+	cdCopyResult(result, &cd.raw)
+	if volatile.LoadUint32(&cd.syncError) != 0 {
+		volatile.StoreUint32(&cd.syncError, 0)
+		return 5
+	}
+	return 2
+}
+
+// cdReadyLimit is how many vertical blanks CdReady(0) waits for a sector, 16
+// seconds.
+const cdReadyLimit = 954
+
+// cdComNames names the drive's commands in the line CdReady(0) prints, as the
+// manual's CdlXXX names have them. A command it does not know has no name.
+var cdComNames = [32]string{
+	"CdlSync", "CdlNop", "CdlSetloc", "CdlPlay", "CdlForward", "CdlBackward",
+	"CdlReadN", "CdlStandby", "CdlStop", "CdlPause", "CdlInit", "CdlMute",
+	"CdlDemute", "CdlSetfilter", "CdlSetmode", "CdlGetparam", "CdlGetlocL",
+	"CdlGetlocP", "", "CdlGetTN", "CdlGetTD", "CdlSeekL", "CdlSeekP", "", "",
+	"CdlTest", "", "CdlReadS",
+}
+
+// ttyString writes s to the TTY through putchar.
+func ttyString(s string) {
+	for i := 0; i < len(s); i++ {
+		putchar(int32(s[i]))
+	}
+}
+
+// CdReady reports on the sectors of a read: 1, once for each sector's response
+// since the last call, 5, once, after any error the drive gives, and 0 for neither.
+// result, if not nil, gets that response. Mode 0 waits for one, and gives up after
+// 16 seconds with a line naming the last command, and returns -1.
+//
+//export CdReady
+//go:noinline
+func CdReady(mode int32, result *uint8) int32 {
+	watch.begin(cdNoLimit)
+	start := volatile.LoadUint32(&vsync.blanks)
+	for volatile.LoadUint32(&cd.ready) == 0 {
+		watch.check()
+		if mode != 0 {
+			return 0
+		}
+		if volatile.LoadUint32(&vsync.blanks)-start > cdReadyLimit {
+			ttyString("CD_ready:(")
+			ttyString(cdComNames[cd.com&31])
+			ttyString(") Sync=")
+			if cd.pending() {
+				ttyString("NoIntr")
+			} else {
+				ttyString("Complete")
+			}
+			ttyString(", Ready=NoIntr\n")
+			return -1
+		}
+	}
+	spinCycles(syncReturn + syncRest)
+	r := int32(volatile.LoadUint32(&cd.ready))
+	volatile.StoreUint32(&cd.ready, 0)
+	cdCopyResult(result, &cd.rawReady)
+	return r
+}
+
+// CdInit runs the drive's reset again, whatever the drive is doing, and returns
+// 1. A read going on ends here.
+//
+//export CdInit
+func CdInit() int32 {
+	cd.start()
+	cd.notice()
+	cdIndex.Set(1)
+	cdReg3.Get()
+	cdIndex.Set(0)
+	cdReg3.Set(0)
+	comDelay.Set(comDelayIdle)
+	volatile.StoreUint32(&cd.remaining, 0)
+	volatile.StoreUint32(&cd.count, 0)
+	volatile.StoreUint32(&cd.pausing, 0)
+	volatile.StoreUint32(&cd.readErr, 0)
+	volatile.StoreUint32(&cd.busy, 0)
+	volatile.StoreUint32(&cd.second, 0)
+	cd.reset()
+	volatile.StoreUint32(&cd.ready, 0)
+	return 1
 }
 
 // CdlLOC is a position on the disc: minutes, seconds and sectors in BCD.
@@ -883,9 +1104,8 @@ func CdReadFile(file *byte, addr *uint32, nbyte int32) int32 {
 
 // readAt starts reading n sectors from sector into buf at double speed.
 func (c *cdDriver) readAt(sector uint32, n int32, buf *uint32) bool {
-	var pos CdlLOC
-	CdIntToPos(int32(sector), &pos)
-	return c.controlEv(cdlSetloc, &pos.Minute, nil) && CdRead(n, buf, cdlModeSpeed) != 0
+	CdIntToPos(int32(sector), &c.readPos)
+	return c.controlEv(cdlSetloc, &c.readPos.Minute, nil) && CdRead(n, buf, cdlModeSpeed) != 0
 }
 
 // readDir reads one sector into dir and waits for it.
