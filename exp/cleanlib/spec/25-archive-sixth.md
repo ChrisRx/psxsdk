@@ -8,7 +8,10 @@ first inside the library, and assembly is open wherever it gets closer.
 
 ## Never time with a root counter
 
-**This emulator's root counters count steps, not cycles.** `emu/machine.go`: "steps counts the steps run, which is
+The emulator has since been fixed, and its root counters now count cycles. What follows is why figures taken from a
+counter before that are wrong, and it still holds for them.
+
+**This emulator's root counters counted steps, not cycles.** `emu/machine.go` said: "steps counts the steps run, which is
 the timers' clock." Frames and `TotalCycles` go by what things really cost, GTE waits included. So on any path that
 waits for the GTE, a root counter says something else. An 11-polygon lit 28h call, flag 0, attribute 0, on spec 24's
 `gsocost` probe:
