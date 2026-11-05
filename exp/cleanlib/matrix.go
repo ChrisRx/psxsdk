@@ -2,10 +2,7 @@
 
 package cleanlib
 
-import (
-	"device"
-	"unsafe"
-)
+import "unsafe"
 
 // Matrices: rotations from angles, translations, and products on the GTE.
 // An angle is in 4096ths of a turn, and a matrix element in 4.12 fixed
@@ -64,79 +61,20 @@ func cos(a int32) int32 {
 	return sinMag(m + 1024)
 }
 
-// sinCos returns sin(a) and cos(a) from the table's two entries for the angle
-// within its quarter, each the other's in the next quarter (see sin).
-//
-//go:inline
-func sinCos(a int32) (s, c int32) {
-	m := uint32(a)
-	if a < 0 {
-		m = uint32(-a)
-	}
-	i := m & 0x3ff
-	s, c = int32(sineTable[i]), int32(sineTable[0x3ff-i])
-	if m&0x400 != 0 {
-		s, c = c, -s
-	}
-	if m&0x800 != 0 {
-		s, c = -s, -c
-	}
-	if a < 0 {
-		s = -s
-	}
-	return s, c
-}
-
-// mulShift returns a times b, shifted right by 12, as an element of 4.12. It
-// is a block of its own since the compiler, left to it, keeps products in the
-// HI and LO registers across the sine's branches and so saves them on the stack,
-// which a C program may keep small. Nothing around it may multiply: the
-// compiler does not know that this changes those registers.
-//
-//go:inline
-func mulShift(a, b int32) int32 {
-	return int32(device.AsmFull(`.set push
-	.set noat
-	mult {a}, {b}
-	mflo {}
-	sra {}, {}, 12
-	nop
-	.set pop`, map[string]interface{}{"a": a, "b": b}))
-}
-
 // RotMatrix makes the rotation by the angles in r in m, about Z first,
-// then Y, then X, and returns m. The translation is left alone.
+// then Y, then X, and returns m. The translation is left alone. m is X times Y
+// times Z, each product of two elements back to 4.12 by an arithmetic shift, which
+// rounds down. The sign goes on the first factor before the shift, and the products
+// of three take Y with Z first, then X. It is in assembly, with no branch on an
+// angle: every call takes the same time on Sony's.
 //
 //export RotMatrix
-func RotMatrix(r *SVECTOR, m *MATRIX) *MATRIX {
-	sx, cx := sinCos(int32(r.Vx))
-	sy, cy := sinCos(int32(r.Vy))
-	sz, cz := sinCos(int32(r.Vz))
-	// m is X times Y times Z, each product of two elements back to 4.12
-	// by an arithmetic shift, which rounds down. The sign goes on the
-	// first factor before the shift, and the products of three take Y
-	// with Z first, then X.
-	a := mulShift(-sy, cz)
-	b := mulShift(-sy, sz)
-	m.M[0][0] = int16(mulShift(cy, cz))
-	m.M[0][1] = int16(mulShift(-cy, sz))
-	m.M[0][2] = int16(sy)
-	m.M[1][0] = int16(mulShift(cx, sz) - mulShift(sx, a))
-	m.M[1][1] = int16(mulShift(cx, cz) + mulShift(sx, b))
-	m.M[1][2] = int16(mulShift(-sx, cy))
-	m.M[2][0] = int16(mulShift(sx, sz) + mulShift(cx, a))
-	m.M[2][1] = int16(mulShift(sx, cz) - mulShift(cx, b))
-	m.M[2][2] = int16(mulShift(cx, cy))
-	return m
-}
+func RotMatrix(r *SVECTOR, m *MATRIX) *MATRIX
 
 // TransMatrix sets the translation of m to v and returns m.
 //
 //export TransMatrix
-func TransMatrix(m *MATRIX, v *VECTOR) *MATRIX {
-	m.T = [3]int32{v.Vx, v.Vy, v.Vz}
-	return m
-}
+func TransMatrix(m *MATRIX, v *VECTOR) *MATRIX
 
 // ScaleMatrix scales the rotation of m by v, 4096 being 1: each column j
 // by v's element j, so that the scaling comes before m's rotation. Each
@@ -219,29 +157,18 @@ func turnLong(x, y, z int32) (int32, int32, int32) {
 
 // ApplyMatrixLV multiplies the 32-bit vector v0 by the rotation of m on the GTE,
 // which it leaves holding m's, into v1, as the coordinate calls multiply (turnLong),
-// and returns v1.
+// and returns v1. In assembly.
 //
 //export ApplyMatrixLV
-func ApplyMatrixLV(m *MATRIX, v0, v1 *VECTOR) *VECTOR {
-	setRotation(m)
-	v1.Vx, v1.Vy, v1.Vz = turnLong(v0.Vx, v0.Vy, v0.Vz)
-	return v1
-}
+func ApplyMatrixLV(m *MATRIX, v0, v1 *VECTOR) *VECTOR
 
 // RotMatrixX turns m about the X axis by r, 4096 to a turn: m becomes the
 // turn times m, rows 1 and 2 mixed as RotMatrixY and RotMatrixZ mix
-// theirs. It returns m.
+// theirs, (c*a - s*b) >> 12 and (s*a + c*b) >> 12. It returns m. In assembly, as are
+// RotMatrixY and RotMatrixZ.
 //
 //export RotMatrixX
-func RotMatrixX(r int32, m *MATRIX) *MATRIX {
-	s, c := sinCos(r)
-	for j := range 3 {
-		a, b := int32(m.M[1][j]), int32(m.M[2][j])
-		m.M[1][j] = int16((c*a - s*b) >> 12)
-		m.M[2][j] = int16((s*a + c*b) >> 12)
-	}
-	return m
-}
+func RotMatrixX(r int32, m *MATRIX) *MATRIX
 
 // ScaleMatrixL scales the rotation of m by v, 4096 being 1: each row i by
 // v's element i, so that the scaling comes after m's rotation. Each
@@ -277,15 +204,10 @@ func TransposeMatrix(m0, m1 *MATRIX) *MATRIX {
 // ApplyMatrixSV multiplies v0 by the rotation of m on the GTE, which it
 // leaves holding m's, into v1: each element shifted right by 12 and
 // saturated to 16 bits. v1's Pad is left alone, and v1 may be v0. It
-// returns v1, typed as a VECTOR.
+// returns v1, typed as a VECTOR. In assembly.
 //
 //export ApplyMatrixSV
-func ApplyMatrixSV(m *MATRIX, v0, v1 *SVECTOR) *VECTOR {
-	setRotation(m)
-	mvmvaAt(uintptr(unsafe.Pointer(v0)))
-	v1.Vx, v1.Vy, v1.Vz = ir1(), ir2(), ir3()
-	return (*VECTOR)(unsafe.Pointer(v1))
-}
+func ApplyMatrixSV(m *MATRIX, v0, v1 *SVECTOR) *VECTOR
 
 // CompMatrix composes m0 and m1 into m2, the transformation m1 and then
 // m0: the rotation m0's times m1's, as MulMatrix0 makes it, and the

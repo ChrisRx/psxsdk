@@ -144,8 +144,10 @@ func ExitCriticalSection() {
 //export putchar
 func putchar(c int32) int32 {
 	b := byte(c)
-	if b >= ' ' && b <= '~' {
-		ttyColumn++
+	if b >= ' ' {
+		if b <= '~' || b >= 0xa4 && b <= 0xa6 || b == 0xc7 {
+			ttyColumn++
+		}
 	} else if putcharOther(b) {
 		return putcharLast
 	}
@@ -177,8 +179,6 @@ func putcharOther(b byte) bool {
 				return true
 			}
 		}
-	case b >= 0xa4 && b <= 0xa6 || b == 0xc7:
-		ttyColumn++
 	}
 	return false
 }
@@ -420,25 +420,19 @@ func libps_interrupt() {
 	}
 }
 
-// randState is rand's state, 0 until srand. The kernel has a rand and a srand,
-// A0h 2Fh and 30h, which the library does not call: a retail kernel's sequence
-// starts elsewhere (probe spec/probes/crand, and Terra Incognita's scenery).
-var randState uint32
+// rand's state is 0 until srand, in the target's assembly with it. The kernel has a
+// rand and a srand, A0h 2Fh and 30h, which the library does not call: a retail kernel's
+// sequence starts elsewhere (probe spec/probes/crand, and Terra Incognita's scenery).
 
 // rand returns the next pseudo-random number, from 0 to 32767.
 //
 //export rand
-func rand() int32 {
-	randState = randState*1103515245 + 12345
-	return int32(randState >> 16 & 0x7fff)
-}
+func rand() int32
 
 // srand seeds rand.
 //
 //export srand
-func srand(seed uint32) {
-	randState = seed
-}
+func srand(seed uint32)
 
 // callC calls the C function at f, which takes no arguments, as a Go
 // func value whose context is nil: the function ignores the register the

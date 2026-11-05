@@ -3,7 +3,6 @@
 package cleanlib
 
 import (
-	"device"
 	"unsafe"
 
 	"go.chrisrx.dev/psx/internal/volatile"
@@ -13,49 +12,23 @@ import (
 // sound.
 
 // RotMatrixY turns m about the Y axis by r, 4096 to a turn: m becomes the
-// turn times m.
+// turn times m. In assembly.
 //
 //export RotMatrixY
-func RotMatrixY(r int32, m *MATRIX) *MATRIX {
-	s, c := sinCos(r)
-	for j := range 3 {
-		a, b := int32(m.M[0][j]), int32(m.M[2][j])
-		m.M[0][j] = int16((c*a + s*b) >> 12)
-		m.M[2][j] = int16((-s*a + c*b) >> 12)
-	}
-	return m
-}
+func RotMatrixY(r int32, m *MATRIX) *MATRIX
 
 // RotMatrixZ turns m about the Z axis by r, 4096 to a turn: m becomes the
-// turn times m.
+// turn times m. In assembly.
 //
 //export RotMatrixZ
-func RotMatrixZ(r int32, m *MATRIX) *MATRIX {
-	s, c := sinCos(r)
-	for j := range 3 {
-		a, b := int32(m.M[0][j]), int32(m.M[1][j])
-		m.M[0][j] = int16((c*a - s*b) >> 12)
-		m.M[1][j] = int16((s*a + c*b) >> 12)
-	}
-	return m
-}
+func RotMatrixZ(r int32, m *MATRIX) *MATRIX
 
 // ApplyMatrix multiplies v0 by m's rotation on the GTE, which it leaves holding m's,
 // into v1, which it returns: each element the sum of three products shifted right by
-// 12, as MAC1 to MAC3 hold it.
+// 12, as MAC1 to MAC3 hold it. In assembly.
 //
 //export ApplyMatrix
-func ApplyMatrix(m *MATRIX, v0 *SVECTOR, v1 *VECTOR) *VECTOR {
-	setRotation(m)
-	mvmvaAt(uintptr(unsafe.Pointer(v0)))
-	device.AsmFull(`.set push
-	.set noat
-	swc2 $$25, 0({v})
-	swc2 $$26, 4({v})
-	swc2 $$27, 8({v})
-	.set pop`, map[string]interface{}{"v": uintptr(unsafe.Pointer(v1))})
-	return v1
-}
+func ApplyMatrix(m *MATRIX, v0 *SVECTOR, v1 *VECTOR) *VECTOR
 
 // GsScaleScreen makes GsWSMATRIX the matrix the last GsSetRefView2 or GsSetView2
 // left, scaled against the world, so that calling it twice does not scale twice.
@@ -84,137 +57,16 @@ const gsScaleScreenPad = 74
 // IR the difference and IR0 the scale.
 //
 //export gteMIMefunc
-func gteMIMefunc(otp, dfp *SVECTOR, n, p int32) {
-	ov := unsafe.Slice(otp, n)
-	dv := unsafe.Slice(dfp, n)
-	device.AsmFull(`.set push
-	.set noat
-	mtc2 {p}, $$8
-	.set pop`, map[string]interface{}{"p": p})
-	for i := range ov {
-		o, d := &ov[i], &dv[i]
-		device.AsmFull(`.set push
-	.set noat
-	mtc2 {a}, $$25
-	mtc2 {b}, $$26
-	mtc2 {c}, $$27
-	mtc2 {x}, $$9
-	mtc2 {y}, $$10
-	mtc2 {z}, $$11
-	nop
-	nop
-	.word 0x4a08003e
-	.set pop`, map[string]interface{}{
-			"a": int32(o.Vx), "b": int32(o.Vy), "c": int32(o.Vz),
-			"x": int32(d.Vx), "y": int32(d.Vy), "z": int32(d.Vz),
-		})
-		o.Vx = int16(device.AsmFull(`.set push
-	.set noat
-	mfc2 {}, $$9
-	nop
-	.set pop`, nil))
-		o.Vy = int16(device.AsmFull(`.set push
-	.set noat
-	mfc2 {}, $$10
-	nop
-	.set pop`, nil))
-		o.Vz = int16(device.AsmFull(`.set push
-	.set noat
-	mfc2 {}, $$11
-	nop
-	.set pop`, nil))
-	}
-}
-
-// The GTE's rotation and translation, control registers 0 to 7, saved by
-// PushMatrix.
-var matrixStack struct {
-	saved [20][8]uint32
-	n     int
-}
+func gteMIMefunc(otp, dfp *SVECTOR, n, p int32)
 
 // PushMatrix saves the GTE's rotation and translation on a stack of
-// twenty.
+// twenty, and PopMatrix restores them from it. In assembly.
 //
 //export PushMatrix
-func PushMatrix() {
-	if matrixStack.n >= len(matrixStack.saved) {
-		return
-	}
-	s := &matrixStack.saved[matrixStack.n]
-	matrixStack.n++
-	s[0], s[1], s[2], s[3] = gteCtrl0(), gteCtrl1(), gteCtrl2(), gteCtrl3()
-	s[4], s[5], s[6], s[7] = gteCtrl4(), gteCtrl5(), gteCtrl6(), gteCtrl7()
-}
+func PushMatrix()
 
-// PopMatrix restores the GTE's rotation and translation from the stack.
-//
 //export PopMatrix
-func PopMatrix() {
-	if matrixStack.n == 0 {
-		return
-	}
-	matrixStack.n--
-	s := &matrixStack.saved[matrixStack.n]
-	var m MATRIX
-	w := (*[5]uint32)(unsafe.Pointer(&m.M))
-	copy(w[:], s[:5])
-	m.T = [3]int32{int32(s[5]), int32(s[6]), int32(s[7])}
-	SetRotMatrix(&m)
-	SetTransMatrix(&m)
-}
-
-// The control register reads, each a cfc2 into $gp and a move out of it, after
-// which gp gets its own value back (see the comment in gte.go).
-
-func gteCtrl0() uint32 {
-	gp := readGP()
-	v := uint32(device.AsmFull(".set push\n.set noat\n.word 0x485c0000\nnop\nmove {}, $$28\n.set pop", nil))
-	setGP(gp)
-	return v
-}
-func gteCtrl1() uint32 {
-	gp := readGP()
-	v := uint32(device.AsmFull(".set push\n.set noat\n.word 0x485c0800\nnop\nmove {}, $$28\n.set pop", nil))
-	setGP(gp)
-	return v
-}
-func gteCtrl2() uint32 {
-	gp := readGP()
-	v := uint32(device.AsmFull(".set push\n.set noat\n.word 0x485c1000\nnop\nmove {}, $$28\n.set pop", nil))
-	setGP(gp)
-	return v
-}
-func gteCtrl3() uint32 {
-	gp := readGP()
-	v := uint32(device.AsmFull(".set push\n.set noat\n.word 0x485c1800\nnop\nmove {}, $$28\n.set pop", nil))
-	setGP(gp)
-	return v
-}
-func gteCtrl4() uint32 {
-	gp := readGP()
-	v := uint32(device.AsmFull(".set push\n.set noat\n.word 0x485c2000\nnop\nmove {}, $$28\n.set pop", nil))
-	setGP(gp)
-	return v
-}
-func gteCtrl5() uint32 {
-	gp := readGP()
-	v := uint32(device.AsmFull(".set push\n.set noat\n.word 0x485c2800\nnop\nmove {}, $$28\n.set pop", nil))
-	setGP(gp)
-	return v
-}
-func gteCtrl6() uint32 {
-	gp := readGP()
-	v := uint32(device.AsmFull(".set push\n.set noat\n.word 0x485c3000\nnop\nmove {}, $$28\n.set pop", nil))
-	setGP(gp)
-	return v
-}
-func gteCtrl7() uint32 {
-	gp := readGP()
-	v := uint32(device.AsmFull(".set push\n.set noat\n.word 0x485c3800\nnop\nmove {}, $$28\n.set pop", nil))
-	setGP(gp)
-	return v
-}
+func PopMatrix()
 
 // StoreImage copies the rectangle rect of video memory to p. As loadImage
 // does, the CPU reads the words that do not make a whole block of 16, from
@@ -339,6 +191,7 @@ const (
 var cdAudio struct {
 	tracks  *int32
 	index   int32
+	last    int32 // the disc's last track
 	repeat  bool
 	playing bool
 	starts  [100][2]uint8
@@ -354,9 +207,9 @@ var cdAudio struct {
 }
 
 // CdPlay plays the tracks at tracks, a list ending in 0, from offset on:
-// once with mode 1, round again with mode 2. Mode 0 stops and mode 3 keeps
-// the list going, as a program calls it every frame. It returns the index
-// of the track playing, or -1.
+// once with mode 1, round again with mode 2 (any mode other than 0 and 3 starts a
+// list, once). Mode 0 stops and mode 3 keeps the list going, as a program calls it
+// every frame. It returns the index of the track playing, or -1.
 //
 // As the reference does it: modes 1 and 2 read the disc's table of
 // contents (GetTN, then GetTD for every track from 0), set CD audio with
@@ -374,20 +227,6 @@ func CdPlay(mode int32, tracks *int32, offset int32) int32 {
 			cd.controlEv(cdlPause, nil, nil)
 			cdAudio.playing = false
 		}
-	case 1, 2:
-		r := &cdAudio.answer
-		cd.control(cdlGetTN, nil, &r[0])
-		last := unbcd(r[2])
-		for t := range last + 1 {
-			cdAudio.track = bcd(t)
-			cd.control(cdlGetTD, &cdAudio.track, &r[0])
-			cdAudio.starts[t] = [2]uint8{r[1], r[2]}
-		}
-		cdAudio.mode = cdlModeCDDA | cdlModeAutoPause
-		cd.controlEv(cdlSetmode, &cdAudio.mode, nil)
-		cdAudio.tracks, cdAudio.index, cdAudio.repeat = tracks, offset, mode == 2
-		volatile.StoreUint32(&cdAudio.ended, 0)
-		cdAudio.playing = cdPlayTrack()
 	case 3:
 		if !cdAudio.playing {
 			break
@@ -406,13 +245,41 @@ func CdPlay(mode int32, tracks *int32, offset int32) int32 {
 			}
 			cdAudio.playing = cdPlayTrack()
 		case cd.resp[0]&cdStatPlay == 0:
-			cdAudio.playing = cdPlayTrack()
+			cdPlayLoc()
 		default:
 			// Sent without a wait for the answer: a program calls this
 			// every frame.
 			CdControlF(cdlGetstat, nil)
 			pace(cdPlayStatPad)
 		}
+	default:
+		r := &cdAudio.answer
+		cd.control(cdlGetTN, nil, &r[0])
+		last := unbcd(r[2])
+		cdAudio.last = last
+		for t := range last + 1 {
+			spinCycles(cdPlayTOCPad)
+			cdAudio.track = bcd(t)
+			cd.control(cdlGetTD, &cdAudio.track, &r[0])
+			cdAudio.starts[t] = [2]uint8{r[1], r[2]}
+		}
+		spinCycles(cdPlayTOCPad)
+		cdAudio.mode = cdlModeCDDA | cdlModeAutoPause
+		cd.controlEv(cdlSetmode, &cdAudio.mode, nil)
+		cdAudio.tracks, cdAudio.repeat = tracks, mode == 2
+		volatile.StoreUint32(&cdAudio.ended, 0)
+		// An offset at or past the list's end goes back to its start, when
+		// it goes round. An empty list then plays what the table holds at
+		// 0, the end of the disc.
+		cdAudio.index = offset
+		if offset >= cdListLen() {
+			if !cdAudio.repeat {
+				cdAudio.playing = false
+				break
+			}
+			cdAudio.index = 0
+		}
+		cdAudio.playing = cdPlayTrack()
 	}
 	if !cdAudio.playing {
 		return -1
@@ -428,18 +295,47 @@ func cdTrack(i int32) int32 {
 	return *(*int32)(unsafe.Add(unsafe.Pointer(cdAudio.tracks), 4*i))
 }
 
-// cdPlayTrack plays the track at cdAudio.index from its start, and
-// reports whether there is one.
+// cdListLen returns the tracks in the list before its 0. The load is volatile, or the
+// compiler makes the loop a call of wcslen.
+func cdListLen() int32 {
+	n := int32(0)
+	for volatile.LoadUint32((*uint32)(unsafe.Add(unsafe.Pointer(cdAudio.tracks), 4*n))) != 0 {
+		n++
+	}
+	return n
+}
+
+// cdPlayTrack plays the track at cdAudio.index from its start. It reports whether
+// the drive was asked to: always. A track past the disc's last gets its message and
+// plays the last, a negative one plays from the disc's very start, and the 0 of an
+// empty list the table's entry 0, the end of the disc.
 func cdPlayTrack() bool {
 	t := cdTrack(cdAudio.index)
-	if t <= 0 || t >= int32(len(cdAudio.starts)) {
-		return false
+	if t > cdAudio.last {
+		ttyPrintf("%d: track overflow\n", uint32(t), 0)
+		t = cdAudio.last
 	}
-	cdAudio.loc = [4]uint8{cdAudio.starts[t][0], cdAudio.starts[t][1], 0, 0}
-	cd.control(cdlSetloc, &cdAudio.loc[0], nil)
-	cd.controlEv(cdlPlay, nil, nil)
+	cdAudio.loc = [4]uint8{}
+	if t >= 0 {
+		cdAudio.loc = [4]uint8{cdAudio.starts[t][0], cdAudio.starts[t][1], 0, 0}
+	}
+	cdPlayLoc()
 	return true
 }
+
+// cdPlayLoc plays from the place cdAudio.loc holds, the track last asked for.
+func cdPlayLoc() {
+	cd.control(cdlSetloc, &cdAudio.loc[0], nil)
+	cd.controlEv(cdlPlay, nil, nil)
+	spinCycles(cdPlayLocPad)
+}
+
+// What CdPlay spends past its drive commands, for Sony's times: after Play, and before
+// each command of the table's reading.
+const (
+	cdPlayLocPad = 224
+	cdPlayTOCPad = 568
+)
 
 // cdAudioEnd is the drive's data end interrupt, from the interrupt
 // handler: autopause has stopped the drive at the end of the track.
