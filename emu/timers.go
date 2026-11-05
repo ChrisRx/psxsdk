@@ -26,11 +26,12 @@ type timer struct {
 
 // timers is the three of them, with the blanking state the GPU reports.
 //
-// psxe advances the counters every step, but nothing sees them between the
-// points where a counter passes its target or 65535 and the accesses that
-// read or change them, so they are brought up to date only then: steps is
-// the machine's count of steps, synced the step the counters were last
-// advanced to, and due the step at which one next needs checking.
+// The counters run on the CPU's cycles, so a wait for the GTE or a fetch from ROM
+// counts for what it costs, where psxe advances them by a fixed amount a step. Nothing
+// sees them between the points where a counter passes its target or 65535 and the
+// accesses that read or change them, so they are brought up to date only then: clock
+// is the CPU's count of cycles, synced the cycle the counters were last advanced to,
+// and due the cycle at which one next needs checking.
 type timers struct {
 	t      [3]timer
 	hblank bool
@@ -38,7 +39,7 @@ type timers struct {
 	gpu    *gpu
 	ic     *ic
 
-	steps  *uint64
+	clock  *uint64
 	synced uint64
 	due    uint64
 	wake   *bool // set when due changes
@@ -106,7 +107,7 @@ func (tm *timers) read(off uint32) (uint32, bool) {
 	if i > 2 {
 		return 0, false
 	}
-	tm.sync(*tm.steps)
+	tm.sync(*tm.clock)
 	switch off & 0xf {
 	case 0:
 		return uint32(tm.t[i].counter), true
@@ -138,7 +139,7 @@ func (tm *timers) write(off uint32, v uint16) {
 	if i > 2 {
 		return
 	}
-	tm.sync(*tm.steps)
+	tm.sync(*tm.clock)
 	defer tm.schedule()
 	switch off & 0xf {
 	case 0:
@@ -221,21 +222,17 @@ func (tm *timers) dotclockDiv() float32 {
 	return float32(ratio / [4]float32{10, 8, 5, 4}[tm.gpu.displayMode&3])
 }
 
-// stepCycles is how far psxe advances the counters a step, whatever the
-// step cost.
-const stepCycles = 2
-
-// increment returns what timer i adds in a step, and whether adding it n
-// times comes to adding n times it at once. The system clock's 2 and its
-// eighth's 0.25 do: the counters only ever hold multiples of a quarter
+// increment returns what timer i adds in a cycle, and whether adding it n
+// times comes to adding n times it at once. The system clock's 1 and its
+// eighth's 0.125 do: the counters only ever hold multiples of an eighth
 // below 2^18, which a float32 holds exactly. The dot clock's fraction does
-// not, so a timer counting it is advanced a step at a time.
+// not, so a timer counting it is advanced a cycle at a time.
 func (tm *timers) increment(i int) (inc float32, exact bool) {
 	t := &tm.t[i]
 	switch i {
 	case 0:
 		if t.clkSource&1 != 0 {
-			return float32(float32(stepCycles) * tm.dotclockDiv()), false
+			return tm.dotclockDiv(), false
 		}
 	case 1:
 		// Counting hblanks happens in hblank instead.
@@ -244,13 +241,13 @@ func (tm *timers) increment(i int) (inc float32, exact bool) {
 		}
 	case 2:
 		if t.clkSource > 1 {
-			return float32(float32(stepCycles) / 8), true
+			return 0.125, true
 		}
 	}
-	return stepCycles, true
+	return 1, true
 }
 
-// sync advances the counters to the given step. Nothing changes whether
+// sync advances the counters to the given cycle. Nothing changes whether
 // a timer is paused, or what it counts, without syncing first, so they
 // hold for every step in between.
 func (tm *timers) sync(to uint64) {
@@ -286,11 +283,11 @@ func (t *timer) settled() bool {
 	return !t.irqTarget || !t.irqToggle && !t.irqRepeat && t.irqFired && !t.irq
 }
 
-// schedule works out the step at which update next has a timer to check:
+// schedule works out the cycle at which update next has a timer to check:
 // the first at which checking a counter changes something. That is when it
 // passes its target, or, once past and settled there, 65535. A timer still
-// changing past its target, or advanced a step at a time, is checked at the
-// next step.
+// changing past its target, or advanced a cycle at a time, is checked at the
+// next cycle.
 func (tm *timers) schedule() {
 	*tm.wake = true
 	tm.due = ^uint64(0)
@@ -300,7 +297,7 @@ func (tm *timers) schedule() {
 			continue
 		}
 		inc, exact := tm.increment(i)
-		// The limit the counter has to pass, in quarters, in which
+		// The limit the counter has to pass, in eighths, in which
 		// everything is a whole number. The target is at most 65535.
 		var limit uint64
 		switch {
@@ -308,9 +305,9 @@ func (tm *timers) schedule() {
 			tm.due = min(tm.due, tm.synced+1)
 			continue
 		case !t.due():
-			limit = uint64(t.target) * 4
+			limit = uint64(t.target) * 8
 		case t.settled():
-			limit = 65535 * 4
+			limit = 65535 * 8
 		default:
 			tm.due = min(tm.due, tm.synced+1)
 			continue
@@ -318,12 +315,12 @@ func (tm *timers) schedule() {
 		if inc == 0 {
 			continue
 		}
-		q, step := uint64(t.counter*4), uint64(inc*4)
+		q, step := uint64(t.counter*8), uint64(inc*8)
 		tm.due = min(tm.due, tm.synced+(limit-q)/step+1)
 	}
 }
 
-// update advances the counters to the given step, at which one is due to
+// update advances the counters to the given cycle, at which one is due to
 // be checked, and checks those that are.
 func (tm *timers) update(now uint64) {
 	tm.sync(now)
@@ -335,12 +332,12 @@ func (tm *timers) update(now uint64) {
 	tm.schedule()
 }
 
-// The GPU calls these as it crosses the blanking periods, before the step's
+// The GPU calls these as it crosses the blanking periods, before the timers'
 // update. Timer 0 can synchronise to horizontal blanking, timer 1 can count
 // it or synchronise to vertical blanking.
 
 func (tm *timers) hblankStart() {
-	tm.sync(*tm.steps)
+	tm.sync(*tm.clock)
 	tm.hblank = true
 	if t := &tm.t[1]; t.clkSource&1 != 0 && !t.paused {
 		t.counter = float32(t.counter + 1)
@@ -353,21 +350,21 @@ func (tm *timers) hblankStart() {
 }
 
 func (tm *timers) hblankEnd() {
-	tm.sync(*tm.steps)
+	tm.sync(*tm.clock)
 	tm.hblank = false
 	tm.blankEndSync(&tm.t[0])
 	tm.schedule()
 }
 
 func (tm *timers) vblankStart() {
-	tm.sync(*tm.steps)
+	tm.sync(*tm.clock)
 	tm.vblank = true
 	tm.blankSync(&tm.t[1])
 	tm.schedule()
 }
 
 func (tm *timers) vblankEnd() {
-	tm.sync(*tm.steps)
+	tm.sync(*tm.clock)
 	tm.vblank = false
 	tm.blankEndSync(&tm.t[1])
 	tm.schedule()
