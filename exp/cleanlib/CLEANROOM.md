@@ -45,7 +45,9 @@ Work is split in two:
   look up which of Sony's symbols an address falls in (from
   `playstation-yaroze-symusr.S`, a link map or a disassembler's
   labels): a stalled or traced PC inside Sony's library stays an
-  address. Never save a dump of RAM that holds Sony's library. Build probes
+  address. A tool must not read the instruction at the PC on Sony's side,
+  even to decide what to log: `ARCHIVE_BUS` and `PROBE_BUS` show the I/O
+  registers and the GTE from outside. Never save a dump of RAM that holds Sony's library. Build probes
   against Sony's own library (`go run ./cmd/yaroze disc` without
   `--libps`), not a `-ref` build: the reference discs exist for
   TestClean.
