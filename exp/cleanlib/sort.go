@@ -156,13 +156,17 @@ func GsSortFastSprite(sp *GsSPRITE, ot *GsOT, pri uint16)
 //go:extern libps_place
 var gsPlace uint32
 
+// cutLimits is the screen rectangle a polygon to cut is dropped against, lowest and highest x and
+// lowest and highest y, and the screen's size, which GsSortObject4 leaves in its scratch argument.
+//
+//go:extern libps_cut_limits
+var cutLimits [6]int16
+
 // updatePlace sets gsPlace, and the rectangle a polygon to cut is dropped against
-// (tmd.go), after the mode, the screen or the offset changes.
+// (the target's GsSortObject4), after the mode, the screen or the offset changes.
 func updatePlace() {
 	w, h := int32(gs.width)/2, int32(gs.height)/2
-	d := &divLimits
-	d.xlo, d.xhi = (gteOFX-w)<<16, (gteOFX+w)<<16
-	d.ylo, d.yhi = (gteOFY-h)<<16, (gteOFY+h+1)<<16
+	cutLimits = [6]int16{int16(gteOFX - w), int16(gteOFX + w), int16(gteOFY - h), int16(gteOFY + h), gs.width, gs.height}
 	if gs.ofsGPU {
 		gsPlace = 0
 		return

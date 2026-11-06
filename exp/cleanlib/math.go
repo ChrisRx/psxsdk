@@ -330,9 +330,9 @@ func mathAtan2(y, x float64) float64 {
 // which for a zero b adds a negative zero to a and so returns -0 where
 // the difference returns a, and a chain of products of constants into
 // the exact constants (strtod's powers of ten).
-func div(a, b float64) float64 { return u2f(dDiv(f2u(a), f2u(b))) }
-func sub(a, b float64) float64 { return u2f(dSub(f2u(a), f2u(b))) }
-func mul(a, b float64) float64 { return u2f(dMul(f2u(a), f2u(b))) }
+func div(a, b float64) float64 { return u2f(softDivdf3(f2u(a), f2u(b))) }
+func sub(a, b float64) float64 { return u2f(softSubdf3(f2u(a), f2u(b))) }
+func mul(a, b float64) float64 { return u2f(softMuldf3(f2u(a), f2u(b))) }
 
 // exp: the Taylor series of e^g summed term by term, g the argument less
 // the nearest multiple of ln 2 taken as one constant, and the sum scaled

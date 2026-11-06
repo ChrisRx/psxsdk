@@ -2,23 +2,42 @@
 
 package cleanlib
 
-import "math/bits"
-
 // The C names of the math calls and of the software floating point
 // helpers. The helpers take and return the bits, which the o32 soft-float
 // convention passes as it does a double: in a register pair.
 
+// The arithmetic takes Sony's time for what it is given (spec 31): a sum by how far
+// apart the two are, their signs and how far the result moves, a product by the bits
+// of the two, a quotient by its own. The library's own math calls come through these
+// too, and so take the time they do on Sony's for each value.
+
 //export __adddf3
-func softAdddf3(a, b uint64) uint64 { return dAdd(a, b) }
+func softAdddf3(a, b uint64) uint64 {
+	r := dAdd(a, b)
+	padAdd(a, b, r)
+	return r
+}
 
 //export __subdf3
-func softSubdf3(a, b uint64) uint64 { return dSub(a, b) }
+func softSubdf3(a, b uint64) uint64 {
+	r := dSub(a, b)
+	padAdd(a, b^dSign, r)
+	return r
+}
 
 //export __muldf3
-func softMuldf3(a, b uint64) uint64 { return dMul(a, b) }
+func softMuldf3(a, b uint64) uint64 {
+	r := dMul(a, b)
+	padMul(a, b)
+	return r
+}
 
 //export __divdf3
-func softDivdf3(a, b uint64) uint64 { return dDiv(a, b) }
+func softDivdf3(a, b uint64) uint64 {
+	r, q := dDivQuotient(a, b)
+	padDiv(q)
+	return r
+}
 
 //export __negdf2
 func softNegdf2(a uint64) uint64 { return dNeg(a) }
@@ -68,51 +87,22 @@ func cmpGreater(a, b uint64) int32 {
 //export __fixdfsi
 func softFixdfsi(a uint64) int32 { return dFix(a) }
 
-// Programs reach the arithmetic through the entries below, which take as long
-// as Sony's on what they are given (spec 21). The library's own arithmetic,
-// the compiler's calls of __muldf3 and the rest above, stays as quick as it is:
-// the math calls are paced as a whole. Sony's figures are much the same for any
-// two nonzero values, 3,900 for a product, and small for a zero: 90 and 48. A
-// quotient goes by its bits, as a probe of 378 divisions found: 10,680 and 260 for
-// each one bit of the quotient to two places below its last, all within 340.
-const (
-	programMulPad     = 3602
-	programMulZeroPad = 38
-	programDivPad     = 400
-	programDivBitPad  = 260
-	programFixPad     = 290
-	programFixZeroPad = 14
-	programFloatPad   = 302
-)
+//export libps_c___adddf3
+func programAdddf3(a, b uint64) uint64 { return softAdddf3(a, b) }
+
+//export libps_c___subdf3
+func programSubdf3(a, b uint64) uint64 { return softSubdf3(a, b) }
 
 //export libps_c___muldf3
-func programMuldf3(a, b uint64) uint64 {
-	r := dMul(a, b)
-	if dIsZero(a) || dIsZero(b) {
-		pace(programMulZeroPad)
-	} else {
-		pace(programMulPad)
-	}
-	return r
-}
+func programMuldf3(a, b uint64) uint64 { return softMuldf3(a, b) }
 
 //export libps_c___divdf3
-func programDivdf3(a, b uint64) uint64 {
-	r, q := dDivQuotient(a, b)
-	if q != 0 {
-		spinCycles(programDivPad + programDivBitPad*uint32(bits.OnesCount64(q)))
-	}
-	return r
-}
+func programDivdf3(a, b uint64) uint64 { return softDivdf3(a, b) }
 
 //export libps_c___fixdfsi
 func programFixdfsi(a uint64) int32 {
 	r := dFix(a)
-	if dIsZero(a) {
-		pace(programFixZeroPad)
-	} else {
-		pace(programFixPad)
-	}
+	padFix(a)
 	return r
 }
 
@@ -133,7 +123,7 @@ func softFloatsidf(i int32) uint64 {
 func programFloatsidf(i int32) uint64 {
 	r := softFloatsidf(i)
 	if i != 0 {
-		pace(programFloatPad)
+		padFloat()
 	}
 	return r
 }
@@ -142,10 +132,18 @@ func programFloatsidf(i int32) uint64 {
 // out from Sony's results as the double was (softfloat.go).
 
 //export __extendsfdf2
-func softExtendsfdf2(a uint32) uint64 { return sExtend(a) }
+func softExtendsfdf2(a uint32) uint64 {
+	r := sExtend(a)
+	padExtend()
+	return r
+}
 
 //export __truncdfsf2
-func softTruncdfsf2(a uint64) uint32 { return sTrunc(a) }
+func softTruncdfsf2(a uint64) uint32 {
+	r := sTrunc(a)
+	padTrunc()
+	return r
+}
 
 //export __addsf3
 func softAddsf3(a, b uint32) uint32 { return sAdd(a, b) }
@@ -159,66 +157,22 @@ func softDivsf3(a, b uint32) uint32 { return sDiv(a, b) }
 //export _get_errno
 func getErrno() int32 { return libps_biosB(biosGetErrno, 0, 0, 0, 0) }
 
-// sqrt, sin and cos take as long as Sony's, which get there by the long way
-// around (spec 21, "Costs"). The pads are in the entries alone, so that asin
-// and the others that use them inside cost what they did. Sony's sin and cos go
-// up and down by some 10,000 cycles with the argument, in no plain way; these are the
-// means over a probe's 2,000 arguments, a sign making no difference.
-const (
-	sinZeroPad  = 6600   // Sony's 7,500 at 0
-	sinNearPad  = 132900 // 266,700 below pi/2
-	sinFarPad   = 143100 // and 279,000 from there
-	cosTinyPad  = 118100 // Sony's 254,300 at 0 and below about 1e-18
-	cosNearPad  = 134600 // 268,800 below pi
-	cosFarPad   = 145400 // and 281,000 from there
-	sqrtBasePad = 140500 // Sony's about 205,000, less the 54,500 of the work and a blank's
-	sqrtExpPad  = 20000  // and 20,000 for each power of two from 1
-
-	// The bits of pi/2 and pi, and of the 2^-60 where cos stops being tiny.
-	bitsHalfPi = 0x3ff921fb54442d18
-	bitsPi     = 0x400921fb54442d18
-	bitsTiny   = (1023 - 60) << dFracBits
-)
-
 //export sqrt
 func libSqrt(x float64) float64 {
 	r := mathSqrt(x)
-	// Nothing to spend on 0, on 1, whose Sony's is quicker, or below 0, not
-	// measured.
-	if b := f2u(x); b != 0 && b != 1023<<dFracBits && b&dSign == 0 {
-		e := int(b>>dFracBits&dExpMax) - 1023
-		spinCycles(sqrtBasePad + sqrtExpPad*uint32(max(e, -e)))
-	}
+	padSqrt(f2u(x))
 	return r
 }
 
 //export sin
 func libSin(x float64) float64 {
 	r := mathSin(x)
-	switch size := f2u(x) &^ dSign; {
-	case dIsZero(size):
-		spinCycles(sinZeroPad)
-	case size < bitsHalfPi:
-		spinCycles(sinNearPad)
-	default:
-		spinCycles(sinFarPad)
-	}
+	padSin(f2u(x))
 	return r
 }
 
 //export cos
-func libCos(x float64) float64 {
-	r := mathCos(x)
-	switch size := f2u(x) &^ dSign; {
-	case size < bitsTiny:
-		spinCycles(cosTinyPad)
-	case size < bitsPi:
-		spinCycles(cosNearPad)
-	default:
-		spinCycles(cosFarPad)
-	}
-	return r
-}
+func libCos(x float64) float64 { return mathCos(x) }
 
 //export tan
 func libTan(x float64) float64 { return mathTan(x) }

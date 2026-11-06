@@ -177,6 +177,13 @@ func dSub(a, b uint64) uint64 {
 // shows when the exact product lies within that of a half ulp: it is
 // rounded down where the exact product would round up (spec 12 has the
 // cases, atan's fraction among them).
+//
+//export libps_mul64
+func libps_mul64(a, b uint32) uint64
+
+//export libps_mulhi
+func libps_mulhi(a, b uint32) uint32
+
 func dMul(a, b uint64) uint64 {
 	s := (a ^ b) & dSign
 	if dIsZero(a) || dIsZero(b) {
@@ -185,9 +192,9 @@ func dMul(a, b uint64) uint64 {
 	_, ea, ma := dUnpack(a)
 	_, eb, mb := dUnpack(b)
 	const up = 63 - dFracBits
-	ah, al := ma<<up>>32, ma<<up&0xffffffff
-	bh, bl := mb<<up>>32, mb<<up&0xffffffff
-	p := ah*bh + ah*bl>>32 + al*bh>>32
+	ah, al := uint32(ma<<up>>32), uint32(ma<<up)
+	bh, bl := uint32(mb<<up>>32), uint32(mb<<up)
+	p := libps_mul64(ah, bh) + uint64(libps_mulhi(ah, bl)) + uint64(libps_mulhi(al, bh))
 	// p's top bit is bit 63 or 62; dPack wants the hidden bit's place
 	// at bit 61 with guard bits below, or one above it.
 	return dPack(s, ea+eb-1023, p>>1, true)
