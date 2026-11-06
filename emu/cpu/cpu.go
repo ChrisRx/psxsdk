@@ -245,10 +245,6 @@ type Clock struct {
 	// not nil.
 	Breaks *Breaks
 
-	// Run stops before the instruction at Spin, the head of a loop the
-	// machine can skip through.
-	Spin uint32
-
 	// Run reads the rest once, when it starts. A device that changes any
 	// of it, or fails, sets Wake, and Run stops after that step so the
 	// machine can read it again.
@@ -472,7 +468,7 @@ func (c *CPU) Run(n uint64, k *Clock) uint64 {
 		}
 		video := float32(*k.Video + float32(float32(c.LastCycles)*k.VideoRate))
 		if c.TotalCycles >= due || video >= *k.VideoEdge || i >= stepsDue || *k.Wake ||
-			k.Hooked && c.PC&k.HookMask == k.Hook || c.PC == k.Spin ||
+			k.Hooked && c.PC&k.HookMask == k.Hook ||
 			k.Breaks != nil && k.Breaks.Has(c.PC) {
 			break
 		}

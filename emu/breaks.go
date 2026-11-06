@@ -16,8 +16,7 @@ var ErrBreak = errors.New("stopped at a breakpoint")
 // the program left them, and the bus reads and writes memory. It returns
 // whether to stop the run, which then returns ErrBreak.
 //
-// A breakpoint inside the vertical blank wait the machine skips through is
-// passed over with the loop, as are those in the BIOS.
+// A loop with a breakpoint in it is not skipped through (see spin.go).
 type Break func(m *Machine) (stop bool)
 
 // breaks is the machine's breakpoints: the addresses, as the CPU tests
