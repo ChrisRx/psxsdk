@@ -42,9 +42,9 @@ func TestMDECScreenshot(t *testing.T) {
 // this golden is OpenBIOS's by that one line.
 func TestDungeonScreenshot(t *testing.T) { dungeonScreenshot(t, "dungeon") }
 
-// TestDungeonScreenshotGo is TestDungeonScreenshot with the program built against
-// the Go library (task build:disc:go NAME=dungeon).
-func TestDungeonScreenshotGo(t *testing.T) { dungeonScreenshot(t, "dungeon-go") }
+// TestDungeonScreenshotResident is TestDungeonScreenshot with the program built against
+// the resident library (task build:disc:resident NAME=dungeon).
+func TestDungeonScreenshotResident(t *testing.T) { dungeonScreenshot(t, "dungeon-resident") }
 
 func dungeonScreenshot(t *testing.T, name string) {
 	parallel(t)
@@ -61,9 +61,9 @@ func dungeonScreenshot(t *testing.T, name string) {
 // the distance, close to the viewpoint and turning.
 func TestCarScreenshot(t *testing.T) { carScreenshot(t, "car") }
 
-// TestCarScreenshotGo is TestCarScreenshot with the program built against
-// the Go library (task build:disc:go NAME=car).
-func TestCarScreenshotGo(t *testing.T) { carScreenshot(t, "car-go") }
+// TestCarScreenshotResident is TestCarScreenshot with the program built against
+// the resident library (task build:disc:resident NAME=car).
+func TestCarScreenshotResident(t *testing.T) { carScreenshot(t, "car-resident") }
 
 func carScreenshot(t *testing.T, name string) {
 	parallel(t)
@@ -77,9 +77,9 @@ func carScreenshot(t *testing.T, name string) {
 // the ball is swapped for its textured version and the scene is turned.
 func TestOdenScreenshot(t *testing.T) { odenScreenshot(t, "oden") }
 
-// TestOdenScreenshotGo is TestOdenScreenshot with the program built against
-// the Go library (task build:disc:go NAME=oden).
-func TestOdenScreenshotGo(t *testing.T) { odenScreenshot(t, "oden-go") }
+// TestOdenScreenshotResident is TestOdenScreenshot with the program built against
+// the resident library (task build:disc:resident NAME=oden).
+func TestOdenScreenshotResident(t *testing.T) { odenScreenshot(t, "oden-resident") }
 
 func odenScreenshot(t *testing.T, name string) {
 	parallel(t)
@@ -96,9 +96,9 @@ func odenScreenshot(t *testing.T, name string) {
 // cylinder, with the picture wrapped round it.
 func TestMorphScreenshot(t *testing.T) { morphScreenshot(t, "morph") }
 
-// TestMorphScreenshotGo is TestMorphScreenshot with the program built against
-// the Go library (task build:disc:go NAME=morph).
-func TestMorphScreenshotGo(t *testing.T) { morphScreenshot(t, "morph-go") }
+// TestMorphScreenshotResident is TestMorphScreenshot with the program built against
+// the resident library (task build:disc:resident NAME=morph).
+func TestMorphScreenshotResident(t *testing.T) { morphScreenshot(t, "morph-resident") }
 
 func morphScreenshot(t *testing.T, name string) {
 	parallel(t)
@@ -115,9 +115,9 @@ func morphScreenshot(t *testing.T, name string) {
 // and OpenBIOS 52, so this golden is Sony's by that one line.
 func TestOffscrScreenshot(t *testing.T) { offscrScreenshot(t, "offscr") }
 
-// TestOffscrScreenshotGo is TestOffscrScreenshot with the program built against
-// the Go library (task build:disc:go NAME=offscr).
-func TestOffscrScreenshotGo(t *testing.T) { offscrScreenshot(t, "offscr-go") }
+// TestOffscrScreenshotResident is TestOffscrScreenshot with the program built against
+// the resident library (task build:disc:resident NAME=offscr).
+func TestOffscrScreenshotResident(t *testing.T) { offscrScreenshot(t, "offscr-resident") }
 
 func offscrScreenshot(t *testing.T, name string) {
 	parallel(t)
@@ -131,9 +131,9 @@ func offscrScreenshot(t *testing.T, name string) {
 // score drawn in sprites.
 func TestTunnelScreenshot(t *testing.T) { tunnelScreenshot(t, "tunnel") }
 
-// TestTunnelScreenshotGo is TestTunnelScreenshot with the program built against
-// the Go library (task build:disc:go NAME=tunnel).
-func TestTunnelScreenshotGo(t *testing.T) { tunnelScreenshot(t, "tunnel-go") }
+// TestTunnelScreenshotResident is TestTunnelScreenshot with the program built against
+// the resident library (task build:disc:resident NAME=tunnel).
+func TestTunnelScreenshotResident(t *testing.T) { tunnelScreenshot(t, "tunnel-resident") }
 
 func tunnelScreenshot(t *testing.T, name string) {
 	parallel(t)
@@ -148,9 +148,9 @@ func tunnelScreenshot(t *testing.T, name string) {
 // palette above them.
 func TestFlameScreenshot(t *testing.T) { flameScreenshot(t, "flame") }
 
-// TestFlameScreenshotGo is TestFlameScreenshot with the program built against
-// the Go library (task build:disc:go NAME=flame).
-func TestFlameScreenshotGo(t *testing.T) { flameScreenshot(t, "flame-go") }
+// TestFlameScreenshotResident is TestFlameScreenshot with the program built against
+// the resident library (task build:disc:resident NAME=flame).
+func TestFlameScreenshotResident(t *testing.T) { flameScreenshot(t, "flame-resident") }
 
 func flameScreenshot(t *testing.T, name string) {
 	parallel(t)
@@ -161,13 +161,13 @@ func flameScreenshot(t *testing.T, name string) {
 }
 
 // goldenSkippingRows compares the screen with the golden image, as Golden
-// does, except under the Go library, where the rows from y0 up to y1 are
+// does, except on the resident library, where the rows from y0 up to y1 are
 // left out: the programs print the count of horizontal syncs a frame
 // took there, which depends on the library's speed, as the timers test
 // says.
 func goldenSkippingRows(t *testing.T, m *emutest.Machine, golden, name string, y0, y1 int) {
 	t.Helper()
-	if !strings.HasSuffix(name, "-go") {
+	if !strings.HasSuffix(name, "-resident") {
 		m.Golden(golden)
 		return
 	}
@@ -210,10 +210,10 @@ func goldenSkippingRows(t *testing.T, m *emutest.Machine, golden, name string, y
 // has slid to the left and fired a shot.
 func TestInvadersScreenshot(t *testing.T) { invadersScreenshot(t, "invaders") }
 
-// TestInvadersScreenshotGo is TestInvadersScreenshot with the program built
-// against the Go library (task build:disc:go NAME=invaders), with the music
+// TestInvadersScreenshotResident is TestInvadersScreenshot with the program built
+// against the resident library (task build:disc:resident NAME=invaders), with the music
 // checked as heard.
-func TestInvadersScreenshotGo(t *testing.T) { invadersScreenshot(t, "invaders-go") }
+func TestInvadersScreenshotResident(t *testing.T) { invadersScreenshot(t, "invaders-resident") }
 
 // TestInvadersScreenshotPS is TestInvadersScreenshot on exp/examples/invaders,
 // the game written against the exp/ps API (task build:disc NAME=invaders-ps
@@ -245,10 +245,10 @@ func invadersScreenshot(t *testing.T, name string) {
 // way down and the bat moved to the right to meet it.
 func TestBreakoutScreenshot(t *testing.T) { breakoutScreenshot(t, "breakout") }
 
-// TestBreakoutScreenshotGo is TestBreakoutScreenshot with the program built
-// against the Go library (task build:disc:go NAME=breakout), whose
+// TestBreakoutScreenshotResident is TestBreakoutScreenshot with the program built
+// against the resident library (task build:disc:resident NAME=breakout), whose
 // sequencer plays the music. The music is checked as heard.
-func TestBreakoutScreenshotGo(t *testing.T) { breakoutScreenshot(t, "breakout-go") }
+func TestBreakoutScreenshotResident(t *testing.T) { breakoutScreenshot(t, "breakout-resident") }
 
 func breakoutScreenshot(t *testing.T, name string) {
 	parallel(t)
@@ -267,9 +267,9 @@ func breakoutScreenshot(t *testing.T, name string) {
 // seconds into its walk.
 func TestDinoScreenshot(t *testing.T) { dinoScreenshot(t, "dino") }
 
-// TestDinoScreenshotGo is TestDinoScreenshot with the program built against
-// the Go library (task build:disc:go NAME=dino).
-func TestDinoScreenshotGo(t *testing.T) { dinoScreenshot(t, "dino-go") }
+// TestDinoScreenshotResident is TestDinoScreenshot with the program built against
+// the resident library (task build:disc:resident NAME=dino).
+func TestDinoScreenshotResident(t *testing.T) { dinoScreenshot(t, "dino-resident") }
 
 // TestDinoScreenshotPS is TestDinoScreenshot on exp/examples/dino, the
 // program written against the exp/ps API (task build:disc NAME=dino-ps
@@ -294,9 +294,9 @@ func dinoScreenshot(t *testing.T, name string) {
 // before he reaches the first cactus.
 func TestDogTaleScreenshot(t *testing.T) { dogtaleScreenshot(t, "dogtale") }
 
-// TestDogTaleScreenshotGo is TestDogTaleScreenshot with the program built against
-// the Go library (task build:disc:go NAME=dogtale).
-func TestDogTaleScreenshotGo(t *testing.T) { dogtaleScreenshot(t, "dogtale-go") }
+// TestDogTaleScreenshotResident is TestDogTaleScreenshot with the program built against
+// the resident library (task build:disc:resident NAME=dogtale).
+func TestDogTaleScreenshotResident(t *testing.T) { dogtaleScreenshot(t, "dogtale-resident") }
 
 func dogtaleScreenshot(t *testing.T, name string) {
 	parallel(t)
@@ -717,15 +717,12 @@ func jumpcube(t *testing.T, name string) {
 // took to start the program and the disc to deliver its files.
 func TestSquareScreenshot(t *testing.T) { squareScreenshot(t, "square") }
 
-// TestSquareScreenshotGo is TestSquareScreenshot with the program built against
-// the Go library (task build:disc:go NAME=square).
-func TestSquareScreenshotGo(t *testing.T) { squareScreenshot(t, "square-go") }
+// TestSquareScreenshotResident is TestSquareScreenshot with the program built against
+// the resident library (task build:disc:resident NAME=square).
+func TestSquareScreenshotResident(t *testing.T) { squareScreenshot(t, "square-resident") }
 
 // TestGalleryScreenshotPS checks exp/examples/gallery, one of everything
-// the exp/ps API draws, against its own picture: the Go library's own
-// font and tables, which a program built against it has, rather than
-// the original's, which the ports above are built with to match the
-// originals' pictures.
+// the exp/ps API draws, against its own picture.
 func TestGalleryScreenshotPS(t *testing.T) {
 	m := bootExample(t, "gallery-ps")
 	m.RunUntilCount("main.screen", 30, frameBudget)
@@ -770,9 +767,9 @@ func squareScreenshot(t *testing.T, name string) {
 // run from zero, so the picture is the same however long the BIOS took.
 func TestTerraScreenshot(t *testing.T) { terraScreenshot(t, "terra") }
 
-// TestTerraScreenshotGo is TestTerraScreenshot with the program built against
-// the Go library (task build:disc:go NAME=terra).
-func TestTerraScreenshotGo(t *testing.T) { terraScreenshot(t, "terra-go") }
+// TestTerraScreenshotResident is TestTerraScreenshot with the program built against
+// the resident library (task build:disc:resident NAME=terra).
+func TestTerraScreenshotResident(t *testing.T) { terraScreenshot(t, "terra-resident") }
 
 func terraScreenshot(t *testing.T, name string) {
 	parallel(t)
@@ -863,10 +860,10 @@ func padsScreenshot(t *testing.T, name string) {
 // one of Sony's to check the card against the BIOS that games used.
 func TestCardScreenshot(t *testing.T) { cardScreenshot(t, "card") }
 
-// TestCardScreenshotGo is TestCardScreenshot with the program built
-// against the Go library (task build:disc:go NAME=card), whose memory
+// TestCardScreenshotResident is TestCardScreenshot with the program built
+// against the resident library (task build:disc:resident NAME=card), whose memory
 // card calls go through the kernel as the resident library's did.
-func TestCardScreenshotGo(t *testing.T) { cardScreenshot(t, "card-go") }
+func TestCardScreenshotResident(t *testing.T) { cardScreenshot(t, "card-resident") }
 
 // TestCardScreenshotPS is TestCardScreenshot on exp/examples/card, the
 // program on the exp/ps API, which must draw the same picture.
@@ -935,10 +932,10 @@ func cardScreenshot(t *testing.T, name string) {
 // that circle stops it.
 func TestCDDAScreenshot(t *testing.T) { cddaScreenshot(t, "cdda") }
 
-// TestCDDAScreenshotGo is TestCDDAScreenshot with the program built against
-// the Go library (task build:disc:go NAME=cdda), whose CdPlay drives the
+// TestCDDAScreenshotResident is TestCDDAScreenshot with the program built against
+// the resident library (task build:disc:resident NAME=cdda), whose CdPlay drives the
 // tracks.
-func TestCDDAScreenshotGo(t *testing.T) { cddaScreenshot(t, "cdda-go") }
+func TestCDDAScreenshotResident(t *testing.T) { cddaScreenshot(t, "cdda-resident") }
 
 // TestCDDAScreenshotPS is TestCDDAScreenshot on exp/examples/cdda, the
 // program on the exp/ps API, which must draw the same picture.
@@ -979,11 +976,10 @@ func cddaScreenshot(t *testing.T, name string) {
 // frame, measured in lines.
 func TestTimersScreenshot(t *testing.T) { timersScreenshot(t, "timers") }
 
-// TestTimersScreenshotGo is TestTimersScreenshot with the program built
-// against the Go library (task build:disc:go NAME=timers). The picture is
-// not compared: it prints the lines the frame took, which are fewer under
-// the Go library, whose sprite sorting is faster than the resident's.
-func TestTimersScreenshotGo(t *testing.T) { timersScreenshot(t, "timers-go") }
+// TestTimersScreenshotResident is TestTimersScreenshot with the program built
+// for the resident library (task build:disc:resident NAME=timers). The picture is
+// not compared: it prints the lines the frame took, which depend on the build.
+func TestTimersScreenshotResident(t *testing.T) { timersScreenshot(t, "timers-resident") }
 
 // TestTimersScreenshotPS is TestTimersScreenshot on exp/examples/timers,
 // the program on the exp/ps API.
@@ -1012,13 +1008,13 @@ func timersScreenshot(t *testing.T, name string) {
 // screens meet, and checks the scroll stops at the map's far corner.
 func TestTilesScreenshot(t *testing.T) { tilesScreenshot(t, "tiles") }
 
-// TestTilesScreenshotGo is TestTilesScreenshot with the program built
-// against the Go library (task build:disc:go NAME=tiles), which reads
+// TestTilesScreenshotResident is TestTilesScreenshot with the program built
+// against the resident library (task build:disc:resident NAME=tiles), which reads
 // the map from the disc and draws it through the same background packets.
 // The scroll's far corner is checked in the picture alone: with the
 // library's calls open to the optimizer, the background is no longer a
 // variable the test can read.
-func TestTilesScreenshotGo(t *testing.T) { tilesScreenshot(t, "tiles-go") }
+func TestTilesScreenshotResident(t *testing.T) { tilesScreenshot(t, "tiles-resident") }
 
 // TestTilesScreenshotPS is TestTilesScreenshot on exp/examples/tiles, the
 // program written against the exp/ps API (task build:disc NAME=tiles-ps
@@ -1050,9 +1046,9 @@ const (
 // shows the halves one above the other and then side by side.
 func TestSplitScreenshot(t *testing.T) { splitScreenshot(t, "split") }
 
-// TestSplitScreenshotGo is TestSplitScreenshot with the program built against
-// the Go library (task build:disc:go NAME=split).
-func TestSplitScreenshotGo(t *testing.T) { splitScreenshot(t, "split-go") }
+// TestSplitScreenshotResident is TestSplitScreenshot with the program built against
+// the resident library (task build:disc:resident NAME=split).
+func TestSplitScreenshotResident(t *testing.T) { splitScreenshot(t, "split-resident") }
 
 func splitScreenshot(t *testing.T, name string) {
 	parallel(t)

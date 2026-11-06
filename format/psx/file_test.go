@@ -2,14 +2,24 @@ package psx
 
 import (
 	"bytes"
+	"compress/gzip"
 	"fmt"
+	"io"
 	"os"
-	"path/filepath"
 	"testing"
 )
 
 func TestEXEParseFile(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("testdata", "psx.exe"))
+	gz, err := os.Open("../../link/libps.exe.gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gz.Close()
+	r, err := gzip.NewReader(gz)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := io.ReadAll(r)
 	if err != nil {
 		t.Fatal(err)
 	}

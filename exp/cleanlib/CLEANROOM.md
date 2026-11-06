@@ -55,6 +55,11 @@ Work is split in two:
 
 ## Off limits (implementation side)
 
+Sony's code left this tree at step 3 of replacing the image. The local branch
+`sony-reference` holds what it was, and a private copy of the image outside the
+repository (spec 15) is what comparisons run against. All of that is off limits, as
+are the paths below where they survive, including under other names in git history.
+
 Never open, search, grep, diff or otherwise read these, or ask anyone to
 summarize them:
 
@@ -66,7 +71,7 @@ summarize them:
 - `internal/toolchain/_tinygo/targets/playstation-yaroze-libps.S`,
   `playstation-yaroze.S`, `playstation-yaroze-symusr-orig.S` and
   `playstation-yaroze-libps-gte.S`.
-- `docs/superpowers/` and `docs/architecture/libps-go.md`.
+- `~/src/ChrisRx/psxsdk-sony/`, which holds Sony's image, its SDK fixtures and the notes on the decompile, and `docs/architecture/libps-go.md` in history.
 - Profiles of the reference builds (`TestCleanProfile` on a `-ref` or
   `-sony` build): their symbols name the decompiled library's functions.
   `TestCleanStart` on a Sony build reads instructions at the PC: run it on

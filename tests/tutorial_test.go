@@ -19,18 +19,18 @@ func TestHelloScreenshot(t *testing.T) {
 	m.Golden("hello.png")
 }
 
-// TestHelloScreenshotGo is TestHelloScreenshot with the program built
-// against the Go library, yaroze --libps go (task build:disc:go NAME=hello
+// TestHelloScreenshotResident is TestHelloScreenshot with the program built
+// for the resident library, yaroze --libps resident (task build:disc:resident NAME=hello
 // DIR=docs/tutorial/hello), which has to show the same picture.
-func TestHelloScreenshotGo(t *testing.T) {
-	m := bootExample(t, "hello-go")
+func TestHelloScreenshotResident(t *testing.T) {
+	m := bootExample(t, "hello-resident")
 	m.RunUntilCount("main.screen", 30, 2*emutest.Second)
 	m.Golden("hello.png")
 	noComplaints(t, m)
 }
 
 // noComplaints fails the test when the library printed one of its
-// timeouts, which the Go library prints as the resident one did.
+// timeouts.
 func noComplaints(t *testing.T, m *emutest.Machine) {
 	t.Helper()
 	for _, c := range []string{"VSync: timeout", "GPU timeout", "intr timeout", "unexpected interrupt"} {

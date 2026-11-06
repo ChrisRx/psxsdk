@@ -1,9 +1,11 @@
 package link
 
 import (
-	"crypto/md5"
+	"bytes"
 	"encoding/binary"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"go.chrisrx.dev/x/assert"
@@ -13,7 +15,7 @@ import (
 )
 
 func TestYarozeConvertEcoffToEXE(t *testing.T) {
-	input, err := ecoff.Open("../format/ecoff/testdata/main-ecoff")
+	input, err := ecoff.Open(sonyFixture(t, "main-ecoff"))
 	input = assert.Ok(t, input, err)
 
 	exe := &psx.File{
@@ -41,7 +43,11 @@ func TestYarozeConvertEcoffToEXE(t *testing.T) {
 
 	exe, err = Combine(exe)
 	exe = assert.Ok(t, exe, err)
-	assert.Equal(t, "ABF4D710C68B1E59A7BF4AB6CF0A9586", fmt.Sprintf("%X", md5.Sum(exe.Bytes())))
+	// The library and the program, past the part the patch changes.
+	libps, err := Libps()
+	libps = assert.Ok(t, libps, err)
+	assert.Equal(t, true, bytes.Contains(exe.Bytes(), libps.Section("text").Data), "the library")
+	assert.Equal(t, true, bytes.Contains(exe.Bytes(), input.Data()[1024:]), "the program")
 }
 
 // TestPatchExecutablePreservesReturnAddress runs the startup stub and checks
@@ -140,4 +146,15 @@ func TestStandalone(t *testing.T) {
 	assert.Equal(t, 0, len(sect.Data)%2048, "the text is padded to whole sectors")
 	assert.Equal(t, []byte{1, 2, 3}, sect.Data[0x200:0x203], "the load is embedded")
 	assert.Equal(t, text[:4], sect.Data[:4], "the program's own code is first: nothing is laid under it")
+}
+
+// sonyFixture is the path of a file built from Sony's SDK, which is not in this
+// repository: PSX_SONY_TESTDATA names a private copy, and the test skips without it.
+func sonyFixture(t *testing.T, name string) string {
+	t.Helper()
+	dir := os.Getenv("PSX_SONY_TESTDATA")
+	if dir == "" {
+		t.Skip("PSX_SONY_TESTDATA is not set")
+	}
+	return filepath.Join(dir, name)
 }

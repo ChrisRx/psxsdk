@@ -9,6 +9,7 @@ import (
 
 	"go.chrisrx.dev/x/assert"
 
+	"go.chrisrx.dev/psx/emu/emutest"
 	"go.chrisrx.dev/psx/serial"
 )
 
@@ -396,28 +397,55 @@ func TestMonitorDisassemble(t *testing.T) {
 			t.FailNow()
 		}
 		assert.Equal(t, string(want), got)
-		assert.Equal(t, true, strings.HasPrefix(command(t, port, "dis 80010000 3"),
-			"80010000:27bdffe8       addiu   sp,sp,0xffffffe8\r\n80010004:afbf0010       sw      ra,0x10(sp)\r\n"+
-				"80010008:0c00400a       jal     0x80010028\r\n8001000c:00000000       nop\r\n"), "a count of instructions, each with its delay slot")
-		assert.Equal(t, 14, strings.Count(command(t, port, "dis 80010000"), "\r\n"), "ten instructions, and four delay slots")
+		// Ten instructions with four delay slots between them, at an address of its own.
+		const counted = 0x80110000
+		for n, w := range []uint32{
+			0x27bdffe8, // addiu sp,sp,-24
+			0xafbf0010, // sw ra,16(sp)
+			0x0c00400a, // jal 80010028
+			0x00000000,
+			0x0c00400a,
+			0x00000000,
+			0x0c00400a,
+			0x00000000,
+			0x0c00400a,
+			0x00000000,
+			0x00000000,
+			0x00000000,
+			0x00000000,
+			0x00000000,
+		} {
+			m.Bus.Write32(counted+uint32(4*n), w)
+		}
+		assert.Equal(t, true, strings.HasPrefix(command(t, port, "dis 80110000 3"),
+			"80110000:27bdffe8       addiu   sp,sp,0xffffffe8\r\n80110004:afbf0010       sw      ra,0x10(sp)\r\n"+
+				"80110008:0c00400a       jal     0x80010028\r\n8011000c:00000000       nop\r\n"), "a count of instructions, each with its delay slot")
+		assert.Equal(t, 14, strings.Count(command(t, port, "dis 80110000"), "\r\n"), "ten instructions, and four delay slots")
 	})
+}
+
+// loadReturn writes a function that returns at once at addr.
+func loadReturn(m *emutest.Machine, addr uint32) {
+	m.Bus.Write32(addr, 0x03e00008) // jr ra
+	m.Bus.Write32(addr+4, 0)
 }
 
 func TestMonitorUserCommands(t *testing.T) {
 	eachMonitor(t, func(t *testing.T, boot boot) {
-		_, port, _ := boot(t)
-		// 80010020 and 80010028 are jr ra in the resident library.
-		for _, c := range []string{"ac y 80010020", "ac longername12345 80010028", "ac Z 80010020"} {
+		m, port, _ := boot(t)
+		loadReturn(m, 0x80100020)
+		loadReturn(m, 0x80100028)
+		for _, c := range []string{"ac y 80100020", "ac longername12345 80100028", "ac Z 80100020"} {
 			assert.Equal(t, "", command(t, port, c), c)
 		}
-		assert.Equal(t, "Show user commands\r\n00:y            80010020\r\n01:longername12345      80010028\r\n02:Z            80010020\r\n", command(t, port, "sc"))
+		assert.Equal(t, "Show user commands\r\n00:y            80100020\r\n01:longername12345      80100028\r\n02:Z            80100020\r\n", command(t, port, "sc"))
 		assert.Equal(t, "", command(t, port, "y a b"), "a user command runs and comes back")
 		assert.Equal(t, "", command(t, port, "dc y"))
-		assert.Equal(t, "Show user commands\r\n01:longername12345      80010028\r\n02:Z            80010020\r\n", command(t, port, "sc"))
+		assert.Equal(t, "Show user commands\r\n01:longername12345      80100028\r\n02:Z            80100020\r\n", command(t, port, "sc"))
 		assert.Equal(t, "no such a command\r\n", command(t, port, "dc zz"))
-		command(t, port, "ac y 80010020")
-		command(t, port, "ac y 80010028")
-		assert.Equal(t, true, strings.HasPrefix(command(t, port, "sc"), "Show user commands\r\n00:y            80010028\r\n"), "the free slot, and the entry replaced")
+		command(t, port, "ac y 80100020")
+		command(t, port, "ac y 80100028")
+		assert.Equal(t, true, strings.HasPrefix(command(t, port, "sc"), "Show user commands\r\n00:y            80100028\r\n"), "the free slot, and the entry replaced")
 		assert.Equal(t, "usage:<command> command-name entry-address\r\n", command(t, port, "ac"))
 		assert.Equal(t, "usage:<command> command-name\r\n", command(t, port, "dc"))
 		assert.Equal(t, "Show user commands\r\n", command(t, port, "dc y")+command(t, port, "dc longername12345")+command(t, port, "dc Z")+command(t, port, "sc"))
@@ -429,11 +457,12 @@ func TestMonitorDrivers(t *testing.T) {
 		m, port, _ := boot(t)
 		// A device's control block at 80100000, named abc, every function
 		// a jr ra.
+		loadReturn(m, 0x80100200)
 		m.Bus.Write32(0x80100000, 0x80100100)
 		m.Bus.Write32(0x80100004, 0x14)
 		m.Bus.Write32(0x8010000c, 0x80100100)
 		for i := uint32(0x10); i < 0x50; i += 4 {
-			m.Bus.Write32(0x80100000+i, 0x80010020)
+			m.Bus.Write32(0x80100000+i, 0x80100200)
 		}
 		m.Bus.Write32(0x80100100, 0x00636261)
 		got := command(t, port, "ad 80100000")

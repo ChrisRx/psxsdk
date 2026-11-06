@@ -191,7 +191,7 @@ func setup(t *testing.T) (*fakeMonitor, *Port, *Monitor) {
 
 func TestLoad(t *testing.T) {
 	f, _, m := setup(t)
-	exe, err := ecoff.Open("../format/ecoff/testdata/main-ecoff")
+	exe, err := ecoff.Open(sonyFixture(t, "main-ecoff"))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -241,10 +241,12 @@ func TestOpenProgram(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(0x801f8000), p.SP, "the stack's end, from the header")
 
-	p, err = OpenProgram("../format/ecoff/testdata/main-ecoff")
-	assert.NoError(t, err)
-	assert.Equal(t, uint32(defaultStack), p.SP)
-	assert.Equal(t, 4, len(p.Segments), ".text, .rdata, .data and .sdata")
+	t.Run("ecoff", func(t *testing.T) {
+		p, err := OpenProgram(sonyFixture(t, "main-ecoff"))
+		assert.NoError(t, err)
+		assert.Equal(t, uint32(defaultStack), p.SP)
+		assert.Equal(t, 4, len(p.Segments), ".text, .rdata, .data and .sdata")
+	})
 
 	srec := filepath.Join(dir, "main.mot")
 	assert.NoError(t, os.WriteFile(srec, []byte("S00600004844521B\n"), 0o644))
@@ -348,4 +350,15 @@ func TestReadUntilKeepsTheRest(t *testing.T) {
 	s, err = p.ReadUntil(t.Context(), ">>")
 	assert.NoError(t, err)
 	assert.Equal(t, "two>>", s)
+}
+
+// sonyFixture is the path of a file built from Sony's SDK, which is not in this
+// repository: PSX_SONY_TESTDATA names a private copy, and the test skips without it.
+func sonyFixture(t *testing.T, name string) string {
+	t.Helper()
+	dir := os.Getenv("PSX_SONY_TESTDATA")
+	if dir == "" {
+		t.Skip("PSX_SONY_TESTDATA is not set")
+	}
+	return filepath.Join(dir, name)
 }

@@ -4,7 +4,7 @@ import "testing"
 
 // TestRelocations pins down the relocation table decoding.
 //
-// The testdata objects are MIPSEL-BE: big-endian headers wrapping
+// The objects are MIPSEL-BE: big-endian headers wrapping
 // little-endian MIPS code, which is what Sony's own compiler produced. Their
 // packed relocation bitfields do not use the big-endian layout in binutils
 // include/coff/mips.h, and decoding them that way halves every relocation
@@ -50,7 +50,7 @@ func TestRelocations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.file, func(t *testing.T) {
-			f, err := Open("testdata/" + tt.file)
+			f, err := Open(sonyFixture(t, tt.file))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -89,7 +89,7 @@ func TestRelocations(t *testing.T) {
 // kept apart. Reading section contents with the header's byte order would
 // byte-swap every instruction in the objects Sony shipped.
 func TestTargetByteOrder(t *testing.T) {
-	f, err := Open("testdata/puts.o")
+	f, err := Open(sonyFixture(t, "puts.o"))
 	if err != nil {
 		t.Fatal(err)
 	}

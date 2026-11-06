@@ -248,11 +248,6 @@ func load(docs, examples string) (*Site, error) {
 		if err != nil {
 			return err
 		}
-		// docs/superpowers holds working notes, specs and plans, written
-		// for the repository rather than the site.
-		if d.IsDir() && d.Name() == "superpowers" {
-			return fs.SkipDir
-		}
 		if d.IsDir() || !strings.HasSuffix(p, ".md") {
 			return nil
 		}

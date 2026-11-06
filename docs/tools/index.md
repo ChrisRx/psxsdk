@@ -45,6 +45,6 @@ Each of these is a tool of its own, which `go:generate` lines and the playground
 | [ecoffdump](ecoffdump.md) | Display ECOFF object files, with disassembly |
 | [ecoff2asm](ecoff2asm.md) | Convert ECOFF objects to GNU as source, for relinking the Net Yaroze library as ELF |
 | [ecoffcmp](ecoff2asm.md) | Check ecoff2asm output against the original objects |
-| [libpsdis](libpsdis.md) | Annotated disassembly of the Net Yaroze resident library, for reimplementing it |
+| [libpsdis](libpsdis.md) | Annotated disassembly of a private copy of Sony's library, and scores against it, for the clean-room work |
 
 [dumpsxiso](dumpsxiso.md) is a translation of the dumpsxiso in Lameguy64's mkpsxiso, and is under the GPL-2.0 as that project is.

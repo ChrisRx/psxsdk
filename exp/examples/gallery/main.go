@@ -3,13 +3,9 @@
 // scaled, turned and blended, a tile map, the packet types, a lit and
 // fogged model, Kanji text, and the overlay.
 //
-// It is the Go library's own regression picture, checked by
-// TestGalleryScreenshotPS in tests/examples_test.go against a picture of
-// its own: the other programs under exp/examples are checked against the
-// originals' pictures, drawn with the original's font, which the sonydata
-// build tag links in for them, and this one is drawn with the font and
-// the tables the library carries itself, which is what a program built
-// against it gets.
+// It is the API's own regression picture, checked by TestGalleryScreenshotPS
+// in tests/examples_test.go against a picture of its own: the other programs
+// under exp/examples are checked against the originals' pictures.
 package main
 
 import (

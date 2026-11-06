@@ -12,15 +12,15 @@ import (
 
 // The fixtures task build:hot writes: v1 built with --hot onto a disc,
 // its ELF, and the patch for v2 built against it. build:hot:go writes
-// the same built against the Go library, exp/libps, onto .build/hot-go.
+// the same built for the resident library, onto .build/hot-resident.
 const (
 	disc  = "../../.build/hot/v1.cue"
 	base  = "../../.build/hot/prog.elf"
 	patch = "../../.build/hot/v2.patch.elf"
 
-	discGo  = "../../.build/hot-go/v1.cue"
-	baseGo  = "../../.build/hot-go/prog.elf"
-	patchGo = "../../.build/hot-go/v2.patch.elf"
+	discResident  = "../../.build/hot-resident/v1.cue"
+	baseResident  = "../../.build/hot-resident/prog.elf"
+	patchResident = "../../.build/hot-resident/v2.patch.elf"
 )
 
 // TestPatch runs v1, which prints a line on teal and counts frames, and
@@ -30,10 +30,10 @@ const (
 // where it was, since the patch keeps a variable the program has written.
 func TestPatch(t *testing.T) { testPatch(t, disc, base, patch) }
 
-// TestPatchGo is TestPatch with the fixtures built against the Go
+// TestPatchResident is TestPatch with the fixtures built against the Go
 // library (task build:hot:go), whose variables the patch binds by name as
 // it does the program's own: the library is ordinary code in the base.
-func TestPatchGo(t *testing.T) { testPatch(t, discGo, baseGo, patchGo) }
+func TestPatchResident(t *testing.T) { testPatch(t, discResident, baseResident, patchResident) }
 
 func testPatch(t *testing.T, disc, base, patch string) {
 	data, err := os.ReadFile(patch)

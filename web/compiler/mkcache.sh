@@ -10,7 +10,7 @@
 # PROGRAM is the directory of a main package within one of the sysroot's
 # modules, given as a path inside the sysroot (mod/go.chrisrx.dev/psx/examples/check),
 # built for the sysroot's target, or for another named after an @
-# (mod/go.chrisrx.dev/psx/exp/libps/probe/@playstation-yaroze-go).
+# (mod/go.chrisrx.dev/psx/examples/dino/@playstation-yaroze-clean).
 #
 # The compiler in the browser has no clang, so the C and assembly files the
 # target needs have to be compiled here, against the same paths, and found
