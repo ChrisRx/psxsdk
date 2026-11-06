@@ -10,7 +10,7 @@ package ps
 // stub is what every call on the library panics with on a host: the
 // library is only there in a program built for the console.
 func stub(name string) string {
-	return "ps." + name + ": the library is only present in a program built with tinygo -target=playstation-yaroze-go"
+	return "ps." + name + ": the library is only present in a program built with tinygo -target=playstation-yaroze-clean"
 }
 
 // A screenImpl is the library's side of a Screen, which a host has none
