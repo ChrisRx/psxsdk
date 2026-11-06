@@ -1,8 +1,0 @@
-{
-	"comment": "The Net Yaroze target with the resident library replaced by psxsdk's exp/libps, a reimplementation in Go linked into the program, which then loads at 0x80010000 and owns the machine. Experimental: see docs/architecture/libps-go.md in psxsdk. LIBPS_GO empties the resident address table, so a library call the reimplementation lacks fails at link time by name, and the C library routines come from playstation-libc.c as they do for the plain playstation target.",
-	"inherits": ["playstation-yaroze"],
-	"build-tags": ["golibps"],
-	"cflags": ["-DLIBPS_GO"],
-	"ldflags": ["--defsym=__load=0x80010000", "--defsym=__libps_heap_size=0"],
-	"extra-files": ["targets/playstation-libc.c", "targets/playstation-yaroze-libps-data.c"]
-}

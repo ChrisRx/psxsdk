@@ -14,7 +14,7 @@ import (
 // through the library's wait for a vertical blank and one stepping through
 // it, and checks that they agree at every vertical blank, which mostly
 // comes while the program waits: the CPU, the clocks, the display and the
-// sound, and every tenth frame all of RAM, where the wait counts down.
+// sound, and every tenth frame all of RAM.
 func TestVSyncSkipChangesNothing(t *testing.T) {
 	parallel(t)
 	for _, name := range []string{"dino", "check", "morph"} {

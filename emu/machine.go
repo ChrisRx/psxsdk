@@ -71,8 +71,8 @@ type Machine struct {
 	// or fails, so that the CPU hands back to run.
 	wake bool
 
-	// spin is what the machine knows of the loop it skips (see spin.go),
-	// unless noSpin.
+	// spin is what the machine keeps for skipping through a program's waits
+	// (see spin.go), unless noSpin.
 	spin   spin
 	noSpin bool
 
@@ -465,10 +465,6 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 		Busy: &dma.active,
 		Hook: 0xb4, HookMask: 0x3fffffff, Hooked: tty,
 		Wake: &m.wake,
-		Spin: spinNone,
-	}
-	if !trace && !m.noSpin && m.spinAt() {
-		k.Spin = vsyncWaitHead
 	}
 	breaking := m.breaks.set.Len() > 0
 	if breaking {
@@ -531,9 +527,10 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 			if err := m.writeTrace(); err != nil {
 				return i, err
 			}
-		} else if c.PC == k.Spin || m.spin.learning {
-			i += m.spinStep(&k, n-i)
 		} else {
+			if !m.noSpin {
+				i += m.skipSpin(&k, n-i)
+			}
 			i += c.Run(n-i, &k)
 		}
 
