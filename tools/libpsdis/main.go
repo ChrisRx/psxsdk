@@ -2,7 +2,7 @@
 // resident library, for reading when reimplementing it in Go
 // (exp/libps). Its output is not committed: it is Sony's code.
 //
-// The image is the one eco2exe combines into every program, link.Libps.
+// The image is a private copy of Sony's, which --image or PSX_SONY_LIBPS names.
 // The only names are the entry points the SDK's symusr.o gives, converted
 // to playstation-yaroze-symusr.S; every other function is named by its
 // address. Each function's listing resolves what an instruction reaches
@@ -15,6 +15,7 @@ import (
 	"bufio"
 	"bytes"
 	"cmp"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"os"
@@ -26,7 +27,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.chrisrx.dev/psx/link"
 )
 
 func main() {
@@ -35,8 +35,8 @@ func main() {
 	cmd := &cobra.Command{
 		Use:   "libpsdis [flags]",
 		Short: "annotated disassembly of the Net Yaroze resident library",
-		Long: `libpsdis disassembles the Net Yaroze resident library, the image link.Libps
-holds, naming its entry points from the symbol file converted from the
+		Long: `libpsdis disassembles Sony's Net Yaroze resident library, from the private copy
+--image or PSX_SONY_LIBPS names, naming its entry points from the symbol file converted from the
 SDK's symusr.o and every other function by its address, and annotates each
 instruction with what it reaches for. -o writes the whole image to
 DIR/libps.txt; -f prints the functions named to standard output.`,
@@ -96,7 +96,7 @@ DIR/libps.txt; -f prints the functions named to standard output.`,
 		},
 	}
 	f := cmd.Flags()
-	f.StringVar(&image, "image", "", "a PSX-EXE of the resident library, in place of the one built in")
+	f.StringVar(&image, "image", "", "Sony's image, a PSX-EXE, gzipped or not, if not PSX_SONY_LIBPS")
 	f.StringVar(&symbols, "symbols", "internal/toolchain/_tinygo/targets/playstation-yaroze-symusr.S", "the symbol file naming the entry points")
 	f.StringVarP(&out, "out", "o", "", "the directory to write libps.txt into")
 	f.StringArrayVarP(&names, "function", "f", nil, "a function to print; may be repeated")
@@ -171,23 +171,29 @@ var symbolLine = regexp.MustCompile(`^\s*\.set\s+([A-Za-z_][A-Za-z0-9_]*),\s*0x(
 func LoadImage(image, symbols string) (*Image, error) {
 	img := &Image{syms: map[uint32]string{}, data: map[string]bool{}}
 	if image == "" {
-		exe, err := link.Libps()
-		if err != nil {
-			return nil, err
-		}
-		text := exe.Section("text")
-		img.Base, img.Data = text.Addr, text.Data
-	} else {
-		data, err := os.ReadFile(image)
-		if err != nil {
-			return nil, err
-		}
-		if len(data) < 2048 {
-			return nil, fmt.Errorf("%s: too short for a PSX-EXE", image)
-		}
-		img.Base = uint32(data[0x18]) | uint32(data[0x19])<<8 | uint32(data[0x1a])<<16 | uint32(data[0x1b])<<24
-		img.Data = data[2048:]
+		image = os.Getenv("PSX_SONY_LIBPS")
 	}
+	if image == "" {
+		return nil, fmt.Errorf("--image or PSX_SONY_LIBPS names the private copy of Sony's image")
+	}
+	data, err := os.ReadFile(image)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > 2 && data[0] == 0x1f && data[1] == 0x8b {
+		r, err := gzip.NewReader(bytes.NewReader(data))
+		if err != nil {
+			return nil, err
+		}
+		if data, err = io.ReadAll(r); err != nil {
+			return nil, err
+		}
+	}
+	if len(data) < 2048 {
+		return nil, fmt.Errorf("%s: too short for a PSX-EXE", image)
+	}
+	img.Base = uint32(data[0x18]) | uint32(data[0x19])<<8 | uint32(data[0x1a])<<16 | uint32(data[0x1b])<<24
+	img.Data = data[2048:]
 	f, err := os.Open(symbols)
 	if err != nil {
 		return nil, err

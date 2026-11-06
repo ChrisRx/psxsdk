@@ -9,6 +9,11 @@ set -euo pipefail
 NAME=$1 DIR=$2
 IMAGE=$PWD/.build/cleanimage/libps.exe
 SIDES=${SIDES:-sony clean}
+export PSX_SONY_LIBPS=${PSX_SONY_LIBPS:-$HOME/src/ChrisRx/psxsdk-sony/libps.exe.gz}
+[ -f "$PSX_SONY_LIBPS" ] || { echo "no $PSX_SONY_LIBPS: comparing needs a private copy of Sony's image, spec 15" >&2; exit 1; }
+SONY=$PWD/.build/cleanimage/sony.exe
+mkdir -p "$(dirname "$SONY")"
+gunzip -c "$PSX_SONY_LIBPS" >"$SONY"
 BIN=$PWD/.build/$NAME-tools
 mkdir -p "$BIN"
 go build -o "$BIN/yaroze" ./cmd/yaroze
@@ -22,7 +27,7 @@ for side in $SIDES; do
   case $side in
     sony)
       mkdir -p ".build/$NAME-cimg"
-      "$BIN/yaroze" disc --elf ".build/$NAME-cimg/prog.elf" -o ".build/$NAME-cimg/$NAME-cimg.bin" "$DIR"
+      PSX_LIBPS_IMAGE=$SONY "$BIN/yaroze" disc --elf ".build/$NAME-cimg/prog.elf" -o ".build/$NAME-cimg/$NAME-cimg.bin" "$DIR"
       run "$NAME-cimg"
       ;;
     clean)

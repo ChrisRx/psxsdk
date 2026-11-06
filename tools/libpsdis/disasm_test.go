@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -91,6 +92,9 @@ func TestBIOSNote(t *testing.T) {
 
 func loadImage(t *testing.T) *Image {
 	t.Helper()
+	if os.Getenv("PSX_SONY_LIBPS") == "" {
+		t.Skip("PSX_SONY_LIBPS names the private copy of Sony's image")
+	}
 	img, err := LoadImage("", "../../internal/toolchain/_tinygo/targets/playstation-yaroze-symusr.S")
 	if !assert.NoError(t, err) {
 		t.FailNow()
