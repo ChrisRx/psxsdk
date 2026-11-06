@@ -163,8 +163,8 @@ func New(runtime string) (*Wasm, error) {
 	if err := json.Unmarshal(data, &w.env); err != nil {
 		return nil, fmt.Errorf("%s: %w", filepath.Join(w.sysroot, "env.json"), err)
 	}
-	if w.env.Target != DefaultTarget {
-		return nil, fmt.Errorf("the compiler's sysroot is for %s, not %s", w.env.Target, DefaultTarget)
+	if w.env.Target != ResidentTarget {
+		return nil, fmt.Errorf("the compiler's sysroot is for %s, not %s", w.env.Target, ResidentTarget)
 	}
 	markUsed(w.dir)
 	trimCache(cache, w.dir, time.Now())

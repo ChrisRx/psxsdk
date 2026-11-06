@@ -13,18 +13,18 @@
 //	eco2exe prog.elf prog.exe
 //	mkdisc -o prog.bin --volume-id prog.exe --boot MAIN.EXE --file MAIN.EXE=prog.exe --src prog
 //
-// Built against the Go library (yaroze --libps go, the experiment in
-// exp/libps) the program is compiled for playstation-yaroze-go, which
-// links the library in, and elf2exe writes it out as it is, with nothing
-// laid under it.
+// A program links the clean library in, as yaroze builds one by default, so
+// the target is playstation-yaroze-clean and elf2exe writes it out as it is.
+// Built for the resident library (yaroze --libps resident) it is compiled for
+// the sysroot's own target, and eco2exe lays it over the image.
 //
 // It runs in a browser worker or in Node, so it takes the module loader and
 // the fetched bytes from its caller rather than fetching itself.
 import { Dir, ExitError, File, FileSystem, WASI } from "./wasi.js";
 
-// GO_LIBRARY_TARGET is the target that links the Go library in,
-// toolchain.GoLibraryTarget.
-export const GO_LIBRARY_TARGET = "playstation-yaroze-go";
+// STATIC_TARGET is the target that links the library in,
+// toolchain.DefaultTarget.
+export const STATIC_TARGET = "playstation-yaroze-clean";
 
 // readTar adds the files of a tar archive (ustar or GNU, uncompressed) to
 // fs under prefix.
@@ -193,21 +193,22 @@ export class Pipeline {
 	//
 	// With hot, the program is built to take patches (see patch): its main
 	// package's functions are called through slots and memory is reserved
-	// for the patches. libps names the Net Yaroze library: "resident", the
-	// one laid under the program, or "go", the reimplementation linked
-	// into it, which the cache has to hold the target of (see targets).
-	async build(project, log, { hot = false, libps = "resident" } = {}) {
-		if (libps !== "resident" && libps !== "go") throw new Error(`no ${libps} library: resident or go`);
-		const go = libps === "go";
-		if (go && !this.targets().includes(GO_LIBRARY_TARGET)) throw new Error("the compiler's cache cannot build for the Go library");
+	// for the patches. libps names the Net Yaroze library: "static", linked
+	// into the program, or "resident", the one laid under it. The cache has
+	// to hold the target's C and assembly (see targets).
+	async build(project, log, { hot = false, libps = "static" } = {}) {
+		if (libps !== "static" && libps !== "resident") throw new Error(`no ${libps} library: static or resident`);
+		const linked = libps === "static";
+		const target = linked ? STATIC_TARGET : this.env.target;
+		if (!this.targets().includes(target)) throw new Error(`the compiler's cache cannot build for ${target}`);
 		const { fs, env } = this.workspace(project);
 		if (!(await this.generate(project, fs, log))) return { ok: false };
-		const tinygo = ["tinygo", "-target=" + (go ? GO_LIBRARY_TARGET : this.env.target)];
+		const tinygo = ["tinygo", "-target=" + target];
 		if (hot) tinygo.push("-hot");
 		const steps = [
 			["tinygo", [...tinygo, "-o", "/work/prog.elf", "/work/prog"]],
 			["mips1fix", ["mips1fix", "-q", "/work/prog.elf"]],
-			go
+			linked
 				? ["elf2exe", ["elf2exe", "--stack-addr", "0x801fff00", "/work/prog.elf", "/work/prog.exe"]]
 				: ["eco2exe", ["eco2exe", "/work/prog.elf", "/work/prog.exe"]],
 			["mkdisc", ["mkdisc", "-o", "/work/prog.bin", "--volume-id", "prog.exe", "--boot", "MAIN.EXE", "--file", "MAIN.EXE=/work/prog.exe", "--src", "/work/prog"]],
@@ -230,11 +231,11 @@ export class Pipeline {
 	// emulator to load. The compiler says on the log, in a line starting
 	// "hot:", when the program has to be built and started again instead:
 	// a variable that changed size, say.
-	async patch(project, base, at, log, { libps = "resident" } = {}) {
+	async patch(project, base, at, log, { libps = "static" } = {}) {
 		const { fs, env } = this.workspace(project);
 		fs.put("/work/base.elf", base);
 		if (!(await this.generate(project, fs, log))) return { ok: false };
-		const target = libps === "go" ? GO_LIBRARY_TARGET : this.env.target;
+		const target = libps === "static" ? STATIC_TARGET : this.env.target;
 		const steps = [
 			["tinygo", ["tinygo", "-target=" + target, "-hot-base=/work/base.elf", "-hot-at=0x" + at.toString(16), "-o", "/work/patch.elf", "/work/prog"]],
 			["mips1fix", ["mips1fix", "-q", "/work/patch.elf"]],
@@ -244,8 +245,7 @@ export class Pipeline {
 	}
 
 	// targets are the TinyGo targets the compiler's cache holds the C and
-	// assembly of, which are the ones it can build for: the sysroot's own
-	// and, when its cache was filled with them, the Go library's.
+	// assembly of, which are the ones it can build for.
 	targets() {
 		return this.env.targets ?? [this.env.target];
 	}

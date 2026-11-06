@@ -9,9 +9,9 @@ import (
 	"strings"
 )
 
-// goAPI is the import path of the Go library's own API, exp/ps. A
-// program that imports it cannot run on the resident library, so the
-// import chooses the Go library, as --libps go does.
+// goAPI is the import path of the Go API, exp/ps. Its layer sits on the
+// library linked into the program, so a program that imports it cannot be
+// built for the resident library.
 const goAPI = "go.chrisrx.dev/psx/exp/ps"
 
 // importsGoAPI reports whether any Go file of the package directory pkg,

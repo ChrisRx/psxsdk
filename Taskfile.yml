@@ -44,17 +44,13 @@ tasks:
       - task: build:disc:cookbook
 
   # The programs under exp/examples, written against the exp/ps API, go
-  # onto .build/NAME-ps: yaroze sees the import and builds them against
-  # the Go library. The ports of examples are built with the original's
-  # font, since their pictures are compared with the originals'; the
-  # gallery, which is the Go library's own picture, is built as a program
-  # is, with the library's own font.
+  # onto .build/NAME-ps, linked statically as every program is.
   build:discs:exp:
     internal: true
     deps:
       - for: { var: PORTS }
         task: build:disc
-        vars: { NAME: '{{.ITEM}}-ps', DIR: 'exp/examples/{{.ITEM}}', TAGS: sonydata }
+        vars: { NAME: '{{.ITEM}}-ps', DIR: 'exp/examples/{{.ITEM}}' }
       - task: build:disc
         vars: { NAME: gallery-ps, DIR: exp/examples/gallery }
     vars:
@@ -88,9 +84,7 @@ tasks:
     vars:
       DIR: '{{.DIR | default (printf "examples/%s" .NAME)}}'
       OPT: '{{.OPT | default "2"}}'
-      # TAGS are extra build tags: sonydata links the original's font into
-      # a program built against the Go library, for a picture compared
-      # with the resident library's.
+      # TAGS are extra build tags.
       TAGS: '{{.TAGS | default ""}}'
     sources:
       - '{{.DIR}}/**/*'
@@ -116,8 +110,8 @@ tasks:
       - mkdir -p .build/{{.NAME}}
       - go run ./cmd/yaroze disc --opt={{.OPT}} {{if .TAGS}}--tags {{.TAGS}}{{end}} --elf .build/{{.NAME}}/prog.elf -o .build/{{.NAME}}/{{.NAME}}.bin ./{{.DIR}}
 
-  # Builds an example onto .build/NAME-go/NAME-go.cue against the Go
-  # library, yaroze --libps go, the experiment in exp/libps.
+  # Builds an example onto .build/NAME-go/NAME-go.cue against the resident
+  # library, yaroze --libps resident.
   build:disc:go:
     label: 'disc:{{.NAME}}-go'
     requires:
@@ -149,7 +143,7 @@ tasks:
       # With the original's font, since the picture is compared with the
       # resident library's; a program built without the tag has the
       # library's own.
-      - go run ./cmd/yaroze disc --libps go --opt={{.OPT}} --tags sonydata --elf .build/{{.NAME}}-go/prog.elf -o .build/{{.NAME}}-go/{{.NAME}}-go.bin ./{{.DIR}}
+      - go run ./cmd/yaroze disc --libps resident --opt={{.OPT}} --elf .build/{{.NAME}}-go/prog.elf -o .build/{{.NAME}}-go/{{.NAME}}-go.bin ./{{.DIR}}
 
   # Regenerates the resident library's entry points under _orig names,
   # for the twin-call tests in exp/libps, which call an original and
@@ -240,19 +234,19 @@ tasks:
       - .build/monitor/monitor.cue
     cmds:
       - mkdir -p .build/serial .build/monitor
-      - go run ./cmd/yaroze build --opt=2 -o .build/serial/print.elf ./tests/testdata/serial/print
+      - go run ./cmd/yaroze build --libps resident --opt=2 -o .build/serial/print.elf ./tests/testdata/serial/print
       - go run ./tools/elf2exe .build/serial/print.elf .build/serial/print.exe
       - go run ./cmd/yaroze disc --opt=2 --target serial/monitor/target.json --file PRINT.EXE=.build/serial/print.exe -o .build/monitor/monitor.bin ./serial/monitor
-      - go run ./cmd/yaroze build --opt=2 -o .build/serial/exit.elf ./tests/testdata/serial/exit
-      - go run ./cmd/yaroze build --opt=2 -o .build/serial/crash.elf ./tests/testdata/serial/crash
+      - go run ./cmd/yaroze build --libps resident --opt=2 -o .build/serial/exit.elf ./tests/testdata/serial/exit
+      - go run ./cmd/yaroze build --libps resident --opt=2 -o .build/serial/crash.elf ./tests/testdata/serial/crash
 
-  # The same fixtures built against the Go library, exp/libps, onto
+  # The same fixtures built against the resident library, onto
   # .build/hot-go, for TestPatchGo.
   build:hot:go:
     sources:
       - 'internal/hot/testdata/**/*'
       - 'yaroze/**/*.go'
-      - 'exp/libps/**/*'
+      - 'exp/cleanlib/**/*'
       - 'internal/**/*'
       - 'cmd/yaroze/**/*.go'
       - 'link/**/*'
@@ -263,8 +257,8 @@ tasks:
     cmds:
       - rm -rf .build/hot-go
       - mkdir -p .build/hot-go
-      - go run ./cmd/yaroze disc --hot --libps go --opt=2 --elf .build/hot-go/prog.elf -o .build/hot-go/v1.bin ./internal/hot/testdata/v1
-      - go run ./cmd/yaroze patch --libps go --opt=2 --base .build/hot-go/prog.elf -o .build/hot-go/v2.patch.elf ./internal/hot/testdata/v2
+      - go run ./cmd/yaroze disc --hot --libps resident --opt=2 --elf .build/hot-go/prog.elf -o .build/hot-go/v1.bin ./internal/hot/testdata/v1
+      - go run ./cmd/yaroze patch --libps resident --opt=2 --base .build/hot-go/prog.elf -o .build/hot-go/v2.patch.elf ./internal/hot/testdata/v2
 
   # Builds the tutorial's first program onto .build/hello/hello.cue, so
   # that it runs on its page like the examples and in the emulator tests.
@@ -589,15 +583,15 @@ tasks:
       # playground shell.
       - test -x {{.TREE}}/build/tinygo-sysroot || (cd {{.TREE}} && GOFLAGS=-mod=mod go build -tags llvm22 -ldflags "-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=$(clang-22 -print-resource-dir)" -o build/tinygo-sysroot ./cmd/tinygo-sysroot)
       - rm -rf .build/sysroot
-      # The golibps tag brings yaroze/libps_go.go into the copy, which the
-      # tool otherwise leaves out as excluded for the target: the file store
-      # has to hold what the Go library's target compiles too.
-      - '{{.TREE}}/build/tinygo-sysroot -target=playstation-yaroze -tags golibps -o .build/sysroot ./examples/... ./docs/tutorial/hello ./exp/...'
-      # The probe and the sprite program are built for the Go library's
-      # target too, so that the cache holds that target's C and assembly,
-      # compiled with its flags, and the playground can offer the library.
+      # The tags bring yaroze/libps_clean.go into the copy, which the tool
+      # otherwise leaves out as excluded for the target: the file store has
+      # to hold what the static target compiles too.
+      - '{{.TREE}}/build/tinygo-sysroot -target=playstation-yaroze -tags ''golibps cleanlib'' -o .build/sysroot ./examples/... ./docs/tutorial/hello ./exp/...'
+      # The programs are built for the static target, as yaroze builds them,
+      # and the tutorial's for the resident target too, so that the cache holds
+      # each target's C and assembly, compiled with its flags.
       - |
-        programs="$(cd .build/sysroot && ls -d mod/go.chrisrx.dev/psx/examples/*/ mod/go.chrisrx.dev/psx/docs/tutorial/hello/ | grep -v /internal/) mod/go.chrisrx.dev/psx/exp/libps/probe/@playstation-yaroze-go mod/go.chrisrx.dev/psx/exp/libps/sprites/@playstation-yaroze-go"
+        programs="$(cd .build/sysroot && ls -d mod/go.chrisrx.dev/psx/examples/*/ mod/go.chrisrx.dev/psx/docs/tutorial/hello/ | grep -v /internal/ | sed 's,$,@playstation-yaroze-clean,') mod/go.chrisrx.dev/psx/docs/tutorial/hello/"
         if [ -f .build/compiler/tinygo-full.wasm ]; then
           web/compiler/mkcache.sh .build/compiler/tinygo-full.wasm .build/compiler/tinygo.wasm .build/sysroot $programs
         else
@@ -623,9 +617,8 @@ tasks:
       - task: playground:sysroot
       - rm -rf {{.SYSROOT}}
       - cp -R .build/sysroot {{.SYSROOT}}
-      # The Go library's target's programs again, as playground:sysroot
-      # built them, so that yaroze can build for it at this level too.
-      - OPTS=2 web/compiler/mkcache.sh .build/compiler/tinygo-full.wasm .build/compiler/tinygo.wasm {{.SYSROOT}} $(cd {{.SYSROOT}} && ls -d mod/go.chrisrx.dev/psx/examples/*/ mod/go.chrisrx.dev/psx/docs/tutorial/hello/ | grep -v /internal/) mod/go.chrisrx.dev/psx/exp/libps/probe/@playstation-yaroze-go mod/go.chrisrx.dev/psx/exp/libps/sprites/@playstation-yaroze-go
+      # The programs again, as playground:sysroot built them, at this level.
+      - OPTS=2 web/compiler/mkcache.sh .build/compiler/tinygo-full.wasm .build/compiler/tinygo.wasm {{.SYSROOT}} $(cd {{.SYSROOT}} && ls -d mod/go.chrisrx.dev/psx/examples/*/ mod/go.chrisrx.dev/psx/docs/tutorial/hello/ | grep -v /internal/ | sed 's,$,@playstation-yaroze-clean,') mod/go.chrisrx.dev/psx/docs/tutorial/hello/
       - mkdir -p cmd/yaroze/wasm
       - gzip -9 -n -c .build/compiler/tinygo.wasm > cmd/yaroze/wasm/tinygo.wasm.gz
       # The archive's directory is sysroot, as the playground's is.

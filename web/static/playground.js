@@ -306,24 +306,23 @@ hotBox.addEventListener("change", () => {
   try { localStorage.setItem("hot", hotBox.checked ? "on" : "off"); } catch { /* no storage */ }
 });
 
-// The Go library: with the box ticked, a project is built against
-// psxsdk's own reimplementation of the Net Yaroze library, linked into the
-// program, rather than laid over the resident one (yaroze --libps go). The
-// box is offered once the compiler has loaded and said its cache can
-// build for that target, and the choice is remembered. Hot reload needs
-// the resident library, so the Hot box is disabled while it is ticked.
-const goLabel = $("golib-label");
-const goBox = $("golib");
-try { goBox.checked = localStorage.getItem("libps") === "go"; } catch { /* no storage */ }
-goBox.addEventListener("change", () => {
-  try { localStorage.setItem("libps", goBox.checked ? "go" : "resident"); } catch { /* no storage */ }
+// The resident library: a project links the library into the program, unless
+// this box is ticked, when it is laid over the image a Net Yaroze leaves in
+// memory (yaroze --libps resident). The box is offered once the compiler has
+// loaded and said its cache can build for that target, and the choice is
+// remembered.
+const residentLabel = $("resident-label");
+const residentBox = $("resident");
+try { residentBox.checked = localStorage.getItem("libps") === "resident"; } catch { /* no storage */ }
+residentBox.addEventListener("change", () => {
+  try { localStorage.setItem("libps", residentBox.checked ? "resident" : "static"); } catch { /* no storage */ }
 });
 function offerLibrary(targets) {
-  goLabel.hidden = !targets.includes("playstation-yaroze-go");
+  residentLabel.hidden = !targets.includes("playstation-yaroze");
 }
 // library is the library the next build is for.
 function library() {
-  return !goLabel.hidden && goBox.checked ? "go" : "resident";
+  return !residentLabel.hidden && residentBox.checked ? "resident" : "static";
 }
 // hotChosen says whether the next build is for hot reload: the Hot box.
 function hotChosen() {

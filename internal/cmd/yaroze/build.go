@@ -66,27 +66,31 @@ func (f *buildFlags) register(cmd *cobra.Command) {
 	fl.BoolVarP(&f.verbose, "verbose", "v", false, "say which compiler runs, and how long each step takes")
 	fl.StringVar(&f.target, "target", "", "a TinyGo target file, JSON that inherits playstation-yaroze and changes what the program needs, such as where it is linked")
 	fl.BoolVar(&f.hot, "hot", false, "build a program that can take patches from the patch command while it runs: its main package's functions are called through slots, which costs a little speed, and 256KB is reserved for the patches")
-	fl.StringVar(&f.libps, "libps", "resident", "the Net Yaroze library: resident, laid under the program, or go, the experimental reimplementation linked into it")
+	fl.StringVar(&f.libps, "libps", "static", "the Net Yaroze library: static, linked into the program, or resident, the program laid over the image a Net Yaroze leaves in memory")
 }
 
 // targetName is the TinyGo target the --libps flag chooses.
 func (f *buildFlags) targetName() string {
-	if f.libps == "go" {
-		return toolchain.GoLibraryTarget
+	if f.overImage() {
+		return toolchain.ResidentTarget
 	}
 	return toolchain.DefaultTarget
 }
 
-// check rejects a --libps value that names no library, and a target file
-// with the Go library, since the file says what the program links.
-func (f *buildFlags) check() error {
+// overImage reports whether the program is laid over the resident library. A
+// target file inherits the resident target and says for itself what it links.
+func (f *buildFlags) overImage() bool { return f.libps == "resident" || f.target != "" }
+
+// check rejects a --libps value that names no library, and a program for the
+// Go API on the resident library, whose layer sits on the library linked in.
+func (f *buildFlags) check(pkg string) error {
 	switch f.libps {
-	case "resident", "go":
+	case "static", "resident":
 	default:
-		return fmt.Errorf("--libps %q names no library: resident or go", f.libps)
+		return fmt.Errorf("--libps %q names no library: static or resident", f.libps)
 	}
-	if f.libps == "go" && f.target != "" {
-		return errors.New("--target and --libps go can't be used together")
+	if f.overImage() && importsGoAPI(pkg) {
+		return fmt.Errorf("%s imports %s, which needs --libps static", pkg, goAPI)
 	}
 	return nil
 }
@@ -111,11 +115,7 @@ func pkgName(pkg string) (string, error) {
 // build compiles pkg and writes the PSX-EXE to exe and, if elf is not empty,
 // the ELF, with its traps removed, to elf. Either may be empty.
 func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
-	if f.libps != "go" && importsGoAPI(pkg) {
-		f.logf("the program imports %s: building against the Go library", goAPI)
-		f.libps = "go"
-	}
-	if err := f.check(); err != nil {
+	if err := f.check(pkg); err != nil {
 		return err
 	}
 	start := time.Now()
@@ -154,6 +154,8 @@ func (f *buildFlags) buildC(ctx context.Context, c *toolchain.Wasm, dir, tmp, ex
 	if f.hot || f.target != "" || len(f.tags) > 0 {
 		return errors.New("--hot, --target and --tags are for Go packages, and this is a C project")
 	}
+	// A C project calls the library it was written for, at its addresses.
+	f.libps = "resident"
 	p, err := cproject.Read(dir)
 	if err != nil {
 		return err
@@ -212,12 +214,12 @@ func (f *buildFlags) finish(ctx context.Context, compile func(context.Context) e
 			return err
 		}
 		var x *psx.File
-		if f.libps == "go" {
+		if f.overImage() {
+			x, err = link.Executable(img, true, f.loads...)
+		} else {
 			// The program brought its own library: nothing to lay it
 			// over, nothing to start first.
 			x, err = link.Standalone(img, f.loads...)
-		} else {
-			x, err = link.Executable(img, true, f.loads...)
 		}
 		if err != nil {
 			return err

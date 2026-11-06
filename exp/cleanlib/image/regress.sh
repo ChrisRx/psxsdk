@@ -37,10 +37,10 @@ build() {
   local n=$1 d
   d=$(dir "$n")
   mkdir -p ".build/$n-cimg" ".build/$n-cimg-clean"
-  PSX_LIBPS_IMAGE=$SONY .build/yaroze-cimg disc --elf ".build/$n-cimg/prog.elf" -o ".build/$n-cimg/$n-cimg.bin" "$d" >".build/$n-cimg/build.log" 2>&1 || {
+  PSX_LIBPS_IMAGE=$SONY .build/yaroze-cimg disc --libps resident --elf ".build/$n-cimg/prog.elf" -o ".build/$n-cimg/$n-cimg.bin" "$d" >".build/$n-cimg/build.log" 2>&1 || {
     echo "FAILED $n-cimg"; tail -3 ".build/$n-cimg/build.log"; return 1
   }
-  PSX_LIBPS_IMAGE=$IMAGE .build/yaroze-cimg disc --elf ".build/$n-cimg-clean/prog.elf" -o ".build/$n-cimg-clean/$n-cimg-clean.bin" "$d" >".build/$n-cimg-clean/build.log" 2>&1 || {
+  PSX_LIBPS_IMAGE=$IMAGE .build/yaroze-cimg disc --libps resident --elf ".build/$n-cimg-clean/prog.elf" -o ".build/$n-cimg-clean/$n-cimg-clean.bin" "$d" >".build/$n-cimg-clean/build.log" 2>&1 || {
     echo "FAILED $n-cimg-clean"; tail -3 ".build/$n-cimg-clean/build.log"; return 1
   }
 }

@@ -27,13 +27,13 @@ for side in $SIDES; do
   case $side in
     sony)
       mkdir -p ".build/$NAME-cimg"
-      PSX_LIBPS_IMAGE=$SONY "$BIN/yaroze" disc --elf ".build/$NAME-cimg/prog.elf" -o ".build/$NAME-cimg/$NAME-cimg.bin" "$DIR"
+      PSX_LIBPS_IMAGE=$SONY "$BIN/yaroze" disc --libps resident --elf ".build/$NAME-cimg/prog.elf" -o ".build/$NAME-cimg/$NAME-cimg.bin" "$DIR"
       run "$NAME-cimg"
       ;;
     clean)
       [ -f "$IMAGE" ] || { echo "no $IMAGE: run exp/cleanlib/image/make.sh" >&2; exit 1; }
       mkdir -p ".build/$NAME-cimg-clean"
-      PSX_LIBPS_IMAGE=$IMAGE "$BIN/yaroze" disc --elf ".build/$NAME-cimg-clean/prog.elf" -o ".build/$NAME-cimg-clean/$NAME-cimg-clean.bin" "$DIR"
+      PSX_LIBPS_IMAGE=$IMAGE "$BIN/yaroze" disc --libps resident --elf ".build/$NAME-cimg-clean/prog.elf" -o ".build/$NAME-cimg-clean/$NAME-cimg-clean.bin" "$DIR"
       run "$NAME-cimg-clean"
       ;;
   esac

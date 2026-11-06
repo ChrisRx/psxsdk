@@ -18,13 +18,14 @@ import (
 	"time"
 )
 
-// DefaultTarget is the TinyGo target yaroze builds for unless a Build
-// names another: the program laid over the resident library.
-const DefaultTarget = "playstation-yaroze"
+// DefaultTarget is the TinyGo target yaroze builds for unless a Build names
+// another: the program with the clean library, exp/cleanlib, linked in.
+const DefaultTarget = "playstation-yaroze-clean"
 
-// GoLibraryTarget is the target that links psxsdk's own library in,
-// exp/libps, in place of the resident one. Experimental.
-const GoLibraryTarget = "playstation-yaroze-go"
+// ResidentTarget is the target of a program laid over the resident library,
+// as a Net Yaroze runs one: the boot disc's library on real hardware, and the
+// image link.Libps holds otherwise.
+const ResidentTarget = "playstation-yaroze"
 
 // DefaultOpt is the optimization level a build has when it names none: for
 // speed, since a game's frame has a budget. TinyGo's own default is z, for
