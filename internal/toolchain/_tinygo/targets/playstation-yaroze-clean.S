@@ -234,8 +234,55 @@ libps_start_ra:
 	.set GSO_RUN, 27
 	.set GSO_SLED, 18
 	.set GSO_EXIT, 3
-	.set GSO_ENTRY, 51
+	.set GSO_ENTRY, 48
 	.set GSO_HIDDEN, 22
+	.set GSO_CUT, 52
+
+# The cut's working memory: see gso_cut. What's in the scratch argument is Sony's layout: the level,
+# the screen, the two corners' palette and page, the first color word, an address, the cells of the
+# polygon's corners, and then the frames, down a level at a time.
+	.set CS_LIMX, 0
+	.set CS_LIMY, 4
+	.set CS_WH, 8
+	.set CS_A0, 12
+	.set CS_A1, 16
+	.set CS_RA, 20
+	.set CS_T0, 24
+	.set CS_T1, 28
+	.set CS_T2, 32
+	.set CS_V1, 36
+	.set CS_A3, 40
+	.set CS_TAG, 44
+	.set CS_LEV, 48
+	.set CS_COL, 52
+	.set CS_UV0, 56
+	.set CS_UV1, 60
+	.set CS_IR0, 64
+	.set CS_SCR, 68
+	.set CS_RGBC, 72
+	.set CS_KEEP, 76
+	.set CS_W5, 80
+	.set CS_DEEP3, 84
+	.set CS_DEEP4, 88
+	.set CS_END, 92
+	.set W_UV, 12
+	.set W_COL, 16
+	.set W_END, 20
+	.set CS_ROOT, 24
+	.set C_Z, 4
+	.set C_UV, 8
+	.set C_COL, 12
+	.set C_SXY, 16
+	.set C_SZ, 20
+	.set C_SIZE, 24
+	.set M0, 0
+	.set M1, 24
+	.set M2, 48
+	.set QAB, 0
+	.set QCA, 24
+	.set QBE, 48
+	.set QEC, 72
+	.set QMD, 96
 
 	.macro G
 98:
@@ -1414,6 +1461,10 @@ GsSortObject4:
 	b	5f
 	nop
 5:	sw	$t9, 24($sp)
+	lui	$t9, %hi(gso_unlit)
+	addiu	$t9, $t9, %lo(gso_unlit)
+	sw	$t9, 36($sp)
+gso_common:
 	# Bit 30 is a bit of the command code.
 	srl	$t8, $t6, 30
 	andi	$t8, $t8, 1
@@ -1458,9 +1509,9 @@ gso_run:
 	addu	$t7, $t7, $at
 	b	6f
 	addu	$t9, $t9, $t7
-5:	lui	$t9, %hi(gso_unlit)
+5:	lw	$t9, 36($sp)
+	nop
 	addu	$t9, $t9, $t7
-	addiu	$t9, $t9, %lo(gso_unlit)
 	NOPS	3
 6:	lw	$t9, 0($t9)
 	nop
@@ -1478,9 +1529,73 @@ gso_hidden:
 	jr	$ra
 	nop
 
+# With a cut asked for the same goes, with the tables of the loops that cut. Each light mode's
+# time to gso_run is Sony's, and what the loops want of the level goes in gso_cut.
 gso_div:
-	j	libps_gso_div
-	addiu	$sp, $sp, 56
+	G
+	lui	$v0, %hi(gso_cut)
+	addiu	$v0, $v0, %lo(gso_cut)
+	sw	$ra, CS_RA($v0)
+	sw	$t8, CS_LEV($v0)
+	sw	$a3, CS_SCR($v0)
+	sw	$t8, 0($a3)
+	lh	$t9, CS_WH($v0)
+	lh	$at, CS_WH + 2($v0)
+	sw	$t9, 4($a3)
+	sw	$at, 8($a3)
+	addiu	$at, $a3, CS_ROOT + 0x4000
+	sw	$at, CS_W5($v0)
+	# The deepest frame, as far down as the level goes for three corners or four.
+	addiu	$at, $t8, -1
+	sll	$t9, $at, 2
+	addu	$t9, $t9, $at
+	sll	$t9, $t9, 1
+	addu	$t9, $t9, $at
+	sll	$t9, $t9, 3
+	addu	$t9, $t9, $a3
+	addiu	$t9, $t9, CS_ROOT + 3 * C_SIZE
+	sw	$t9, CS_DEEP3($v0)
+	sll	$t9, $at, 4
+	addu	$t9, $t9, $at
+	sll	$t9, $t9, 1
+	addu	$t9, $t9, $at
+	sll	$t9, $t9, 2
+	addu	$t9, $t9, $a3
+	addiu	$t9, $t9, CS_ROOT + 4 * C_SIZE
+	sw	$t9, CS_DEEP4($v0)
+	andi	$t8, $t6, 0x40
+	bnez	$t8, 1f
+	andi	$t8, $t6, 0x20
+	bnez	$t8, 2f
+	srl	$t9, $t6, 3
+	lui	$t9, %hi(GsLIGHT_MODE)
+	lw	$t9, %lo(GsLIGHT_MODE)($t9)
+2:	nop
+	andi	$t9, $t9, 3
+	addiu	$t9, $t9, -1
+	beqz	$t9, 4f
+	lui	$t9, %hi(gso_clit)
+	addiu	$t9, $t9, %lo(gso_clit)
+	GAP	GSO_CUT
+	b	5f
+	nop
+4:	G
+	lui	$t9, %hi(gso_cfog)
+	addiu	$t9, $t9, %lo(gso_cfog)
+	GAP	GSO_CUT - 42
+	b	5f
+	nop
+1:	G
+	lui	$t9, %hi(gso_coff)
+	addiu	$t9, $t9, %lo(gso_coff)
+	GAP	GSO_CUT - 45
+	b	5f
+	nop
+5:	sw	$t9, 24($sp)
+	lui	$t9, %hi(gso_cunlit)
+	addiu	$t9, $t9, %lo(gso_cunlit)
+	b	gso_common
+	sw	$t9, 36($sp)
 	.size GsSortObject4, .-GsSortObject4
 
 # The loops. For each kind: its name, what makes it, and the stretches of Sony's; col is
@@ -1561,6 +1676,2808 @@ gso_off:
 	.word 0x4a49e012
 	.endm
 
+# Cut polygons: GsSortObject4 under GsDIV (spec 04, spec 31). The GTE sees what Sony's shows it
+# from outside, at the same spacing, for each kind, level and way out.
+#
+# gso_cut holds what the cutting works from. A corner is a cell: its point in the model, its
+# place and depth on the screen, its texture coordinates and its color. A level's frame has the
+# five cells its cut makes, the corners of the piece being cut that come back into use, and where to
+# go when the piece below it is done. The frames stand in for a stack, as a program's stack may be
+# 1 KB of scratchpad.
+	.section .bss.gso_cut, "aw", @nobits
+	.align 2
+	.globl libps_cut_limits
+	.type libps_cut_limits, @object
+libps_cut_limits:
+gso_cut:
+	.space CS_END
+	.size libps_cut_limits, .-libps_cut_limits
+
+# GAPS is GAP for a long pad, spent in a sled of nops all the loops share, as they are many. The way
+# there and back takes at.
+	.macro GAPS n
+#ifdef LIBPS_FIDELITY
+	.set GS_PAD, ((\n) * 4 - (. - 98b)) / 4
+	.if GS_PAD > 8
+	lui	$at, %hi(99f)
+	addiu	$at, $at, %lo(99f)
+	j	gso_sled_end - 4 * (GS_PAD - 6)
+	nop
+99:
+	.else
+	.space GS_PAD * 4
+	.endif
+98:
+#endif
+	.endm
+
+	.section .text.gso_sled, "ax", @progbits
+	.align 2
+	.rept 140
+	nop
+	.endr
+gso_sled_end:
+	jr	$at
+	nop
+
+# NEAR3 and NEAR4 go on past a piece with a corner at half the projection or further. A corner nearer
+# than that costs 4 cycles, and if all are the piece goes.
+	.macro NEAR3 up
+	CFC	14, 26
+	lw	$t7, C_SZ($t3)
+	sra	$t6, $t6, 1
+	sltu	$at, $t7, $t6
+	beqz	$at, 11f
+	lw	$t7, C_SZ($t4)
+	lw	$t8, C_SZ($t5)
+	sltu	$at, $t7, $t6
+	beqz	$at, 12f
+	sltu	$at, $t8, $t6
+	beqz	$at, 12f
+	nop
+	j	\up\()2
+	lw	$t6, F_RET($a0)
+11:	NOPS	2
+12:
+	.endm
+
+	.macro NEAR4 up
+	CFC	14, 26
+	lw	$t7, C_SZ($t3)
+	sra	$t6, $t6, 1
+	sltu	$at, $t7, $t6
+	beqz	$at, 11f
+	lw	$t7, C_SZ($t4)
+	lw	$t8, C_SZ($t5)
+	sltu	$at, $t7, $t6
+	beqz	$at, 19f
+	lw	$v0, C_SZ($t9)
+	sltu	$at, $t8, $t6
+	beqz	$at, 12f
+	sltu	$at, $v0, $t6
+	beqz	$at, 12f
+	nop
+	NOPS	1
+	j	\up\()2
+	lw	$t6, F_RET($a0)
+11:	NOPS	2
+19:	NOPS	1
+12:
+	.endm
+
+# SIDE3 and SIDE4 load a piece's places on one axis and go to lo and hi when the first is off the
+# low or high side. RUNLOW and RUNHIGH are what is there: each corner on the same side costs 4
+# cycles, and if all are, what follows them is where the piece goes.
+	.macro SIDE3 cf, lim, off, lo, hi
+	CFC	0, \cf
+	lh	$t6, \lim($v1)
+	lh	$t7, \lim + 2($v1)
+	lh	$t8, \off($t3)
+	lh	$v0, \off($t4)
+	lh	$t1, \off($t5)
+	slt	$at, $t8, $t6
+	bnez	$at, \lo\()f
+	slt	$at, $t7, $t8
+	bnez	$at, \hi\()f
+	slt	$at, $t7, $v0
+	.endm
+
+	.macro SIDE4 cf, lim, off, lo, hi
+	CFC	0, \cf
+	lh	$t6, \lim($v1)
+	lh	$t7, \lim + 2($v1)
+	lh	$t8, \off($t3)
+	lh	$v0, \off($t4)
+	lh	$t1, \off($t5)
+	lh	$t2, \off($t9)
+	slt	$at, $t8, $t6
+	bnez	$at, \lo\()f
+	slt	$at, $t7, $t8
+	bnez	$at, \hi\()f
+	slt	$at, $t7, $v0
+	.endm
+
+	.macro RUNLOW3 lab, way
+\lab\():
+	NOPS	1
+	slt	$at, $v0, $t6
+	beqz	$at, \way\()b
+	slt	$at, $t1, $t6
+	beqz	$at, \way\()b
+	nop
+	.endm
+	.macro RUNHIGH3 lab, way, up
+\lab\():
+	beqz	$at, \way\()b
+	slt	$at, $t7, $t1
+	beqz	$at, \way\()b
+	.ifb \up
+	nop
+	.else
+	lw	$t6, F_RET($a0)
+	.endif
+	.endm
+	.macro RUNLOW4 lab, way
+\lab\():
+	NOPS	1
+	slt	$at, $v0, $t6
+	beqz	$at, \way\()b
+	slt	$at, $t1, $t6
+	beqz	$at, \way\()b
+	slt	$at, $t2, $t6
+	beqz	$at, \way\()b
+	nop
+	.endm
+	.macro RUNHIGH4 lab, way
+\lab\():
+	beqz	$at, \way\()b
+	slt	$at, $t7, $t1
+	beqz	$at, \way\()b
+	slt	$at, $t7, $t2
+	beqz	$at, \way\()b
+	nop
+	.endm
+
+# TMID makes the three middles of the triangle t3, t4, t5 for the signed halfword at off, and TBYTE
+# for the byte, which a color or texture coordinate is, one at a time as each keeps what's above it.
+	.macro TMID off, l, sh
+	\l	$t6, \off($t3)
+	\l	$t7, \off($t4)
+	\l	$t8, \off($t5)
+	TMIDREST \off, \sh
+	.endm
+	.macro TMIDREST off, sh
+	addu	$at, $t6, $t7
+	sra	$at, $at, 1
+	\sh	$at, M0 + \off($a0)
+	addu	$at, $t7, $t8
+	sra	$at, $at, 1
+	\sh	$at, M1 + \off($a0)
+	addu	$at, $t8, $t6
+	sra	$at, $at, 1
+	\sh	$at, M2 + \off($a0)
+	.endm
+
+# QMID1 and QMID2 are a quad's: QMID1 the three middles a cut makes first, QMID2 the fourth and the
+# center, by the sum of two corners and the middle's own sum.
+	.macro QLOAD off, l
+	\l	$t6, \off($t3)
+	\l	$t7, \off($t4)
+	\l	$t8, \off($t5)
+	\l	$v0, \off($t9)
+	.endm
+	.macro QMID1 off, sh
+	addu	$at, $t6, $t7
+	sra	$at, $at, 1
+	\sh	$at, QAB + \off($a0)
+	addu	$t2, $t7, $v0
+	sra	$at, $t2, 1
+	\sh	$at, QBE + \off($a0)
+	addu	$at, $v0, $t8
+	sra	$at, $at, 1
+	\sh	$at, QEC + \off($a0)
+	.endm
+	.macro QMID2 off, sh
+	addu	$t1, $t8, $t6
+	sra	$at, $t1, 1
+	\sh	$at, QCA + \off($a0)
+	addu	$t1, $t1, $t2
+	sra	$t1, $t1, 2
+	\sh	$t1, QMD + \off($a0)
+	.endm
+
+# TPACK and QPACK write a packet from its cells, each a register and an offset. t1 is its length,
+# t2 the flat color or the code's byte, t8 and v0 the first corners' palette and page.
+	.macro PTAG t, g, size
+	or	$a3, $a3, $t1
+	sw	$a3, 0($a2)
+	sll	$a3, $a2, 8
+	srl	$a3, $a3, 8
+	addiu	$a2, $a2, \size
+	.endm
+
+	.macro TPACK t, g, c0, o0, c1, o1, c2, o2
+	.set TS, 4 * (1 + \t + \g)
+	lw	$at, C_SXY + \o0(\c0)
+	lw	$t6, C_SXY + \o1(\c1)
+	lw	$t7, C_SXY + \o2(\c2)
+	sw	$at, 8($a2)
+	sw	$t6, 8 + TS($a2)
+	sw	$t7, 8 + 2 * TS($a2)
+	.if \t
+	lhu	$at, C_UV + \o0(\c0)
+	lhu	$t6, C_UV + \o1(\c1)
+	lhu	$t7, C_UV + \o2(\c2)
+	or	$at, $at, $t8
+	or	$t6, $t6, $v0
+	sw	$at, 12($a2)
+	sw	$t6, 12 + TS($a2)
+	sw	$t7, 12 + 2 * TS($a2)
+	.endif
+	.if \g
+	sb	$t2, C_COL + 3 + \o0(\c0)
+	lw	$at, C_COL + \o0(\c0)
+	lw	$t6, C_COL + \o1(\c1)
+	lw	$t7, C_COL + \o2(\c2)
+	sw	$at, 4($a2)
+	sw	$t6, 4 + TS($a2)
+	sw	$t7, 4 + 2 * TS($a2)
+	.else
+	sw	$t2, 4($a2)
+	.endif
+	PTAG	\t, \g, 4 + 3 * TS + (1 - \g) * 4
+	.endm
+
+	.macro QPACK t, g, c0, o0, c1, o1, c2, o2, c3, o3
+	.set TS, 4 * (1 + \t + \g)
+	lw	$at, C_SXY + \o0(\c0)
+	lw	$t6, C_SXY + \o1(\c1)
+	lw	$t7, C_SXY + \o2(\c2)
+	lw	$t0, C_SXY + \o3(\c3)
+	sw	$at, 8($a2)
+	sw	$t6, 8 + TS($a2)
+	sw	$t7, 8 + 2 * TS($a2)
+	sw	$t0, 8 + 3 * TS($a2)
+	.if \t
+	lhu	$at, C_UV + \o0(\c0)
+	lhu	$t6, C_UV + \o1(\c1)
+	lhu	$t7, C_UV + \o2(\c2)
+	lhu	$t0, C_UV + \o3(\c3)
+	or	$at, $at, $t8
+	or	$t6, $t6, $v0
+	sw	$at, 12($a2)
+	sw	$t6, 12 + TS($a2)
+	sw	$t7, 12 + 2 * TS($a2)
+	sw	$t0, 12 + 3 * TS($a2)
+	.endif
+	.if \g
+	sb	$t2, C_COL + 3 + \o0(\c0)
+	lw	$at, C_COL + \o0(\c0)
+	lw	$t6, C_COL + \o1(\c1)
+	lw	$t7, C_COL + \o2(\c2)
+	lw	$t0, C_COL + \o3(\c3)
+	sw	$at, 4($a2)
+	sw	$t6, 4 + TS($a2)
+	sw	$t7, 4 + 2 * TS($a2)
+	sw	$t0, 4 + 3 * TS($a2)
+	.else
+	sw	$t2, 4($a2)
+	.endif
+	PTAG	\t, \g, 4 + 4 * TS + (1 - \g) * 4
+	.endm
+
+# LEAFHEAD loads what every packet of a cut's last level has.
+	.macro LEAFHEAD t, g, n
+	lui	$t1, (4 * 0 + (\n) * (1 + \t + \g) + 1 - \g) << 8
+	.if \g
+	lbu	$t2, CS_A3 + 3($v1)
+	.else
+	lw	$t2, CS_COL($v1)
+	.endif
+	.if \t
+	lw	$t8, CS_UV0($v1)
+	lw	$v0, CS_UV1($v1)
+	.endif
+	.endm
+
+# CUTTRI cuts a triangle: its corners in t3 to t5, a0 its level's frame, a1 that level, a2 the next
+# packet, a3 the entry's first packet and v1 gso_cut. It returns to ra with a2 and a3 moved on and v1
+# as it was. The last level links its four leaves.
+#
+# pre is the instructions from the last load to RTPT, n1 from RTPT to where the points are put, and
+# n2 from there to the next piece's check. leaf is the instructions from the points to the way up.
+# early has the frame written ahead of the points, where n2 is too short for it.
+	.macro TNEXT name, a, b, c
+	.ifb \a
+	addiu	$t3, $a0, M0
+	.else
+	lw	$t3, \a($a0)
+	.endif
+	addiu	$t4, $a0, \b
+	addiu	$t5, $a0, \c
+	sw	$t3, F_SIZE + F_A($a0)
+	sw	$t4, F_SIZE + F_B($a0)
+	sw	$t5, F_SIZE + F_C($a0)
+	addiu	$a0, $a0, F_SIZE
+	bal	cut_\name
+	sw	$ra, F_RET($a0)
+	.endm
+
+	.macro CUTTRI name, t, g, pre, n1, n2, leaf, early
+	.section .text.GsSortCut.\name, "ax", @progbits
+	.align 2
+cut_\name\():
+	NEAR3	cut_\name\()_up
+	SIDE3	24, CS_LIMX, C_SXY, 13, 14
+15:	NOPS	6
+	SIDE3	25, CS_LIMY, C_SXY + 2, 16, 17
+18:	TMID	0, lh, sh
+	TMID	2, lh, sh
+	TMID	C_Z, lh, sh
+	NOPS	2
+	lwc2	$0, M0($a0)
+	lwc2	$1, M0 + C_Z($a0)
+	lwc2	$2, M1($a0)
+	lwc2	$3, M1 + C_Z($a0)
+	lwc2	$4, M2($a0)
+	lwc2	$5, M2 + C_Z($a0)
+	G
+	.if \t && \g
+	TMID	C_UV, lbu, sb
+	.else
+	subu	$v0, $a0, $a1
+	.if \g
+	lbu	$t6, C_COL($t3)
+	lbu	$t7, C_COL($t4)
+	.endif
+	.endif
+	GAP	\pre
+	RTPT
+	G
+	.if \t && \g
+	subu	$v0, $a0, $a1
+	TMID	C_UV + 1, lbu, sb
+	.elseif \t
+	TMID	C_UV, lbu, sb
+	TMID	C_UV + 1, lbu, sb
+	.endif
+	.if \g
+	.if \t
+	TMID	C_COL, lbu, sb
+	.else
+	lbu	$t8, C_COL($t5)
+	TMIDREST C_COL, sb
+	.endif
+	TMID	C_COL + 1, lbu, sb
+	TMID	C_COL + 2, lbu, sb
+	.endif
+	.if \early == 0
+	GAP	\n1 - 2
+	.endif
+	beqz	$v0, 21f
+	nop
+	.if \early
+	addiu	$t6, $a0, M0
+	addiu	$t7, $a0, M2
+	sw	$t3, F_SIZE + F_A($a0)
+	sw	$t6, F_SIZE + F_B($a0)
+	sw	$t7, F_SIZE + F_C($a0)
+	GAP	\n1
+	.endif
+	swc2	$17, M0 + C_SZ($a0)
+	swc2	$18, M1 + C_SZ($a0)
+	swc2	$19, M2 + C_SZ($a0)
+	swc2	$12, M0 + C_SXY($a0)
+	swc2	$13, M1 + C_SXY($a0)
+	swc2	$14, M2 + C_SXY($a0)
+	G
+	addiu	$t4, $a0, M0
+	addiu	$t5, $a0, M2
+	.if \early == 0
+	sw	$t3, F_SIZE + F_A($a0)
+	sw	$t4, F_SIZE + F_B($a0)
+	sw	$t5, F_SIZE + F_C($a0)
+	.endif
+	addiu	$a0, $a0, F_SIZE
+	GAP	\n2 - 2
+	bal	cut_\name
+	sw	$ra, F_RET($a0)
+	# The second piece, the third and the last.
+	TNEXT	\name, F_B, M1, M0
+	TNEXT	\name, F_C, M2, M1
+	TNEXT	\name, , M1, M2
+	lw	$t6, F_RET($a0)
+	nop
+	NOPS	2
+	jr	$t6
+	addiu	$a0, $a0, -F_SIZE
+21:
+	.if \early
+	NOPS	\early
+	.endif
+	swc2	$12, M0 + C_SXY($a0)
+	swc2	$13, M1 + C_SXY($a0)
+	swc2	$14, M2 + C_SXY($a0)
+	G
+	LEAFHEAD \t, \g, 3
+	TPACK	\t, \g, $t4, 0, $a0, M1, $a0, M0
+	TPACK	\t, \g, $a0, M0, $a0, M1, $a0, M2
+	TPACK	\t, \g, $t3, 0, $a0, M0, $a0, M2
+	TPACK	\t, \g, $t5, 0, $a0, M2, $a0, M1
+	GAPS	\leaf - 1
+	j	cut_\name\()_up2
+	lw	$t6, F_RET($a0)
+	RUNLOW3	13, 15
+	NOPS	6
+	j	cut_\name\()_up2
+	lw	$t6, F_RET($a0)
+	RUNHIGH3 14, 15
+	NOPS	2
+	j	cut_\name\()_up2
+	lw	$t6, F_RET($a0)
+	RUNLOW3	16, 18
+	NOPS	2
+	j	cut_\name\()_up2
+	lw	$t6, F_RET($a0)
+	RUNHIGH3 17, 18, 1
+cut_\name\()_up2:
+	nop
+	jr	$t6
+	addiu	$a0, $a0, -F_SIZE
+	.endm
+
+	.set FT_RET, 84
+	.set FT_SIZE, 88
+	.set FQ_RET, 136
+	.set FQ_SIZE, 140
+	.set F_A, 72
+	.set F_B, 76
+	.set F_C, 80
+	.set F_RET, 84
+	.set F_SIZE, 88
+	CUTTRI	f3, 0, 0, 1, 12, 5, 98, 6
+	CUTTRI	ft3, 1, 0, 1, 27, 13, 150, 0
+	CUTTRI	g3, 0, 1, 3, 37, 13, 126, 0
+	CUTTRI	gt3, 1, 1, 12, 52, 13, 174, 0
+
+# QCHECK is a quad's checks and the start of its z: the sum of a's and c's and ca's z, kept in t0 over
+# the check on y.
+	.macro QSTART name
+	.section .text.GsSortCut.\name, "ax", @progbits
+	.align 2
+cut_\name\():
+	NEAR4	cut_\name\()_up
+	SIDE4	24, CS_LIMX, C_SXY, 13, 14
+15:
+	.endm
+
+	.macro QCHECK name
+	QSTART	\name
+	lh	$at, C_Z($t3)
+	lh	$t0, C_Z($t5)
+	nop
+	addu	$t0, $t0, $at
+	sra	$at, $t0, 1
+	sh	$at, QCA + C_Z($a0)
+	SIDE4	25, CS_LIMY, C_SXY + 2, 16, 17
+18:
+	.endm
+
+# QFRAME saves what's needed of the piece being cut for its other three pieces, and QRET where to go
+# after the first. QDOWN goes on to the first.
+	.macro QKID
+	addiu	$t6, $a0, QAB
+	sw	$t3, F_SIZE + F_A($a0)
+	sw	$t6, F_SIZE + F_B($a0)
+	addiu	$t6, $a0, QCA
+	sw	$t6, F_SIZE + F_C($a0)
+	addiu	$t6, $a0, QMD
+	sw	$t6, F_SIZE + F_E($a0)
+	.endm
+	.macro QDOWNG name, n
+	addiu	$t4, $a0, QAB
+	addiu	$t5, $a0, QCA
+	addiu	$t9, $a0, QMD
+	addiu	$a0, $a0, F_SIZE
+	GAP	\n - 2
+	bal	cut_\name
+	sw	$ra, F_RET($a0)
+	QNEXT	\name, F_B, QBE, QAB
+	QNEXT	\name, F_C, QCA, QEC
+	QNEXT	\name, F_E, QEC, QBE
+	lw	$t6, F_RET($a0)
+	nop
+	NOPS	2
+	jr	$t6
+	addiu	$a0, $a0, -F_SIZE
+	.endm
+	.macro QNEXT name, a, b, c
+	lw	$t3, \a($a0)
+	addiu	$t4, $a0, \b
+	addiu	$t5, $a0, \c
+	addiu	$t9, $a0, QMD
+	sw	$t3, F_SIZE + F_A($a0)
+	sw	$t4, F_SIZE + F_B($a0)
+	sw	$t5, F_SIZE + F_C($a0)
+	sw	$t9, F_SIZE + F_E($a0)
+	addiu	$a0, $a0, F_SIZE
+	bal	cut_\name
+	sw	$ra, F_RET($a0)
+	.endm
+
+# QTAIL is what follows a quad's leaves.
+	.macro QTAIL name
+	QPACK	QT, QG, $t3, 0, $a0, QAB, $a0, QCA, $a0, QMD
+	QPACK	QT, QG, $t4, 0, $a0, QBE, $a0, QAB, $a0, QMD
+	QPACK	QT, QG, $t5, 0, $a0, QCA, $a0, QEC, $a0, QMD
+	QPACK	QT, QG, $t9, 0, $a0, QEC, $a0, QBE, $a0, QMD
+	.endm
+
+	.macro QEND name, leaf
+	GAPS	\leaf - 1
+	j	cut_\name\()_up2
+	lw	$t6, F_RET($a0)
+	RUNLOW4	13, 15
+	NOPS	7
+	j	cut_\name\()_up2
+	lw	$t6, F_RET($a0)
+	RUNHIGH4 14, 15
+	NOPS	3
+	j	cut_\name\()_up2
+	lw	$t6, F_RET($a0)
+	RUNLOW4	16, 18
+	NOPS	3
+	j	cut_\name\()_up2
+	lw	$t6, F_RET($a0)
+	RUNHIGH4 17, 18
+	lw	$t6, F_RET($a0)
+cut_\name\()_up2:
+	nop
+	jr	$t6
+	addiu	$a0, $a0, -F_SIZE
+	.endm
+
+# The three middles first, in x, y and z, and the rest of the five.
+	.macro QXYZ
+	QLOAD	0, lh
+	QMID1	0, sh
+	QMID2	0, sh
+	QLOAD	2, lh
+	QMID1	2, sh
+	QMID2	2, sh
+	QLOAD	C_Z, lh
+	QMID1	C_Z, sh
+	addu	$t1, $t0, $t2
+	sra	$t1, $t1, 2
+	sh	$t1, QMD + C_Z($a0)
+	.endm
+
+	.macro QLOAD012
+	lwc2	$0, QAB($a0)
+	lwc2	$1, QAB + C_Z($a0)
+	lwc2	$2, QCA($a0)
+	lwc2	$3, QCA + C_Z($a0)
+	lwc2	$4, QMD($a0)
+	lwc2	$5, QMD + C_Z($a0)
+	.endm
+	.macro QLOAD34
+	lwc2	$0, QBE($a0)
+	lwc2	$1, QBE + C_Z($a0)
+	lwc2	$2, QEC($a0)
+	lwc2	$3, QEC + C_Z($a0)
+	.endm
+	.macro QPUT012
+	swc2	$12, QAB + C_SXY($a0)
+	swc2	$13, QCA + C_SXY($a0)
+	swc2	$14, QMD + C_SXY($a0)
+	swc2	$17, QAB + C_SZ($a0)
+	swc2	$18, QCA + C_SZ($a0)
+	swc2	$19, QMD + C_SZ($a0)
+	.endm
+
+# A flat quad does its last three middles after the first RTPT, on the fourth and the center.
+	.macro CUTF4 name, leaf
+	.set QT, 0
+	.set QG, 0
+	QSTART	\name
+	lh	$t0, C_Z($t3)
+	lh	$ra, C_Z($t5)
+	nop
+	addu	$ra, $ra, $t0
+	sra	$at, $ra, 1
+	sh	$at, QCA + C_Z($a0)
+	SIDE4	25, CS_LIMY, C_SXY + 2, 16, 17
+18:	lh	$t6, 0($t3)
+	lh	$t7, 0($t4)
+	lh	$t8, 0($t5)
+	addu	$at, $t6, $t7
+	sra	$at, $at, 1
+	sh	$at, QAB($a0)
+	addu	$at, $t8, $t6
+	sra	$at, $at, 1
+	sh	$at, QCA($a0)
+	lh	$t6, 2($t3)
+	lh	$t7, 2($t4)
+	lh	$t8, 2($t5)
+	addu	$at, $t6, $t7
+	sra	$at, $at, 1
+	sh	$at, QAB + 2($a0)
+	addu	$at, $t8, $t6
+	sra	$at, $at, 1
+	sh	$at, QCA + 2($a0)
+	lh	$v0, C_Z($t9)
+	lh	$t7, C_Z($t4)
+	lh	$t8, C_Z($t5)
+	addu	$at, $t0, $t7
+	sra	$at, $at, 1
+	sh	$at, QAB + C_Z($a0)
+	addu	$at, $t7, $v0
+	sra	$at, $at, 1
+	sh	$at, QBE + C_Z($a0)
+	NOPS	2
+	lwc2	$0, QAB($a0)
+	lwc2	$1, QAB + C_Z($a0)
+	lwc2	$2, QCA($a0)
+	lwc2	$3, QCA + C_Z($a0)
+	nop
+	RTPT
+	G
+	addu	$at, $v0, $t8
+	sra	$at, $at, 1
+	sh	$at, QEC + C_Z($a0)
+	NOPS	1
+	addu	$ra, $t0, $t7
+	sra	$ra, $ra, 1
+	addu	$ra, $ra, $at
+	sra	$ra, $ra, 1
+	sh	$ra, QMD + C_Z($a0)
+	QLOAD	0, lh
+	addu	$t1, $t8, $t6
+	addu	$t2, $t7, $v0
+	sra	$at, $t2, 1
+	sh	$at, QBE($a0)
+	addu	$at, $v0, $t8
+	sra	$at, $at, 1
+	sh	$at, QEC($a0)
+	addu	$t1, $t1, $t2
+	sra	$t1, $t1, 2
+	sh	$t1, QMD($a0)
+	QLOAD	2, lh
+	addu	$t1, $t8, $t6
+	addu	$t2, $t7, $v0
+	sra	$at, $t2, 1
+	sh	$at, QBE + 2($a0)
+	addu	$at, $v0, $t8
+	sra	$at, $at, 1
+	sh	$at, QEC + 2($a0)
+	addu	$t1, $t1, $t2
+	sra	$t1, $t1, 2
+	sh	$t1, QMD + 2($a0)
+	GAP	39
+	swc2	$12, QAB + C_SXY($a0)
+	swc2	$13, QCA + C_SXY($a0)
+	swc2	$17, QAB + C_SZ($a0)
+	swc2	$18, QCA + C_SZ($a0)
+	lwc2	$0, QBE($a0)
+	lwc2	$1, QBE + C_Z($a0)
+	lwc2	$2, QEC($a0)
+	lwc2	$3, QEC + C_Z($a0)
+	lwc2	$4, QMD($a0)
+	lwc2	$5, QMD + C_Z($a0)
+	nop
+	RTPT
+	G
+	subu	$at, $a0, $a1
+	beqz	$at, 21f
+	nop
+	QKID
+	GAP	14
+	swc2	$12, QBE + C_SXY($a0)
+	swc2	$13, QEC + C_SXY($a0)
+	swc2	$14, QMD + C_SXY($a0)
+	swc2	$17, QBE + C_SZ($a0)
+	swc2	$18, QEC + C_SZ($a0)
+	swc2	$19, QMD + C_SZ($a0)
+	G
+	QDOWNG	\name, 6
+21:	NOPS	6
+	swc2	$12, QBE + C_SXY($a0)
+	swc2	$13, QEC + C_SXY($a0)
+	swc2	$14, QMD + C_SXY($a0)
+	G
+	LEAFHEAD 0, 0, 4
+	QTAIL	\name
+	QEND	\name, \leaf
+	.endm
+
+# The other quads do all five before the first RTPT, and what they make of texture coordinates and
+# color goes on through both RTPTs. A last level does that after the points are stored.
+	.macro BL off
+	QLOAD	\off, lbu
+	.endm
+	.macro BAB off
+	addu	$at, $t6, $t7
+	srl	$at, $at, 1
+	sb	$at, QAB + \off($a0)
+	.endm
+	.macro BBE off
+	addu	$t2, $t7, $v0
+	srl	$at, $t2, 1
+	sb	$at, QBE + \off($a0)
+	.endm
+	.macro BEC off
+	addu	$at, $v0, $t8
+	srl	$at, $at, 1
+	sb	$at, QEC + \off($a0)
+	.endm
+	.macro BCA off
+	addu	$t1, $t8, $t6
+	srl	$at, $t1, 1
+	sb	$at, QCA + \off($a0)
+	.endm
+	.macro BMD off
+	addu	$t1, $t1, $t2
+	srl	$t1, $t1, 2
+	sb	$t1, QMD + \off($a0)
+	.endm
+	.macro BALL off
+	BL	\off
+	BAB	\off
+	BBE	\off
+	BEC	\off
+	BCA	\off
+	BMD	\off
+	.endm
+
+# CUTQ's four stretches: before the second RTPT and after it, on the way down and at the last level.
+	.macro CUTQ name, t, g, n1, n2, n3, leaf
+	.set QT, \t
+	.set QG, \g
+	QCHECK	\name
+	QXYZ
+	NOPS	5
+	QLOAD012
+	nop
+	RTPT
+	G
+	subu	$at, $a0, $a1
+	beqz	$at, 21f
+	nop
+	QKID
+	.if \g
+	BALL	C_COL
+	BL	C_COL + 1
+	BAB	C_COL + 1
+	.else
+	BL	C_UV
+	BAB	C_UV
+	.endif
+	GAP	\n1
+	QPUT012
+	QLOAD34
+	nop
+	RTPT
+	G
+	.if \g
+	BBE	C_COL + 1
+	BEC	C_COL + 1
+	BCA	C_COL + 1
+	BMD	C_COL + 1
+	BALL	C_COL + 2
+	.if \t
+	BALL	C_UV
+	BL	C_UV + 1
+	addu	$at, $t6, $t7
+	srl	$at, $at, 1
+	.endif
+	.else
+	BBE	C_UV
+	BEC	C_UV
+	BCA	C_UV
+	BMD	C_UV
+	BALL	C_UV + 1
+	.endif
+	GAP	\n2
+	swc2	$12, QBE + C_SXY($a0)
+	swc2	$13, QEC + C_SXY($a0)
+	swc2	$17, QBE + C_SZ($a0)
+	swc2	$18, QEC + C_SZ($a0)
+	G
+	.if \t && \g
+	sb	$at, QAB + C_UV + 1($a0)
+	BBE	C_UV + 1
+	BEC	C_UV + 1
+	BCA	C_UV + 1
+	BMD	C_UV + 1
+	.endif
+	QDOWNG	\name, \n3
+21:
+	G
+	.if \g
+	BALL	C_COL
+	BL	C_COL + 1
+	BAB	C_COL + 1
+	BBE	C_COL + 1
+	BEC	C_COL + 1
+	.else
+	BL	C_UV
+	BAB	C_UV
+	BBE	C_UV
+	BEC	C_UV
+	.endif
+	GAP	\n1 - 3
+	QPUT012
+	QLOAD34
+	nop
+	RTPT
+	G
+	.if \g
+	BCA	C_COL + 1
+	BMD	C_COL + 1
+	BALL	C_COL + 2
+	.if \t
+	BALL	C_UV
+	BL	C_UV + 1
+	BAB	C_UV + 1
+	BBE	C_UV + 1
+	.endif
+	.else
+	BCA	C_UV
+	BMD	C_UV
+	BALL	C_UV + 1
+	.endif
+	GAP	\n2 - 5 * (1 - \t * \g)
+	swc2	$12, QBE + C_SXY($a0)
+	swc2	$13, QEC + C_SXY($a0)
+	.if \t && \g
+	swc2	$17, QBE + C_SZ($a0)
+	swc2	$18, QEC + C_SZ($a0)
+	.endif
+	G
+	.if \t && \g
+	BEC	C_UV + 1
+	BCA	C_UV + 1
+	BMD	C_UV + 1
+	.endif
+	LEAFHEAD \t, \g, 4
+	QTAIL	\name
+	QEND	\name, \leaf
+	.endm
+
+	.set F_A, 120
+	.set F_B, 124
+	.set F_C, 128
+	.set F_E, 132
+	.set F_RET, 136
+	.set F_SIZE, 140
+	CUTF4	f4, 110
+	CUTQ	ft4, 1, 0, 18, 32, 6, 166
+	CUTQ	g4, 0, 1, 37, 32, 6, 142
+	CUTQ	gt4, 1, 1, 37, 56, 20, 207
+
+# What a head does: a kind's way in, its polygon as far as the cut, and its way out. Its parts take
+# a kind's places from PSET. light is 0 for an unlit body, 1 lit, 2 fog and 3 light off.
+#
+# CHSTART is a run's start and CHNEXT a polygon's. x is the instructions of CHNEXT, and s those from
+# the jump to the run's start to the first polygon.
+	.macro CHTOPF q
+	lw	$t7, CS_SCR($t6)
+	nop
+	.if \q
+	addiu	$t8, $t7, CS_ROOT
+	sw	$t8, CS_ROOT + 4 * C_SIZE + 120($t7)
+	addiu	$t8, $t7, CS_ROOT + C_SIZE
+	sw	$t8, CS_ROOT + 4 * C_SIZE + 124($t7)
+	addiu	$t8, $t7, CS_ROOT + 2 * C_SIZE
+	sw	$t8, CS_ROOT + 4 * C_SIZE + 128($t7)
+	addiu	$t8, $t7, CS_ROOT + 3 * C_SIZE
+	sw	$t8, CS_ROOT + 4 * C_SIZE + 132($t7)
+	.else
+	addiu	$t8, $t7, CS_ROOT
+	sw	$t8, CS_ROOT + 3 * C_SIZE + 72($t7)
+	addiu	$t8, $t7, CS_ROOT + C_SIZE
+	sw	$t8, CS_ROOT + 3 * C_SIZE + 76($t7)
+	addiu	$t8, $t7, CS_ROOT + 2 * C_SIZE
+	sw	$t8, CS_ROOT + 3 * C_SIZE + 80($t7)
+	.endif
+	.endm
+
+	.macro CHSTART name, light, t, s, x, dbl, q
+	.section .text.GsSortCut.c\name, "ax", @progbits
+	.align 2
+	.type gso_c\name, @function
+gso_c\name\():
+	G
+	.ifnb \dbl
+	srl	$at, $t6, 17
+	andi	$at, $at, 1
+	beqz	$at, 3f
+	lui	$at, %hi(gso_c\dbl)
+	addiu	$at, $at, %lo(gso_c\dbl)
+	jr	$at
+	nop
+3:	G
+	.endif
+	# The code: a textured polygon has no use for the unlit bit, and its color is fixed.
+	srl	$t6, $t6, 24
+	.if \t && (\light == 0)
+	andi	$t6, $t6, 0xfe
+	.endif
+	sll	$t6, $t6, 24
+	or	$a3, $a3, $t6
+	lui	$t6, %hi(gso_cut)
+	addiu	$t6, $t6, %lo(gso_cut)
+	sw	$a3, CS_A3($t6)
+	sw	$t0, CS_T0($t6)
+	sw	$t1, CS_T1($t6)
+	sw	$t2, CS_T2($t6)
+	.if \light == 0 || \light == 3
+	move	$v1, $t6
+	.endif
+	sw	$v1, CS_V1($t6)
+	.if \t
+	lui	$at, 0xfd00
+	and	$at, $at, $a3
+	lui	$t7, 0x80
+	ori	$t7, $t7, 0x8080
+	or	$at, $at, $t7
+	sw	$at, CS_RGBC($t6)
+	.endif
+	CHTOPF	0\q
+	.endm
+
+# CHNEXT finds a polygon's vertices and for a lit triangle its normals, in t7 to v0, and copies its
+# points. Lit quads find their normals with the last polygon's end.
+	.macro CHNORM g
+	lhu	$t7, P_N0($a0)
+	.if \g
+	lhu	$t8, P_N1($a0)
+	lhu	$v0, P_N2($a0)
+	.else
+	nop
+	.endif
+	sll	$t7, $t7, 3
+	.if \g
+	sll	$t8, $t8, 3
+	sll	$v0, $v0, 3
+	.endif
+	addu	$t7, $t7, $v1
+	.if \g
+	addu	$t8, $t8, $v1
+	addu	$v0, $v0, $v1
+	.endif
+	.endm
+
+	.macro COPYV r, i
+	lw	$at, 0(\r)
+	lw	$ra, 4(\r)
+	sw	$at, CS_ROOT + \i * C_SIZE($t0)
+	sw	$ra, CS_ROOT + \i * C_SIZE + 4($t0)
+	.endm
+
+	.macro CHNEXT light, t, g, q, x
+7:	G
+	.if \q
+	lhu	$t9, P_V3($a0)
+	.endif
+	PREFETCH P_V0, P_V1, P_V2
+	.if \q
+	sll	$t9, $t9, 3
+	addu	$t9, $t9, $t0
+	.endif
+	.if \q == 0 && (\light == 1 || \light == 2)
+	CHNORM	\g
+	.endif
+	.if \light == 0 || \light == 3
+	lw	$t0, CS_SCR($v1)
+	.else
+	lui	$t6, %hi(gso_cut)
+	addiu	$t6, $t6, %lo(gso_cut)
+	lw	$t0, CS_SCR($t6)
+	.endif
+	COPYV	$t3, 0
+	COPYV	$t4, 1
+	COPYV	$t5, 2
+	.if \q
+	COPYV	$t9, 3
+	.endif
+	.if \t == 0 && (\light == 1 || \light == 2)
+	lw	$at, P_COL($a0)
+	nop
+	sll	$at, $at, 8
+	srl	$at, $at, 8
+	or	$at, $at, $a3
+	sw	$at, CS_RGBC($t6)
+	.endif
+	GAPS	\x
+	.endm
+
+# CHTOP is a polygon's first points, FLAG, NCLIP and the way out at label 6 for one turned away.
+	.macro CHTOP
+1:	lwc2	$0, 0($t3)
+	lwc2	$1, 4($t3)
+	lwc2	$2, 0($t4)
+	lwc2	$3, 4($t4)
+	lwc2	$4, 0($t5)
+	lwc2	$5, 4($t5)
+	nop
+	RTPT
+	nop
+	CFLAG
+	nop
+	nop
+	NCLIP
+	lui	$v1, %hi(gso_cut)
+	addiu	$v1, $v1, %lo(gso_cut)
+	nop
+	mfc2	$t6, $24
+	nop
+	blez	$t6, 6f
+	nop
+	.endm
+
+# CHZ takes the depth in t6 to the entry of the ordering table, and a3 to what it held.
+	.macro CHZ
+	nop
+	srav	$t6, $t6, $t2
+	sll	$t6, $t6, 2
+	addu	$t6, $t6, $t1
+	sw	$t6, CS_TAG($v1)
+	lw	$a3, 0($t6)
+	.endm
+
+# CHPOLY takes the polygon's texture coordinates, and color if flat, to where the cut wants them.
+	.macro CHPOLY light, t, g, q
+	sll	$a3, $a3, 8
+	srl	$a3, $a3, 8
+	.if \t
+	lw	$t6, 4($a0)
+	lw	$at, 8($a0)
+	sw	$t6, CS_ROOT + C_UV($t0)
+	sw	$at, CS_ROOT + C_SIZE + C_UV($t0)
+	srl	$t6, $t6, 16
+	srl	$at, $at, 16
+	sll	$t7, $at, 16
+	or	$t6, $t6, $t7
+	sw	$t6, W_UV($t0)
+	sll	$t6, $t6, 16
+	sw	$t6, CS_UV0($v1)
+	sw	$t7, CS_UV1($v1)
+	lw	$t6, 12($a0)
+	.if \q
+	lw	$at, 16($a0)
+	.else
+	nop
+	.endif
+	sw	$t6, CS_ROOT + 2 * C_SIZE + C_UV($t0)
+	.if \q
+	sw	$at, CS_ROOT + 3 * C_SIZE + C_UV($t0)
+	.endif
+	.endif
+	lbu	$t7, CS_A3 + 3($v1)
+	lw	$at, CS_W5($v1)
+	nop
+	sw	$at, W_END($t0)
+	.if \g
+	# Every corner's color word has the code on top.
+	.if \light == 0
+	lw	$t6, P_COL($a0)
+	lw	$at, P_COL + 4($a0)
+	sw	$t6, CS_ROOT + C_COL($t0)
+	sw	$at, CS_ROOT + C_SIZE + C_COL($t0)
+	lw	$t6, P_COL + 8($a0)
+	.if \q
+	lw	$at, P_COL + 12($a0)
+	.else
+	nop
+	.endif
+	sw	$t6, CS_ROOT + 2 * C_SIZE + C_COL($t0)
+	.if \q
+	sw	$at, CS_ROOT + 3 * C_SIZE + C_COL($t0)
+	.endif
+	.elseif \light == 3
+	.if \t
+	lw	$t6, CS_RGBC($v1)
+	nop
+	.else
+	lw	$t6, P_COL($a0)
+	nop
+	.endif
+	sw	$t6, CS_ROOT + C_COL($t0)
+	sw	$t6, CS_ROOT + C_SIZE + C_COL($t0)
+	sw	$t6, CS_ROOT + 2 * C_SIZE + C_COL($t0)
+	.if \q
+	sw	$t6, CS_ROOT + 3 * C_SIZE + C_COL($t0)
+	.endif
+	.endif
+	sb	$t7, W_COL + 3($t0)
+	.else
+	# A flat polygon has its color in one place.
+	.if \light == 0
+	lw	$t6, P_COL($a0)
+	nop
+	sw	$t6, W_COL($t0)
+	sb	$t7, W_COL + 3($t0)
+	lw	$t6, W_COL($t0)
+	.elseif \light == 3
+	.if \t
+	lw	$t6, CS_RGBC($v1)
+	nop
+	.else
+	lw	$t6, P_COL($a0)
+	nop
+	.endif
+	sw	$t6, W_COL($t0)
+	sb	$t7, W_COL + 3($t0)
+	lw	$t6, W_COL($t0)
+	.else
+	sb	$t7, W_COL + 3($t0)
+	lw	$t6, W_COL($t0)
+	.endif
+	nop
+	sw	$t6, CS_COL($v1)
+	.endif
+	sw	$a0, CS_A0($v1)
+	sw	$a1, CS_A1($v1)
+	.endm
+
+# CHCALL goes to the cut with the polygon's corners as the piece to cut.
+	.macro CHCALL name, q, p
+	addiu	$t3, $t0, CS_ROOT
+	addiu	$t4, $t0, CS_ROOT + C_SIZE
+	addiu	$t5, $t0, CS_ROOT + 2 * C_SIZE
+	.if \q
+	addiu	$t9, $t0, CS_ROOT + 3 * C_SIZE
+	addiu	$a0, $t0, CS_ROOT + 4 * C_SIZE
+	lw	$at, FQ_RET($a0)
+	.else
+	addiu	$a0, $t0, CS_ROOT + 3 * C_SIZE
+	lw	$at, FT_RET($a0)
+	.endif
+	.if \q
+	lw	$a1, CS_DEEP4($v1)
+	.else
+	lw	$a1, CS_DEEP3($v1)
+	.endif
+	sw	$at, CS_KEEP($v1)
+	GAPS	\p - 2
+	.if \q
+	jal	cut_\name
+	sw	$ra, FQ_RET($a0)
+	.else
+	jal	cut_\name
+	sw	$ra, FT_RET($a0)
+	.endif
+	.endm
+
+# CHTAIL is what follows the cut: the entry gets its packets, and the head its registers back.
+# tl is the instructions from the cut's return to the end of GsSortObject4, and a polygon turned
+# away takes back more, its first back being the back's instructions after mf24. l0 has it load V0.
+	.macro CHTAIL light, t, g, q, tl, x, back, l0
+8:	G
+	lw	$at, CS_KEEP($v1)
+	.if \q
+	.set Q_F, FQ_SIZE + FQ_RET
+	.else
+	.set Q_F, FT_SIZE + FT_RET
+	.endif
+	lw	$t6, CS_TAG($v1)
+	sw	$at, Q_F($a0)
+	lui	$at, 0xff00
+	lw	$t7, 0($t6)
+	lw	$a0, CS_A0($v1)
+	and	$t7, $t7, $at
+	or	$t7, $t7, $a3
+	sw	$t7, 0($t6)
+	lw	$a1, CS_A1($v1)
+	lw	$ra, CS_RA($v1)
+	lw	$t0, CS_T0($v1)
+	lw	$t1, CS_T1($v1)
+	lw	$t2, CS_T2($v1)
+	.if \t == 0
+	lw	$a3, CS_A3($v1)
+	.endif
+	lw	$v1, CS_V1($v1)
+5:	addiu	$a1, $a1, -1
+	addiu	$a0, $a0, P_SIZE
+	.if \q && (\light == 1 || \light == 2)
+	CHNORM	\g
+	.endif
+	GAPS	\tl - 16
+	bnez	$a1, 7b
+	nop
+	j	gso_run
+	nop
+6:	lw	$ra, CS_RA($v1)
+	.if \l0
+	lwc2	$0, 0($t3)
+	.endif
+	lw	$t0, CS_T0($v1)
+	lw	$v1, CS_V1($v1)
+	.if ((\back) / 2 - (\tl) + 6 - (\t) - (\l0)) > 8
+	G
+	GAPS	(\back) / 2 - (\tl) + 6 - (\t) - (\l0)
+	.else
+	NOPS	(\back) / 2 - (\tl) + 6 - (\t) - (\l0)
+	.endif
+	b	5b
+	nop
+	.endm
+
+	.macro CHLIT3 name, kind, light, t, g, s, x, k, p, tl, back, dbl
+	PSET	\light, \t, \g, 0, 0
+	CHSTART	\name, \light, \t, \s, \x, \dbl
+	GAPS	\s - \x + 1
+	CHNEXT	\light, \t, \g, 0, \x
+	CHTOP
+	lwc2	$0, 0($t7)
+	lwc2	$1, 4($t7)
+	.if \g
+	lwc2	$2, 0($t8)
+	lwc2	$3, 4($t8)
+	lwc2	$4, 0($v0)
+	lwc2	$5, 4($v0)
+	.else
+	lwc2	$2, 0($t7)
+	lwc2	$3, 4($t7)
+	lwc2	$4, 0($t7)
+	lwc2	$5, 4($t7)
+	.endif
+	lwc2	$6, CS_RGBC($v1)
+	nop
+	LIGHTTHREE \light
+	G
+	GAP	6
+	swc2	$12, CS_ROOT + C_SXY($t0)
+	swc2	$13, CS_ROOT + C_SIZE + C_SXY($t0)
+	swc2	$14, CS_ROOT + 2 * C_SIZE + C_SXY($t0)
+	.if \g
+	swc2	$20, CS_ROOT + C_COL($t0)
+	.else
+	swc2	$20, W_COL($t0)
+	.endif
+	swc2	$21, CS_ROOT + C_SIZE + C_COL($t0)
+	swc2	$22, CS_ROOT + 2 * C_SIZE + C_COL($t0)
+	nop
+	AVSZ3
+	nop
+	mfc2	$t6, $7
+	G
+	CHZ
+	GAP	\k - 1
+	swc2	$17, CS_ROOT + C_SZ($t0)
+	swc2	$18, CS_ROOT + C_SIZE + C_SZ($t0)
+	swc2	$19, CS_ROOT + 2 * C_SIZE + C_SZ($t0)
+	G
+	CHPOLY	\light, \t, \g, 0
+	CHCALL	\kind, 0, \p
+	CHTAIL	\light, \t, \g, 0, \tl, \x, \back, 1
+	.endm
+
+	.macro CHPLAIN3 name, kind, light, t, g, s, x, k, p, tl, back, dbl
+	PSET	\light, \t, \g, 0, 0
+	CHSTART	\name, \light, \t, \s, \x, \dbl
+	GAPS	\s - \x + 1
+	CHNEXT	\light, \t, \g, 0, \x
+	CHTOP
+	swc2	$12, CS_ROOT + C_SXY($t0)
+	swc2	$13, CS_ROOT + C_SIZE + C_SXY($t0)
+	swc2	$14, CS_ROOT + 2 * C_SIZE + C_SXY($t0)
+	swc2	$8, CS_IR0($v1)
+	nop
+	AVSZ3
+	nop
+	mfc2	$t6, $7
+	G
+	CHZ
+	GAP	\k - 1
+	swc2	$17, CS_ROOT + C_SZ($t0)
+	swc2	$18, CS_ROOT + C_SIZE + C_SZ($t0)
+	swc2	$19, CS_ROOT + 2 * C_SIZE + C_SZ($t0)
+	G
+	CHPOLY	\light, \t, \g, 0
+	CHCALL	\kind, 0, \p
+	CHTAIL	\light, \t, \g, 0, \tl, \x, \back, 0
+	.endm
+
+# CHQUAD is a quad's way as far as its depth, with its fourth point.
+	.macro CHQUAD k
+	swc2	$12, CS_ROOT + C_SXY($t0)
+	swc2	$13, CS_ROOT + C_SIZE + C_SXY($t0)
+	swc2	$14, CS_ROOT + 2 * C_SIZE + C_SXY($t0)
+	lwc2	$0, 0($t9)
+	lwc2	$1, 4($t9)
+	nop
+	RTPS
+	G
+	GAP	3
+	swc2	$14, CS_ROOT + 3 * C_SIZE + C_SXY($t0)
+	CFLAG
+	swc2	$8, CS_IR0($v1)
+	nop
+	nop
+	AVSZ4
+	nop
+	mfc2	$t6, $7
+	G
+	CHZ
+	GAP	\k - 2
+	swc2	$16, CS_ROOT + C_SZ($t0)
+	swc2	$17, CS_ROOT + C_SIZE + C_SZ($t0)
+	swc2	$18, CS_ROOT + 2 * C_SIZE + C_SZ($t0)
+	swc2	$19, CS_ROOT + 3 * C_SIZE + C_SZ($t0)
+	.endm
+
+	.macro CHPLAIN4 name, kind, light, t, g, s, x, k, p, tl, back
+	PSET	\light, \t, \g, 1, 0
+	CHSTART	\name, \light, \t, \s, \x, , 1
+	GAPS	\s - \x + 1
+	CHNEXT	\light, \t, \g, 1, \x
+	CHTOP
+	CHQUAD	\k
+	G
+	CHPOLY	\light, \t, \g, 1
+	CHCALL	\kind, 1, \p
+	CHTAIL	\light, \t, \g, 1, \tl, \x, \back, 0
+	.endm
+
+# A lit flat quad is lit after its depth.
+	.macro CHLITF4 name, kind, light, t, s, x, k, p1, p, tl, back
+	PSET	\light, \t, 0, 1, 0
+	CHSTART	\name, \light, \t, \s, \x, , 1
+	CHNORM	0
+	GAPS	\s - \x + 1
+	CHNEXT	\light, \t, 0, 1, \x
+	CHTOP
+	CHQUAD	\k
+	G
+	.if \light == 2
+	lw	$at, CS_IR0($v1)
+	.endif
+	GAP	\p1
+	lwc2	$0, 0($t7)
+	lwc2	$1, 4($t7)
+	lwc2	$6, CS_RGBC($v1)
+	.if \light == 2
+	mtc2	$at, $8
+	.endif
+	nop
+	LIGHTONE \light
+	swc2	$22, W_COL($t0)
+	G
+	CHPOLY	\light, \t, 0, 1
+	CHCALL	\kind, 1, \p
+	CHTAIL	\light, \t, 0, 1, \tl, \x, \back, 0
+	.endm
+
+# A lit gouraud quad has three corners by NCCT and the fourth by NCCS.
+	.macro CHLITG4 name, kind, light, t, s, x, k, p1, n4, p, tl, back
+	PSET	\light, \t, 1, 1, 0
+	CHSTART	\name, \light, \t, \s, \x, , 1
+	CHNORM	1
+	GAPS	\s - \x + 1
+	CHNEXT	\light, \t, 1, 1, \x
+	CHTOP
+	CHQUAD	\k
+	G
+	GAP	\p1
+	lwc2	$0, 0($t7)
+	lwc2	$1, 4($t7)
+	lwc2	$2, 0($t8)
+	lwc2	$3, 4($t8)
+	lwc2	$4, 0($v0)
+	lwc2	$5, 4($v0)
+	lwc2	$6, CS_RGBC($v1)
+	nop
+	LIGHTTHREE \light
+	G
+	lhu	$t7, P_N3($a0)
+	GAP	3
+	swc2	$20, CS_ROOT + C_COL($t0)
+	swc2	$21, CS_ROOT + C_SIZE + C_COL($t0)
+	swc2	$22, CS_ROOT + 2 * C_SIZE + C_COL($t0)
+	G
+	sll	$t7, $t7, 3
+	lw	$t8, CS_V1($v1)
+	nop
+	addu	$t7, $t7, $t8
+	GAP	8
+	lwc2	$0, 0($t7)
+	lwc2	$1, 4($t7)
+	lwc2	$6, CS_RGBC($v1)
+	nop
+	LIGHTONE \light
+	swc2	$22, CS_ROOT + 3 * C_SIZE + C_COL($t0)
+	G
+	CHPOLY	\light, \t, 1, 1
+	CHCALL	\kind, 1, \p
+	CHTAIL	\light, \t, 1, 1, \tl, \x, \back, 0
+	.endm
+
+# In fog a gouraud polygon has each point and each corner's color by itself, each with
+# its own IR0, as RTPT and NCDT have only one.
+	.macro CHFOGTOP
+1:	lwc2	$0, 0($t3)
+	lwc2	$1, 4($t3)
+	nop
+	RTPS
+	mfc2	$at, $8
+	lwc2	$0, 0($t4)
+	lwc2	$1, 4($t4)
+	nop
+	RTPS
+	mfc2	$ra, $8
+	lwc2	$0, 0($t5)
+	lwc2	$1, 4($t5)
+	nop
+	RTPS
+	nop
+	mfc2	$t9, $8
+	CFLAG
+	nop
+	nop
+	NCLIP
+	lui	$v1, %hi(gso_cut)
+	addiu	$v1, $v1, %lo(gso_cut)
+	nop
+	mfc2	$t6, $24
+	nop
+	blez	$t6, 6f
+	nop
+	lwc2	$0, 0($t7)
+	lwc2	$1, 4($t7)
+	lwc2	$6, CS_RGBC($v1)
+	mtc2	$at, $8
+	nop
+	LIGHTONE 2
+	nop
+	nop
+	swc2	$12, CS_ROOT + C_SXY($t0)
+	swc2	$22, CS_ROOT + C_COL($t0)
+	lwc2	$0, 0($t8)
+	lwc2	$1, 4($t8)
+	mtc2	$ra, $8
+	nop
+	LIGHTONE 2
+	nop
+	nop
+	swc2	$13, CS_ROOT + C_SIZE + C_SXY($t0)
+	swc2	$22, CS_ROOT + C_SIZE + C_COL($t0)
+	lwc2	$0, 0($v0)
+	lwc2	$1, 4($v0)
+	mtc2	$t9, $8
+	nop
+	LIGHTONE 2
+	nop
+	nop
+	swc2	$14, CS_ROOT + 2 * C_SIZE + C_SXY($t0)
+	swc2	$22, CS_ROOT + 2 * C_SIZE + C_COL($t0)
+	AVSZ3
+	nop
+	mfc2	$t6, $7
+	.endm
+
+	.macro CHFOG3 name, kind, t, s, x, k, p, tl, back
+	PSET	2, \t, 1, 0, 0
+	CHSTART	\name, 2, \t, \s, \x
+	GAPS	\s - \x + 1
+	CHNEXT	2, \t, 1, 0, \x
+	CHFOGTOP
+	G
+	CHZ
+	GAP	\k - 1
+	swc2	$17, CS_ROOT + C_SZ($t0)
+	swc2	$18, CS_ROOT + C_SIZE + C_SZ($t0)
+	swc2	$19, CS_ROOT + 2 * C_SIZE + C_SZ($t0)
+	G
+	CHPOLY	2, \t, 1, 0
+	CHCALL	\kind, 0, \p
+	CHTAIL	2, \t, 1, 0, \tl, \x, \back, 0
+	.endm
+
+	.macro CHFOG4 name, kind, t, s, x, k, k2, p1, p, tl, back
+	PSET	2, \t, 1, 1, 0
+	CHSTART	\name, 2, \t, \s, \x, , 1
+	CHNORM	1
+	GAPS	\s - \x + 1
+	CHNEXT	2, \t, 1, 1, \x
+	CHFOGTOP
+	G
+	lhu	$t9, P_V3($a0)
+	move	$v0, $t6
+	lhu	$t7, P_N3($a0)
+	lw	$t8, CS_V1($v1)
+	lw	$at, CS_T0($v1)
+	sll	$t9, $t9, 3
+	addu	$t9, $t9, $at
+	sll	$t7, $t7, 3
+	addu	$t7, $t7, $t8
+	GAP	\k - 1
+	lwc2	$0, 0($t9)
+	lwc2	$1, 4($t9)
+	nop
+	RTPS
+	swc2	$14, CS_ROOT + 3 * C_SIZE + C_SXY($t0)
+	swc2	$8, CS_IR0($v1)
+	CFLAG
+	mfc2	$t8, $19
+	G
+	move	$t6, $v0
+	srav	$t6, $t6, $t2
+	sll	$t6, $t6, 2
+	addu	$t6, $t6, $t1
+	sw	$t6, CS_TAG($v1)
+	GAP	\k2
+	swc2	$16, CS_ROOT + C_SZ($t0)
+	swc2	$17, CS_ROOT + C_SIZE + C_SZ($t0)
+	swc2	$18, CS_ROOT + 2 * C_SIZE + C_SZ($t0)
+	swc2	$19, CS_ROOT + 3 * C_SIZE + C_SZ($t0)
+	G
+	lw	$a3, 0($t6)
+	lw	$t6, CS_IR0($v1)
+	GAP	\p1
+	lwc2	$0, 0($t7)
+	lwc2	$1, 4($t7)
+	lwc2	$6, CS_RGBC($v1)
+	mtc2	$t6, $8
+	nop
+	LIGHTONE 2
+	swc2	$22, CS_ROOT + 3 * C_SIZE + C_COL($t0)
+	G
+	CHPOLY	2, \t, 1, 1
+	CHCALL	\kind, 1, \p
+	CHTAIL	2, \t, 1, 1, \tl, \x, \back, 0
+	.endm
+
+# A textured flat triangle with flag bit 1 is drawn whichever way it faces: no NCLIP.
+	.macro CHDOUBLE name, kind, light, s, x, k, k2, p, tl
+	PSET	\light, 1, 0, 0, 0
+	.section .text.GsSortCut.c\name, "ax", @progbits
+	.align 2
+gso_c\name\():
+	G
+	srl	$t6, $t6, 24
+	.if \light == 0
+	andi	$t6, $t6, 0xfe
+	.endif
+	sll	$t6, $t6, 24
+	or	$a3, $a3, $t6
+	lui	$t6, %hi(gso_cut)
+	addiu	$t6, $t6, %lo(gso_cut)
+	sw	$a3, CS_A3($t6)
+	sw	$t0, CS_T0($t6)
+	sw	$t1, CS_T1($t6)
+	sw	$t2, CS_T2($t6)
+	.if \light == 0 || \light == 3
+	move	$v1, $t6
+	.endif
+	sw	$v1, CS_V1($t6)
+	lui	$at, 0xfd00
+	and	$at, $at, $a3
+	lui	$t7, 0x80
+	ori	$t7, $t7, 0x8080
+	or	$at, $at, $t7
+	sw	$at, CS_RGBC($t6)
+	CHTOPF	0
+	GAPS	\s - \x + 1
+	CHNEXT	\light, 1, 0, 0, \x
+	lwc2	$0, 0($t3)
+	lwc2	$1, 4($t3)
+	lwc2	$2, 0($t4)
+	lwc2	$3, 4($t4)
+	lwc2	$4, 0($t5)
+	lwc2	$5, 4($t5)
+	nop
+	RTPT
+	lui	$v1, %hi(gso_cut)
+	addiu	$v1, $v1, %lo(gso_cut)
+	nop
+	nop
+	swc2	$12, CS_ROOT + C_SXY($t0)
+	swc2	$13, CS_ROOT + C_SIZE + C_SXY($t0)
+	swc2	$14, CS_ROOT + 2 * C_SIZE + C_SXY($t0)
+	CFLAG
+	swc2	$8, CS_IR0($v1)
+	nop
+	AVSZ3
+	mfc2	$t6, $7
+	G
+	CHZ
+	.if \light == 1 || \light == 2
+	GAP	\k
+	lwc2	$0, 0($t7)
+	lwc2	$1, 4($t7)
+	lwc2	$2, 0($t7)
+	lwc2	$3, 4($t7)
+	lwc2	$4, 0($t7)
+	lwc2	$5, 4($t7)
+	lwc2	$6, CS_RGBC($v1)
+	.if \light == 2
+	lwc2	$8, CS_IR0($v1)
+	.endif
+	nop
+	LIGHTTHREE \light
+	G
+	GAP	3
+	swc2	$20, W_COL($t0)
+	swc2	$21, CS_ROOT + C_SIZE + C_COL($t0)
+	swc2	$22, CS_ROOT + 2 * C_SIZE + C_COL($t0)
+	G
+	GAP	\k2
+	.else
+	GAP	\k
+	.endif
+	swc2	$17, CS_ROOT + C_SZ($t0)
+	swc2	$18, CS_ROOT + C_SIZE + C_SZ($t0)
+	swc2	$19, CS_ROOT + 2 * C_SIZE + C_SZ($t0)
+	G
+	CHPOLY	\light, 1, 0, 0
+	CHCALL	\kind, 0, \p
+	CHTAIL	\light, 1, 0, 0, \tl, \x, 2 * (\tl - 5), 0
+	.endm
+
+	CHPLAIN3	f3, f3, 0, 0, 0, 72, 25, 11, 29, 39, 102
+	CHLIT3	lf3, f3, 1, 0, 0, 101, 42, 11, 27, 41, 106
+	CHLIT3	ff3, f3, 2, 0, 0, 101, 42, 11, 27, 41, 106
+	CHPLAIN3	of3, f3, 3, 0, 0, 82, 25, 11, 27, 41, 106
+	CHDOUBLE	dft3, ft3, 0, 80, 28, 8, 0, 39, 44
+	CHDOUBLE	dlft3, ft3, 1, 80, 28, 16, 6, 40, 43
+	CHDOUBLE	dfft3, ft3, 2, 80, 28, 18, 6, 40, 43
+	CHDOUBLE	doft3, ft3, 3, 79, 28, 8, 0, 39, 43
+	CHPLAIN3	ft3, ft3, 0, 1, 0, 75, 29, 12, 41, 44, 112, dft3
+	CHLIT3	lft3, ft3, 1, 1, 0, 100, 45, 12, 40, 43, 110, dlft3
+	CHLIT3	fft3, ft3, 2, 1, 0, 100, 45, 12, 40, 43, 110, dfft3
+	CHPLAIN3	oft3, ft3, 3, 1, 0, 84, 30, 12, 39, 43, 110, doft3
+	CHPLAIN3	g3, g3, 0, 0, 1, 71, 23, 11, 34, 41, 106
+	CHLIT3	lg3, g3, 1, 0, 1, 103, 42, 11, 27, 44, 112
+	CHFOG3	fg3, g3, 0, 103, 42, 11, 27, 44, 112
+	CHPLAIN3	og3, g3, 3, 0, 1, 81, 22, 11, 31, 44, 112
+	CHPLAIN3	gt3, gt3, 0, 1, 1, 71, 22, 11, 50, 42, 108
+	CHLIT3	lgt3, gt3, 1, 1, 1, 100, 41, 11, 40, 44, 112
+	CHFOG3	fgt3, gt3, 1, 100, 41, 11, 40, 44, 112
+	CHPLAIN3	ogt3, gt3, 3, 1, 1, 79, 22, 11, 43, 44, 112
+	CHPLAIN4	f4, f4, 0, 0, 0, 88, 40, 13, 30, 40, 106
+	CHLITF4	lf4, f4, 1, 0, 96, 37, 13, 10, 28, 47, 120
+	CHLITF4	ff4, f4, 2, 0, 96, 37, 13, 11, 28, 47, 120
+	CHPLAIN4	of4, f4, 3, 0, 0, 94, 37, 13, 30, 43, 112
+	CHPLAIN4	ft4, ft4, 0, 1, 0, 88, 40, 13, 48, 40, 106
+	CHLITF4	lft4, ft4, 1, 1, 99, 40, 13, 9, 44, 40, 106
+	CHLITF4	fft4, ft4, 2, 1, 99, 40, 13, 10, 44, 40, 106
+	CHPLAIN4	oft4, ft4, 3, 1, 0, 98, 40, 13, 45, 40, 106
+	CHPLAIN4	g4, g4, 0, 0, 1, 88, 37, 13, 38, 43, 112
+	CHLITG4	lg4, g4, 1, 0, 96, 38, 12, 21, 16, 27, 47, 120
+	CHFOG4	fg4, g4, 0, 115, 55, 11, 8, 9, 27, 47, 120
+	CHPLAIN4	og4, g4, 3, 0, 1, 95, 38, 13, 38, 42, 110
+	CHPLAIN4	gt4, gt4, 0, 1, 1, 88, 36, 13, 57, 44, 114
+	CHLITG4	lgt4, gt4, 1, 1, 100, 37, 13, 19, 16, 45, 43, 112
+	CHFOG4	fgt4, gt4, 1, 118, 53, 12, 8, 9, 44, 43, 112
+	CHPLAIN4	ogt4, gt4, 3, 1, 1, 96, 37, 13, 48, 43, 112
+
+# The tables, as GsSortObject4 has for what is not cut.
+	.section .text.GsSortCut.tables, "ax", @progbits
+	.align 2
+gso_cunlit:
+	.word gso_cf3, gso_cft3, gso_cf4, gso_cft4, gso_cg3, gso_cgt3, gso_cg4, gso_cgt4
+gso_clit:
+	.word gso_clf3, gso_clft3, gso_clf4, gso_clft4, gso_clg3, gso_clgt3, gso_clg4, gso_clgt4
+	.word gso_lgr20, gso_clft3, gso_clf4, gso_clft4, gso_lgr30, gso_clgt3, gso_clg4, gso_clgt4
+gso_cfog:
+	.word gso_cff3, gso_cfft3, gso_cff4, gso_cfft4, gso_cfg3, gso_cfgt3, gso_cfg4, gso_cfgt4
+	.word gso_fgr20, gso_cfft3, gso_cff4, gso_cfft4, gso_fgr30, gso_cfgt3, gso_cfg4, gso_cfgt4
+gso_coff:
+	.word gso_cof3, gso_coft3, gso_cof4, gso_coft4, gso_cog3, gso_cogt3, gso_cog4, gso_cogt4
+	.word gso_ogr20, gso_coft3, gso_cof4, gso_coft4, gso_ogr30, gso_cogt3, gso_cog4, gso_cogt4
+
+# libps_va_sprintf(args) and libps_va_printf(args): formatters A and B of cformat.go's comment,
+# without doubles, each path at Sony's cycles (spec 31). sprintf calls nothing, keeping everything in
+# registers, as a program's stack may be small.
+	.set SF_ENTRY, 5
+	.set SF_END, 2
+	.set SF_DIR, 0
+	.set SF_FLAG, 0
+	.set SF_WID, 0
+	.set SF_PCT, 0
+	.set SF_C, 21
+	.set SF_END10, 0
+	.set SF_DIG16, 1
+	.set SF_FD, 0
+	.set SF_FH, 0
+	.set SF_SLOW, 8
+
+	.section .text.libps_sprintf, "ax", @progbits
+	.align 2
+libps_hexl:
+	.ascii "0123456789ABCDEF0123456789abcdef"
+libps_pow10:
+	.word 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000
+
+	.globl libps_va_sprintf
+	.type libps_va_sprintf, @function
+libps_va_sprintf:
+	lw	$a3, 0($a0)
+	lw	$a1, 4($a0)
+	addiu	$a2, $a0, 8
+	move	$a0, $a3
+	NOPS	SF_ENTRY
+	lbu	$v0, 0($a1)
+	nop
+	beqz	$v0, 1f
+	nop
+	NOPS	2
+	b	1f
+	nop
+sf_more:
+	NOPS	4
+1:	lbu	$v0, 0($a1)
+	addiu	$a1, $a1, 1
+	addiu	$at, $v0, -37
+	beqz	$at, 2f
+	sb	$v0, 0($a3)
+	beqz	$v0, 90f
+	nop
+	b	sf_more
+	addiu	$a3, $a3, 1
+	# The directive: its flags,
+2:	NOPS	SF_DIR
+	move	$t0, $zero
+3:	lbu	$v0, 0($a1)
+	nop
+	addiu	$at, $v0, -45
+	beqz	$at, 4f
+	li	$t9, 1
+	addiu	$at, $v0, -43
+	beqz	$at, 4f
+	li	$t9, 2
+	addiu	$at, $v0, -32
+	beqz	$at, 4f
+	li	$t9, 4
+	addiu	$at, $v0, -35
+	beqz	$at, 4f
+	li	$t9, 8
+	addiu	$at, $v0, -48
+	bnez	$at, 5f
+	li	$t9, 16
+4:	or	$t0, $t0, $t9
+	NOPS	SF_FLAG
+	b	3b
+	addiu	$a1, $a1, 1
+	# its width,
+5:	addiu	$at, $v0, -42
+	bnez	$at, 6f
+	move	$t1, $zero
+	lw	$t1, 0($a2)
+	addiu	$a1, $a1, 1
+	addiu	$a2, $a2, 4
+	bgez	$t1, 8f
+	nop
+	ori	$t0, $t0, 1
+	b	8f
+	subu	$t1, $zero, $t1
+6:	addiu	$at, $v0, -48
+	sltiu	$t9, $at, 10
+	beqz	$t9, 8f
+	sll	$t9, $t1, 2
+	addu	$t1, $t9, $t1
+	sll	$t1, $t1, 1
+	addu	$t1, $t1, $at
+	addiu	$a1, $a1, 1
+	lbu	$v0, 0($a1)
+	NOPS	SF_WID
+	b	6b
+	nop
+	# its precision,
+8:	lbu	$v0, 0($a1)
+	li	$t2, -1
+	addiu	$at, $v0, -46
+	bnez	$at, 10f
+	nop
+	lbu	$v0, 1($a1)
+	addiu	$a1, $a1, 1
+	addiu	$at, $v0, -42
+	bnez	$at, 9f
+	move	$t2, $zero
+	lw	$t2, 0($a2)
+	addiu	$a1, $a1, 1
+	addiu	$a2, $a2, 4
+	bgez	$t2, 10f
+	nop
+	b	10f
+	li	$t2, -1
+9:	addiu	$at, $v0, -48
+	sltiu	$t9, $at, 10
+	beqz	$t9, 10f
+	sll	$t9, $t2, 2
+	addu	$t2, $t9, $t2
+	sll	$t2, $t2, 1
+	addu	$t2, $t2, $at
+	addiu	$a1, $a1, 1
+	lbu	$v0, 0($a1)
+	nop
+	b	9b
+	nop
+	# its h, l and L, and what it converts.
+10:	lbu	$t9, 0($a1)
+	nop
+	addiu	$at, $t9, -104
+	bnez	$at, 11f
+	addiu	$at, $t9, -108
+	ori	$t0, $t0, 32
+	NOPS	10
+	b	10b
+	addiu	$a1, $a1, 1
+11:	beqz	$at, 12f
+	addiu	$at, $t9, -76
+	bnez	$at, 13f
+	nop
+12:	NOPS	10
+	b	10b
+	addiu	$a1, $a1, 1
+13:	addiu	$a1, $a1, 1
+	move	$t3, $zero
+	move	$t4, $zero
+	move	$t5, $zero
+	move	$t6, $zero
+	move	$t7, $zero
+	move	$t8, $zero
+	addiu	$at, $t9, -37
+	bnez	$at, 14f
+	addiu	$at, $t9, -110
+	sb	$at, 0($a3)
+	li	$v0, 37
+	sb	$v0, 0($a3)
+	NOPS	SF_PCT
+	b	1b
+	addiu	$a3, $a3, 1
+14:	bnez	$at, 15f
+	addiu	$at, $t9, -99
+	lw	$t3, 0($a2)
+	subu	$v0, $a3, $a0
+	andi	$t0, $t0, 32
+	bnez	$t0, 145f
+	addiu	$a2, $a2, 4
+	b	1b
+	sw	$v0, 0($t3)
+145:	b	1b
+	sh	$v0, 0($t3)
+15:	bnez	$at, 16f
+	addiu	$at, $t9, -115
+	lw	$t3, 0($a2)
+	li	$t7, 1
+	li	$t2, -1
+	addiu	$a2, $a2, 4
+	NOPS	SF_C
+	b	40f
+	andi	$t0, $t0, 0xffef
+16:	bnez	$at, 20f
+	addiu	$at, $t9, -100
+	lw	$t3, 0($a2)
+	andi	$at, $t0, 8
+	addiu	$a2, $a2, 4
+	beqz	$at, 17f
+	andi	$t0, $t0, 0xffef
+	# A counted string, the byte at p being its length.
+	lbu	$t7, 0($t3)
+	addiu	$t3, $t3, 1
+	bltz	$t2, 40f
+	slt	$at, $t2, $t7
+	beqz	$at, 40f
+	nop
+	b	40f
+	move	$t7, $t2
+17:	bnez	$t3, 18f
+	nop
+	bltz	$t2, 40f
+	nop
+	b	40f
+	move	$t7, $t2
+18:	NOPS	0
+	beq	$t7, $t2, 40f
+	addu	$at, $t3, $t7
+	lbu	$at, 0($at)
+	nop
+	beqz	$at, 40f
+	nop
+	b	18b
+	addiu	$t7, $t7, 1
+	# A number.
+20:	beqz	$at, 22f
+	addiu	$at, $t9, -105
+	beqz	$at, 22f
+	addiu	$at, $t9, -117
+	beqz	$at, 23f
+	addiu	$at, $t9, -111
+	beqz	$at, 24f
+	addiu	$at, $t9, -120
+	beqz	$at, 25f
+	addiu	$at, $t9, -88
+	beqz	$at, 26f
+	addiu	$at, $t9, -112
+	beqz	$at, 26f
+	nop
+	b	90f
+	nop
+22:	lw	$t3, 0($a2)
+	andi	$at, $t0, 32
+	beqz	$at, 221f
+	addiu	$a2, $a2, 4
+	sll	$t3, $t3, 16
+	sra	$t3, $t3, 16
+221:	bgez	$t3, 222f
+	andi	$at, $t0, 2
+	li	$t5, 45
+	b	28f
+	subu	$t3, $zero, $t3
+222:	beqz	$at, 223f
+	andi	$at, $t0, 4
+	b	28f
+	li	$t5, 43
+223:	beqz	$at, 28f
+	nop
+	b	28f
+	li	$t5, 32
+23:	b	27f
+	lw	$t3, 0($a2)
+24:	lw	$t3, 0($a2)
+	b	27f
+	li	$t4, 3
+25:	lw	$t3, 0($a2)
+	b	27f
+	li	$t4, 4
+26:	lw	$t3, 0($a2)
+	li	$t4, 4
+	ori	$t0, $t0, 128
+27:	andi	$at, $t0, 32
+	beqz	$at, 271f
+	addiu	$a2, $a2, 4
+	andi	$t3, $t3, 0xffff
+271:
+28:
+29:	addiu	$at, $t9, -112
+	bnez	$at, 30f
+	nop
+	li	$t2, 8
+	andi	$t0, $t0, 0xffef
+30:	bnez	$t3, 31f
+	nop
+	beqz	$t2, 34f
+	nop
+31:	li	$t7, 1
+	bnez	$t4, 33f
+	move	$v0, $t3
+	# Digits by the powers of ten, or by the bits a digit has.
+	lui	$v1, %hi(libps_pow10 + 4)
+	addiu	$v1, $v1, %lo(libps_pow10 + 4)
+32:	slti	$at, $t7, 10
+	beqz	$at, 34f
+	nop
+	lw	$at, 0($v1)
+	addiu	$v1, $v1, 4
+	sltu	$at, $v0, $at
+	bnez	$at, 34f
+	nop
+	b	32b
+	addiu	$t7, $t7, 1
+33:	srlv	$v0, $v0, $t4
+	beqz	$v0, 34f
+	nop
+	b	33b
+	addiu	$t7, $t7, 1
+	# With nothing round the digits they come straight.
+34:	andi	$at, $t0, 0x1f
+	or	$at, $at, $t1
+	or	$at, $at, $t5
+	bnez	$at, 341f
+	nop
+	bgez	$t2, 341f
+	nop
+	move	$v1, $zero
+	bnez	$t4, 340f
+	nop
+	bnez	$t3, 3401f
+	nop
+	NOPS	4
+	b	60f
+	nop
+3401:	NOPS	10
+	b	60f
+	nop
+340:	NOPS	SF_FH
+	b	60f
+	nop
+341:	NOPS	SF_SLOW
+	andi	$at, $t0, 8
+	beqz	$at, 342f
+	addiu	$at, $t4, -4
+	bnez	$at, 342f
+	nop
+	move	$t6, $t9
+342:	slt	$at, $t7, $t2
+	beqz	$at, 35f
+	nop
+	subu	$t8, $t2, $t7
+35:	andi	$at, $t0, 8
+	beqz	$at, 40f
+	addiu	$at, $t4, -3
+	bnez	$at, 40f
+	nop
+	bnez	$t8, 40f
+	nop
+	beqz	$t3, 40f
+	nop
+	li	$t8, 1
+	# What goes round what a directive converts.
+40:	andi	$at, $t0, 0x1f
+	or	$at, $at, $t1
+	or	$at, $at, $t5
+	or	$at, $at, $t8
+	bnez	$at, 401f
+	nop
+	b	48f
+	move	$v1, $zero
+401:	addu	$at, $t7, $t8
+	beqz	$t5, 41f
+	nop
+	addiu	$at, $at, 1
+41:	beqz	$t6, 42f
+	nop
+	addiu	$at, $at, 2
+42:	subu	$v1, $t1, $at
+	blez	$v1, 45f
+	andi	$at, $t0, 1
+	bnez	$at, 45f
+	andi	$at, $t0, 16
+	beqz	$at, 43f
+	nop
+	bgez	$t2, 43f
+	nop
+	addu	$t8, $t8, $v1
+	b	45f
+	move	$v1, $zero
+43:	li	$v0, 32
+44:	sb	$v0, 0($a3)
+	NOPS	3
+	addiu	$v1, $v1, -1
+	bgtz	$v1, 44b
+	addiu	$a3, $a3, 1
+45:	beqz	$t5, 46f
+	nop
+	sb	$t5, 0($a3)
+	addiu	$a3, $a3, 1
+46:	beqz	$t6, 47f
+	li	$v0, 48
+	sb	$v0, 0($a3)
+	sb	$t6, 1($a3)
+	addiu	$a3, $a3, 2
+47:	blez	$t8, 48f
+	li	$v0, 48
+	NOPS	2
+	sb	$v0, 0($a3)
+	addiu	$t8, $t8, -1
+	b	47b
+	addiu	$a3, $a3, 1
+48:	addiu	$at, $t9, -99
+	bnez	$at, 49f
+	addiu	$at, $t9, -115
+	sb	$t3, 0($a3)
+	b	70f
+	addiu	$a3, $a3, 1
+49:	bnez	$at, 60f
+	nop
+	blez	$t7, 70f
+	lbu	$v0, 0($t3)
+	addiu	$t3, $t3, 1
+	addiu	$t7, $t7, -1
+	sb	$v0, 0($a3)
+	b	49b + 4
+	addiu	$a3, $a3, 1
+	# The digits. A power of ten's by division, from the top; a shift's by the bits.
+60:	blez	$t7, 70f
+	addiu	$t7, $t7, -1
+	bnez	$t4, 62f
+	sll	$at, $t7, 2
+	lui	$t8, %hi(libps_pow10)
+	addiu	$t8, $t8, %lo(libps_pow10)
+	addu	$t8, $t8, $at
+61:	lw	$at, 0($t8)
+	addiu	$t8, $t8, -4
+	addiu	$t7, $t7, -1
+	divu	$zero, $t3, $at
+	mflo	$v0
+	mfhi	$t3
+	addiu	$v0, $v0, 48
+	sb	$v0, 0($a3)
+	bgez	$t7, 61b
+	addiu	$a3, $a3, 1
+	NOPS	SF_END10
+	b	70f
+	nop
+62:	sll	$t8, $t7, 2
+	addiu	$at, $t4, -4
+	beqz	$at, 621f
+	sll	$t6, $t4, 3
+	subu	$t8, $t8, $t7
+621:	addiu	$t6, $t6, -17
+	andi	$at, $t0, 128
+	lui	$t5, %hi(libps_hexl)
+	bnez	$at, 63f
+	addiu	$t5, $t5, %lo(libps_hexl)
+	addiu	$t5, $t5, 16
+63:	srlv	$v0, $t3, $t8
+	and	$v0, $v0, $t6
+	addu	$v0, $v0, $t5
+	lbu	$v0, 0($v0)
+	subu	$t8, $t8, $t4
+	addiu	$t7, $t7, -1
+	sb	$v0, 0($a3)
+	NOPS	SF_DIG16
+	bgez	$t7, 63b
+	addiu	$a3, $a3, 1
+	# The rest of the width.
+70:	blez	$v1, 1b
+	li	$v0, 32
+	sb	$v0, 0($a3)
+	addiu	$v1, $v1, -1
+	b	70b
+	addiu	$a3, $a3, 1
+90:	sb	$zero, 0($a3)
+	subu	$v0, $a3, $a0
+	NOPS	SF_END
+	jr	$ra
+	nop
+	.size libps_va_sprintf, .-libps_va_sprintf
+
+	.set PF_ENTRY, 4
+	.set PF_NUM, 0
+	.set PF_RAW, 9
+	.set PC_NL, 5
+	.set PF_LIT, 10
+	.set PF_FAST, 0
+	.set PF_SLOW, 0
+	.set PF_DIG, 3
+	.set PF_C, 0
+	.set PF_S, 7
+	.set PF_PCT, 0
+	.set PF_OTHER, 0
+	.set PF_SIGN, 0
+	.set PF_FILL, 0
+	.set PF_END, 0
+
+	.section .text.libps_printf, "ax", @progbits
+	.align 2
+	.set PL_FRAME, 192
+	.set PL_SHIFT, PL_FRAME - 144
+	.set PL_SIGN, PL_FRAME - 140
+	.set PL_PREFIX, PL_FRAME - 136
+	.set PL_CONV, PL_FRAME - 132
+	.set PL_BODY, PL_FRAME - 128
+	.set PL_FILL, PL_FRAME - 124
+	.set PL_T0, PL_FRAME - 120
+	.set PL_T1, PL_FRAME - 116
+	.set PL_RA, PL_FRAME - 8
+	.set PL_RA2, PL_FRAME - 112
+	.set PL_S, PL_FRAME - 64
+
+# PPUT sends the register's byte to the TTY.
+	.macro PPUT r
+	move	$a0, \r
+	jal	putchar
+	nop
+	.endm
+
+	.globl libps_va_printf
+	.type libps_va_printf, @function
+libps_va_printf:
+	addiu	$sp, $sp, -PL_FRAME
+	sw	$ra, PL_RA($sp)
+	sw	$s0, PL_S + 0($sp)
+	sw	$s1, PL_S + 4($sp)
+	sw	$s2, PL_S + 8($sp)
+	sw	$s3, PL_S + 12($sp)
+	sw	$s4, PL_S + 16($sp)
+	sw	$s5, PL_S + 20($sp)
+	sw	$s6, PL_S + 24($sp)
+	sw	$s7, PL_S + 28($sp)
+	lw	$s1, 0($a0)
+	addiu	$s0, $a0, 4
+	move	$s2, $zero
+	NOPS	PF_ENTRY
+	beqz	$s1, 90f
+	nop
+19:	NOPS	PF_LIT
+1:	lbu	$a0, 0($s1)
+	addiu	$s1, $s1, 1
+	beqz	$a0, 90f
+	addiu	$at, $a0, -37
+	beqz	$at, 2f
+	sltiu	$at, $a0, 0x80
+	beqz	$at, 11f
+	nop
+12:	jal	putchar
+	nop
+	b	19b
+	nop
+	# A byte with the top bit set moves no column but for a few, and goes straight to the write.
+11:	addiu	$at, $a0, -0xc7
+	beqz	$at, 12b
+	addiu	$at, $a0, -0xa4
+	sltiu	$at, $at, 3
+	bnez	$at, 12b
+	nop
+	jal	libps_putraw
+	nop
+	NOPS	PF_RAW
+	b	1b
+	nop
+	# A directive is a loop until a letter that converts.
+2:	move	$s3, $zero
+	move	$s4, $zero
+	li	$s5, -1
+3:	lbu	$t0, 0($s1)
+	addiu	$s1, $s1, 1
+	beqz	$t0, 90f
+	addiu	$at, $t0, -32
+	beqz	$at, 31f
+	li	$t1, 4
+	addiu	$at, $t0, -35
+	beqz	$at, 31f
+	li	$t1, 8
+	addiu	$at, $t0, -45
+	beqz	$at, 31f
+	li	$t1, 1
+	addiu	$at, $t0, -43
+	beqz	$at, 31f
+	li	$t1, 2
+	addiu	$at, $t0, -48
+	beqz	$at, 31f
+	li	$t1, 16
+	addiu	$at, $t0, -104
+	beqz	$at, 31f
+	li	$t1, 32
+	addiu	$at, $t0, -108
+	beqz	$at, 31f
+	li	$t1, 64
+	addiu	$at, $t0, -76
+	beqz	$at, 3b
+	addiu	$at, $t0, -42
+	bnez	$at, 32f
+	addiu	$at, $t0, -46
+	lw	$s4, 0($s0)
+	addiu	$s0, $s0, 4
+	bgez	$s4, 3b
+	nop
+	ori	$s3, $s3, 1
+	b	3b
+	subu	$s4, $zero, $s4
+31:	b	3b
+	or	$s3, $s3, $t1
+32:	bnez	$at, 35f
+	addiu	$at, $t0, -49
+	lbu	$t1, 0($s1)
+	nop
+	addiu	$at, $t1, -42
+	bnez	$at, 33f
+	move	$s5, $zero
+	addiu	$s1, $s1, 1
+	lw	$s5, 0($s0)
+	addiu	$s0, $s0, 4
+	bgez	$s5, 3b
+	nop
+	b	3b
+	li	$s5, -1
+33:	addiu	$at, $t1, -48
+	sltiu	$t2, $at, 10
+	beqz	$t2, 3b
+	sll	$t2, $s5, 2
+	addu	$s5, $t2, $s5
+	sll	$s5, $s5, 1
+	addu	$s5, $s5, $at
+	addiu	$s1, $s1, 1
+	lbu	$t1, 0($s1)
+	b	33b
+	nop
+35:	sltiu	$at, $at, 9
+	beqz	$at, 37f
+	nop
+	addiu	$s4, $t0, -48
+36:	lbu	$t1, 0($s1)
+	nop
+	addiu	$at, $t1, -48
+	sltiu	$t2, $at, 10
+	beqz	$t2, 3b
+	sll	$t2, $s4, 2
+	addu	$s4, $t2, $s4
+	sll	$s4, $s4, 1
+	addu	$s4, $s4, $at
+	b	36b
+	addiu	$s1, $s1, 1
+	# What it converts.
+37:	sw	$zero, PL_SIGN($sp)
+	sw	$zero, PL_PREFIX($sp)
+	sw	$zero, PL_SHIFT($sp)
+	sw	$t0, PL_CONV($sp)
+	move	$s7, $zero
+	addiu	$at, $t0, -37
+	beqz	$at, 38f
+	addiu	$at, $t0, -100
+	beqz	$at, 50f
+	addiu	$at, $t0, -105
+	beqz	$at, 50f
+	addiu	$at, $t0, -117
+	beqz	$at, 53f
+	addiu	$at, $t0, -120
+	beqz	$at, 54f
+	addiu	$at, $t0, -88
+	beqz	$at, 55f
+	addiu	$at, $t0, -111
+	beqz	$at, 56f
+	addiu	$at, $t0, -112
+	beqz	$at, 54f
+	addiu	$at, $t0, -68
+	beqz	$at, 57f
+	addiu	$at, $t0, -85
+	beqz	$at, 58f
+	addiu	$at, $t0, -79
+	beqz	$at, 59f
+	addiu	$at, $t0, -115
+	beqz	$at, 40f
+	addiu	$at, $t0, -99
+	beqz	$at, 42f
+	addiu	$at, $t0, -110
+	beqz	$at, 44f
+	addiu	$at, $t0, -37
+	# Any other letter, or a percent sign, is itself.
+38:	NOPS	PF_OTHER
+	move	$a0, $t0
+	jal	putchar
+	addiu	$s2, $s2, 1
+	b	1b
+	nop
+	# A string, with what's in it counted.
+40:	lw	$s6, 0($s0)
+	addiu	$s0, $s0, 4
+	bnez	$s6, 41f
+	nop
+	lui	$s6, %hi(libps_null)
+	addiu	$s6, $s6, %lo(libps_null)
+41:	beq	$s7, $s5, 70f
+	addu	$at, $s6, $s7
+	lbu	$at, 0($at)
+	nop
+	beqz	$at, 70f
+	nop
+	b	41b
+	addiu	$s7, $s7, 1
+42:	lw	$s6, 0($s0)
+	addiu	$s0, $s0, 4
+	NOPS	PF_C
+	b	70f
+	li	$s7, 1
+44:	lw	$t1, 0($s0)
+	addiu	$s0, $s0, 4
+	andi	$at, $s3, 96
+	addiu	$at, $at, -32
+	beqz	$at, 45f
+	nop
+	b	1b
+	sw	$s2, 0($t1)
+45:	b	1b
+	sh	$s2, 0($t1)
+	# A number. A short one's low half is signed here, without doubles.
+57:	li	$t0, 100
+	b	50f
+	ori	$s3, $s3, 64
+58:	li	$t0, 117
+	ori	$s3, $s3, 64
+	b	53f
+	sw	$t0, PL_CONV($sp)
+59:	li	$t0, 111
+	ori	$s3, $s3, 64
+	b	56f
+	sw	$t0, PL_CONV($sp)
+50:	lw	$s6, 0($s0)
+	addiu	$s0, $s0, 4
+	andi	$at, $s3, 96
+	addiu	$at, $at, -32
+	bnez	$at, 500f
+	nop
+	sll	$s6, $s6, 16
+	sra	$s6, $s6, 16
+500:	bgez	$s6, 501f
+	andi	$at, $s3, 2
+	li	$at, 45
+	sw	$at, PL_SIGN($sp)
+	b	60f
+	subu	$s6, $zero, $s6
+501:	beqz	$at, 502f
+	andi	$at, $s3, 4
+	li	$at, 43
+	b	60f
+	sw	$at, PL_SIGN($sp)
+502:	beqz	$at, 60f
+	li	$at, 32
+	b	60f
+	sw	$at, PL_SIGN($sp)
+53:	jal	libps_printf_short
+	nop
+	b	60f
+	nop
+54:	li	$at, 112
+	beq	$t0, $at, 541f
+	nop
+	jal	libps_printf_short
+	nop
+	b	542f
+	nop
+541:	lw	$s6, 0($s0)
+	addiu	$s0, $s0, 4
+542:	li	$at, 4
+	b	551f
+	sw	$at, PL_SHIFT($sp)
+55:	jal	libps_printf_short
+	ori	$s3, $s3, 128
+	li	$at, 4
+	sw	$at, PL_SHIFT($sp)
+551:	andi	$at, $s3, 8
+	beqz	$at, 60f
+	nop
+	beqz	$s6, 60f
+	li	$at, 112
+	lw	$t0, PL_CONV($sp)
+	nop
+	beq	$t0, $at, 60f
+	nop
+	b	60f
+	sw	$t0, PL_PREFIX($sp)
+56:	jal	libps_printf_short
+	nop
+	li	$at, 3
+	sw	$at, PL_SHIFT($sp)
+	# How many digits.
+60:	li	$at, 100
+	lw	$t0, PL_CONV($sp)
+	lw	$t1, PL_SHIFT($sp)
+	bnez	$s6, 61f
+	nop
+	beqz	$s5, 65f
+	nop
+61:	li	$s7, 1
+	bnez	$t1, 63f
+	move	$t2, $s6
+	lui	$t3, %hi(libps_pow10 + 4)
+	addiu	$t3, $t3, %lo(libps_pow10 + 4)
+62:	slti	$at, $s7, 10
+	beqz	$at, 65f
+	nop
+	lw	$at, 0($t3)
+	addiu	$t3, $t3, 4
+	sltu	$at, $t2, $at
+	bnez	$at, 65f
+	nop
+	b	62b
+	addiu	$s7, $s7, 1
+63:	srlv	$t2, $t2, $t1
+	beqz	$t2, 65f
+	nop
+	b	63b
+	addiu	$s7, $s7, 1
+65:	lw	$t0, PL_CONV($sp)
+	li	$at, 111
+	bne	$t0, $at, 66f
+	andi	$at, $s3, 8
+	beqz	$at, 66f
+	nop
+	beqz	$s6, 66f
+	nop
+	ori	$s3, $s3, 256
+	addiu	$s7, $s7, 1
+66:	bltz	$s5, 67f
+	li	$at, 0xffef
+	and	$s3, $s3, $at
+67:	li	$at, 100
+	sw	$at, PL_CONV($sp)
+	lw	$t1, PL_SIGN($sp)
+	andi	$at, $s3, 0x1f
+	or	$at, $at, $s4
+	or	$at, $at, $t1
+	bnez	$at, 70f
+	nop
+	bgez	$s5, 70f
+	nop
+	NOPS	PF_NUM
+	b	84f
+	addu	$s2, $s2, $s7
+	# The field: sign and prefix and bytes together, or a number's precision.
+70:	lw	$t1, PL_SIGN($sp)
+	andi	$at, $s3, 0x1f
+	or	$at, $at, $s4
+	or	$at, $at, $t1
+	bnez	$at, 701f
+	nop
+	bgez	$s5, 701f
+	nop
+	addu	$s2, $s2, $s7
+	sw	$zero, PL_FILL($sp)
+	NOPS	PF_FAST
+	b	79f
+	sw	$zero, PL_BODY($sp)
+701:	NOPS	PF_SLOW
+	lw	$t2, PL_PREFIX($sp)
+	beqz	$t1, 71f
+	move	$t3, $s7
+	addiu	$t3, $t3, 1
+71:	beqz	$t2, 72f
+	lw	$t0, PL_CONV($sp)
+	addiu	$t3, $t3, 2
+72:	move	$t4, $t3
+	addiu	$at, $t0, -100
+	bnez	$at, 73f
+	slt	$at, $t4, $s5
+	beqz	$at, 73f
+	nop
+	move	$t4, $s5
+73:	slt	$at, $s4, $t4
+	bnez	$at, 74f
+	move	$t5, $t4
+	move	$t5, $s4
+74:	addu	$s2, $s2, $t5
+	sw	$t3, PL_BODY($sp)
+	subu	$t4, $s4, $t4
+	sw	$t4, PL_FILL($sp)
+	# Spaces before, unless left or zero.
+	andi	$at, $s3, 17
+	bnez	$at, 76f
+	lw	$t4, PL_FILL($sp)
+	jal	libps_printf_fill
+	li	$a0, 32
+76:	lw	$a0, PL_SIGN($sp)
+	nop
+	beqz	$a0, 77f
+	nop
+	NOPS	PF_SIGN
+	jal	putchar
+	nop
+77:	lw	$a0, PL_PREFIX($sp)
+	nop
+	beqz	$a0, 78f
+	nop
+	li	$a0, 48
+	jal	putchar
+	nop
+	lw	$a0, PL_PREFIX($sp)
+	jal	putchar
+	nop
+78:	andi	$at, $s3, 17
+	addiu	$at, $at, -16
+	bnez	$at, 79f
+	lw	$t4, PL_FILL($sp)
+	jal	libps_printf_fill
+	li	$a0, 48
+79:	lw	$t0, PL_CONV($sp)
+	nop
+	addiu	$at, $t0, -99
+	bnez	$at, 80f
+	addiu	$at, $t0, -115
+	jal	putchar
+	andi	$a0, $s6, 0xff
+	b	89f
+	nop
+80:	bnez	$at, 82f
+	nop
+81:	blez	$s7, 89f
+	nop
+	lbu	$a0, 0($s6)
+	addiu	$s6, $s6, 1
+	NOPS	PF_S
+	jal	putchar
+	addiu	$s7, $s7, -1
+	b	81b
+	nop
+	# The digits, first to last.
+82:	lw	$t3, PL_BODY($sp)
+	nop
+	subu	$t0, $s5, $t3
+	blez	$t0, 83f
+	nop
+821:	li	$a0, 48
+	sw	$t0, PL_T0($sp)
+	jal	putchar
+	nop
+	lw	$t0, PL_T0($sp)
+	nop
+	addiu	$t0, $t0, -1
+	bgtz	$t0, 821b
+	nop
+83:	andi	$at, $s3, 256
+	beqz	$at, 84f
+	nop
+	li	$a0, 48
+	jal	putchar
+	addiu	$s7, $s7, -1
+84:	blez	$s7, 89f
+	addiu	$s7, $s7, -1
+	lw	$t1, PL_SHIFT($sp)
+	nop
+	bnez	$t1, 85f
+	sll	$at, $s7, 2
+	lui	$t0, %hi(libps_pow10)
+	addu	$t0, $t0, $at
+	lw	$at, %lo(libps_pow10)($t0)
+	nop
+	divu	$zero, $s6, $at
+	mflo	$a0
+	mfhi	$s6
+	b	86f
+	addiu	$a0, $a0, 48
+85:	sll	$at, $s7, 2
+	addiu	$t0, $t1, -4
+	beqz	$t0, 851f
+	nop
+	subu	$at, $at, $s7
+851:	srlv	$t0, $s6, $at
+	sll	$at, $t1, 3
+	addiu	$at, $at, -17
+	and	$t0, $t0, $at
+	lui	$t1, %hi(libps_hexl)
+	andi	$at, $s3, 128
+	bnez	$at, 852f
+	addiu	$t1, $t1, %lo(libps_hexl)
+	addiu	$t1, $t1, 16
+852:	addu	$t1, $t1, $t0
+	lbu	$a0, 0($t1)
+86:	NOPS	PF_DIG
+	jal	putchar
+	nop
+	b	84b
+	nop
+89:	lw	$t4, PL_FILL($sp)
+	andi	$at, $s3, 1
+	beqz	$at, 1b
+	nop
+	jal	libps_printf_fill
+	li	$a0, 32
+	b	1b
+	nop
+90:	move	$v0, $s2
+	NOPS	PF_END
+	lw	$ra, PL_RA($sp)
+	lw	$s0, PL_S + 0($sp)
+	lw	$s1, PL_S + 4($sp)
+	lw	$s2, PL_S + 8($sp)
+	lw	$s3, PL_S + 12($sp)
+	lw	$s4, PL_S + 16($sp)
+	lw	$s5, PL_S + 20($sp)
+	lw	$s6, PL_S + 24($sp)
+	lw	$s7, PL_S + 28($sp)
+	jr	$ra
+	addiu	$sp, $sp, PL_FRAME
+	.size libps_va_printf, .-libps_va_printf
+
+# libps_printf_short takes a number's word into s6, its low half signed if short and not long.
+libps_printf_short:
+	lw	$s6, 0($s0)
+	addiu	$s0, $s0, 4
+	andi	$at, $s3, 96
+	addiu	$at, $at, -32
+	bnez	$at, 1f
+	nop
+	sll	$s6, $s6, 16
+	sra	$s6, $s6, 16
+1:	jr	$ra
+	nop
+
+# libps_printf_fill writes t4 copies of a0, keeping its count on the stack past its return.
+libps_printf_fill:
+	blez	$t4, 3f
+	nop
+	sw	$ra, PL_RA2($sp)
+	sw	$a0, PL_T0($sp)
+	sw	$t4, PL_T1($sp)
+1:	NOPS	PF_FILL
+	jal	putchar
+	nop
+	lw	$a0, PL_T0($sp)
+	lw	$t4, PL_T1($sp)
+	nop
+	addiu	$t4, $t4, -1
+	bgtz	$t4, 2f
+	sw	$t4, PL_T1($sp)
+	lw	$ra, PL_RA2($sp)
+	nop
+3:	jr	$ra
+	nop
+2:	b	1b
+	nop
+
+# putchar(c): kernel.go says what it does. The plain text goes to the write from here.
+	.section .text.putchar, "ax", @progbits
+	.align 2
+	.globl putchar
+	.type putchar, @function
+putchar:
+	andi	$a0, $a0, 0xff
+	sltiu	$at, $a0, 0x20
+	bnez	$at, 2f
+	sltiu	$at, $a0, 0x7f
+	bnez	$at, 1f
+	addiu	$at, $a0, -0xc7
+	beqz	$at, 1f
+	addiu	$at, $a0, -0xa4
+	sltiu	$at, $at, 3
+	beqz	$at, 3f
+	nop
+1:	lui	$t0, %hi(libps_tty_column)
+	lw	$at, %lo(libps_tty_column)($t0)
+	nop
+	addiu	$at, $at, 1
+	sw	$at, %lo(libps_tty_column)($t0)
+	.globl libps_putraw
+libps_putraw:
+3:	lui	$a1, %hi(libps_tty_char)
+	addiu	$a1, $a1, %lo(libps_tty_char)
+	sb	$a0, 0($a1)
+	li	$a0, 1
+	li	$a2, 1
+	li	$t1, 0x35
+	li	$t0, 0xb0
+	jr	$t0
+	nop
+	# A newline goes with a carriage return before it; the rest below a space to Go.
+2:	addiu	$at, $a0, -10
+	beqz	$at, 4f
+	nop
+	j	libps_putchar_other
+	nop
+4:	addiu	$sp, $sp, -24
+	sw	$ra, 16($sp)
+	lui	$t0, %hi(libps_tty_column)
+	sw	$zero, %lo(libps_tty_column)($t0)
+	li	$a0, 13
+	lui	$a1, %hi(libps_tty_char)
+	addiu	$a1, $a1, %lo(libps_tty_char)
+	sb	$a0, 0($a1)
+	li	$a0, 1
+	li	$a2, 1
+	li	$t1, 0x35
+	li	$t0, 0xb0
+	jalr	$t0
+	nop
+	lw	$ra, 16($sp)
+	li	$a0, 10
+	NOPS	PC_NL
+	b	3b
+	addiu	$sp, $sp, 24
+	.size putchar, .-putchar
+
+	.section .bss.libps_tty, "aw", @nobits
+	.align 2
+	.globl libps_tty_column
+libps_tty_column:
+	.space 4
+	.globl libps_tty_char
+libps_tty_char:
+	.space 4
+
+	.section .rodata.libps_null, "a", @progbits
+libps_null:
+	.asciz "(null)"
+
+# libps_mul64(a, b) and libps_mulhi(a, b) are the CPU's product, for the soft float: the compiler's
+# 64-bit product is a good deal longer than Sony's time for a product, whole.
+	.section .text.libps_mul, "ax", @progbits
+	.align 2
+	.globl libps_mul64
+libps_mul64:
+	multu	$a0, $a1
+	mflo	$v0
+	mfhi	$v1
+	jr	$ra
+	nop
+	.globl libps_mulhi
+libps_mulhi:
+	multu	$a0, $a1
+	mfhi	$v0
+	jr	$ra
+	nop
 # SETROT loads the rotation at the given register into the GTE, its words in t0 to t4 first.
 	.macro LOADROT m
 	lw	$t0, 0(\m)

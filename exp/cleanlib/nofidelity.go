@@ -59,3 +59,14 @@ func leaveKromGlyphs(frame uint32, s *byte) {}
 
 //go:inline
 func leaveKromImage(frame uint32, t *uint32, shape kromShape) {}
+
+// padAdd and the rest are what the arithmetic spends for Sony's time (fidelity.go).
+func padAdd(a, b, r uint64) {}
+func padMul(a, b uint64)    {}
+func padDiv(q uint64)       {}
+func padFix(a uint64)       {}
+func padFloat()             {}
+func padSqrt(x uint64)      {}
+func padExtend()            {}
+func padTrunc()             {}
+func padSin(x uint64)       {}

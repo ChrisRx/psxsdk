@@ -3,6 +3,7 @@
 package cleanlib
 
 import (
+	"math/bits"
 	"unsafe"
 
 	"go.chrisrx.dev/psx/internal/volatile"
@@ -170,3 +171,145 @@ func libps_krom_glyph(at int32, x, y int, addr uintptr)
 
 //export libps_krom_image
 func libps_krom_image(at int32, pix unsafe.Pointer, stride, lines uint32)
+
+// spend busy-waits for c cycles to the cycle, c counting the call.
+func spend(c uint32) {
+	if c >= spendShort+spinCall {
+		n := (c - spinCall) / spinTurn
+		spin(n)
+		c -= spinCall + n*spinTurn
+	}
+	if c >= delayCall {
+		delay((c - delayCall) / 2)
+	}
+}
+
+const (
+	spendShort = 200
+	delayCall  = 14
+)
+
+// The arithmetic's time on Sony's, from a fit of hundreds of probed operands (spec 31). A sum starts by its signs and their order, takes 24
+// cycles for each place between the two, 60 if the result moves up and 84 for each
+// place it moves down.
+const (
+	addEven    = 36
+	addEqual   = 1052
+	addOwn     = 610 // what the sum takes of its own to the pad
+	addPlace   = 24
+	addCarry   = 60
+	addDownBit = 81
+	mulBase    = 3832
+	mulBit     = 4
+	mulOwn     = 584
+	divBit     = 279
+)
+
+var addBases = [8]uint16{
+	0<<2 | 0<<1 | 0: 1340, // a and b positive, b the bigger
+	0<<2 | 0<<1 | 1: 1340,
+	0<<2 | 1<<1 | 0: 1640, // a positive, b negative
+	0<<2 | 1<<1 | 1: 1500,
+	1<<2 | 0<<1 | 0: 1490,
+	1<<2 | 0<<1 | 1: 1640,
+	1<<2 | 1<<1 | 0: 1790,
+	1<<2 | 1<<1 | 1: 1790,
+}
+
+func padAdd(a, b, r uint64) {
+	if dIsZero(a) || dIsZero(b) {
+		return
+	}
+	ea, eb := int32(a>>dFracBits&dExpMax), int32(b>>dFracBits&dExpMax)
+	big, d := ea, ea-eb
+	i := uint32(a>>63<<2 | b>>63<<1)
+	if ea >= eb {
+		i |= 1
+	} else {
+		big, d = eb, eb-ea
+	}
+	if d > 54 {
+		return
+	}
+	if dIsZero(r) {
+		spend(addEqual - addOwn)
+		return
+	}
+	t := uint32(addBases[i]) + addPlace*uint32(d)
+	if d == 0 {
+		t += addEven
+	}
+	switch m := int32(r>>dFracBits&dExpMax) - big; {
+	case m > 0:
+		t += addCarry
+	case m < 0:
+		t += addDownBit * uint32(-m)
+	}
+	spend(t - addOwn)
+}
+
+func padMul(a, b uint64) {
+	if dIsZero(a) || dIsZero(b) {
+		return
+	}
+	spend(mulBase + mulBit*uint32(bits.OnesCount64(a&dFracMask)+bits.OnesCount64(b&dFracMask)) - mulOwn)
+}
+
+func padDiv(q uint64) {
+	if q != 0 {
+		spinCycles(programDivPad + divBit*uint32(bits.OnesCount64(q)) - 4*uint32(bits.OnesCount64(q)))
+	}
+}
+
+func padFix(a uint64) {
+	if dIsZero(a) {
+		pace(programFixZeroPad)
+	} else {
+		pace(programFixPad)
+	}
+}
+
+func padFloat() { pace(programFloatPad) }
+
+const (
+	programDivPad     = 456
+	programFixPad     = 290
+	programFixZeroPad = 14
+	programFloatPad   = 302
+)
+
+// What sqrt and sin take beyond their arithmetic. Sony's sqrt scales by each power of two
+// (20,000 cycles each) and has more of its own besides; these are its means over the probed
+// arguments. Nothing goes on 0, on 1, whose Sony's is quicker, or below 0, not measured. Sony's sin
+// of 0 goes the long way round, and the rest has more than the arithmetic says, on the sum over
+// two programs that spend most of their time on it.
+const (
+	sqrtBasePad = 72000
+	sqrtExpPad  = 20000
+	sinZeroPad  = 6080
+	sinNearPad  = 7300
+	sinFarPad   = 3200
+	sinNearTop  = 0x3ff921fb54442d18 // pi/2
+)
+
+func padSqrt(b uint64) {
+	if b != 0 && b != 1023<<dFracBits && b&dSign == 0 {
+		e := int(b>>dFracBits&dExpMax) - 1023
+		spinCycles(sqrtBasePad + sqrtExpPad*uint32(max(e, -e)))
+	}
+}
+
+func padSin(b uint64) {
+	switch size := b &^ dSign; {
+	case size == 0:
+		spinCycles(sinZeroPad)
+	case size < sinNearTop:
+		spinCycles(sinNearPad)
+	default:
+		spinCycles(sinFarPad)
+	}
+}
+
+// What converting between float and double takes on Sony's, beyond the work.
+func padExtend() { delay(70) }
+func padTrunc()  { delay(64) }

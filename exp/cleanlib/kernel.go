@@ -142,13 +142,14 @@ func ExitCriticalSection() {
 // byte of c counts.
 //
 //export putchar
-func putchar(c int32) int32 {
+func putchar(c int32) int32
+
+// putcharBelowSpace is putchar for a byte below a space, from its assembly.
+//
+//export libps_putchar_other
+func putcharBelowSpace(c int32) int32 {
 	b := byte(c)
-	if b >= ' ' {
-		if b <= '~' || b >= 0xa4 && b <= 0xa6 || b == 0xc7 {
-			ttyColumn++
-		}
-	} else if putcharOther(b) {
+	if putcharOther(b) {
 		return putcharLast
 	}
 	volatile.StoreUint8(&ttyChar, b)
@@ -186,6 +187,8 @@ func putcharOther(b byte) bool {
 // ttyColumn is the column putchar has reached, for a tab: only its own printing
 // characters move it, and only a newline sets it back. Backspace and a carriage
 // return leave it, and write and putc go around it (probe spec/probes/ctab).
+//
+//go:extern libps_tty_column
 var ttyColumn uint32
 
 // ttyPrintf prints format to the TTY (file 1) as the reference library's
@@ -297,6 +300,8 @@ func ttyDecimal(v int32) {
 }
 
 // ttyChar is the character ttyPut hands the kernel.
+//
+//go:extern libps_tty_char
 var ttyChar byte
 
 // ttyPut writes c to the TTY through the kernel's write(1, &c, 1).
