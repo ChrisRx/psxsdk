@@ -81,18 +81,13 @@ func (f *buildFlags) targetName() string {
 // target file inherits the resident target and says for itself what it links.
 func (f *buildFlags) overImage() bool { return f.libps == "resident" || f.target != "" }
 
-// check rejects a --libps value that names no library, and a program for the
-// Go API on the resident library, whose layer sits on the library linked in.
-func (f *buildFlags) check(pkg string) error {
+// check rejects a --libps value that names no library.
+func (f *buildFlags) check() error {
 	switch f.libps {
 	case "static", "resident":
-	default:
-		return fmt.Errorf("--libps %q names no library: static or resident", f.libps)
+		return nil
 	}
-	if f.overImage() && importsGoAPI(pkg) {
-		return fmt.Errorf("%s imports %s, which needs --libps static", pkg, goAPI)
-	}
-	return nil
+	return fmt.Errorf("--libps %q names no library: static or resident", f.libps)
 }
 
 // logf prints a step's progress with -v.
@@ -115,7 +110,7 @@ func pkgName(pkg string) (string, error) {
 // build compiles pkg and writes the PSX-EXE to exe and, if elf is not empty,
 // the ELF, with its traps removed, to elf. Either may be empty.
 func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
-	if err := f.check(pkg); err != nil {
+	if err := f.check(); err != nil {
 		return err
 	}
 	start := time.Now()

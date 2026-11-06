@@ -24,6 +24,13 @@ import "unsafe"
 //export FntPrint
 func FntPrint(s *byte) int32
 
+// FntPrintStream writes s to print stream id, for FntFlush to draw, with the same
+// caution about percent directives as FntPrint: in C it is FntPrint with its
+// optional first argument. It returns the number of characters in the stream.
+//
+//export libps_FntPrintStream
+func FntPrintStream(id int32, s *byte) int32
+
 // KanjiFntPrint writes the Shift JIS string s to the current Kanji print
 // stream, for KanjiFntFlush to draw, with the same caution about percent
 // directives as FntPrint. It returns the number of characters in the
