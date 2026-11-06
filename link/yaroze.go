@@ -11,8 +11,8 @@ import (
 	"go.chrisrx.dev/psx/format/psx"
 )
 
-// libpsGz is the Net Yaroze library as the boot disc leaves it resident in
-// RAM, a PSX-EXE, gzipped.
+// libpsGz is the clean library, exp/cleanlib, laid out as a Net Yaroze's boot disc
+// leaves its library resident in RAM, a PSX-EXE, gzipped. task image builds it.
 //
 //go:embed libps.exe.gz
 var libpsGz []byte
@@ -20,7 +20,7 @@ var libpsGz []byte
 // Libps returns the Net Yaroze library as a PSX-EXE, read the first time it
 // is asked for.
 var Libps = sync.OnceValues(func() (*psx.File, error) {
-	// PROTOTYPE: an image of the Go library laid out as the resident one.
+	// Another image in its place, for comparing programs on two of them.
 	if p := os.Getenv("PSX_LIBPS_IMAGE"); p != "" {
 		return psx.Open(p)
 	}

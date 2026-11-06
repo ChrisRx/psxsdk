@@ -1,7 +1,8 @@
-//go:build yaroze && golibps && cleanlib
+//go:build yaroze && cleanlib
 
 package yaroze
 
-// With the cleanlib tag as well, the playstation-yaroze-go target links
-// the clean-room library, exp/cleanlib, in place of exp/libps.
+// The playstation-yaroze-clean target links the clean-room library in rather
+// than calling the resident image; this import is what brings it in, and the
+// bindings' bodyless declarations resolve to it.
 import _ "go.chrisrx.dev/psx/exp/cleanlib"

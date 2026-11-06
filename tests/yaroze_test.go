@@ -271,12 +271,21 @@ func TestYarozePrint(t *testing.T) {
 // TestYarozeLoadAndRun uploads an ECOFF executable, one of Sony's samples,
 // as sioload does, starts it, and checks what it draws.
 func TestYarozeLoadAndRun(t *testing.T) {
+	dir := os.Getenv("PSX_SONY_TESTDATA")
+	if dir == "" {
+		t.Skip("PSX_SONY_TESTDATA names a private copy of the sample, which is Sony's")
+	}
 	eachMonitor(t, func(t *testing.T, boot boot) {
 		m, _, mon := boot(t)
-		assert.NoError(t, mon.LoadFile(t.Context(), "../format/ecoff/testdata/main-ecoff"))
+		assert.NoError(t, mon.LoadFile(t.Context(), filepath.Join(dir, "main-ecoff")))
 		assert.NoError(t, mon.Run(t.Context()))
 		m.RunFrames(300)
-		m.Golden("yaroze-load.png")
+		// Sony's library and font on its monitor, and ours on ours.
+		if strings.HasSuffix(t.Name(), "/sony") {
+			m.Golden("yaroze-load.png")
+		} else {
+			m.Golden("yaroze-load-ours.png")
+		}
 	})
 }
 

@@ -3,11 +3,12 @@ title: libpsdis
 weight: 13
 ---
 
-`libpsdis` writes an annotated disassembly of the Net Yaroze resident library, the image [`eco2exe`](eco2exe.md) combines into every program. It exists for one job: reading the library's code when reimplementing a function of it in Go, which is what `exp/libps` does. Its output is Sony's code and is never committed; it goes to a directory outside the repository.
+`libpsdis` writes an annotated disassembly of Sony's Net Yaroze resident library, and `libpsdis score` compares the clean library's instructions with it, entry point by entry point. Sony's image is not in this repository: `--image` or `PSX_SONY_LIBPS` names a private copy. Both are for the spec side of the clean-room work in `exp/cleanlib`, off limits to the side that writes the library. Their input and output are never committed.
 
 ```bash
 $ libpsdis -o /tmp/dis          # the whole image, as /tmp/dis/libps.txt
 $ libpsdis -f putchar -f VSync  # named functions, to standard output
+$ libpsdis score -o scores.txt  # how close each entry point is
 ```
 
 The only names the image has are the entry points the SDK's `symusr.o` gives, as [`ecoff2asm`](ecoff2asm.md) converted them to `playstation-yaroze-symusr.S`. Every other function is named by its address, `func_8002048c`. A function starts at a named entry point or at the target of a `jal` and ends where the next begins; the few named symbols past the last call target are the library's variables, not code, unless a `jr ra` follows them.

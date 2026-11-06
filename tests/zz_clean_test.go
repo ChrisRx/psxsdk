@@ -751,3 +751,8 @@ func TestCleanStart(t *testing.T) {
 		}
 	}
 }
+
+func atoi(s string) int {
+	n, _ := strconv.Atoi(s)
+	return n
+}

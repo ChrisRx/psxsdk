@@ -32,7 +32,7 @@ func main() {
 
 The `yaroze` package binds the Net Yaroze library for TinyGo. Functions, types and constants keep the exact names from Sony's `libps.h`, so Sony's [manuals](../manuals/index.md) apply to the Go code unchanged.
 
-- **On the console**, under the `yaroze` build tag the `playstation-yaroze` target sets, each function is a bodyless declaration the linker resolves against the resident library's fixed addresses, exactly as a C program's calls are.
+- **On the console**, under the `yaroze` build tag, each function is a bodyless declaration the linker resolves. By default that is the clean-room library, `exp/cleanlib`, linked into the program. With `--libps resident` it is the library's fixed addresses, exactly as a C program's calls are on a Net Yaroze.
 - **In every other build**, each is a stub that panics, naming itself and saying where the real one is. A program still compiles and type-checks on the host: an editor shows the library's documentation, `go vet` runs, and a call into the library fails at run time rather than at the build.
 
 The bindings are generated from `libps.h` by [`hdr2go`](../tools/hdr2go.md), with comments condensed from Sony's library reference. Every struct's size is asserted against clang's layout when the console build compiles, so a struct a byte off from the C one fails the build rather than making a disc that draws nothing.
@@ -87,6 +87,6 @@ The [`disc`](disc) package declares a program's files. A registration names the 
 
 ## Memory
 
-A program's data lives in its own memory, as everything else does. The program loads at 0x80090000, where Sony's memory map starts the application area, just above the resident library, and has the rest of the console's two megabytes, less the stack, to itself.
+A program's data lives in its own memory, as everything else does. The program loads at 0x80010000 with its library inside it, and has the rest of the console's two megabytes, less the stack, to itself. With `--libps resident` it loads at 0x80090000, where Sony's memory map starts the application area, just above the resident library.
 
 The [examples](../examples/index.md) are ports of Sony's Net Yaroze samples and demos, each using a different part of the machine, and the [tutorial](../tutorial/index.md) starts from nothing.
