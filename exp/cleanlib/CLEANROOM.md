@@ -69,6 +69,8 @@ summarize them:
 - `docs/superpowers/` and `docs/architecture/libps-go.md`.
 - Profiles of the reference builds (`TestCleanProfile` on a `-ref` or
   `-sony` build): their symbols name the decompiled library's functions.
+  `TestCleanStart` on a Sony build reads instructions at the PC: run it on
+  clean builds only.
 - `tests/zz_image_test.go`, and `.build/image/`, `.build/archive/` and any
   other build output of the library image prototype. `.build/instr/` and what
   `libpsdis score` writes: a score to climb would steer the work toward Sony's code.
