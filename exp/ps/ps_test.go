@@ -29,7 +29,7 @@ func TestStubPanics(t *testing.T) {
 	} {
 		assert.Panic(t, stub(name), call, name)
 	}
-	assert.Equal(t, true, strings.Contains(stub("X"), "ps.X: ") && strings.Contains(stub("X"), "playstation-yaroze-go"), stub("X"))
+	assert.Equal(t, true, strings.Contains(stub("X"), "ps.X: ") && strings.Contains(stub("X"), "playstation-yaroze-clean"), stub("X"))
 }
 
 // TestZeroSound checks that a bank or sequence that never opened does

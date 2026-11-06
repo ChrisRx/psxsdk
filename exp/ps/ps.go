@@ -1,14 +1,14 @@
 // Package ps is the PlayStation as a Go program sees it: a screen drawn
 // frame by frame, sprites and boxes on it, text, the controllers, and
 // music from a sound bank. It is the Net Yaroze library in Go,
-// exp/libps, under an ordinary Go surface: types with methods, strings,
+// exp/cleanlib, under an ordinary Go surface: types with methods, strings,
 // ints and errors, where the yaroze package keeps the library's C names
 // and signatures for programs written against them.
 //
 // A program that imports it is built against the Go library: yaroze
-// build, disc and run see the import and link the library in, as
-// --libps go does, so nothing is resident under the program and the
-// console's memory from the load address up is its own.
+// build, disc and run link the library in, as --libps static does, so
+// nothing is resident under the program and the console's memory from
+// the load address up is its own.
 //
 //	var screen = ps.Screen{Background: ps.Color{R: 60, G: 120, B: 120}}
 //

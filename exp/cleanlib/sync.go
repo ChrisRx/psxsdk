@@ -85,7 +85,11 @@ func VSyncCallback(f uintptr) {
 // negative mode returns the vertical blanks since the library started, without
 // waiting.
 //
+// Never inlined: hot reload applies a patch at the address of this symbol, on
+// the static target as on the resident image.
+//
 //export VSync
+//go:noinline
 func VSync(mode int32) int32 {
 	libStart()
 	now := volatile.LoadUint32(&vsync.blanks)
