@@ -1034,10 +1034,9 @@ func tilesScreenshot(t *testing.T, name string) {
 	if name != "tiles" {
 		return
 	}
+	// At the far corner of the map, where the scrolling stops.
 	m.Hold(1, emu.ButtonRight|emu.ButtonDown, 200)
-	bg := m.Sym("main.bg")
-	scroll := m.Read32(bg + 12)
-	assert.Equal(t, [2]int16{40*16 - 320, 32*16 - 240}, [2]int16{int16(scroll), int16(scroll >> 16)}, "scrolled to the far corner")
+	m.Golden("tiles-corner.png")
 }
 
 // The layout of yaroze.Object on the console: a GsDOBJ2 of 16 bytes and a
