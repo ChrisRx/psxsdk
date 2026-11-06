@@ -475,8 +475,10 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 		m.breaks.resuming = false
 	}
 
+	k.Hook, _ = m.bStub()
+
 	// Logging, the CPU stops anywhere in the first 256 bytes, which takes
-	// in 0xb4 as well as the exception vector and the BIOS's tables.
+	// in the stub at 0xb0 as well as the exception vector and the BIOS's tables.
 	if logging {
 		k.Hook, k.HookMask, k.Hooked = 0, 0x3fffff00, true
 	} else if m.hookTarget != 0 {
@@ -486,28 +488,30 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 	var i uint64
 	for i < n && gpu.frames < frames {
 		// A call through the B-function table lands at 0xb0 and jumps to
-		// the handler at 0xb4, with the function number in $t1 and the
-		// handler's address in $t0. The call is looked at when the
-		// handler is reached rather than at the jump: an interrupt taken
-		// in the jump's delay slot returns to the jump, which runs again,
-		// and the call would be seen twice.
+		// the handler, with the function number in $t1 and the handler's
+		// address in $t0. The call is looked at when the handler is reached
+		// rather than on the way: an interrupt returns to the instruction it
+		// landed on, or to the jump from its delay slot, which then runs
+		// again, and the call would be seen twice.
 		if tty && !logging {
-			if c.PC&0x3fffffff == 0xb4 {
-				// The kernels jump through a register there; a test's
-				// stand-in may not, and is looked at as it is.
-				if op := m.Bus.Read32(0xb4); op&0xfc1fffff == 0x08 && op>>21&31 != 31 {
+			if pc := c.PC & 0x3fffffff; pc == 0xb4 || pc == 0xb8 {
+				at, reg := m.bStub()
+				switch {
+				case pc == at && reg != 0:
 					m.hookCall = [5]uint32{c.R[9], c.R[4], c.R[5], c.R[6], c.R[31]}
-					m.hookTarget = c.R[op>>21&31] & 0x3fffffff
+					m.hookTarget = c.R[reg] & 0x3fffffff
 					k.Hook = m.hookTarget
-				} else {
+				case pc == at:
 					m.bFunction()
+				case pc < at:
+					k.Hook = at
 				}
-			} else if m.hookTarget != 0 && c.PC&0x3fffffff == m.hookTarget {
+			} else if m.hookTarget != 0 && pc == m.hookTarget {
 				if m.hookCall == [5]uint32{c.R[9], c.R[4], c.R[5], c.R[6], c.R[31]} {
 					m.bFunction()
 				}
 				m.hookTarget = 0
-				k.Hook = 0xb4
+				k.Hook, _ = m.bStub()
 			}
 		}
 		if logging && c.PC&0x3fffff00 == 0 {
@@ -593,6 +597,19 @@ func (f *failure) take() error {
 	err := f.err
 	f.err = nil
 	return err
+}
+
+// bStub finds the jump in the stub at 0xb0: its address and the register it goes
+// through. The kernels jump at 0xb4 or 0xb8. A test's stand-in may not jump, which
+// is reg 0, and is looked at as it is at 0xb4.
+func (m *Machine) bStub() (at, reg uint32) {
+	for _, at := range []uint32{0xb4, 0xb8} {
+		op := m.Bus.Read32(at)
+		if reg := op >> 21 & 31; op&0xfc1fffff == 0x08 && reg != 31 {
+			return at, reg
+		}
+	}
+	return 0xb4, 0
 }
 
 // bFunction prints what a call to the BIOS's putchar or puts is printing,
