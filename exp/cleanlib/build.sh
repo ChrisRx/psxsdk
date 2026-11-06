@@ -20,7 +20,7 @@ sync() {
   rm -f "$MOD/$1"/*.go
   cp "$1"/*.go "$MOD/$1/" 2>/dev/null || true
 }
-for d in yaroze exp/cleanlib internal/volatile disc "$DIR"; do
+for d in yaroze exp/cleanlib exp/ps exp/ps/scene exp/ps/stage internal/volatile disc "$DIR"; do
   sync "$d"
 done
 for d in $(cd exp/cleanlib && find . -mindepth 1 -type d -not -path './spec*' -not -path './gen*'); do

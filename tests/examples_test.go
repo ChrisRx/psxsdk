@@ -227,7 +227,7 @@ func invadersScreenshot(t *testing.T, name string) {
 	// The exp/ps port counts frames in its screen, whose count is the
 	// screen's first field.
 	counter := "main.frameNumber"
-	if name == "invaders-ps" {
+	if strings.HasPrefix(name, "invaders-ps") {
 		counter = "main.screen"
 	}
 	m.RunUntilCount(counter, 30, frameBudget)
@@ -280,7 +280,7 @@ func dinoScreenshot(t *testing.T, name string) {
 	parallel(t)
 	m := bootExample(t, name)
 	counter := "main.frameNumber"
-	if name == "dino-ps" {
+	if strings.HasPrefix(name, "dino-ps") {
 		counter = "main.screen"
 	}
 	m.RunUntilCount(counter, 120, frameBudget)
@@ -723,8 +723,10 @@ func TestSquareScreenshotResident(t *testing.T) { squareScreenshot(t, "square-re
 
 // TestGalleryScreenshotPS checks exp/examples/gallery, one of everything
 // the exp/ps API draws, against its own picture.
-func TestGalleryScreenshotPS(t *testing.T) {
-	m := bootExample(t, "gallery-ps")
+func TestGalleryScreenshotPS(t *testing.T) { galleryScreenshot(t, "gallery-ps") }
+
+func galleryScreenshot(t *testing.T, name string) {
+	m := bootExample(t, name)
 	m.RunUntilCount("main.screen", 30, frameBudget)
 	m.Golden("gallery.png")
 	noComplaints(t, m)

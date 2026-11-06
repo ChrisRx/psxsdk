@@ -53,6 +53,9 @@ tasks:
         vars: { NAME: '{{.ITEM}}' }
       - task: build:disc:resident
         vars: { NAME: hello, DIR: docs/tutorial/hello }
+      - for: [card, cdda, dino, gallery, invaders, jumpcube, pads, quest, square, tiles, timers]
+        task: build:disc:resident
+        vars: { NAME: '{{.ITEM}}-ps', DIR: 'exp/examples/{{.ITEM}}' }
 
   # The programs under exp/examples, written against the exp/ps API, go
   # onto .build/NAME-ps, linked statically as every program is.

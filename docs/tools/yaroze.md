@@ -45,7 +45,7 @@ or on its own with `go install go.chrisrx.dev/psx/cmd/yaroze@latest`.
 
 Every command that compiles takes `--opt`, TinyGo's optimization level, 2 by default since a frame has a budget, `--tags`, `--load file@addr` to put a file into the executable as siocons' `local dload` did, `--hot` to build a program that takes patches, which calls the main package's functions through a slot each and reserves 256KB for the patches, `--target FILE.json`, a TinyGo target that inherits `playstation-yaroze` and changes what the program needs, such as where it is linked, and `-v`, which says how the compiler ran and how long each step took.
 
-`--libps` chooses how a program gets the Net Yaroze library. `static`, the default, links the library in like any package: only what the program calls is linked, and the program loads at `0x80010000`. `resident` lays the program over the image a Net Yaroze leaves in memory, at `0x80090000`, as an original program runs, with the library at its fixed addresses. That is the way to run a program on a real Net Yaroze through its boot disc. A C project is always built this way, and a program that imports the Go API, `exp/ps`, always links statically.
+`--libps` chooses how a program gets the Net Yaroze library. `static`, the default, links the library in like any package: only what the program calls is linked, and the program loads at `0x80010000`. `resident` lays the program over the image a Net Yaroze leaves in memory, at `0x80090000`, as an original program runs, with the library at its fixed addresses. That is the way to run a program on a real Net Yaroze through its boot disc. A C project is always built this way.
 
 ## The window
 
