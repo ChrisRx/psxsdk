@@ -50,10 +50,7 @@ func (f *buildFlags) patch(ctx context.Context, pkg, base string, at uint32, out
 		return err
 	}
 	defer os.RemoveAll(tmp)
-	if f.libps != "go" && importsGoAPI(pkg) {
-		f.libps = "go"
-	}
-	if err := f.check(); err != nil {
+	if err := f.check(pkg); err != nil {
 		return err
 	}
 	b := &toolchain.Build{

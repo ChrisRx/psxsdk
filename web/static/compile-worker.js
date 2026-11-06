@@ -4,7 +4,7 @@
 //
 // The page sends {type: "build", id, files, hot, libps}, the project's
 // files as {path, data}, its Go files at the root and its data files under
-// assets/, with libps "resident" or "go" naming the Net Yaroze library to
+// assets/, with libps "static" or "resident" naming the Net Yaroze library to
 // build against (see pipeline.js), or {type: "load", id} to fetch the
 // compiler ahead of the first build, answered by {id, ok, targets}, the
 // targets the compiler's cache can build for, or {id, ok: false, error}.

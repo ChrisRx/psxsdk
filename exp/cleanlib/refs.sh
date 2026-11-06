@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # refs.sh: rebuilds the reference discs (.build/NAME-ref) of regress.sh's
-# list against exp/libps as it is, four at a time. Run it from the repository
-# root after a change to exp/libps, and never alongside regress.sh. A disc
+# list against exp/libps, four at a time. exp/libps left the tree, so run it in a
+# worktree of the branch sony-reference (spec 15), and copy .build/NAME-ref back,
+# and never alongside regress.sh. A disc
 # that fails to build is named with the end of its log, and the script exits
 # nonzero once the others are done.
 set -euo pipefail
