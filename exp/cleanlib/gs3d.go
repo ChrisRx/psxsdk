@@ -244,12 +244,6 @@ const (
 	refTurnTwo    = 19
 )
 
-// delay spends n instructions and the call. In assembly, for what a Go call needs to
-// spend exactly.
-//
-//export libps_delay
-func delay(n uint32)
-
 // magnitude returns the size of v, as an unsigned value for the most negative.
 //
 //go:inline

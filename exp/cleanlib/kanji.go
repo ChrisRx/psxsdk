@@ -257,18 +257,22 @@ func putGlyph(pix []uint32, cols, col, row int, addr uintptr) {
 //
 //export Krom2Tim
 func Krom2Tim(sjis *byte, taddr *uint32, dx, dy, cx, cy int32, fg, bg uint32) int32 {
-	r, shape := krom2Tim(sjis, taddr, dx, dy, cx, cy, fg, bg, false)
+	clearKromStack(krom2TimFrame)
+	r, shape := krom2Tim(sjis, taddr, dx, dy, cx, cy, fg, bg, false, krom2TimFrame)
 	if r == 0 {
-		spinCycles(krom2TimPad + krom2TimCellPad*shape.cells + krom2TimBlankPad*(shape.reached-shape.glyphs) - krom2TimGlyphBack*shape.glyphs)
+		leaveKromImage(krom2TimFrame, taddr, shape)
+		spinCycles(krom2TimPad + krom2TimCellPad*shape.cells + krom2TimBlankPad*(shape.reached-shape.glyphs) - krom2TimGlyphBack*shape.glyphs - krom2TimRowBack*shape.rows)
 	}
 	return r
 }
 
-// kromShape is what a string made of a TIM, for Krom2Tim's time: the image's
-// cells, the cells the string's characters and newlines went past, and the
-// glyphs among them.
+// kromShape is what a string made of a TIM, for what Krom2Tim spends and leaves:
+// the image's cells, columns and rows, the cells the string's characters and
+// newlines went past, and the glyphs among them.
 type kromShape struct {
 	cells   uint32
+	cols    uint32
+	rows    uint32
 	reached uint32
 	glyphs  uint32
 }
@@ -276,13 +280,21 @@ type kromShape struct {
 // The rest of Krom2Tim's time. Sony's is 610,500 cycles, 2,050 for each cell of the
 // image, 2,225 for each it reached, and 875 for each glyph (probe: 1 to 33 characters,
 // with and without newlines), against the work here of 1,035 a cell and 3,180 a
-// glyph. The figure for a glyph comes off two-byte and one-byte characters alike. The
-// first frame's vertical blank goes on top of the pad.
+// glyph, and the time of what it leaves on the stack: the clear's 589,632 and the calls' 48, and 384 a cell
+// and 288 a row for the image, and for a glyph its ROM bytes. The figure for a glyph comes off
+// two-byte and one-byte characters alike. The first frame's vertical blank goes on top
+// of the pad.
 const (
-	krom2TimPad       = 595000
-	krom2TimCellPad   = 1015
+	krom2TimPad       = 595000 - 589632 - 48
+	krom2TimCellPad   = 1015 - 384
 	krom2TimBlankPad  = 2225
-	krom2TimGlyphBack = 100
+	krom2TimGlyphBack = 100 + 396
+	krom2TimRowBack   = 288
+
+	// krom2TimFrame and krom2Tim2Frame are how far Krom2Tim's and Krom2Tim2's sp
+	// are below their callers', which what they leave on the stack is placed by.
+	krom2TimFrame  = 80
+	krom2Tim2Frame = 72
 )
 
 // Krom2Tim2 is Krom2Tim reading the string as user-defined characters: a
@@ -292,11 +304,13 @@ const (
 //
 //export Krom2Tim2
 func Krom2Tim2(sjis *byte, taddr *uint32, dx, dy, cx, cy int32, fg, bg uint32) int32 {
-	r, _ := krom2Tim(sjis, taddr, dx, dy, cx, cy, fg, bg, true)
+	clearKromStack(krom2Tim2Frame)
+	r, shape := krom2Tim(sjis, taddr, dx, dy, cx, cy, fg, bg, true, krom2Tim2Frame)
+	leaveKromImage(krom2Tim2Frame, taddr, shape)
 	return r
 }
 
-func krom2Tim(s *byte, taddr *uint32, dx, dy, cx, cy int32, fg, bg uint32, user bool) (int32, kromShape) {
+func krom2Tim(s *byte, taddr *uint32, dx, dy, cx, cy int32, fg, bg uint32, user bool, frame uint32) (int32, kromShape) {
 	// The first pass checks the characters and lays them out: they fill
 	// rows of 16 cells, and a newline starts the next row. The image is
 	// as wide as the characters up to 16 cells, or 16 with a newline, and
@@ -314,10 +328,12 @@ func krom2Tim(s *byte, taddr *uint32, dx, dy, cx, cy int32, fg, bg uint32, user 
 		switch _, kind := glyphFor(c, user); kind {
 		case glyphBadSJIS:
 			ttyPrintf("bad sjis code 0x%x\n", uint32(c), 0)
+			leaveKromGlyphs(frame, s)
 			return -1, kromShape{}
 		case glyphBadHankaku:
 			if !user {
 				ttyPrintf("bad hankaku code 0x%x\n", uint32(c), 0)
+				leaveKromGlyphs(frame, s)
 				return -1, kromShape{}
 			}
 			result = -1
@@ -356,11 +372,14 @@ func krom2Tim(s *byte, taddr *uint32, dx, dy, cx, cy int32, fg, bg uint32, user 
 		if c != '\n' {
 			addr, _ := glyphFor(c, user)
 			putGlyph(pix, cols, at.x, at.y, addr)
+			leaveKromGlyph(frame, at.x, at.y, addr)
 		}
 		at = at.past(c)
 	}
 	return result, kromShape{
 		cells:   uint32(cols * rows),
+		cols:    uint32(cols),
+		rows:    uint32(rows),
 		reached: uint32(at.y*kanjiRow + at.x),
 		glyphs:  uint32(count),
 	}
@@ -466,15 +485,7 @@ type kanjiFrame struct {
 	_ [kanjiFrameBytes - kanjiImageWords*4 - kanjiDrawn*8]byte
 }
 
-const (
-	kanjiFrameBytes = 65536
-	kanjiImageWords = (kanjiDrawn/kanjiRow + 1) * kanjiCell * kanjiRow * 2
-
-	// kanjiFrameExtra is what the assembly takes off the stack besides the
-	// frame: the callee's argument home at the bottom and, above the frame,
-	// what brings the image to Sony's depth below the caller's sp.
-	kanjiFrameExtra = 16 + 40
-)
+const kanjiImageWords = (kanjiDrawn/kanjiRow + 1) * kanjiCell * kanjiRow * 2
 
 // kanjiFlushFrame calls libps_kanji_flush(st, frame) with size bytes taken off
 // the stack, in assembly: the compiler moves a local this big to the heap.

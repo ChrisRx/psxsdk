@@ -6,21 +6,32 @@
 # Each path takes the cycles Sony's did, from black-box probes. An instruction costs 2
 # cycles, so that a path is a count of instructions and the nops make up the difference.
 # The results are not all IEEE's: the comments say where they are not.
+#
+# A program's static build, LIBPS_GO without LIBPS_FIDELITY, has nothing to match, and NOPS
+# and WAIT are empty there (spec 30). A nop that a load needs is written out.
 
 	.set noreorder
 	.set noat
 
+#if defined(LIBPS_FIDELITY) || !defined(LIBPS_GO)
+#define MATCH_SONY
+#endif
+
 	.macro NOPS n
+#ifdef MATCH_SONY
 	.rept \n
 	nop
 	.endr
+#endif
 	.endm
 
 # WAIT spends n instructions, an odd number from 3 up, with t9 gone.
 	.macro WAIT n
+#ifdef MATCH_SONY
 	li    $t9, ((\n) - 3) / 2
 97:	bnez  $t9, 97b
 	addiu $t9, $t9, -1
+#endif
 	.endm
 
 	.macro FUNC name
@@ -159,17 +170,20 @@
 	jal   __addsf3
 	nop
 	lw    $ra, 16($sp)
-	NOPS  3
+	nop
+	NOPS  2
 	jr    $ra
 	addiu $sp, $sp, 24
 1:	move  $v0, $a0
 	lw    $ra, 16($sp)
-	NOPS  5
+	nop
+	NOPS  4
 	jr    $ra
 	addiu $sp, $sp, 24
 2:	xor   $v0, $a1, $t2
 	lw    $ra, 16($sp)
-	NOPS  12
+	nop
+	NOPS  11
 	jr    $ra
 	addiu $sp, $sp, 24
 
@@ -545,11 +559,14 @@ SetVideoMode:
 # asks for code 0, which is a blank cell, and makes the result -1. Sixteen rows are the
 # most: at the end of the sixteenth the string is over, whatever it goes on to hold.
 #
-# It makes the time of Sony's, whose stack frame of 74KB it does not: the pixels are written
+# It makes the time of Sony's, and its stack frame of 73,872 bytes as Krom2Tim's is (spec 30):
+# 73,728 bytes cleared at 8 cycles a byte, from 88 above its sp, then each cell's ROM bytes in
+# a table there and the image 8,192 bytes above it, in rows of 16 cells. The pixels are written
 # last, from the glyphs' addresses, which wait in the cells' first words. The time from
 # entry to the first Krom2RawAdd2, from one to the next and from the last to the return are
 # Sony's, on a budget in s7 that each path takes its own cycles from, and KROMSPIN
-# spends the rest of. Interrupts come on top on both.
+# spends the rest of. The clear takes what the first of those has, and what it has not cleared
+# by the first call comes off the last. Interrupts come on top on both.
 
 # KROMSPIN spends t9's cycles, an even number from 12 up. t0 goes.
 	.macro KROMSPIN
@@ -562,7 +579,7 @@ SetVideoMode:
 	addiu $t9, $t9, -4
 	.endm
 
-	.set K_START, 589510 + 18 - 180	# to the first character, less the fixed work
+	.set K_START, 589510 + 18 - 180 - 18	# to the first character, less the fixed work
 	.set K_FIRST, 22		# if there is a character at all
 	.set KP_TWO, 36			# the first pass, by kind of character
 	.set KP_NL, 34
@@ -571,7 +588,7 @@ SetVideoMode:
 	.set K_G2, 428 - 18 - 26 - 10	# the wait before a two-byte code's call
 	.set K_GBAD, 506 - 18 - 30 - 10	# before a byte that is not text
 	.set K_GASC, 18 + 36 + 14	# what comes off Sony's time for a byte of text
-	.set K_END, 60			# what comes off the end's time in any case
+	.set K_END, 82			# what comes off the end's time in any case
 	.set K_E00, K_END + 16		# by where the cursor ended: on the first row or not,
 	.set K_E0X, K_END + 22		# in the row's first cell or not
 	.set K_E10, K_END + 32
@@ -579,7 +596,8 @@ SetVideoMode:
 	.set K_E16, K_END + 26
 	.set K_E1X, K_END + 32
 	.set K_ROW, 26			# a cell with nothing in it
-	.set K_CELL, 964		# a cell with a glyph
+	.set K_CELL, 1160		# a cell with a glyph
+	.set K_DROP, 73872 - 56		# the frame past the saved registers
 
 	.section .text.Krom2Tim2, "ax", @progbits
 	.align 2
@@ -717,7 +735,20 @@ Krom2Tim2:
 	sll   $s2, $s2, 3
 	move  $s4, $zero
 	move  $s5, $zero
-	move  $t9, $s7
+	lui   $t0, %hi(K_DROP)
+	ori   $t0, $t0, %lo(K_DROP)
+	subu  $sp, $sp, $t0
+	addiu $t0, $s7, -12
+	srl   $t5, $t0, 3
+	addiu $t4, $sp, 88
+	addu  $t5, $t5, $t4
+9:	addiu $t4, $t4, 1
+	nop
+	bne   $t4, $t5, 9b
+	sb    $zero, -1($t4)
+	sw    $t4, 16($sp)
+	andi  $t0, $t0, 7
+	addiu $t9, $t0, 12
 	KROMSPIN
 
 	# Each character: its code, the time it takes on Sony's, the call, and its address in
@@ -817,9 +848,22 @@ Krom2Tim2:
 	li    $t0, 40118 - K_E1X
 	addu  $s7, $s7, $t0
 
-	# Then the glyphs: each cell's word and its 15 rows of two bytes. t3 counts the
-	# cells, t8 is the cell, s2 the bytes a row of the image takes.
-24:	move  $t8, $zero
+	# What is left of the clear, and then the glyphs: each cell's word and its 15 rows of two
+	# bytes, with a0 the frame's image, a2 the cell's place in the table and v1 in the image.
+	# t3 counts the cells, t8 is the cell, s2 the bytes a row of the image takes.
+24:	lw    $t4, 16($sp)
+	lui   $t0, %hi(K_DROP)
+	ori   $t0, $t0, %lo(K_DROP)
+	addu  $t0, $t0, $sp
+	subu  $t1, $t0, $t4
+	sll   $t1, $t1, 3
+	subu  $s7, $s7, $t1
+241:	addiu $t4, $t4, 1
+	nop
+	bne   $t4, $t0, 241b
+	sb    $zero, -1($t4)
+	addiu $a0, $sp, 88 + 8192
+	move  $t8, $zero
 25:	beq   $t8, $t3, 30f
 	srl   $t0, $t8, 4
 	sll   $t0, $t0, 11
@@ -833,12 +877,21 @@ Krom2Tim2:
 	addiu $s7, $s7, -K_ROW
 	b     25b
 	nop
-26:	lui   $t6, %hi(krom_nibbles)
+26:	addu  $v1, $t0, $a0
+	andi  $a2, $t0, 0x78
+	sll   $a2, $a2, 2
+	srl   $t1, $t0, 11
+	sll   $t1, $t1, 9
+	addu  $a2, $a2, $t1
+	addu  $a2, $a2, $sp
+	addiu $a2, $a2, 88
+	lui   $t6, %hi(krom_nibbles)
 	addiu $t6, $t6, %lo(krom_nibbles)
 	li    $t7, 15
 	addiu $s7, $s7, K_ROW - K_CELL
 27:	lbu   $t0, 0($t5)
 	lbu   $t2, 1($t5)
+	sb    $t0, 0($a2)
 	srl   $t1, $t0, 4
 	sll   $t1, $t1, 1
 	addu  $t1, $t1, $t6
@@ -851,6 +904,8 @@ Krom2Tim2:
 	sll   $t0, $t0, 16
 	or    $t0, $t0, $t1
 	sw    $t0, 0($t4)
+	sw    $t0, 0($v1)
+	sb    $t2, 1($a2)
 	srl   $t1, $t2, 4
 	sll   $t1, $t1, 1
 	addu  $t1, $t1, $t6
@@ -863,6 +918,9 @@ Krom2Tim2:
 	sll   $t0, $t0, 16
 	or    $t0, $t0, $t1
 	sw    $t0, 4($t4)
+	sw    $t0, 4($v1)
+	addiu $a2, $a2, 2
+	addiu $v1, $v1, 128
 	addiu $t5, $t5, 2
 	addu  $t4, $t4, $s2
 	addiu $t7, $t7, -1
@@ -873,6 +931,9 @@ Krom2Tim2:
 
 30:	move  $t9, $s7
 	KROMSPIN
+	lui   $t0, %hi(K_DROP)
+	ori   $t0, $t0, %lo(K_DROP)
+	addu  $sp, $sp, $t0
 	move  $v0, $s6
 	lw    $ra, 16($sp)
 	lw    $s0, 20($sp)
