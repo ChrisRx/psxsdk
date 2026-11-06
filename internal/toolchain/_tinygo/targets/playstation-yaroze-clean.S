@@ -2205,6 +2205,27 @@ libps_delay:
 	nop
 	.size libps_delay, .-libps_delay
 
+# libps_kanji_frame(st, size) calls libps_kanji_flush(st, frame) on a frame of size bytes
+# taken off the stack, the callee's argument home first. Go keeps nothing this big on the stack.
+	.section .text.KanjiFrame, "ax", @progbits
+	.align 2
+	.globl libps_kanji_frame
+	.type libps_kanji_frame, @function
+libps_kanji_frame:
+	addiu	$sp, $sp, -24
+	sw	$ra, 20($sp)
+	sw	$s0, 16($sp)
+	move	$s0, $sp
+	subu	$sp, $sp, $a1
+	jal	libps_kanji_flush
+	addiu	$a1, $sp, 16
+	move	$sp, $s0
+	lw	$ra, 20($sp)
+	lw	$s0, 16($sp)
+	jr	$ra
+	addiu	$sp, $sp, 24
+	.size libps_kanji_frame, .-libps_kanji_frame
+
 # The C library's byte copies, sets and compares: clib.go has what each does at its edges.
 # The loops take Sony's time a byte. The first byte's load is in a branch's delay, and the
 # last load reads one past the end.
