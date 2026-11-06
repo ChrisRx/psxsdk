@@ -275,3 +275,16 @@ linked-in target has not shown them.
 sizes from a link that reads the compile cache, since a package compiled just now can differ in
 size from the same one read back, and it removes the old image first, so a failed link leaves
 none behind.
+
+## Comparing with Sony's, once its bytes are out of the repository
+
+Nothing in the repository holds Sony's code after step 3, so comparing needs two things kept outside it:
+
+- A private copy of Sony's image. `PSX_SONY_LIBPS` names it, a PSX-EXE gzipped or not, and `image/regress.sh`, `image/archive.sh`,
+  `image/probe.sh`, `image/terra.sh` and `tools/libpsdis` read it, by default from `$HOME/src/ChrisRx/psxsdk-sony/libps.exe.gz`.
+  Without it those scripts stop and say so, and everything else still works.
+- The local git branch `sony-reference`, the tree before Sony's code was removed. A worktree of it builds the reference discs
+  (`exp/cleanlib/refs.sh`) and runs anything that needs Sony's linked-in members or the decompiled library.
+
+A probe's two sides are then the same program, with the clean start-up and members, on Sony's image and on the clean one, which is
+what compares the library. Sony's start-up and members can only be run from the branch.

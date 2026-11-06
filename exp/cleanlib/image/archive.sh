@@ -10,6 +10,8 @@
 set -uo pipefail
 IMAGE=$PWD/.build/cleanimage/libps.exe
 [ -f "$IMAGE" ] || { echo "no $IMAGE: run exp/cleanlib/image/make.sh" >&2; exit 1; }
+export PSX_SONY_LIBPS=${PSX_SONY_LIBPS:-$HOME/src/ChrisRx/psxsdk-sony/libps.exe.gz}
+[ -f "$PSX_SONY_LIBPS" ] || { echo "no $PSX_SONY_LIBPS: comparing needs a private copy of Sony's image, spec 15" >&2; exit 1; }
 SONY=$PWD/.build/cleanimage/sony-cleanfont.exe
 python3 -I exp/cleanlib/image/sonyfont.py "$SONY"
 export PSX_BIOS=${PSX_BIOS:-$HOME/.mednafen/firmware/scph1001.bin}

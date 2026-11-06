@@ -74,7 +74,7 @@ any order. Each is 100 when the two are the same.`,
 		},
 	}
 	f := cmd.Flags()
-	f.StringVar(&image, "image", "", "a PSX-EXE of Sony's library, in place of the one built in")
+	f.StringVar(&image, "image", "", "Sony's image, a PSX-EXE, gzipped or not, if not PSX_SONY_LIBPS")
 	f.StringVar(&symbols, "symbols", "internal/toolchain/_tinygo/targets/playstation-yaroze-symusr.S", "the symbol file naming the entry points")
 	f.StringVar(&clean, "clean", ".build/cleanimage/image.elf", "the clean library's image, as an ELF")
 	f.StringVarP(&out, "out", "o", "", "the file to write, standard output if not given")

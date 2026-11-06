@@ -2,6 +2,7 @@ package main
 
 import (
 	"cmp"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -29,6 +30,9 @@ func TestExactKeyMasksWhereThingsAre(t *testing.T) {
 }
 
 func TestScoreControls(t *testing.T) {
+	if os.Getenv("PSX_SONY_LIBPS") == "" {
+		t.Skip("PSX_SONY_LIBPS names the private copy of Sony's image")
+	}
 	img, err := LoadImage("", "../../internal/toolchain/_tinygo/targets/playstation-yaroze-symusr.S")
 	assert.NoError(t, err)
 	fns := img.Functions()
