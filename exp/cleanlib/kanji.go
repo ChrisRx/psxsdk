@@ -92,7 +92,9 @@ func nextKanji(p unsafe.Pointer) (uint16, unsafe.Pointer) {
 func glyphFor(c uint16, user bool) (uintptr, glyphKind) {
 	switch {
 	case c >= ' ' && c <= '~':
-		c = fullWidth[c-' ']
+		// The table entry, worked out from c itself: one instruction more than
+		// from c-' ', which the pads of Krom2Tim and KanjiFntFlush were measured with.
+		c = *(*uint16)(unsafe.Add(unsafe.Pointer(&fullWidth), 2*uintptr(c)-2*' '))
 	case c <= 0xff:
 		return 0, glyphBadHankaku
 	}
@@ -432,14 +434,6 @@ type kanjiState struct {
 	// bg is the packet that clears the window.
 	bg [4]uint32
 
-	// placed is the characters of the text a flush draws: it reads them
-	// all before it builds a packet, which may overwrite what is left.
-	placed [kanjiDrawn]kanjiPlaced
-
-	// image is the glyph image a flush loads, rows of 16 cells with a
-	// cell for each character drawn and one more.
-	image [(kanjiDrawn/kanjiRow + 1) * kanjiCell * kanjiRow * 2]uint32
-
 	// ot is the one-entry ordering table KanjiFntFlush draws through,
 	// and sent the drawing queue's tail after the last flush (see
 	// font.sent).
@@ -452,6 +446,47 @@ type kanjiState struct {
 type kanjiPlaced struct {
 	addr uintptr
 	x, y int16
+}
+
+// kanjiFrame is a flush's working memory, on the stack for the length of the
+// call, as a pattern below sp shows Sony's to be: 65,536 bytes above the calls
+// it makes, the image written into them from the bottom a cell's row at a time,
+// 65,672 bytes below the caller's sp, the words it does not write left as they
+// were. So the cells of the image's last row that no character reaches load
+// what the stack held, on either library.
+type kanjiFrame struct {
+	// image is the glyph image a flush loads, rows of 16 cells with a cell
+	// for each character drawn and one more.
+	image [kanjiImageWords]uint32
+
+	// placed is the characters of the text a flush draws: it reads them all
+	// before it builds a packet, which may overwrite what is left.
+	placed [kanjiDrawn]kanjiPlaced
+
+	_ [kanjiFrameBytes - kanjiImageWords*4 - kanjiDrawn*8]byte
+}
+
+const (
+	kanjiFrameBytes = 65536
+	kanjiImageWords = (kanjiDrawn/kanjiRow + 1) * kanjiCell * kanjiRow * 2
+
+	// kanjiFrameExtra is what the assembly takes off the stack besides the
+	// frame: the callee's argument home at the bottom and, above the frame,
+	// what brings the image to Sony's depth below the caller's sp.
+	kanjiFrameExtra = 16 + 40
+)
+
+// kanjiFlushFrame calls libps_kanji_flush(st, frame) with size bytes taken off
+// the stack, in assembly: the compiler moves a local this big to the heap.
+//
+//export libps_kanji_frame
+func kanjiFlushFrame(st *kanjiStream, size uint32) *uint32
+
+// kanjiFlushOn is what kanjiFlushFrame calls.
+//
+//export libps_kanji_flush
+func kanjiFlushOn(st *kanjiStream, f *kanjiFrame) *uint32 {
+	return st.flush(f)
 }
 
 // kanjiClut is the streams' palette: index 0 transparent black, 1 white,
@@ -606,24 +641,41 @@ func (k *kanjiState) put(i int, c byte) int {
 //export KanjiFntFlush
 func KanjiFntFlush(id int32) *uint32 {
 	if !kanji.opened {
+		space(kanjiFlushClosedSpace)
 		return nil
 	}
 	if id < 0 || int(id) >= kanji.open {
 		id = 0
 	}
-	r := kanji.streams[id].flush()
+	r := kanjiFlushFrame(&kanji.streams[id], kanjiFrameExtra+kanjiFrameBytes)
 	spinCycles(kanjiFntFlushPad)
+	space(kanjiFlushEndSpace)
 	return r
 }
 
 // kanjiFntFlushPad is what KanjiFntFlush's mean of 98,800 cycles has over the
-// work here (spec 21).
-const kanjiFntFlushPad = 11532
+// work here (spec 21). The stores on each path keep the times the flush had with
+// its working memory in .bss, to the cycle: a character, a stream with and without
+// isbg, with and without characters, and a flush that fails.
+const (
+	kanjiFntFlushPad       = 11412
+	kanjiFlushCharSpace    = 4
+	kanjiFlushQuadSpace    = 2
+	kanjiFlushNoBgSpace    = 8
+	kanjiFlushEmptySpace   = 2
+	kanjiFlushBgEmptySpace = 1
+	kanjiFlushBgSpace      = 2
+	kanjiFlushEndSpace     = 5
+	kanjiFlushBadSpace     = 19
+	kanjiFlushBadSJISSpace = 22
+	kanjiFlushClosedSpace  = 14
+	kanjiFlushNoRoomSpace  = 1
+)
 
 // flush lays the stream's text out, loads its glyph image and queues the
 // packets that draw it. The packets are built after the text is read, since
 // its end may lie in them.
-func (st *kanjiStream) flush() *uint32 {
+func (st *kanjiStream) flush(f *kanjiFrame) *uint32 {
 	// The image and packets of the flush before may still be on their
 	// way to the GPU.
 	for int32(volatile.LoadUint32(&queue.head)-kanji.sent) < 0 {
@@ -640,6 +692,9 @@ func (st *kanjiStream) flush() *uint32 {
 	// on. Whenever x moves and comes to or past w it wraps to the next
 	// line, and whenever y moves, by a wrap or a newline, and comes to or
 	// past h the text ends there: nothing after it is placed or checked.
+	if st.n <= 0 {
+		spaceWith(kanjiFlushNoRoomSpace, uint32(st.off))
+	}
 	for range max(st.n, 0) {
 		var c uint16
 		if c, p = nextKanji(p); c == 0 {
@@ -661,19 +716,23 @@ func (st *kanjiStream) flush() *uint32 {
 			switch kind {
 			case glyphBadSJIS:
 				ttyPrintf("bad sjis code 0x%x\n", uint32(c), 0)
+				spaceWith(kanjiFlushBadSJISSpace, uint32(c))
 				return nil
 			case glyphBadHankaku:
+				spaceWith(kanjiFlushBadSpace, uint32(c))
 				return nil
 			}
 			if k == kanjiDrawn {
+				spaceWith(kanjiFlushBadSpace, uint32(c))
 				return nil
 			}
-			kanji.placed[k] = kanjiPlaced{
+			f.placed[k] = kanjiPlaced{
 				addr: addr,
 				x:    st.x + int16(x),
 				y:    st.y + int16(y),
 			}
 			k++
+			space(kanjiFlushCharSpace)
 			x += kanjiCell
 		}
 		if !moved && x >= int(st.w) {
@@ -688,18 +747,26 @@ func (st *kanjiStream) flush() *uint32 {
 	// The image has a cell for each character and one more, blank.
 	cells := k + 1
 	cols, rows := min(cells, kanjiRow), (cells-1)/kanjiRow+1
-	pix := kanji.image[:cols*2*rows*kanjiCell]
+	pix := f.image[:cols*2*rows*kanjiCell]
 	for i := range cells {
 		var addr uintptr
 		if i < k {
-			addr = kanji.placed[i].addr
+			addr = f.placed[i].addr
 		}
 		putGlyph(pix, cols, i%kanjiRow, i/kanjiRow, addr)
 	}
+	if k == 0 {
+		spaceApart(kanjiFlushEmptySpace, uint32(cells))
+	}
 	for i := range k {
-		next = st.quad(i, kanji.placed[i].x, kanji.placed[i].y, next)
+		next = st.quad(i, f.placed[i].x, f.placed[i].y, next)
+		space(kanjiFlushQuadSpace)
 	}
 	loadImage(RECT{X: st.dx, Y: st.dy, W: int16(cols * 4), H: int16(rows * kanjiCell)}, unsafe.Pointer(&pix[0]))
+	// On a console the DMA goes on after loadImage returns, and the image goes
+	// with the frame. In the emulator it is already over: one read.
+	for dmaGPUControl.Get()&dmaBusy != 0 {
+	}
 
 	if st.isbg {
 		b := &kanji.bg
@@ -708,6 +775,13 @@ func (st *kanjiStream) flush() *uint32 {
 		b[2] = pair(st.x, st.y)
 		b[3] = pair(st.w, st.h)
 		next = physical(unsafe.Pointer(&b[0]))
+		if k == 0 {
+			spaceWith(kanjiFlushBgEmptySpace, next)
+		} else {
+			spaceApart(kanjiFlushBgSpace, uint32(k))
+		}
+	} else {
+		space(kanjiFlushNoBgSpace)
 	}
 	kanji.ot = next
 	sendList(unsafe.Pointer(&kanji.ot))
