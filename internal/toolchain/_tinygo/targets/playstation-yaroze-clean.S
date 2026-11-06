@@ -13,11 +13,18 @@
 # cycles after entry plus 10 per word cleared, the system call 58 cycles
 # after InitHeap is entered (with the clean InitHeap), and main 486 after
 # the system call. Each instruction here costs 2 cycles, fetched from RAM,
-# and the nops below make up the difference.
+# and the nops below make up the difference, when LIBPS_FIDELITY says there is
+# anything to match (spec 30): the image, and the build compared with a reference.
 
+#ifdef LIBPS_FIDELITY
 #define PAD_INITHEAP 50
 #define PAD_SYSCALL 23
 #define PAD_MAIN 1
+#else
+#define PAD_INITHEAP 0
+#define PAD_SYSCALL 0
+#define PAD_MAIN 0
+#endif
 
 	.set noreorder
 	.set noat
@@ -162,16 +169,20 @@ libps_start_ra:
 	.set LINK_PRIM, 2
 	.set LINK_NONE, 6
 
+# NOPS and the macros like it below exist only to match Sony's time: without
+# LIBPS_FIDELITY they are empty, and a nop that a load or the GTE needs is written out.
 	.macro NOPS n
+#ifdef LIBPS_FIDELITY
 	.rept \n
 	nop
 	.endr
+#endif
 	.endm
 
 # An entry of the resident image is reached through a jump and its delay, which the
 # routines' times below allow for. STUBTIME spends those two when linked in.
 	.macro STUBTIME
-#ifndef CLEAN_LIBRARY_ONLY
+#if defined(LIBPS_FIDELITY) && !defined(CLEAN_LIBRARY_ONLY)
 	nop
 	nop
 #endif
@@ -230,8 +241,10 @@ libps_start_ra:
 98:
 	.endm
 	.macro GAP n
+#ifdef LIBPS_FIDELITY
 	.space (\n) * 4 - (. - 98b)
 98:
+#endif
 	.endm
 
 # PREFETCH finds a polygon's vertices. The load of each is in the delay of the one before
@@ -307,7 +320,11 @@ gso_\name\():
 # GSOBACK leaves a run: from the loop's end it takes ta instructions to the next run's
 # start, GSO_RUN + GSO_BASE of them from gso_run, by a jump into the nops before it.
 	.macro GSOBACK ta
+#ifdef LIBPS_FIDELITY
 	j	gso_run - 4 * (\ta - 2 - GSO_RUN - GSO_BASE)
+#else
+	j	gso_run
+#endif
 	nop
 	.endm
 
@@ -386,8 +403,9 @@ gso_\name\():
 	G
 	.if !\t
 	or	$v0, $v0, $a3
+	.else
+	nop
 	.endif
-	GAP	1
 	RTPT
 	G
 	lhu	$t3, P_V0($a0)
@@ -2190,6 +2208,7 @@ libps_ws_unscaled:
 	.space 32
 	.section .text.Matrix, "ax", @progbits
 
+#ifdef LIBPS_FIDELITY
 # libps_delay(n) spends n nops and a call's few instructions, by a jump into the nops.
 	.globl libps_delay
 	.type libps_delay, @function
@@ -2204,6 +2223,75 @@ libps_delay:
 1:	jr	$ra
 	nop
 	.size libps_delay, .-libps_delay
+
+# What Krom2Tim leaves below the stack (spec 30). libps_krom_clear(n) clears the n bytes
+# below sp, at Sony's 8 cycles a byte. libps_krom_glyph(at, x, y, addr) copies the 30 bytes at
+# addr to cell x, y of the table at at from sp, or spends the time of it for an addr of 0.
+# libps_krom_image(at, pix, stride, lines) copies lines of stride bytes from pix to at
+# from sp, in lines 128 bytes apart: 12 cycles a word and 18 a line, so that all of
+# this is whole turns of the spin it comes off.
+	.section .text.KromFrame, "ax", @progbits
+	.align 2
+	.globl libps_krom_clear
+	.type libps_krom_clear, @function
+libps_krom_clear:
+	subu	$t0, $sp, $a0
+1:	addiu	$t0, $t0, 1
+	nop
+	bne	$t0, $sp, 1b
+	sb	$zero, -1($t0)
+	jr	$ra
+	nop
+	.size libps_krom_clear, .-libps_krom_clear
+
+	.globl libps_krom_glyph
+	.type libps_krom_glyph, @function
+libps_krom_glyph:
+	sll	$a1, $a1, 5
+	sll	$a2, $a2, 9
+	addu	$a0, $a0, $sp
+	addu	$a0, $a0, $a1
+	addu	$a0, $a0, $a2
+	bnez	$a3, 1f
+	addiu	$t0, $a0, 30
+	move	$a3, $a0
+1:	lbu	$t1, 0($a3)
+	addiu	$a3, $a3, 1
+	addiu	$a0, $a0, 1
+	sb	$t1, -1($a0)
+	bne	$a0, $t0, 1b
+	nop
+	nop
+	nop
+	nop
+	jr	$ra
+	nop
+	.size libps_krom_glyph, .-libps_krom_glyph
+
+	.globl libps_krom_image
+	.type libps_krom_image, @function
+libps_krom_image:
+	addu	$a0, $a0, $sp
+1:	addu	$t0, $a0, $a2
+	move	$t1, $a0
+	beq	$t1, $t0, 3f
+	nop
+2:	lw	$t2, 0($a1)
+	addiu	$a1, $a1, 4
+	sw	$t2, 0($t1)
+	addiu	$t1, $t1, 4
+	bne	$t1, $t0, 2b
+	nop
+3:	addiu	$a3, $a3, -1
+	nop
+	nop
+	bnez	$a3, 1b
+	addiu	$a0, $a0, 128
+	jr	$ra
+	nop
+	.size libps_krom_image, .-libps_krom_image
+	.section .text.Matrix, "ax", @progbits
+#endif
 
 # libps_kanji_frame(st, size) calls libps_kanji_flush(st, frame) on a frame of size bytes
 # taken off the stack, the callee's argument home first. Go keeps nothing this big on the stack.
@@ -2593,7 +2681,8 @@ fp_putx:
 	andi	$t0, $t0, 15
 	addu	$t0, $t0, $a0
 	lbu	$t0, 0($t0)
-	NOPS	FP_XDIGIT
+	nop
+	NOPS	FP_XDIGIT - 1
 	sb	$t0, 0($a1)
 	addiu	$a1, $a1, 1
 	sltu	$at, $a2, $a1
@@ -3656,7 +3745,8 @@ quad_corners:
 GsSortBoxFill:
 	STUBTIME
 	lw	$t0, 0($a0)
-	NOPS	4
+	nop
+	NOPS	3
 	bltz	$t0, 1f
 	lui	$t9, %hi(GsOUT_PACKET_P)
 	lw	$v0, %lo(GsOUT_PACKET_P)($t9)

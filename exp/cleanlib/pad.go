@@ -65,13 +65,5 @@ func padBegin() {
 	libStart()
 	pads.started = true
 	libps_biosB(biosInitPad, uintptr(b0), padSize, uintptr(b1), padSize)
-	// Sony's routine leaves the reading to the card driver, which comes next
-	// on the resident image (spec 07, step 3, and spec 21).
-	if resident {
-		return
-	}
-	libps_biosB(biosStartPad, 0, 0, 0, 0)
-	// The driver would acknowledge the vertical blank itself, before the
-	// library's handler counted it.
-	libps_biosB(biosClearPad, 0, 0, 0, 0)
+	padReadingStart()
 }

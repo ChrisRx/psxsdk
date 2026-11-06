@@ -146,9 +146,7 @@ func GsInitGraph(w, h, intmode, dith, vrammode uint16) {
 		setOFY(0)
 	}
 	gs.draw(0)
-	if resident {
-		spinCycles(residentInitGraphPad)
-	}
+	imagePad(residentInitGraphPad)
 }
 
 // interlace is 1 for an interlaced display: one asked for, or one taller
@@ -207,12 +205,6 @@ func startup() {
 	cardStart()
 }
 
-// resident says this library is laid out as the resident image, which Startup
-// alone sets. The start of such a program is timed against Sony's routine (spec
-// 21, "Start-up"), whereas a linked-in library's first ResetGraph does this work
-// and has its time from the reference.
-var resident bool
-
 // What the resident image's start spends past its work, in cycles, so that the
 // kernel calls come when they do on Sony's (spec 21, "Start-up"), which on some
 // programs decides the vertical blank they land on. They are spent where the
@@ -233,7 +225,6 @@ const (
 // routine leaves. A program's own ResetGraph(0) after it starts nothing. The
 // linked-in target does not call it, and starts these at the first ResetGraph.
 func Startup() {
-	resident = true
 	spinCycles(residentEntryPad)
 	libStart()
 	SetDispMask(0)
@@ -258,79 +249,6 @@ func resetNotice() {
 // state in the clean library to clear, 4,096 bytes at 8 cycles each, in
 // spin's loops.
 const resetRest = 4096 * 8 / 12
-
-// spinCount is what spin counts on, so that the loop is not optimized
-// away.
-var spinCount uint32
-
-// spinCycles busy-waits for about c CPU cycles, as the emulator counts
-// them, longer if interrupts come in between.
-func spinCycles(c uint32) { spin(c / spinTurn) }
-
-// spinTurn is the cycles one turn of spin's loop takes in the emulator: a
-// run of 512 turns spans 6,132 cycles in a trace of spec/probes/drawq
-// (FntOpen's spin).
-const spinTurn = 12
-
-// spin busy-waits for about n of its loops, spinTurn cycles each.
-//
-//go:noinline
-func spin(n uint32) {
-	for range n {
-		volatile.StoreUint32(&spinCount, volatile.LoadUint32(&spinCount)+1)
-	}
-}
-
-// spinCall is what a call of spin costs beyond its turns, measured on
-// spec/probes/drawq: a spin(1) at a call's end lengthens it by 26 cycles
-// and a spin(2) by 38.
-const spinCall = 14
-
-// pace busy-waits so that the call takes about c cycles, the call itself
-// included: whole turns of spin, so c less spinCall should be a multiple
-// of spinTurn. c is a constant at every call and pace is inlined, so the
-// turns are computed by the compiler. The library's calls end in one,
-// sized so that each takes as long as Sony's (spec 08, "Pacing to Sony's
-// times"); an interrupt in between lengthens it as it would Sony's.
-//
-//go:inline
-func pace(c uint32) { spin((c - spinCall) / spinTurn) }
-
-// spacer is the word the short spacers store to: a store to memory costs
-// 2 cycles in the emulator, which spaces register accesses more finely
-// than spin's turns.
-var spacer uint32
-
-// space spends 2 cycles a store on n stores to spacer. n is a constant at
-// every call, so that the loop unrolls into plain stores.
-func space(n int) {
-	for range n {
-		volatile.StoreUint32(&spacer, 0)
-	}
-}
-
-// spaceWith is space storing v, a value live on its path: when two paths
-// pad with stores of the same value the compiler merges their tails, and
-// then a change to one path's count moves the other's time.
-func spaceWith(n int, v uint32) {
-	for range n {
-		volatile.StoreUint32(&spacer, v)
-	}
-}
-
-// spacer2 is a second word for a pad that ends where another path's pad
-// does: the compiler sinks pads that store to the same word into one block
-// after the paths join, feeding the stores with whichever value each path
-// had, and then their counts move together. A pad that stores another
-// value to another word stays where it is.
-var spacer2 uint32
-
-// spaceApart is spaceWith storing v to spacer2 (see spacer2).
-func spaceApart(n int, v uint32) {
-	for range n {
-		volatile.StoreUint32(&spacer2, v)
-	}
-}
 
 // clearBytes sets the n bytes at p to 0 one store at a time, about 8
 // cycles a byte, as the clears the reference and Sony's library make in

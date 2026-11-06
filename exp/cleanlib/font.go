@@ -525,7 +525,7 @@ func (st *stream) flush() {
 			b[3] = textSize(st.text, int(st.h))
 		}
 		next = physical(unsafe.Pointer(&b[0]))
-		volatile.StoreUint32(&font.pad, 0)
+		spaceAt(&font.pad)
 	}
 	// The flush empties the stream: the NUL at its start ends the next
 	// flush's walk where FntPrint's text does not.

@@ -77,9 +77,7 @@ func cardStart() {
 	for i, spec := range cardSpecs {
 		card.hw[i] = libps_biosB(biosOpenEvent, cardHwClass, spec, evModeNoIntr, 0)
 	}
-	if resident {
-		spinCycles(residentCardPad)
-	}
+	imagePad(residentCardPad)
 	libps_biosB(biosInitCard, 1, 0, 0, 0)
 	libps_biosB(biosStartCard, 0, 0, 0, 0)
 	libps_biosA(biosBuInit, 0, 0, 0, 0)

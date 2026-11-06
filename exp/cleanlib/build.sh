@@ -54,7 +54,7 @@ wasmtime run --allow-precompiled \
   --env GOROOT="$GOROOT" --env GOVERSION="$GOVERSION" --env GOTOOLTAGS="$GOTOOLTAGS" \
   --env TINYGOROOT="$TINYGOROOT" --env GOMODCACHE="$GOMODCACHE" --env TINYGO_BUILD_ID="dev" \
   --env HOME=/tmp --env XDG_CACHE_HOME=/tmp/cache --env TMPDIR=/tmp --env PWD=/work \
-  -- "$CWASM" -o /work/prog.elf -target=playstation-yaroze-clean -opt=2 ${TGOFLAGS:-} /work/prog 2>&1 | grep -v 'MIPS-I support' || true
+  -- "$CWASM" -o /work/prog.elf -target=playstation-yaroze-clean-fidelity -opt=2 ${TGOFLAGS:-} /work/prog 2>&1 | grep -v 'MIPS-I support' || true
 [ -f "$WORK/prog.elf" ] || { echo "build failed" >&2; exit 1; }
 cp "$WORK/prog.elf" "$OUT/prog.elf"
 go run ./tools/mips1fix "$OUT/prog.elf" | tail -1

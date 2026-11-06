@@ -226,9 +226,7 @@ func soundBegin() {
 	spinCycles(startCtrl)
 	dmaInterrupt.Get()
 	dmaInterrupt.Set(dicrMaster | dicrSPUEnable)
-	if resident {
-		spinCycles(residentSoundPad)
-	}
+	imagePad(residentSoundPad)
 	ev := libps_biosB(biosOpenEvent, spuEventClass, 0x20, evModeNoIntr, 0)
 	libps_biosB(biosEnableEvent, uintptr(ev), 0, 0, 0)
 	spinCycles(startEvent)
@@ -277,9 +275,7 @@ func soundBegin() {
 	memInit()
 	spinCycles(startSeqs)
 	spuCount(1000)
-	if resident {
-		spinCycles(residentSoundEndPad)
-	}
+	imagePad(residentSoundEndPad)
 	// The controllers' and the vertical blank's acknowledgement handed to
 	// the kernel and back, each with the interrupts masked.
 	m := iMask.Get()
