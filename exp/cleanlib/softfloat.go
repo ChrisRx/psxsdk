@@ -26,7 +26,9 @@ import (
 //   - A result too large is an infinity of its sign. One too small for a
 //     normal number is packed anyway, its exponent below zero running
 //     into the sign bit; division alone makes a denormal of it, by a
-//     shift whose rounding half is a 32-bit quantity.
+//     shift whose rounding half is a 32-bit quantity. A single precision
+//     sum that small is an infinity of its sign and a range error instead
+//     (spec 26's sweep of __subsf3).
 //   - Comparisons put the bit patterns in order as sign and magnitude,
 //     with the two zeros equal.
 //   - A result that overflows, in the sense of the bullet above or by a
@@ -396,7 +398,7 @@ func sPack(s uint32, e int, m uint64, halfUp bool) uint32 {
 		m >>= 1
 		e++
 	}
-	if e >= sExpMax {
+	if e >= sExpMax || e < 0 {
 		errMath(mathERANGE)
 		return s | sInf
 	}

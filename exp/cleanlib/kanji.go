@@ -20,10 +20,12 @@ const (
 	romKanji    = 0xbfc69d68
 	romGlyph    = 30
 
-	// kanjiCell is a glyph cell's width and height in pixels, and
-	// kanjiRow the cells in a row of an image.
+	// kanjiCell is a glyph cell's width and height in pixels, kanjiRow the
+	// cells in a row of an image, and kanjiRows the most rows of them: at the
+	// end of the last the string is over, whatever it goes on to hold.
 	kanjiCell = 16
 	kanjiRow  = 16
+	kanjiRows = 16
 )
 
 // nonKanji lists the assigned cells of JIS rows 1 to 8 as ranges of Shift
@@ -300,7 +302,7 @@ func krom2Tim(s *byte, taddr *uint32, dx, dy, cx, cy int32, fg, bg uint32, user 
 	result := int32(0)
 	count, lines := 0, false
 	var at kanjiCursor
-	for c, p := nextKanji(unsafe.Pointer(s)); c != 0; c, p = nextKanji(p) {
+	for c, p := nextKanji(unsafe.Pointer(s)); c != 0 && at.y < kanjiRows; c, p = nextKanji(p) {
 		at = at.past(c)
 		if c == '\n' {
 			lines = true
@@ -348,7 +350,7 @@ func krom2Tim(s *byte, taddr *uint32, dx, dy, cx, cy int32, fg, bg uint32, user 
 		pix[i] = 0
 	}
 	at = kanjiCursor{}
-	for c, p := nextKanji(unsafe.Pointer(s)); c != 0; c, p = nextKanji(p) {
+	for c, p := nextKanji(unsafe.Pointer(s)); c != 0 && at.y < kanjiRows; c, p = nextKanji(p) {
 		if c != '\n' {
 			addr, _ := glyphFor(c, user)
 			putGlyph(pix, cols, at.x, at.y, addr)

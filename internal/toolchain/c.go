@@ -75,9 +75,10 @@ func (b *CBuild) logf(format string, args ...any) {
 // The target's files a C program links, in order: the crt0 first, so that
 // _start is at the program's address.
 var cTargetFiles = []string{
-	"playstation-yaroze.S",
+	"playstation-yaroze-start.S",
 	"playstation-yaroze-symusr.S",
-	"playstation-yaroze-libps.S",
+	"playstation-yaroze-symusr-orig.S",
+	"playstation-yaroze-members.S",
 	"playstation-yaroze-gte.S",
 	"r3000-builtins.c",
 }
