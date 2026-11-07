@@ -152,6 +152,10 @@ else in the header changes:
 - The table's sizes decide the upload, not the header's total size: a
   table entry 8 larger (64 bytes) sends 32 more halfwords, and changes
   to the total size send the same.
+- A header with a VAG count of 0 or above 255, or whose table's sizes come to
+  0, is refused with -1, with nothing written to the header and no sound memory
+  taken (`spec/probes/vabrefuse`, spec 36). A count of 255 is accepted. The sizes
+  were only tried all 0, so a first size of 0 with later ones isn't known.
 
 terra sends a buffer that still holds a header written this way as the
 start of a later bank's body, so the written values reach sound memory
@@ -795,27 +799,33 @@ from the header being read at every key on:
   reverse) 0284h (cases 11 to 13).
 
 **The VAG index.** The start address at a key on, for both the sequencer
-and SsUtKeyOn, comes from a table of halves whose entries 0 to 2p - 1
-(p the bank's program count at SsVabTransfer, 3 here) are read from the
-header's entries (bytes 12 to 15 of entry h/2 for half h), and whose
-entries from 2p to 255 hold ffffh whatever the header holds: half 4
-(entry 2's first, the end) and half 5 marked 0444h and 0555h are read
-(VAG 5 and 6, cases 53, 54, 61, 62), halves 6 and 7 (entry 3's) marked
-0666h 0777h give ffffh (VAG 7 and 8, cases 55, 56, 63, 64), as do VAG
-250, 252 and 254 (cases 57 to 59, 65 to 67) and SsUtKeyOn's VAG 256
-(half 255, case 68). The header's program count is not what bounds it
-(set to 4, VAG 7 still gives ffffh; set to 2 or 1, VAG 5 and 3 still read
-the header: cases 69 to 72), nor its VAG count (set to 1 in all these).
+and SsUtKeyOn, is half h of the header: bytes 12 to 15 of entry h/2, for
+all 256 halves of the 128 entries, read at the key on. No count bounds it,
+neither the program count nor the VAG count, at SsVabTransfer or now
+(spec 36, probe `vagtable`). half 4 (entry 2's first, the end) and half 5
+marked 0444h and 0555h are read (VAG 5 and 6, cases 53, 54, 61, 62).
+SsUtKeyOn's VAG 257 and up, half 256 and up, give 0000h.
+
+(Corrected 2026-11-07. This said that halves from 2p, p the program count at
+SsVabTransfer, held ffffh whatever the header held. There is no such table.
+The ffffh is what mkvab leaves in those bytes, and this probe's "far" marks
+never reached halves 6 and 7: eight bytes written from entry 2's byte 12 run on
+into entry 3's bytes 0 to 3. So VAG 7 and 8, 250, 252, 254 and 256 in cases 55
+to 59 and 63 to 68 read an unmarked ffffh from the file, and the program count
+in cases 69 to 72 had nothing to do with it. A bank from another tool holds
+something else there: `pssoft-airbob-2-airbob`'s SE.VH has zeros, and one
+program with 14 VAGs.)
 
 - The sequencer takes the low byte of the tone's VAG half: 0100h, 0200h,
   8000h read half 1 like 0, 0101h, 7f01h, 8001h and 1001h half 0 like 1,
   0102h and 8002h half 1 like 2, 0103h half 2 (cases 41 to 51). Byte 0
   reads half 1 (VAG 2's address 020ch, cases 34, 35; entry 0's halves set
   to 0300h 0400h give 0400h, case 36); byte b from 1 reads half b - 1.
-  Bytes fah to feh read ffffh (the table).
+  Bytes fah to feh read their halves too, ffffh in this bank.
 - SsUtKeyOn takes the half whole and signed: 0 is refused (-1, case 74);
   v from 1 reads half v - 1 (1, 2 and 5 give 0202h, 020ch, 025ah; 6, 7
-  and 256 ffffh, cases 73 to 78, 82); -1, -2, 258, 7fffh, 8000h and
+  and 256 ffffh, what this bank's file holds there, cases 73 to 78, 82);
+  -1, -2, 258, 7fffh, 8000h and
   8002h give 0000h (cases 79, 80, 83 to 86), past the table either way,
   whatever entry 0's bytes 4 to 11 hold (marked a4h to abh in these
   cases).
