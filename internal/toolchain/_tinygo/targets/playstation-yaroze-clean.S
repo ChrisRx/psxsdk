@@ -5351,25 +5351,33 @@ libps_kanji_frame:
 
 # The C library's byte copies, sets and compares: clib.go has what each does at its edges.
 # The loops take Sony's time a byte. The first byte's load is in a branch's delay, and the
-# last load reads one past the end.
+# last load reads one past the end. bcopy's load comes first instead, so that the image can
+# put it in the delay of its entry's jump (spec 33), and the loop's first turn starts in
+# the delay after the tests. Only its null source pays for that: the length is tested
+# first, so that a null source takes 2 or 3 instructions more, and reads at 0.
 	.section .text.CBytes, "ax", @progbits
 	.align 2
 	.globl bcopy
 	.type bcopy, @function
 bcopy:
 	STUBTIME
-	beqz	$a0, 2f
-	nop
-	blez	$a2, 2f
 	lbu	$t0, 0($a0)
+	blez	$a2, 2f
+	nop
+	beqz	$a0, 3f
 1:	addiu	$a2, $a2, -1
 	addiu	$a0, $a0, 1
 	sb	$t0, 0($a1)
 	addiu	$a1, $a1, 1
 	bgtz	$a2, 1b
 	lbu	$t0, 0($a0)
-2:	jr	$ra
+	jr	$ra
 	nop
+2:	NOPS	1
+	jr	$ra
+	nop
+3:	jr	$ra
+	addiu	$a2, $a2, 1
 	.size bcopy, .-bcopy
 
 	.globl libps_c_memcpy

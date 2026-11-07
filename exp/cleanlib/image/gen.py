@@ -25,7 +25,7 @@ BASE, TOP, INIT = 0x80010000, 0x80090000, 0x80010030
 # only when it's called often and too slow by just that much. IN_SLOT also has to fit
 # in the room before the next entry point.
 IN_SLOT = {"GsGetActiveBuff", "GsGetWorkBase", "GetClut"}
-HEAD_IN_SLOT = {"GsSetWorkBase", "GetTPage", "TransMatrix", "RotMatrix", "rand"}
+HEAD_IN_SLOT = {"GsSetWorkBase", "GsInitCoordinate2", "GetTPage", "TransMatrix", "RotMatrix", "bcopy", "rand"}
 
 # Every resident entry point a program's link reaches.
 syms = {}
