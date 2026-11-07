@@ -363,6 +363,7 @@ func (st *stream) flush() {
 	// either (536 against 676 for one glyph; spec 08).
 	if *(*byte)(text) == 0 {
 		space(fntFlushEmptySpace)
+		nops(2)
 	} else {
 		cmd := font.cmd
 		// The text is walked by pointer from t to a NUL. (The bottom is

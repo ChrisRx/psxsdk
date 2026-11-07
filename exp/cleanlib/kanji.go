@@ -285,7 +285,7 @@ type kromShape struct {
 // two-byte and one-byte characters alike. The first frame's vertical blank goes on top
 // of the pad.
 const (
-	krom2TimPad       = 595000 - 589632 - 48
+	krom2TimPad       = 595000 - 589632 - 48 - 190
 	krom2TimCellPad   = 1015 - 384
 	krom2TimBlankPad  = 2225
 	krom2TimGlyphBack = 100 + 396
@@ -325,6 +325,9 @@ func krom2Tim(s *byte, taddr *uint32, dx, dy, cx, cy int32, fg, bg uint32, user 
 			continue
 		}
 		count++
+		if !user {
+			kromCharTime(c)
+		}
 		switch _, kind := glyphFor(c, user); kind {
 		case glyphBadSJIS:
 			ttyPrintf("bad sjis code 0x%x\n", uint32(c), 0)

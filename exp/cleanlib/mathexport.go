@@ -152,7 +152,10 @@ func softAddsf3(a, b uint32) uint32 { return sAdd(a, b) }
 func softMulsf3(a, b uint32) uint32 { return sMul(a, b) }
 
 //export __divsf3
-func softDivsf3(a, b uint32) uint32 { return sDiv(a, b) }
+func softDivsf3(a, b uint32) uint32 {
+	nops(5)
+	return sDiv(a, b)
+}
 
 //export _get_errno
 func getErrno() int32 { return libps_biosB(biosGetErrno, 0, 0, 0, 0) }

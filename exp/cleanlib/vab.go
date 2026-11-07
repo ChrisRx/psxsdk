@@ -252,9 +252,10 @@ func SsVabTransfer(vh, vb *uint8, vabid, mode int16) int32 {
 	return int32(id)
 }
 
-// ssVabTransferPad is what SsVabTransfer's mean of 25,200 cycles has over the
-// work here (spec 21).
-const ssVabTransferPad = 13800
+// ssVabTransferPad is what SsVabTransfer's time has over the work here: 31,614 cycles
+// on scee-topten-cardem, in which Sony's own interrupt for the end of the transfer
+// holds the rest of the machine off for about 22,000, which isn't done here.
+const ssVabTransferPad = 16652
 
 // The SPU's DMA channel, 4.
 var (

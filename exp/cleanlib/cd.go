@@ -332,7 +332,8 @@ func (c *cdDriver) start() {
 	}
 	c.started = true
 	libStart()
-	EnterCriticalSection()
+	mask := iMask.Get()
+	iMask.Set(0)
 	cdIndex.Set(1)
 	cdReg3.Set(0x1f) // acknowledge anything pending
 	cdReg2.Set(0x1f) // enable every interrupt
@@ -343,10 +344,11 @@ func (c *cdDriver) start() {
 	// acknowledge the interrupt.
 	dmaInterrupt.Set(dmaInterrupt.Get()&0x00ffffff&^dicrCDEnable | dicrCDFlag)
 	iStat.Set(^uint32(irqCD | irqDMA))
-	iMask.Set(iMask.Get() | irqCD)
-	ExitCriticalSection()
+	iMask.Set(mask | irqCD)
+	cdStartPad()
 	// The reference sends Getstat straight after the line.
 	c.notice()
+	imagePad(residentGetstatPad)
 	c.reset()
 }
 

@@ -217,39 +217,24 @@ func ttyPrintf(format string, a, b uint32) {
 			}
 			// What the reference spends after a conversion, past the
 			// next character's own time.
-			spin(ttyAfterConv)
+			ttyAfterConvPad()
 		case '\n':
-			spin(ttyNewline)
+			ttyNewlinePad()
 			ttyPut('\r')
 			ttyPut('\n')
 		default:
-			spin(ttyPlain)
+			ttyPlainPad()
 			ttyPut(c)
 		}
 	}
 }
 
-// The remainders of the reference's printf's time between writes, past
-// what ttyPrintf's own work takes, in spin's loops. The reference (hello-ref,
-// measured with iotrace) spends 134 cycles before a plain character, 658
-// before a conversion's first digit and 114 before each of the others, 166
-// before a plain character after a conversion and 146 before the "\r" of a
-// "\n", and 40 between the two. (Sony's library takes 84, 522, 80, 120 to
-// 130 and 28, spec 08.)
-const (
-	ttyPlain     = 4
-	ttyFirstDig  = 46
-	ttyDigit     = 4
-	ttyAfterConv = 1
-	ttyNewline   = 3
-)
-
 // ttyHex writes v as eight hexadecimal digits, lower case.
 func ttyHex(v uint32) {
-	spin(ttyFirstDig)
+	ttyFirstDigPad()
 	for i := 28; i >= 0; i -= 4 {
 		if i != 28 {
-			spin(ttyDigit)
+			ttyDigitPad()
 		}
 		ttyPut("0123456789abcdef"[v>>uint(i)&15])
 	}
@@ -261,10 +246,10 @@ func ttyHexShort(v uint32) {
 	for n > 0 && v>>uint(n) == 0 {
 		n -= 4
 	}
-	spin(ttyFirstDig)
+	ttyFirstDigPad()
 	for i := n; i >= 0; i -= 4 {
 		if i != n {
-			spin(ttyDigit)
+			ttyDigitPad()
 		}
 		ttyPut("0123456789abcdef"[v>>uint(i)&15])
 	}
@@ -290,10 +275,10 @@ func ttyDecimal(v int32) {
 		d[n] = '-'
 		n++
 	}
-	spin(ttyFirstDig)
+	ttyFirstDigPad()
 	for i := n - 1; i >= 0; i-- {
 		if i != n-1 {
-			spin(ttyDigit)
+			ttyDigitPad()
 		}
 		ttyPut(d[i])
 	}
@@ -311,11 +296,6 @@ func ttyPut(c byte) {
 	volatile.StoreUint8(&ttyChar, c)
 	libps_biosB(biosWrite, 1, uintptr(unsafe.Pointer(&ttyChar)), 1, 0)
 }
-
-// tableClear is the time the reference takes to clear a 64-byte table a
-// byte at a time (512 cycles) and make the stores around it, in cycles,
-// measured with iotrace on hello-ref.
-const tableClear = 576
 
 // exitBuf is what the kernel resumes with at the end of an interrupt, as
 // SetCustomExitFromException takes it: the return address, the stack and
@@ -366,7 +346,7 @@ func libBegin() {
 	// The reference clears a 64-byte table of its own here, a byte at a
 	// time, which the clean library does not have (spec 08), sets timer
 	// 1 counting lines and masks every interrupt.
-	spinCycles(tableClear)
+	libTablePad()
 	lineMode.Set(0x0107)
 	iMask.Get()
 	iMask.Set(0)
@@ -377,7 +357,7 @@ func libBegin() {
 	// Then the vertical blank alone, a second table of 64 bytes, no DMA
 	// interrupts, and the vertical blank's and the DMA's.
 	iMask.Set(irqVBlank)
-	spinCycles(tableClear)
+	libTablePad()
 	dmaInterrupt.Set(0)
 	iMask.Set(0)
 	iMask.Set(irqVBlank | irqDMA)

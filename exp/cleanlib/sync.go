@@ -45,15 +45,18 @@ func startLineCounter() {
 	lineCount.Set(0)
 }
 
+// vsyncLines is the line counter when VSync last returned from a wait.
+//
+//go:extern libps_vsync_lines
+var vsyncLines uint32
+
 var vsync struct {
 	// blanks counts the vertical blanks since the library started, which
 	// the interrupt handler advances.
 	blanks uint32
 
-	// last is blanks when VSync last returned, and lines the line
-	// counter then.
-	last  uint32
-	lines uint32
+	// last is blanks when VSync last returned.
+	last uint32
 
 	// callback is the function VSyncCallback installed, called at each
 	// vertical blank after the count, or 0.
@@ -88,9 +91,14 @@ func VSyncCallback(f uintptr) {
 // Never inlined: hot reload applies a patch at the address of this symbol, on
 // the static target as on the resident image.
 //
+// VSync(1) is all in the target's assembly, which goes to vsyncWait for the rest.
+//
 //export VSync
+func VSync(mode int32) int32
+
+//export libps_vsync_wait
 //go:noinline
-func VSync(mode int32) int32 {
+func vsyncWait(mode int32) int32 {
 	libStart()
 	now := volatile.LoadUint32(&vsync.blanks)
 	if mode < 0 {
@@ -98,10 +106,8 @@ func VSync(mode int32) int32 {
 	}
 	// The difference wraps at 16 bits, as the counter does, so a program
 	// that resets the counter in between sees a large count.
-	lines := (lineCount.Get() - vsync.lines) & 0xffff
+	lines := (lineCount.Get() - vsyncLines) & 0xffff
 	switch {
-	case mode == 1:
-		return int32(lines)
 	case mode == 0:
 		waitBlanks(now + 1)
 	default:
@@ -112,7 +118,7 @@ func VSync(mode int32) int32 {
 		waitBlanks(target)
 	}
 	vsync.last = volatile.LoadUint32(&vsync.blanks)
-	vsync.lines = lineCount.Get() & 0xffff
+	vsyncLines = lineCount.Get() & 0xffff
 	return int32(lines)
 }
 

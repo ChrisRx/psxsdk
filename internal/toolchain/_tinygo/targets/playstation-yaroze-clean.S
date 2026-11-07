@@ -3826,11 +3826,17 @@ sf_more:
 	nop
 	.size libps_va_sprintf, .-libps_va_sprintf
 
-	.set PF_ENTRY, 4
+	.set PF_ENTRY, 14
 	.set PF_NUM, 0
-	.set PF_RAW, 9
-	.set PC_NL, 5
-	.set PF_LIT, 10
+	.set PF_RAW, 10
+	.set PF_NL, 17
+	.set PF_TAB, 0
+	.set PC_NL, 1
+	.set PC_HIGH, 1
+	.set PC_PLAIN, 8
+	.set PC_NLIN, 14
+	.set PF_HIGH, 3
+	.set PF_LIT, 14
 	.set PF_FAST, 0
 	.set PF_SLOW, 0
 	.set PF_DIG, 3
@@ -3860,7 +3866,7 @@ sf_more:
 # PPUT sends the register's byte to the TTY.
 	.macro PPUT r
 	move	$a0, \r
-	jal	putchar
+	jal	libps_putint
 	nop
 	.endm
 
@@ -3883,29 +3889,47 @@ libps_va_printf:
 	NOPS	PF_ENTRY
 	beqz	$s1, 90f
 	nop
-19:	NOPS	PF_LIT
+	# All of a literal's time comes before its write, by what the byte is: from one write
+	# to the next, 582 cycles to a printing byte, 570 to any other.
 1:	lbu	$a0, 0($s1)
 	addiu	$s1, $s1, 1
 	beqz	$a0, 90f
 	addiu	$at, $a0, -37
 	beqz	$at, 2f
-	sltiu	$at, $a0, 0x80
-	beqz	$at, 11f
+	sltiu	$at, $a0, 0x20
+	bnez	$at, 11f
+	sltiu	$at, $a0, 0x7f
+	beqz	$at, 12f
 	nop
-12:	jal	putchar
+	NOPS	PF_LIT
+	jal	libps_putplain
 	nop
-	b	19b
+	b	1b
 	nop
-	# A byte with the top bit set moves no column but for a few, and goes straight to the write.
-11:	addiu	$at, $a0, -0xc7
-	beqz	$at, 12b
-	addiu	$at, $a0, -0xa4
-	sltiu	$at, $at, 3
-	bnez	$at, 12b
+12:	NOPS	PF_HIGH
+	jal	libps_puthigh
 	nop
-	jal	libps_putraw
+	b	1b
+	nop
+	# A newline and a tab go to putchar. Any other byte below a space goes straight to the write.
+11:	addiu	$at, $a0, -10
+	beqz	$at, 13f
+	addiu	$at, $a0, -9
+	beqz	$at, 14f
 	nop
 	NOPS	PF_RAW
+	jal	libps_putraw
+	nop
+	b	1b
+	nop
+13:	NOPS	PF_NL
+	jal	libps_putnl
+	nop
+	b	1b
+	nop
+14:	NOPS	PF_TAB
+	jal	libps_putint
+	nop
 	b	1b
 	nop
 	# A directive is a loop until a letter that converts.
@@ -4028,7 +4052,7 @@ libps_va_printf:
 	# Any other letter, or a percent sign, is itself.
 38:	NOPS	PF_OTHER
 	move	$a0, $t0
-	jal	putchar
+	jal	libps_putint
 	addiu	$s2, $s2, 1
 	b	1b
 	nop
@@ -4234,17 +4258,17 @@ libps_va_printf:
 	beqz	$a0, 77f
 	nop
 	NOPS	PF_SIGN
-	jal	putchar
+	jal	libps_putint
 	nop
 77:	lw	$a0, PL_PREFIX($sp)
 	nop
 	beqz	$a0, 78f
 	nop
 	li	$a0, 48
-	jal	putchar
+	jal	libps_putint
 	nop
 	lw	$a0, PL_PREFIX($sp)
-	jal	putchar
+	jal	libps_putint
 	nop
 78:	andi	$at, $s3, 17
 	addiu	$at, $at, -16
@@ -4257,7 +4281,7 @@ libps_va_printf:
 	addiu	$at, $t0, -99
 	bnez	$at, 80f
 	addiu	$at, $t0, -115
-	jal	putchar
+	jal	libps_putint
 	andi	$a0, $s6, 0xff
 	b	89f
 	nop
@@ -4268,7 +4292,7 @@ libps_va_printf:
 	lbu	$a0, 0($s6)
 	addiu	$s6, $s6, 1
 	NOPS	PF_S
-	jal	putchar
+	jal	libps_putint
 	addiu	$s7, $s7, -1
 	b	81b
 	nop
@@ -4280,7 +4304,7 @@ libps_va_printf:
 	nop
 821:	li	$a0, 48
 	sw	$t0, PL_T0($sp)
-	jal	putchar
+	jal	libps_putint
 	nop
 	lw	$t0, PL_T0($sp)
 	nop
@@ -4291,7 +4315,7 @@ libps_va_printf:
 	beqz	$at, 84f
 	nop
 	li	$a0, 48
-	jal	putchar
+	jal	libps_putint
 	addiu	$s7, $s7, -1
 84:	blez	$s7, 89f
 	addiu	$s7, $s7, -1
@@ -4325,7 +4349,7 @@ libps_va_printf:
 852:	addu	$t1, $t1, $t0
 	lbu	$a0, 0($t1)
 86:	NOPS	PF_DIG
-	jal	putchar
+	jal	libps_putint
 	nop
 	b	84b
 	nop
@@ -4373,7 +4397,7 @@ libps_printf_fill:
 	sw	$a0, PL_T0($sp)
 	sw	$t4, PL_T1($sp)
 1:	NOPS	PF_FILL
-	jal	putchar
+	jal	libps_putint
 	nop
 	lw	$a0, PL_T0($sp)
 	lw	$t4, PL_T1($sp)
@@ -4388,6 +4412,66 @@ libps_printf_fill:
 2:	b	1b
 	nop
 
+# VSync's mode 1, in sync.go. Any other mode goes to the Go.
+	.section .text.VSync, "ax", @progbits
+	.align 2
+	.globl VSync
+	.type VSync, @function
+VSync:
+	STUBTIME
+	li	$at, 1
+	beq	$a0, $at, 1f
+	lui	$v0, 0x1f80
+	j	libps_vsync_wait
+	nop
+1:	NOPS	13
+	lw	$v0, 0x1110($v0)
+	lui	$at, %hi(libps_vsync_lines)
+	lw	$at, %lo(libps_vsync_lines)($at)
+	nop
+	subu	$v0, $v0, $at
+	jr	$ra
+	andi	$v0, $v0, 0xffff
+	.size VSync, .-VSync
+
+# GsGetActiveBuff and GsSetWorkBase, in gs.go.
+	.section .text.GsGetActiveBuff, "ax", @progbits
+	.align 2
+	.globl GsGetActiveBuff
+	.type GsGetActiveBuff, @function
+GsGetActiveBuff:
+	STUBTIME
+	lui	$v0, %hi(PSDIDX)
+	lw	$v0, %lo(PSDIDX)($v0)
+	jr	$ra
+	andi	$v0, $v0, 1
+	.size GsGetActiveBuff, .-GsGetActiveBuff
+
+	.section .text.GsSetWorkBase, "ax", @progbits
+	.align 2
+	.globl GsSetWorkBase
+	.type GsSetWorkBase, @function
+GsSetWorkBase:
+	STUBTIME
+	lui	$at, %hi(GsOUT_PACKET_P)
+	jr	$ra
+	sw	$a0, %lo(GsOUT_PACKET_P)($at)
+	.size GsSetWorkBase, .-GsSetWorkBase
+
+# libps_putint is putchar for printf's own bytes, with no time of its own beyond its tests.
+	.section .text.putchar, "ax", @progbits
+	.align 2
+	.globl libps_putint
+libps_putint:
+	andi	$a0, $a0, 0xff
+	sltiu	$at, $a0, 0x20
+	bnez	$at, libps_putlow
+	sltiu	$at, $a0, 0x7f
+	bnez	$at, libps_putplain
+	nop
+	b	libps_puthigh
+	nop
+
 # putchar(c): kernel.go says what it does. The plain text goes to the write from here.
 	.section .text.putchar, "ax", @progbits
 	.align 2
@@ -4398,13 +4482,23 @@ putchar:
 	sltiu	$at, $a0, 0x20
 	bnez	$at, 2f
 	sltiu	$at, $a0, 0x7f
-	bnez	$at, 1f
-	addiu	$at, $a0, -0xc7
-	beqz	$at, 1f
-	addiu	$at, $a0, -0xa4
-	sltiu	$at, $at, 3
-	beqz	$at, 3f
+	bnez	$at, 6f
+	# A byte from 7Fh up prints as highClass in pad.go says.
+	.globl libps_puthigh
+libps_puthigh:
+	addiu	$at, $a0, -0x93
+	sltiu	$t0, $at, 86
+	beqz	$t0, 5f
+	lui	$t0, %hi(libps_class_low)
+	addu	$t0, $t0, $at
+	lbu	$t0, %lo(libps_class_low)($t0)
 	nop
+	andi	$t0, $t0, 0x97
+	beqz	$t0, 3f
+	nop
+	NOPS	PC_HIGH
+	.globl libps_putplain
+libps_putplain:
 1:	lui	$t0, %hi(libps_tty_column)
 	lw	$at, %lo(libps_tty_column)($t0)
 	nop
@@ -4421,13 +4515,28 @@ libps_putraw:
 	li	$t0, 0xb0
 	jr	$t0
 	nop
-	# A newline goes with a carriage return before it; the rest below a space to Go.
+5:	NOPS	4
+	b	3b
+	nop
+6:	NOPS	PC_PLAIN
+	b	1b
+	nop
+	# A newline goes with a carriage return before it, a tab to Go, the rest straight to the write.
+libps_putlow:
 2:	addiu	$at, $a0, -10
 	beqz	$at, 4f
+	addiu	$at, $a0, -9
+	beqz	$at, 7f
 	nop
-	j	libps_putchar_other
+	NOPS	4
+	b	3b
 	nop
-4:	addiu	$sp, $sp, -24
+7:	j	libps_putchar_other
+	nop
+4:	NOPS	PC_NLIN
+	.globl libps_putnl
+libps_putnl:
+	addiu	$sp, $sp, -24
 	sw	$ra, 16($sp)
 	lui	$t0, %hi(libps_tty_column)
 	sw	$zero, %lo(libps_tty_column)($t0)
@@ -4450,6 +4559,15 @@ libps_putraw:
 
 	.section .bss.libps_tty, "aw", @nobits
 	.align 2
+	.globl libps_class_low
+libps_class_low:
+	.space 16
+	.globl libps_pad_buf
+libps_pad_buf:
+	.space 72
+	.globl libps_vsync_lines
+libps_vsync_lines:
+	.space 4
 	.globl libps_tty_column
 libps_tty_column:
 	.space 4
@@ -4715,7 +4833,7 @@ MulMatrix0:
 	sh	$t4, 10($a2)
 	GAP	6
 	swc2	$11, 16($a2)
-	sh	$zero, 18($a2)
+	nop
 	jr	$ra
 	move	$v0, $a2
 	.size MulMatrix0, .-MulMatrix0

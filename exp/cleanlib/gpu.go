@@ -155,9 +155,14 @@ func drawDone() {
 	if d := dmaInterrupt.Get(); d&dicrGPUFlag != 0 {
 		dmaInterrupt.Set(d&0x00ffffff | dicrGPUFlag)
 	}
-	if queue.head != queue.tail && gpuIdle() {
-		drawNext()
+	if queue.head != queue.tail {
+		if gpuIdle() {
+			drawNext()
+		}
+		return
 	}
+	// Sony's handler takes its time here whether anything is queued or not.
+	nops(24)
 }
 
 // drawNext, with the GPU free, retires the request that was running and
@@ -184,7 +189,7 @@ func drawNext() {
 // measured on the same probe. The paced calls are not inlined, so that
 // each costs the same from every caller, as a call of Sony's does.
 const (
-	loadImagePad       = 182  // LoadImage, with the sizes' pads below
+	loadImagePad       = 158  // LoadImage, with the sizes' pads below
 	storeImagePad      = 242  // StoreImage, with the sizes' pads below
 	clearImagePad      = 50   // ClearImage, a rectangle (60h): 730
 	clearFillPad       = 98   // ClearImage, a fill (02h): 586, measured the same way
@@ -248,7 +253,7 @@ const (
 	fntPrintPercentSpace      = 1 // "%%", in place of fntPrintChar: 10 more than a character
 	fntPrintCutSpace          = 3 // the print cut at the limit: 20 more
 	fntPrintRefusedEmptySpace = 8 // the empty string on a stream a print has cut: 16 less than an empty print
-	fntFlushEmptySpace        = 4
+	fntFlushEmptySpace        = 0
 	fntNulExitSpace           = 1 // the walk that ends at the NUL
 	fntLimitExitSpace         = 1 // the walk that ends at the limit: 4 more than at the NUL
 	fntGlyphsSpace            = 0
@@ -334,8 +339,13 @@ func enqueue(list uintptr, env []uint32, restore uint32) bool {
 	}
 	atOnce := queue.head+1 == queue.tail
 	queueLeave(m)
+	nops(enqueueNops)
 	return atOnce
 }
+
+// enqueueNops brings the calls through the queue, GsDrawOt, PutDrawEnv and FntFlush, back to
+// Sony's: they came out 26 cycles under after spec 32's work, for a reason not found.
+const enqueueNops = 13
 
 // startHead starts the GPU's DMA channel on the request at the queue's
 // head. Interrupts must be off. The channel is enabled in DPCR from
@@ -562,7 +572,9 @@ func textureWindow(w RECT) uint32 {
 		(uint32(w.X)>>3&0x1f)<<10 | (uint32(w.Y)>>3&0x1f)<<15
 }
 
-func clamp(v, hi int) int { return min(max(v, 0), hi) }
+// clamp keeps v within 0 and hi. The low end takes no branch: Sony's PutDrawEnv takes the
+// same time for a clip at y 0 as at y 240.
+func clamp(v, hi int) int { return min(v&^(v>>31), hi) }
 
 // DISPENV is a display environment: the area of video memory shown and
 // where on the monitor it goes.

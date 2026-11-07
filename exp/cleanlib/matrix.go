@@ -2,6 +2,8 @@
 
 package cleanlib
 
+import "unsafe"
+
 // Matrices: rotations from angles, translations, and products on the GTE.
 // An angle is in 4096ths of a turn, and a matrix element in 4.12 fixed
 // point, 4096 being 1.
@@ -86,14 +88,16 @@ func ScaleMatrix(m *MATRIX, v *VECTOR) *MATRIX {
 			m.M[i][j] = int16(int32(m.M[i][j]) * s[j] >> 12)
 		}
 	}
-	space(scaleSpace)
+	// The last element goes as a word, which carries into the padding (spec 32).
+	*(*int32)(unsafe.Pointer(&m.M[2][2])) = int32(m.M[2][2])
+	space(scaleSpace - 1)
 	return m
 }
 
 // MulMatrix0 sets the rotation of m2 to that of m0 times that of m1 on the
 // GTE, which it leaves holding m0's, and returns m2. Each element is the
-// sum of three products shifted right by 12. The padding halfword becomes 0,
-// and the translations are left alone. m2 may be m0 or m1. In assembly.
+// sum of three products shifted right by 12. The last goes as a word, so that
+// the padding halfword takes its sign (spec 32), and the translations are left alone. m2 may be m0 or m1. In assembly.
 //
 //export MulMatrix0
 func MulMatrix0(m0, m1, m2 *MATRIX) *MATRIX

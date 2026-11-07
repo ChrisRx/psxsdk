@@ -61,22 +61,24 @@ Krom2RawAdd:
 	li	$t1, 0x51
 	.size Krom2RawAdd, .-Krom2RawAdd
 
-# _dbl_shift(dst, pad, lo, hi, n) stores the 64 bits lo, hi shifted right
-# arithmetically by n at dst, the fifth word on the stack, and returns dst in v0
-# and the high word in v1. An n of 0 or below shifts nothing. One shift a turn
-# costs what Sony's turn does (28 cycles, spec 17), up to 64, by when the result
-# is settled and Sony's alone goes on.
+# _dbl_shift(dst, right, lo, hi, n) stores the 64 bits lo, hi shifted by n at dst, the fifth
+# word on the stack, and returns dst and the high word in v1: left with a word of 0 at a1,
+# what a C caller of the long long shift leaves there, and right and arithmetically with any
+# other (spec 32). An n of 0 or below shifts nothing. One shift costs what Sony's turn does
+# (28 cycles left, 24 right), up to 64, by when the result is settled and Sony's alone goes on.
 	.globl _dbl_shift
 	.type _dbl_shift, @function
 _dbl_shift:
 	lw	$t0, 16($sp)
-	nop
+	move	$v1, $a1
 	blez	$t0, 2f
 	slti	$a1, $t0, 64
 	bnez	$a1, 1f
 	nop
 	li	$t0, 64
-1:	sll	$a1, $a3, 31
+1:	beqz	$v1, 3f
+	nop
+4:	sll	$a1, $a3, 31
 	srl	$a2, $a2, 1
 	or	$a2, $a2, $a1
 	sra	$a3, $a3, 1
@@ -86,9 +88,23 @@ _dbl_shift:
 	nop
 	nop
 	nop
+	bnez	$t0, 4b
+	nop
+	b	2f
+	nop
+3:	srl	$a1, $a2, 31
+	sll	$a2, $a2, 1
+	sll	$a3, $a3, 1
+	or	$a3, $a3, $a1
+	addiu	$t0, $t0, -1
 	nop
 	nop
-	bnez	$t0, 1b
+	nop
+	nop
+	nop
+	nop
+	nop
+	bnez	$t0, 3b
 	nop
 2:	sw	$a2, 0($a0)
 	sw	$a3, 4($a0)
