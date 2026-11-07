@@ -73,10 +73,11 @@ type Pacing struct {
 	Run        time.Duration // after the monitor has echoed go
 }
 
-// DevicePacing is what a real console needs through a USB serial adapter,
-// found by uploading to one: without Header an upload fails waiting for CTS,
-// and without BlockStart it hangs. The rest were in the loader that worked,
-// and stay until a console shows they can go. The emulated line needs none.
+// DevicePacing is the delays of the loader that worked on a real console
+// through a USB serial adapter. They came from manual testing, on an older
+// serial library, and no root cause is known: without Header that loader
+// failed waiting for CTS, and without BlockStart it hung. They stay until a
+// console shows they can go. The emulated line needs none.
 var DevicePacing = Pacing{
 	Load:       500 * time.Millisecond,
 	Reply:      100 * time.Millisecond,
@@ -233,9 +234,10 @@ func (p *Port) Poll() error {
 
 // pulse turns RTS off and on again: the Net Yaroze's monitor waits for that
 // pulse before it sends the next byte of a binary read. SIOCONS's receive
-// interrupt pulses for every byte it gets, but only a binary read needs it,
-// and pulsing outside one has stalled a real console through a USB adapter,
-// so a Port pulses only while PulseReads is set.
+// interrupt pulses for every byte it gets, but only a binary read needs it.
+// The loader that worked on a real console never pulsed, and an attempt at
+// handling RTS in it stalled for a reason not found, so a Port pulses only
+// while PulseReads is set.
 func (p *Port) pulse() error {
 	if err := p.line.SetRTS(false); err != nil {
 		return err

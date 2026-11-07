@@ -221,8 +221,8 @@ func TestLoad(t *testing.T) {
 	assert.Equal(t, n, len(f.mem), "only the sections' bytes should be written, not the last block's padding")
 }
 
-// Only a binary read pulses RTS: a real console through a USB adapter stalls
-// on pulses anywhere else, and doesn't need them.
+// Only a binary read pulses RTS: a loader that worked on a real console never
+// did, and an attempt at it stalled for a reason not found.
 func TestPulsesOnlyInBinaryRead(t *testing.T) {
 	f, _, m := setup(t)
 	data := bytes.Repeat([]byte{1, 2, 3, 4}, 1024)
