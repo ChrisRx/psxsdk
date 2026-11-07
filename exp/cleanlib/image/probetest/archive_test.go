@@ -554,18 +554,17 @@ func TestArchiveBus(t *testing.T) {
 	}
 }
 
-// entryNames names the library's entry points, from the image's first link.
+// entryNames names the library's public entry points, from the list make.sh writes.
 func entryNames() map[uint32]string {
 	names := map[uint32]string{}
-	b, err := os.ReadFile("../../../../.build/cleanimage/map1.txt")
+	b, err := os.ReadFile("../../../../.build/cleanimage/entries.txt")
 	if err != nil {
 		return names
 	}
 	for line := range strings.SplitSeq(string(b), "\n") {
-		f := strings.Fields(line)
-		if len(f) == 5 && strings.HasPrefix(f[4], ".fix.") {
-			a, _ := strconv.ParseUint(f[0], 16, 32)
-			names[uint32(a)] = strings.TrimPrefix(f[4], ".fix.")
+		if at, name, ok := strings.Cut(line, " "); ok {
+			a, _ := strconv.ParseUint(at, 16, 32)
+			names[uint32(a)] = name
 		}
 	}
 	return names
@@ -728,16 +727,7 @@ func TestArchiveAllCosts(t *testing.T) {
 	if frames == 0 {
 		t.Skip("ARCHIVE_ALLCOSTS gives the frames")
 	}
-	names := map[uint32]string{}
-	if b, err := os.ReadFile("../../../../.build/cleanimage/map1.txt"); err == nil {
-		for line := range strings.SplitSeq(string(b), "\n") {
-			f := strings.Fields(line)
-			if len(f) == 5 && strings.HasPrefix(f[4], ".fix.") {
-				a, _ := strconv.ParseUint(f[0], 16, 32)
-				names[uint32(a)] = strings.TrimPrefix(f[4], ".fix.")
-			}
-		}
-	}
+	names := entryNames()
 	rows, err := os.ReadFile(carchive + "summary.txt")
 	if err != nil {
 		t.Fatal(err)

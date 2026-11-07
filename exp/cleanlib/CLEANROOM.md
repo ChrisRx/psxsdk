@@ -81,7 +81,10 @@ summarize them:
   `libpsdis score` writes: a score to climb would steer the work toward Sony's code.
 - `exp/cleanlib/image/gen.py`, `exp/cleanlib/image/sonyfont.py`, and the `.ld`,
   `.S`, `.json`, `exports.txt`, `map1.txt` and `sony-cleanfont.exe` files in
-  `.build/cleanimage/`: they carry the resident address table or Sony's bytes. Run `exp/cleanlib/image/make.sh` and `regress.sh`, and edit
+  `.build/cleanimage/`: they carry the resident address table or Sony's bytes. This
+  covers your own tools too: never write one that reads them, even if it prints only
+  names. To name a call, use `entryNames` in `image/probetest`, which reads the public
+  entry points from the list the spec side writes, `.build/cleanimage/entries.txt`. Run `exp/cleanlib/image/make.sh` and `regress.sh`, and edit
   `image/main.go` and `image/clib.S` where a spec says to. `.build/cleanimage/missing.txt` and the
   symbols of `.build/cleanimage/image.elf`, which are the clean library's, are
   fine, but a PC in Sony's image on the `-cimg` side stays an address.
