@@ -35,6 +35,7 @@ func LoadImage(rect *RECT, p *uint32) int32 {
 	if loadImage(*rect, unsafe.Pointer(p)) {
 		rect.W, rect.H = imageSize(*rect)
 	}
+	imageCallLeaves()
 	return 0
 }
 
@@ -61,7 +62,9 @@ const timHasClut = 1 << 3
 //
 //export GsGetTimInfo
 func GsGetTimInfo(im *uint32, info *GsIMAGE) {
-	flags := *im
+	// Either may be null, which is memory here (probe spec/probes/timnull).
+	flags := *at(im)
+	info = at(info)
 	p := unsafe.Add(unsafe.Pointer(im), 4)
 	// Pmode is the flags as they are, with the palette bit, which a
 	// program tests to know whether there is a palette to load.

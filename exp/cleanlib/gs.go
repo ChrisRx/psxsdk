@@ -133,7 +133,6 @@ func GsInitGraph(w, h, intmode, dith, vrammode uint16) {
 	updatePlace()
 	position = GsPOSITION{}
 	psdCNT = 1
-	psdOFSX, psdOFSY = [2]int16{}, [2]int16{}
 	gsIDMATRIX = identity()
 	gsIDMATRIX2 = identity()
 	// GsIDMATRIX2 scales y by the screen's aspect against 4:3, a half
@@ -457,14 +456,17 @@ func GsDrawOt(ot *GsOT) {
 // ResetGraph resets the GPU. Mode 0 resets it completely, 1 cancels the
 // drawing in progress and empties the command queue, and 3 resets it but
 // keeps the drawing and display environments. Mode 1 empties the drawing
-// queue too. It returns 0.
+// queue too. Only the mode's low three bits count, and modes 2, 4, 5, 6 and 7 act
+// as 1. Mode 0 returns 3, and any other 0 (probe spec/probes/resetret).
 //
 //export ResetGraph
 func ResetGraph(mode int32) int32 {
+	mode &= 7
 	switch mode {
 	case 0:
 		resetGPU()
-	case 1, 3:
+		return 3
+	default:
 		// Mode 3 is mode 1 after the notice mode 0 prints (Sony's
 		// library, probe spec/probes/resetwait).
 		if mode == 3 {

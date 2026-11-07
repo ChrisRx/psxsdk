@@ -362,7 +362,6 @@ func libBegin() {
 	iMask.Set(0)
 	iMask.Set(irqVBlank | irqDMA)
 	libps_biosA(biosCdRemove, 0, 0, 0, 0)
-	startLineCounter()
 	startQueue()
 	iStat.Set(^uint32(irqVBlank))
 	iMask.Set(iMask.Get() | irqVBlank)

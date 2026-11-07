@@ -559,6 +559,38 @@ func TestArchiveBus(t *testing.T) {
 	}
 }
 
+// TestArchiveGP0 writes the GPU words of the programs in ARCHIVE_GP0, each NAME:FROM:TO in
+// frames from "Execute !", into calls/NAME-SIDE.gp0, a line of words a frame, with
+// the frame first. The pad is pressed as TestArchive presses it.
+func TestArchiveGP0(t *testing.T) {
+	list := strings.Fields(os.Getenv("ARCHIVE_GP0"))
+	if len(list) == 0 {
+		t.Skip("ARCHIVE_GP0 names the programs")
+	}
+	if err := os.MkdirAll(carchive+"calls", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, spec := range list {
+		f := strings.Split(spec, ":")
+		from, _ := strconv.Atoi(f[1])
+		to, _ := strconv.Atoi(f[2])
+		for _, side := range []string{"sony", "clean"} {
+			s := newFirstSide(t, carchive+f[0]+"-"+side+"/"+f[0]+"-"+side+".cue")
+			var out []byte
+			for s.frame < to {
+				s.words = s.words[:0]
+				s.next(s.frame + 1)
+				if s.frame > from {
+					out = fmt.Appendf(out, "%d %08x\n", s.frame, s.words)
+				}
+			}
+			if err := os.WriteFile(carchive+"calls/"+f[0]+"-"+side+".gp0", out, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
 // entryNames names the library's public entry points, from the list make.sh writes.
 func entryNames() map[uint32]string {
 	names := map[uint32]string{}
@@ -579,7 +611,7 @@ func entryNames() map[uint32]string {
 type programCall struct {
 	frame, cycles uint64
 	text          string
-	left          [3]uint32 // a1 to a3 on return
+	left          [4]uint32 // a0 to a3 on return
 }
 
 // programCalls records the calls a program makes into the library over its first
@@ -614,7 +646,7 @@ func programCalls(t *testing.T, name, side string, names map[uint32]string, fram
 				calls[open].text += fmt.Sprintf(" prints %d", n-printed)
 				printed = n
 			}
-			calls[open].left = [3]uint32{r[5], r[6], r[7]}
+			calls[open].left = [4]uint32{r[4], r[5], r[6], r[7]}
 			open = -1
 		}
 		if e, ok := names[pc]; ok && open < 0 && r[31] >= programStart {

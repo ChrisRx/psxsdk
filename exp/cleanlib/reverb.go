@@ -2,6 +2,8 @@
 
 package cleanlib
 
+import "unsafe"
+
 // The reverb: the SPU's own, set to one of the library's presets.
 
 // reverbTypes are the presets for SS_REV_TYPE_OFF to SS_REV_TYPE_PIPE:
@@ -30,8 +32,8 @@ var reverbType int16
 
 // SsUtSetReverbType sets the reverb to one of the presets with its depth
 // at zero, turning it off for SS_REV_TYPE_OFF, and returns the type, or -1
-// for none. A negative type names the preset of its size, and is what
-// SsUtGetReverbType reports with bit 8 set (spec 23).
+// for none. A negative type names the preset of its size, is what
+// SsUtGetReverbType reports with bit 8 set (spec 23), and clears the work area.
 //
 //export SsUtSetReverbType
 func SsUtSetReverbType(t int16) int32 {
@@ -45,7 +47,10 @@ func SsUtSetReverbType(t int16) int32 {
 		return -1
 	}
 	reverbType = kept
-	if t == 0 {
+	// The reverb goes off while its registers change and back on after, but for
+	// SS_REV_TYPE_OFF, which leaves it off (probe spec/probes/revctrl).
+	on := spuGet(spuCtrl)&spuReverbOn != 0
+	if on || t == 0 {
 		spuSet(spuCtrl, spuGet(spuCtrl)&^spuReverbOn)
 	}
 	spuSet(spuRevL, 0)
@@ -54,9 +59,22 @@ func SsUtSetReverbType(t int16) int32 {
 	for i, r := range p.regs {
 		spuSet(spuRevRegs+uint32(i)*2, r)
 	}
+	// A negative type also clears the work area, from its start to the top of sound
+	// memory, by DMA, a kilobyte at a time.
+	if kept != t {
+		for at := uint32(p.base) << 3; at < spuRAMSize; at += uint32(len(reverbZeros)) * 4 {
+			spuWrite(at, unsafe.Pointer(&reverbZeros), min(spuRAMSize-at, uint32(len(reverbZeros))*4))
+		}
+	}
 	spuSet(spuRevBase, p.base)
+	if on && t != 0 {
+		spuSet(spuCtrl, spuGet(spuCtrl)|spuReverbOn)
+	}
 	return int32(t)
 }
+
+// reverbZeros is what a negative type clears the work area with.
+var reverbZeros [256]uint32
 
 // reverbNegative marks a type SsUtSetReverbType was given as a negative.
 const reverbNegative = 1 << 8

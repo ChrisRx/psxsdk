@@ -89,6 +89,7 @@ func StoreImage(rect *RECT, p *uint32) int32 {
 	if w == 0 || h == 0 {
 		queueLeave(m)
 		pace(storeImagePad)
+		imageCallLeaves()
 		return 0
 	}
 	// The DMA direction off first, as the reference does.
@@ -124,6 +125,7 @@ func StoreImage(rect *RECT, p *uint32) int32 {
 	}
 	queueLeave(m)
 	pace(storeImagePad)
+	imageCallLeaves()
 	return 0
 }
 
@@ -154,6 +156,7 @@ func ClearImage(rect *RECT, r, g, b uint8) int32 {
 			rect.W, rect.H = w, h
 		}
 		pace(clearFillPad)
+		imageCallLeaves()
 		return 0
 	}
 	p := [8]uint32{
@@ -171,6 +174,7 @@ func ClearImage(rect *RECT, r, g, b uint8) int32 {
 		rect.W, rect.H = w, h
 	}
 	pace(clearImagePad)
+	imageCallLeaves()
 	return 0
 }
 

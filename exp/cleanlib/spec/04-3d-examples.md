@@ -134,7 +134,10 @@ Corrections and additions to the specs:
   - Textured lit primitives light 808080h and use the mode as the code.
   - GsDOFF hides the object.
 - **LoadImage.** The CPU writes the leftover words from the start of the
-  image, then DMA sends the whole blocks.
+  image, then DMA sends the whole blocks. LoadImage, StoreImage, MoveImage
+  and ClearImage return with the interrupt mask in a0 and its register's
+  address, 1F801074h, in v1, which a program can pick up by passing a call no
+  argument (`loadleft`, spec 37).
 - **ResetGraph(1)** writes GP1 02h, then 01h.
 - **VSync's return value** is the lines from the previous VSync's return
   to this call, before it waits (offscr shows 45, not 263).

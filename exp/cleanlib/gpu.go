@@ -3,6 +3,7 @@
 package cleanlib
 
 import (
+	"device"
 	"unsafe"
 
 	"go.chrisrx.dev/psx/internal/volatile"
@@ -504,6 +505,21 @@ func imageSize(r RECT) (w, h int16) {
 // the low half, y in the high.
 func pair(x, y int16) uint32 { return uint32(uint16(x)) | uint32(uint16(y))<<16 }
 
+// imageCallLeaves puts in a0 and v1 what the four image calls leave there on Sony's:
+// the interrupt mask and its register's address (probe spec/probes/loadleft). A program
+// can get a0 as an argument by passing none, as a call to srand() with no seed does.
+// It comes last in each, with nothing else live in those registers.
+//
+//go:inline
+func imageCallLeaves() {
+	device.AsmFull(`.set push
+	.set noat
+	lui $$3, 0x1f80
+	lw $$4, 0x1074($$3)
+	ori $$3, $$3, 0x1074
+	.set pop`, nil)
+}
+
 // RECT is a rectangle in video memory: its top left corner and its size.
 type RECT struct {
 	X, Y, W, H int16
@@ -756,5 +772,6 @@ func MoveImage(r *RECT, x, y int32) int32 {
 		pair(r.W, r.H),
 	}
 	submit(0, p[:])
+	imageCallLeaves()
 	return 0
 }
