@@ -451,8 +451,10 @@ Measured on the clean image with `probe.sh`, on the sources as they stand. New p
 - **PSDIDX, PSDOFSX, PSDOFSY.** These are the library's state, not a copy of it. PSDIDX is the
   buffer drawn into, and GsGetActiveBuff and the next GsSwapDispBuff go by what a program wrote
   there. PSDOFSX and PSDOFSY each hold two halfwords, buffer 0's and buffer 1's x or y, and the next
-  swap draws with what a program wrote. All are 0 after GsInitGraph, so before GsDefDispBuff both
-  buffers are at (0, 0) (`gspsd`). On the image these three symbols did not exist before, since
+  swap draws with what a program wrote. PSDIDX is 0 after GsInitGraph, every call. PSDOFSX and PSDOFSY start at 0, so
+  before any GsDefDispBuff both buffers are at (0, 0) (`gspsd`), and GsInitGraph doesn't touch them: a
+  second GsInitGraph keeps the corners, and one after GsDefDispBuff keeps them even as the first call
+  (`initkeep`, spec 37). On the image these three symbols did not exist before, since
   nothing read them: the compiler dropped the stores, and programs read 0.
 - **rand and srand, spec 02.** Sony's library does not call the kernel's A0h 2Fh and 30h, and `crand`
   and Terra show no such call. Its rand is next = next * 1103515245 + 12345, returning bits 16 to

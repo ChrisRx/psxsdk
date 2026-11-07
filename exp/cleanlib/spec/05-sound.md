@@ -236,8 +236,12 @@ Sequences were not probed; they are expected to use the same
 allocation. Note off matching is above.
 
 **Reverb.** The ten presets (1c0 to 1fe and the 1a2 base) are in
-reverb.go. SsUtSetReverbType sets depth 0 and writes the preset; only
-type 0 clears SPUCNT bit 7; types above 9 return -1 and keep the type.
+reverb.go. SsUtSetReverbType sets depth 0 and writes the preset; types above 9 return -1 and
+keep the type, with nothing written. Type 0 clears SPUCNT bit 7 and leaves it clear.
+Any other type with the bit set clears it first and sets it again after the 1A2 base,
+the last write. A negative type, -1 to -9, also clears the work area in sound memory,
+from the preset's base to the top, by DMA in kilobytes before the base is written
+(`revctrl`, spec 37).
 SsUtReverbOn and Off set and clear bit 7. Depth register = v·0x7fff/127.
 
 **GPU, found on the way.**
@@ -445,6 +449,11 @@ and ChangeClearRCnt twice there). The clean library waits as long.
 
 **GPU and others, found on the way.**
 
+- ResetGraph goes by its level's low three bits: 8, 16, 256, 65536 and -8 act as 0, 11
+  and 259 as 3, and every other level as 1, GP1 02h and 01h with no line printed. That
+  was read from the GPU's writes for 5 to 12 and up; 2, 4 and -1 only from the print and
+  the return. Level 0 returns 3, whatever came before it, and every other returns 0
+  (`resetret`, spec 37).
 - ResetGraph(0) and (3) print a line before resetting the GPU:
   "ResetGraph:jtb=8004829c,env=800482e4\r\n", through the kernel's
   write (B0h function 35h) once per character, each call write(1, &c,

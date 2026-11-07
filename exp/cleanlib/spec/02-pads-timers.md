@@ -63,7 +63,9 @@ a comment.
 
 **GsGetTimInfo(tim, info)** takes the TIM's address after its ID word
 (as the manual says) and fills a GsIMAGE: pixel mode, the image's
-position, size and pixel address, and the CLUT's when there is one.
+position, size and pixel address, and the CLUT's when there is one. Either pointer may be null, which
+is memory here: info null writes the fields from address 0 on, and a null TIM reads from address 0 on,
+with the addresses it stores counted from 0 (`timnull`, spec 37).
 
 **LoadImage(rect, p)** uploads to VRAM and returns at once; DrawSync
 waits for it. Uploads may go by DMA or by the CPU; the stream shows what
@@ -118,7 +120,10 @@ spec lacked:
 - The CD needs the kernel's CD handlers removed (A0 72h) and DMA channel
   3's interrupt disabled in DICR; the library takes the CD interrupt
   itself. CdRead sends Setmode before ReadN.
-- VSync must leave root counter 1 running: programs read it as RCntCNT1.
+- VSync must leave root counter 1 running: programs read it as RCntCNT1. The library's start writes
+  its mode 0107h and nothing else, so it holds at 0 until the next vertical blank and then runs free,
+  its mode reading 0106h after, and it isn't restarted by a later ResetGraph or GsInitGraph (`linestart`,
+  spec 37). The lines the first VSync returns are counted from that blank.
 - FntPrint's `~cRGB` sets the text color (each digit times 16), reset to
   808080 at the start of each flush.
 - The target's link script PROVIDEs CdControl and CdIntToPos at the

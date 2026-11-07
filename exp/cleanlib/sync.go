@@ -31,19 +31,14 @@ func SetVideoMode(mode int32) int32 {
 	return old
 }
 
-// Root counter 1, which counts horizontal blanks for VSync.
+// Root counter 1, which counts horizontal blanks for VSync. The library's start
+// writes its mode 0107h, which holds it at 0 until the next vertical blank and then
+// lets it run free (probe spec/probes/linestart). VSync measures by the difference
+// of two readings, and a program may read and reset it as RCntCNT1.
 var (
 	lineCount = (*volatile.Register32)(unsafe.Pointer(uintptr(0x1f801110)))
 	lineMode  = (*volatile.Register32)(unsafe.Pointer(uintptr(0x1f801114)))
 )
-
-// startLineCounter sets root counter 1 counting horizontal blanks, from 0.
-// It runs free: VSync measures by the difference of two readings, and a
-// program may read and reset it as RCntCNT1.
-func startLineCounter() {
-	lineMode.Set(0x0100)
-	lineCount.Set(0)
-}
 
 // vsyncLines is the line counter when VSync last returned from a wait.
 //
