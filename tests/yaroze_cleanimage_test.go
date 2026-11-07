@@ -91,8 +91,8 @@ func hwSession(t *testing.T, library string, image *serial.Program, out string) 
 		t.FailNow()
 	}
 	path := filepath.Join(out, "hwprobe-"+library+".txt")
-	program := serialProgram(t, "hwprobe")
-	if !assert.NoError(t, s.Run(t.Context(), []string{program})) {
+	program := []hwrun.Job{hwrun.NewJob(serialProgram(t, "hwprobe"))}
+	if !assert.NoError(t, s.Run(t.Context(), program)) {
 		t.FailNow()
 	}
 	data, err := os.ReadFile(path)
@@ -100,7 +100,7 @@ func hwSession(t *testing.T, library string, image *serial.Program, out string) 
 
 	// A program with a file is skipped, which is how a session goes on later.
 	before, _ := os.Stat(path)
-	assert.NoError(t, s.Run(t.Context(), []string{program}))
+	assert.NoError(t, s.Run(t.Context(), program))
 	after, _ := os.Stat(path)
 	assert.Equal(t, before.ModTime(), after.ModTime(), "a finished program shouldn't run again")
 
@@ -120,7 +120,7 @@ func hwSession(t *testing.T, library string, image *serial.Program, out string) 
 	}
 
 	assert.NoError(t, os.Remove(path))
-	assert.NoError(t, s.Run(t.Context(), []string{program}))
+	assert.NoError(t, s.Run(t.Context(), program))
 	again, err := os.ReadFile(path)
 	assert.NoError(t, err)
 	return string(data), string(again)
@@ -163,5 +163,60 @@ func TestYarozeCleanImage(t *testing.T) {
 	assert.Equal(t, len(a), len(b))
 	for _, n := range slices.Sorted(maps.Keys(a)) {
 		t.Logf("%-20s sony %-40s clean %s", n, a[n], b[n])
+	}
+}
+
+// TestYarozeArchiveJob runs an original program with its data files as the
+// hardware session would, on each library, and checks it's still running at the
+// end with no crash. PSX_HW_ARCHIVE names the archive's programs.tsv.
+func TestYarozeArchiveJob(t *testing.T) {
+	tsv := os.Getenv("PSX_HW_ARCHIVE")
+	if tsv == "" {
+		t.Skip("PSX_HW_ARCHIVE is not set")
+	}
+	jobs, err := hwrun.ArchiveJobs(tsv, []string{cmp.Or(os.Getenv("PSX_HW_PROGRAM"), "scee-topten-adven")})
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	image := cleanImage(t)
+	for _, library := range []string{"sony", "clean"} {
+		t.Run(library, func(t *testing.T) {
+			m, port, _ := sonyMonitor(t)
+			port.Timeout = 60 * time.Second
+			errReset := errors.New("reset asked for")
+			s := &hwrun.Session{
+				Port:    port,
+				Library: library,
+				Out:     t.TempDir(),
+				Watch:   20 * time.Second,
+				Log:     io.Discard,
+				Reset:   func(why string) error { return errReset },
+			}
+			if library == "clean" {
+				monitor, err := serial.OpenMonitor(serialProgram(t, "monitor"), 115200)
+				if !assert.NoError(t, err) {
+					t.FailNow()
+				}
+				s.TakeOver, err = serial.TakeOver(monitor, image.Segments[0])
+				if !assert.NoError(t, err) {
+					t.FailNow()
+				}
+				s.Marker = binary.LittleEndian.Uint32(monitor.Segments[0].Data)
+			}
+			if !assert.NoError(t, s.Start(t.Context())) {
+				t.FailNow()
+			}
+
+			// It never returns, so it ends by asking for a reset.
+			if err := s.Run(t.Context(), jobs); !errors.Is(err, errReset) {
+				t.Errorf("the program should end by asking for a reset, not %v", err)
+			}
+			data, err := os.ReadFile(filepath.Join(s.Out, jobs[0].Name+"-"+library+".txt"))
+			assert.NoError(t, err)
+			t.Logf("pc %08x, printed: %.300q", m.CPU.PC, string(data))
+			if m.CPU.PC>>16 == 0xbfc0 || m.CPU.PC < 0x10000 {
+				t.Logf("pc in the BIOS: %08x, epc %08x, cause %08x", m.CPU.PC, m.CPU.COP0[14], m.CPU.COP0[13])
+			}
+		})
 	}
 }

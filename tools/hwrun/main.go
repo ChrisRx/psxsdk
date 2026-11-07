@@ -5,6 +5,11 @@
 //	go run ./tools/hwrun -d /dev/ttyUSB0 -library sony  -o results .build/serial/hwprobe.elf
 //	go run ./tools/hwrun -d /dev/ttyUSB0 -library clean -o results .build/serial/hwprobe.elf
 //
+// With -archive, the arguments are names from a programs.tsv, which brings each
+// program's data files as its AUTO batch does:
+//
+//	go run ./tools/hwrun -d /dev/ttyUSB0 -archive .build/carchive/programs.tsv demos-scee-tunelfin
+//
 // With -library clean it first replaces the boot disc's monitor and library
 // with the clean ones, once per boot. Programs then return to that monitor.
 package main
@@ -34,17 +39,29 @@ func main() {
 	imagePath := flag.String("image", "link/libps.exe.gz", "the clean image")
 	monitorPath := flag.String("monitor", ".build/serial/monitor.elf", "the clean monitor, from task build:serial")
 	out := flag.String("o", "results", "directory for the output")
+	archive := flag.String("archive", "", "a programs.tsv whose names the arguments are")
 	watch := flag.Duration("watch", 60*time.Second, "how long a program runs if it prints no end mark")
 	flag.Parse()
-	if err := run(*device, *baud, *library, *imagePath, *monitorPath, *out, *watch, flag.Args()); err != nil {
+	if err := run(*device, *baud, *library, *imagePath, *monitorPath, *archive, *out, *watch, flag.Args()); err != nil {
 		fmt.Fprintln(os.Stderr, "hwrun:", err)
 		os.Exit(1)
 	}
 }
 
-func run(device string, baud int, library, imagePath, monitorPath, out string, watch time.Duration, programs []string) error {
+func run(device string, baud int, library, imagePath, monitorPath, archive, out string, watch time.Duration, programs []string) error {
 	if device == "" || len(programs) == 0 {
 		return fmt.Errorf("give -d and at least one program")
+	}
+	jobs := make([]hwrun.Job, 0, len(programs))
+	if archive != "" {
+		var err error
+		if jobs, err = hwrun.ArchiveJobs(archive, programs); err != nil {
+			return err
+		}
+	} else {
+		for _, path := range programs {
+			jobs = append(jobs, hwrun.NewJob(path))
+		}
 	}
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return err
@@ -93,7 +110,7 @@ func run(device string, baud int, library, imagePath, monitorPath, out string, w
 	if err := s.Start(ctx); err != nil {
 		return fmt.Errorf("reaching the monitor: %w", err)
 	}
-	return s.Run(ctx, programs)
+	return s.Run(ctx, jobs)
 }
 
 // openImage reads a resident image, gzipped as it is in link.
