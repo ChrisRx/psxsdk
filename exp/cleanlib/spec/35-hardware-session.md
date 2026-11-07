@@ -187,6 +187,17 @@ Medians of the five readings, in the system clock with interrupts off. Sin and S
 
 **Programs.** `pssoft-terra-2`, a real Net Yaroze game, uploaded in 1 minute 25 seconds and ran on the clean library. The user saw it on the TV. It printed `go` and `ResetGraph`, and no more in 45 s. Since it never returns, the old monitor couldn't get control back, and `hwrun` stopped to ask for the button. The other four programs planned then didn't run: `demos-scee-tunelfin`, `showcase-gasgar`, `scee-topten-adven`, `pssoft-airbob-2-airbob`.
 
+**After the serial reset, at 0104238's library.** With the boot disc's monitor back after a press of reset, `hwrun -library clean` ran four programs, 45 s each, with nobody watching the TV. The serial reset worked three times, with no button: each time the console rebooted from the disc, and the clean library went back in, in 1 minute 8 seconds.
+
+| Program | Upload | Printed | After |
+|---|---|---|---|
+| `demos-scee-tunelfin` | 1 min 25 s | the pad driver, `ResetGraph`, `level updating` 1 and 2 | reset from the cable |
+| `showcase-gasgar` | 1 min 31 s | `ResetGraph` twice, then the monitor's greeting and `>>` | back at the monitor by itself |
+| `scee-topten-adven` | 2 min 21 s | `ResetGraph` | reset from the cable |
+| `pssoft-airbob-2-airbob` | 1 min 42 s | `ResetGraph`, the pad driver | reset from the cable |
+
+`showcase-gasgar` returns to the monitor on the clean library on a console, as in the emulator, where Sony's keeps it running. It's a difference in behavior, and isn't explained. `demos-scee-tunelfin` reached `level updating` 2 in 45 s, where the emulator reaches 4.
+
 **Unexplained:** while Terra uploaded, the TV showed solid bright blue, where the probe's last picture should be dark blue (20, 20, 60) with a smaller bright box, a line and a sprite. Terra's picture then replaced it. It may be the TV's own no-signal color. That hasn't been checked.
 
 What this shows, and what it doesn't yet:
