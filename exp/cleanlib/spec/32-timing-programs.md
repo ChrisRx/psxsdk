@@ -45,6 +45,8 @@ Time by cycles only. Report per program: what first differed, the cause, what yo
 
 ## What the work on this spec found
 
+The probes are `probes/tim*`.
+
 `same` went from 98 to 102 of 140. `test-demo-fm`, `pssoft-koro-koro`, `scee-topten-adven` and `test-wme-wme` reached it. `event-event001-rave096` is 52 bytes off, and `scee-topten-cardem`, `pssoft-airbob-2-airbob` and `test-pd961207` still differ. The table's leads were wrong in two places: `init` was 566,082 cycles long, not short, and `airbob` and `pd961207` aren't mainly paced math.
 
 - **Start-up:** Sony's start runs InitCard and StartCard inside a critical section, so a blank during FlushCache waits until StartCard's own exit, and the card driver's first frame is that blank.
