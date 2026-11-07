@@ -12,7 +12,9 @@ const (
 type memory [size]byte
 
 func (m *memory) read(start, end uint32) []byte {
-	return m[start&mask : end&mask]
+	// By length, since an end at the top of RAM masks to 0.
+	from := start & mask
+	return m[from : from+end-start]
 }
 
 func (m *memory) write(start uint32, data []byte) int {
