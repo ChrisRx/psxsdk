@@ -95,20 +95,6 @@ var wsUnscaled MATRIX
 //export libps_view
 func viewUnder(view *MATRIX, super *GsCOORDINATE2)
 
-// GsInitCoordinate2 makes base a coordinate system under super, or under
-// the world when super is nil, its matrix a copy of GsIDMATRIX, and makes
-// base super's Sub. It leaves base's Workm, Param and Sub.
-//
-//export GsInitCoordinate2
-func GsInitCoordinate2(super, base *GsCOORDINATE2) {
-	base.Coord = gsIDMATRIX
-	base.Flg = 0
-	base.Super = super
-	if super != nil {
-		super.Sub = base
-	}
-}
-
 // localToWorld brings c's Workm up to date with what its chain's flags say,
 // and returns it, without recursion or a table, since a program's stack may be
 // the 1 KB scratchpad, and with no link in the chain changed even for a time.

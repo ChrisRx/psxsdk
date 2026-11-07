@@ -112,3 +112,38 @@ _dbl_shift:
 	jr	$ra
 	move	$v0, $a0
 	.size _dbl_shift, .-_dbl_shift
+
+# GsInitCoordinate2(super, base): gs3d_static.go says what it does. In assembly so that its
+# first instruction is not a branch (spec 33).
+	.section .text.GsInitCoordinate2, "ax", @progbits
+	.align 2
+	.globl GsInitCoordinate2
+	.type GsInitCoordinate2, @function
+GsInitCoordinate2:
+	lui	$at, %hi(GsIDMATRIX)
+	addiu	$v0, $at, %lo(GsIDMATRIX)
+	NOPS	2
+	lw	$at, %lo(GsIDMATRIX)($at)
+	lw	$v1, 16($v0)
+	lw	$a2, 20($v0)
+	lw	$a3, 24($v0)
+	lw	$t0, 28($v0)
+	lw	$t1, 12($v0)
+	lw	$t2, 8($v0)
+	lw	$v0, 4($v0)
+	nop
+	sw	$v0, 8($a1)
+	sw	$t2, 12($a1)
+	sw	$t1, 16($a1)
+	sw	$t0, 32($a1)
+	sw	$a3, 28($a1)
+	sw	$a2, 24($a1)
+	sw	$v1, 20($a1)
+	sw	$a0, 72($a1)
+	sw	$at, 4($a1)
+	beqz	$a0, 1f
+	sw	$zero, 0($a1)
+	sw	$a1, 76($a0)
+1:	jr	$ra
+	nop
+	.size GsInitCoordinate2, .-GsInitCoordinate2
