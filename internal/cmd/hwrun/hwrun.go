@@ -16,6 +16,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,6 +36,74 @@ const (
 	// bootTimeout is how long a console gets to boot its disc after a reset.
 	bootTimeout = 3 * time.Minute
 )
+
+// Job is a program to run, with any files its batch loads into RAM first.
+type Job struct {
+	// Name names the output file.
+	Name string
+
+	// Path is the executable.
+	Path string
+
+	// Loads are the files to put in RAM, as "PATH@ADDRESS", in hexadecimal.
+	Loads []string
+}
+
+// NewJob is a job for an executable on its own, named after its file.
+func NewJob(path string) Job {
+	return Job{Name: strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)), Path: path}
+}
+
+// ArchiveJobs reads the jobs named from a programs.tsv, as
+// exp/cleanlib/image/archive.py writes it from each program's AUTO batch: its
+// name, directory, executable, and files to load, separated by spaces.
+func ArchiveJobs(path string, names []string) ([]Job, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	all := map[string]Job{}
+	for _, line := range strings.Split(string(data), "\n") {
+		f := strings.Split(line, "\t")
+		if len(f) != 4 {
+			continue
+		}
+		all[f[0]] = Job{Name: f[0], Path: f[2], Loads: strings.Fields(f[3])}
+	}
+	jobs := make([]Job, 0, len(names))
+	for _, name := range names {
+		job, ok := all[name]
+		if !ok {
+			return nil, fmt.Errorf("%s has no program %s", path, name)
+		}
+		jobs = append(jobs, job)
+	}
+	return jobs, nil
+}
+
+// program reads what's uploaded for a job.
+func (j Job) program() (*serial.Program, error) {
+	prog, err := serial.OpenProgram(j.Path)
+	if err != nil {
+		return nil, err
+	}
+	for _, load := range j.Loads {
+		path, at, ok := strings.Cut(load, "@")
+		if !ok {
+			return nil, fmt.Errorf("%q has no address", load)
+		}
+		addr, err := strconv.ParseUint(at, 16, 32)
+		if err != nil {
+			return nil, fmt.Errorf("%q: %w", load, err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		prog.Segments = append(prog.Segments, serial.Segment{Name: filepath.Base(path), Addr: uint32(addr), Data: data})
+	}
+	return prog, nil
+}
 
 // Session is a run of programs on one console.
 type Session struct {
@@ -105,28 +174,28 @@ func (s *Session) Start(ctx context.Context) error {
 }
 
 // Run runs each program.
-func (s *Session) Run(ctx context.Context, programs []string) error {
-	for _, path := range programs {
-		if err := s.one(ctx, path); err != nil {
-			return fmt.Errorf("%s: %w", path, err)
+func (s *Session) Run(ctx context.Context, jobs []Job) error {
+	for _, job := range jobs {
+		if err := s.one(ctx, job); err != nil {
+			return fmt.Errorf("%s: %w", job.Name, err)
 		}
 	}
 	return nil
 }
 
 // outPath is where a program's output goes.
-func (s *Session) outPath(path string) string {
-	name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-	return filepath.Join(s.Out, name+"-"+s.Library+".txt")
+func (s *Session) outPath(job Job) string {
+	return filepath.Join(s.Out, job.Name+"-"+s.Library+".txt")
 }
 
-func (s *Session) one(ctx context.Context, path string) error {
-	out := s.outPath(path)
+func (s *Session) one(ctx context.Context, job Job) error {
+	out := s.outPath(job)
+	path := job.Name
 	if _, err := os.Stat(out); err == nil {
 		fmt.Fprintf(s.Log, "%s: already done, in %s\n", path, out)
 		return nil
 	}
-	prog, err := serial.OpenProgram(path)
+	prog, err := job.program()
 	if err != nil {
 		return err
 	}
@@ -164,7 +233,7 @@ func (s *Session) one(ctx context.Context, path string) error {
 	if ended && s.backOnItsOwn(ctx) {
 		return nil
 	}
-	return s.reset(ctx, "the monitor won't come back from "+filepath.Base(path))
+	return s.reset(ctx, "the monitor won't come back from "+path)
 }
 
 // backOnItsOwn reports whether the monitor restarted after a program returned.

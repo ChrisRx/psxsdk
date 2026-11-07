@@ -45,7 +45,7 @@ This is why the tools look as they do.
 
 Built, and rehearsed in the emulator on the boot disc's own monitor and Sony's BIOS:
 
-- **`tools/hwrun`** (`internal/cmd/hwrun`), the runner. It uploads each program, runs it, keeps what it prints in `results/NAME-LIBRARY.txt`, skips any program with a file so that a session can stop and go on later, and asks for the reset button when the monitor won't come back. The emulated console can't be reset, so that path has never run.
+- **`tools/hwrun`** (`internal/cmd/hwrun`), the runner. It uploads each program, runs it, keeps what it prints in `results/NAME-LIBRARY.txt`, skips any program with a file so that a session can stop and go on later, and asks for the reset button when the monitor won't come back. The emulated console can't be reset, so that path has run only against a fake console in `hwrun_test.go`. With `-archive .build/carchive/programs.tsv`, its arguments are program names, and each brings its data files as its `AUTO` batch does. `TestYarozeArchiveJob` rehearses that on both libraries, with `PSX_HW_ARCHIVE` and `PSX_HW_PROGRAM`.
 - **`tests/testdata/serial/hwprobe`**, the probe, built by `task build:serial` onto `.build/serial/hwprobe.elf`. It prints `T` lines of five readings of the system clock (the first with a cold instruction cache), `S` lines at an eighth of the clock for long routines, `F frame`, and `H scene`, a hash of a drawn picture. Interrupts are off while it measures. Its readings include the `null` line's.
 - **`serial.TakeOver`**, how the clean library gets onto the console, with `serial/monitor` built onto `.build/serial/monitor.elf`. See below.
 - **`tools/sioloop`**, the adapter check, tested only against fakes.
@@ -65,7 +65,6 @@ The other serial tests use the same two variables: `go test ./tests -run 'TestYa
 
 Not built:
 
-- **Programs with data files.** `hwrun` uploads one executable. Those needing data in RAM, which may include the 9 `noboot` programs, need their `auto` batch, or `yaroze sio` by hand.
 - **Static programs.** They need relinking at 80090000h (`--defsym=__load=0x80090000`), because the clean target's default of 80010000h overwrites the monitor as it loads. Nothing has been tried.
 
 ### Loading the clean library, as rehearsed
