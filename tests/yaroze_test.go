@@ -427,6 +427,7 @@ func TestYarozeReadResent(t *testing.T) {
 		for i := range 16 {
 			m.Bus.Write8(addr+uint32(i), byte(i))
 		}
+		port.PulseReads = true
 		rawTransfer(t, port, "brd", addr, 16)
 		first, sum := rawReadBlock(t, port)
 		var want byte

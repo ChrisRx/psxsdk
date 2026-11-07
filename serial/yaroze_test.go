@@ -48,6 +48,7 @@ type fakeMonitor struct {
 	gated    []byte
 	released int
 	rts      bool
+	pulses   int // RTS turned back on, in all
 }
 
 func newFakeMonitor() *fakeMonitor {
@@ -59,6 +60,7 @@ func (f *fakeMonitor) CTS() (bool, error) { return f.cts, nil }
 func (f *fakeMonitor) SetRTS(on bool) error {
 	if on && !f.rts {
 		f.released++
+		f.pulses++
 	}
 	f.rts = on
 	return nil
@@ -217,6 +219,44 @@ func TestLoad(t *testing.T) {
 		n += len(data)
 	}
 	assert.Equal(t, n, len(f.mem), "only the sections' bytes should be written, not the last block's padding")
+}
+
+// Only a binary read pulses RTS: a real console through a USB adapter stalls
+// on pulses anywhere else, and doesn't need them.
+func TestPulsesOnlyInBinaryRead(t *testing.T) {
+	f, _, m := setup(t)
+	data := bytes.Repeat([]byte{1, 2, 3, 4}, 1024)
+	_, err := m.Command(t.Context(), "cls")
+	assert.NoError(t, err)
+	assert.NoError(t, m.WriteMemory(t.Context(), 0x80100000, data))
+	assert.NoError(t, m.Run(t.Context()))
+	assert.Equal(t, 0, f.pulses)
+
+	f, _, m = setup(t)
+	assert.NoError(t, m.WriteMemory(t.Context(), 0x80100000, data))
+	got, err := m.ReadMemory(t.Context(), 0x80100000, len(data))
+	assert.NoError(t, err)
+	assert.Equal(t, data, got)
+	assert.Equal(t, true, f.pulses > 0)
+
+	before := f.pulses
+	_, err = m.Command(t.Context(), "cls")
+	assert.NoError(t, err)
+	assert.Equal(t, before, f.pulses, "a command after a binary read shouldn't pulse")
+}
+
+func TestPacing(t *testing.T) {
+	_, p, m := setup(t)
+	p.Pacing = Pacing{
+		Load:       20 * time.Millisecond,
+		Reply:      time.Millisecond,
+		Header:     20 * time.Millisecond,
+		BlockStart: 10 * time.Millisecond,
+	}
+	start := time.Now()
+	prog := &Program{Segments: []Segment{{Addr: 0x80100000, Data: make([]byte, 2*blockSize)}}, PC: 0x80100000, SP: defaultStack}
+	assert.NoError(t, m.Load(t.Context(), prog))
+	assert.Equal(t, true, time.Since(start) >= 60*time.Millisecond, "the load, header and two blocks should each pause")
 }
 
 func TestOpenProgram(t *testing.T) {

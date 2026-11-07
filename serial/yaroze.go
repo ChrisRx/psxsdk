@@ -64,7 +64,10 @@ func (m *Monitor) Command(ctx context.Context, line string) (string, error) {
 		return "", err
 	}
 	reply, err := m.port.ReadUntil(ctx, prompt)
-	return echo[len(echo)-len(line)-2:] + reply, err
+	if err != nil {
+		return echo[len(echo)-len(line)-2:] + reply, err
+	}
+	return echo[len(echo)-len(line)-2:] + reply, m.port.pause(ctx, m.port.Pacing.Reply)
 }
 
 // ClearScreen clears the monitor's screen with its cls command, after an
@@ -128,6 +131,8 @@ func (m *Monitor) WriteSegments(ctx context.Context, segs ...Segment) error {
 // the host answers with Y, or N to have it sent again. The monitor waits
 // for the host to pulse RTS after each byte, which Port does.
 func (m *Monitor) ReadMemory(ctx context.Context, addr uint32, size int) ([]byte, error) {
+	m.port.PulseReads = true
+	defer func() { m.port.PulseReads = false }()
 	if err := m.startTransfer(ctx, "brd"); err != nil {
 		return nil, err
 	}
@@ -155,8 +160,10 @@ func (m *Monitor) startTransfer(ctx context.Context, command string) error {
 	if _, err := m.port.Write([]byte(command + "\r")); err != nil {
 		return err
 	}
-	_, err := m.port.ReadUntil(ctx, "binary\r")
-	return err
+	if _, err := m.port.ReadUntil(ctx, "binary\r"); err != nil {
+		return err
+	}
+	return m.port.pause(ctx, m.port.Pacing.Reply)
 }
 
 // sendHeader sends a transfer's address and size.
@@ -164,7 +171,10 @@ func (m *Monitor) sendHeader(ctx context.Context, addr uint32, size int) error {
 	head := []byte{transferStart, 0, 0, 0, 0, 0, 0, 0, 0}
 	binary.BigEndian.PutUint32(head[1:], addr)
 	binary.BigEndian.PutUint32(head[5:], uint32(size))
-	return m.port.Send(ctx, head)
+	if err := m.port.Send(ctx, head); err != nil {
+		return err
+	}
+	return m.port.pause(ctx, m.port.Pacing.Header)
 }
 
 // endTransfer ends binary mode and waits for the monitor's prompt.
@@ -175,8 +185,10 @@ func (m *Monitor) endTransfer(ctx context.Context) error {
 	if _, err := m.port.ReadUntil(ctx, "end binary"); err != nil {
 		return err
 	}
-	_, err := m.port.ReadUntil(ctx, prompt)
-	return err
+	if _, err := m.port.ReadUntil(ctx, prompt); err != nil {
+		return err
+	}
+	return m.port.pause(ctx, m.port.Pacing.Reply)
 }
 
 // sendBlock sends a block of a binary write with its sum, again for as
@@ -187,6 +199,9 @@ func (m *Monitor) sendBlock(ctx context.Context, block []byte) error {
 		if err := m.port.SendByte(ctx, blockStart); err != nil {
 			return err
 		}
+		if err := m.port.pause(ctx, m.port.Pacing.BlockStart); err != nil {
+			return err
+		}
 		if err := m.port.Send(ctx, block); err != nil {
 			return err
 		}
@@ -195,6 +210,9 @@ func (m *Monitor) sendBlock(ctx context.Context, block []byte) error {
 		}
 		reply, err := m.port.ReceiveByte(ctx)
 		if err != nil {
+			return err
+		}
+		if err := m.port.pause(ctx, m.port.Pacing.Reply); err != nil {
 			return err
 		}
 		switch reply {
@@ -250,6 +268,9 @@ func checksum(block []byte) uint8 {
 // session, each with a header of its own, then its registers, epc, gp
 // unless it is 0, and sp. Run then starts it.
 func (m *Monitor) Load(ctx context.Context, p *Program) error {
+	if err := m.port.pause(ctx, m.port.Pacing.Load); err != nil {
+		return err
+	}
 	if err := m.WriteSegments(ctx, p.Segments...); err != nil {
 		return err
 	}
@@ -298,6 +319,8 @@ func (m *Monitor) Run(ctx context.Context) error {
 	if _, err := m.port.Write([]byte("go\r")); err != nil {
 		return err
 	}
-	_, err := m.port.ReadUntil(ctx, "go\r\n")
-	return err
+	if _, err := m.port.ReadUntil(ctx, "go\r\n"); err != nil {
+		return err
+	}
+	return m.port.pause(ctx, m.port.Pacing.Run)
 }

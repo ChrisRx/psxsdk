@@ -50,9 +50,39 @@ type Port struct {
 	// ErrTimeout. Open and NewPort set it to DefaultTimeout.
 	Timeout time.Duration
 
+	// Pacing is how long a transfer leaves the console between its steps.
+	// Open sets it to DevicePacing, and NewPort leaves it at zero.
+	Pacing Pacing
+
+	// PulseReads pulses RTS after each read, which the monitor's binary read
+	// waits for. ReadMemory sets it for as long as it runs, and anything
+	// else that speaks that protocol by hand must set it too.
+	PulseReads bool
+
 	line    Line
 	closer  io.Closer
 	pending []byte // read from the line and not yet returned
+}
+
+// Pacing is how long a transfer waits at each of its steps.
+type Pacing struct {
+	Load       time.Duration // before a program's upload
+	Reply      time.Duration // after the monitor's reply to a command or a block
+	Header     time.Duration // after a binary transfer's header
+	BlockStart time.Duration // after the byte that begins a block
+	Run        time.Duration // after the monitor has echoed go
+}
+
+// DevicePacing is what a real console needs through a USB serial adapter,
+// found by uploading to one: without Header an upload fails waiting for CTS,
+// and without BlockStart it hangs. The rest were in the loader that worked,
+// and stay until a console shows they can go. The emulated line needs none.
+var DevicePacing = Pacing{
+	Load:       500 * time.Millisecond,
+	Reply:      100 * time.Millisecond,
+	Header:     100 * time.Millisecond,
+	BlockStart: time.Millisecond,
+	Run:        2 * time.Second,
 }
 
 // Devices returns the names of the host's serial devices.
@@ -77,6 +107,7 @@ func Open(name string, baud int) (*Port, error) {
 	}
 	p := NewPort(device{d})
 	p.closer = d
+	p.Pacing = DevicePacing
 	return p, nil
 }
 
@@ -91,6 +122,19 @@ func (p *Port) Close() error {
 		return nil
 	}
 	return p.closer.Close()
+}
+
+// pause waits for d, or until ctx is done.
+func (p *Port) pause(ctx context.Context, d time.Duration) error {
+	if d == 0 {
+		return nil
+	}
+	select {
+	case <-time.After(d):
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // Discard drops what has been read from the console and not yet returned.
@@ -175,8 +219,10 @@ func (p *Port) Poll() error {
 	if n > 0 {
 		p.Output.Write(buf[:n])
 		p.pending = append(p.pending, buf[:n]...)
-		if err := p.pulse(); err != nil {
-			return err
+		if p.PulseReads {
+			if err := p.pulse(); err != nil {
+				return err
+			}
 		}
 	}
 	if err == io.EOF {
@@ -185,9 +231,11 @@ func (p *Port) Poll() error {
 	return err
 }
 
-// pulse turns RTS off and on again, as SIOCONS's receive interrupt does for
-// each byte: the Net Yaroze's monitor waits for that pulse before it sends
-// the next byte of a binary read.
+// pulse turns RTS off and on again: the Net Yaroze's monitor waits for that
+// pulse before it sends the next byte of a binary read. SIOCONS's receive
+// interrupt pulses for every byte it gets, but only a binary read needs it,
+// and pulsing outside one has stalled a real console through a USB adapter,
+// so a Port pulses only while PulseReads is set.
 func (p *Port) pulse() error {
 	if err := p.line.SetRTS(false); err != nil {
 		return err
@@ -210,7 +258,7 @@ func (p *Port) Stream(ctx context.Context) error {
 
 // fill reads what the console has sent onto pending, copying it to Output.
 // It fails once ctx is done or deadline passes with nothing read. Having
-// read something, it pulses RTS.
+// read something in a binary read, it pulses RTS.
 func (p *Port) fill(ctx context.Context, deadline time.Time) error {
 	var buf [1024]byte
 	for {
@@ -218,7 +266,10 @@ func (p *Port) fill(ctx context.Context, deadline time.Time) error {
 		if n > 0 {
 			p.Output.Write(buf[:n])
 			p.pending = append(p.pending, buf[:n]...)
-			return p.pulse()
+			if p.PulseReads {
+				return p.pulse()
+			}
+			return nil
 		}
 		if err == io.EOF {
 			return io.ErrUnexpectedEOF
