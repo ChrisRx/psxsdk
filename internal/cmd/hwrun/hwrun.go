@@ -4,8 +4,9 @@
 // Each program's output goes in a file of its own, and one that has a file
 // is skipped, so a session can stop and go on later. A console stuck in a
 // program can't be told to stop, so hwrun asks for the reset button when the
-// monitor doesn't come back, which on the clean library is after every
-// program: the boot disc's monitor doesn't survive one returning there.
+// monitor doesn't come back. For the clean library it first replaces the boot
+// disc's monitor and library with ours, once per boot, and programs return to
+// that.
 package hwrun
 
 import (
@@ -28,6 +29,9 @@ const (
 	// greeting is what the monitor prints as it starts.
 	greeting = "Communication baud rate"
 
+	// monitorStart is where a monitor starts, the boot disc's or ours.
+	monitorStart = 0x80068000
+
 	// bootTimeout is how long a console gets to boot its disc after a reset.
 	bootTimeout = 3 * time.Minute
 )
@@ -36,9 +40,11 @@ const (
 type Session struct {
 	Port *serial.Port
 
-	// Image is the resident library to run on, uploaded with each program, or
-	// nil for the one the boot disc left.
-	Image *serial.Program
+	// TakeOver is what replaces the boot disc's monitor and library, from
+	// serial.TakeOver, or nil to stay on them. Marker is the first word of the
+	// monitor it brings, which tells if it's already there.
+	TakeOver *serial.Program
+	Marker   uint32
 
 	// Library names the library in the output files' names.
 	Library string
@@ -60,14 +66,41 @@ type Session struct {
 	mon *serial.Monitor
 }
 
-// Start connects to the monitor.
+// Start connects to the monitor, and takes over from it if the session should
+// and that hasn't happened on this boot.
 func (s *Session) Start(ctx context.Context) error {
 	mon, err := serial.NewMonitor(ctx, s.Port)
 	if err != nil {
 		return err
 	}
 	s.mon = mon
-	_, err = mon.Command(ctx, "")
+	if _, err := mon.Command(ctx, ""); err != nil {
+		return err
+	}
+	if s.TakeOver == nil {
+		return nil
+	}
+	reply, err := mon.Command(ctx, fmt.Sprintf("dw %08x 4", monitorStart))
+	if err != nil {
+		return err
+	}
+	if strings.Contains(strings.ToLower(reply), fmt.Sprintf(":%08x", s.Marker)) {
+		fmt.Fprintln(s.Log, "the clean library is already in place")
+		return nil
+	}
+	start := time.Now()
+	fmt.Fprintln(s.Log, "uploading the clean library and monitor")
+	if err := mon.Load(ctx, s.TakeOver); err != nil {
+		return fmt.Errorf("uploading the clean library: %w", err)
+	}
+	if err := mon.Run(ctx); err != nil {
+		return err
+	}
+	if !s.backOnItsOwn(ctx) {
+		return errors.New("the clean monitor didn't start")
+	}
+	fmt.Fprintf(s.Log, "the clean library is in place, after %v\n", time.Since(start).Round(time.Second))
+	s.mon, err = serial.NewMonitor(ctx, s.Port)
 	return err
 }
 
@@ -96,12 +129,6 @@ func (s *Session) one(ctx context.Context, path string) error {
 	prog, err := serial.OpenProgram(path)
 	if err != nil {
 		return err
-	}
-	if s.Image != nil {
-		prog, err = serial.Relocated(prog, s.Image.Segments...)
-		if err != nil {
-			return err
-		}
 	}
 
 	start := time.Now()
@@ -134,7 +161,7 @@ func (s *Session) one(ctx context.Context, path string) error {
 	}
 	s.Port.Output = io.Discard
 
-	if s.Image == nil && ended && s.backOnItsOwn(ctx) {
+	if ended && s.backOnItsOwn(ctx) {
 		return nil
 	}
 	return s.reset(ctx, "the monitor won't come back from "+filepath.Base(path))

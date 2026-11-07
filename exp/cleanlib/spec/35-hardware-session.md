@@ -45,9 +45,9 @@ This is why the tools look as they do.
 
 Built, and rehearsed in the emulator on the boot disc's own monitor and Sony's BIOS:
 
-- **`tools/hwrun`** (`internal/cmd/hwrun`), the runner. It uploads each program, runs it, keeps what it prints in `results/NAME-LIBRARY.txt`, skips any program with a file so that a session can stop and go on later, and asks for the reset button when the monitor won't come back. Only the path that ends by asking for a reset has been rehearsed: the emulated console can't be reset, so `reset`'s wait for the monitor afterward has never run.
+- **`tools/hwrun`** (`internal/cmd/hwrun`), the runner. It uploads each program, runs it, keeps what it prints in `results/NAME-LIBRARY.txt`, skips any program with a file so that a session can stop and go on later, and asks for the reset button when the monitor won't come back. The emulated console can't be reset, so that path has never run.
 - **`tests/testdata/serial/hwprobe`**, the probe, built by `task build:serial` onto `.build/serial/hwprobe.elf`. It prints `T` lines of five readings of the system clock (the first with a cold instruction cache), `S` lines at an eighth of the clock for long routines, `F frame`, and `H scene`, a hash of a drawn picture. Interrupts are off while it measures. Its readings include the `null` line's.
-- **`serial.Relocated`**, how the clean library gets onto the console. See below.
+- **`serial.TakeOver`**, how the clean library gets onto the console, with `serial/monitor` built onto `.build/serial/monitor.elf`. See below.
 - **`tools/sioloop`**, the adapter check, tested only against fakes.
 - **`yaroze sio`** (SIOCONS in Go, `-p DEVICE,BAUD`, or `DTLH3000` in the environment) and `tools/sioload`, on `serial`.
 - **The fallback, `.build/sioload-v1.0.0`:** the last `sioload` on v1.0.0, with all the old delays. It takes ECOFF files only. To rebuild it, extract `go.mod go.sum tools/sioload format/ecoff` from `751f0fd~1` with `git archive` into an empty directory, and run `GOFLAGS=-mod=mod go build ./tools/sioload` there.
@@ -70,15 +70,28 @@ Not built:
 
 ### Loading the clean library, as rehearsed
 
-Three things were tried, and the rehearsal found why the first two don't work:
+`-library clean` replaces the boot disc's monitor and library with ours, once per boot, and programs then load and return with no reset, as they do on Sony's. The disc only has to boot.
+
+What the rehearsal found on the way there:
 
 1. **Uploading the image straight over Sony's fails.** The monitor goes silent once the upload reaches 80012000h, 8 KB in, as it still needs that library. `TestYarozeCleanImageInPlace` records this.
-2. **Uploading our monitor with the image fails.** Our monitor crashes with an address error at 8006D264h, in `main.disassemble`, called from nothing at start-up. The likely cause is a handler Sony's monitor registered in the kernel, whose address is now in our code. Clearing the kernel's state from the loader might fix it, but that's a riskier thing to do to a real console than this is worth. If resets turn out to be a burden, come back to this.
-3. **What works:** `serial.Relocated` uploads the image to high RAM with a small loader, and the program starts at the loader. It turns interrupts off, masks them, copies the image down, calls the kernel's FlushCache and jumps to the program. Sony's monitor stays in place above the image, and printing through it still works.
+2. **Leaving Sony's monitor on the clean library works, but needs a reset per run,** because it can't restart when a program returns. That version is `serial.Relocated` in `eeb6a80`, the fallback if taking over fails on a console.
+3. **Starting our monitor with the kernel as Sony's left it crashes.** Sony's monitor replaces the kernel's `tty` device with its own and adds `mem` and `cdx`, with code in 8006xxxx, and opens card events with handlers in 80079xxx. Those addresses land in our code. This was read from the kernel's public tables, not from Sony's code.
 
-**Each run on the clean library ends with a reset,** because Sony's monitor doesn't come back when a program returns there. So it's one boot of the original disc per run on the clean library, and `hwprobe` is one program for that reason. Runs on Sony's library need no reset. Do those first, and reset before moving to clean, since a clean run replaces Sony's library until the next boot.
+So `serial.TakeOver` uploads the image and our monitor to high RAM with a small loader, which:
 
-A real console may differ: a DMA still running during the copy, say, which the emulator wouldn't show.
+1. Turns interrupts off and masks them.
+2. Calls the kernel's `RemoveDevice` on `tty`, `mem` and `cdx`, while Sony's code is still there for the kernel to call, then `AddDummyTty`, and `CloseEvent` on events 1 to 15.
+3. Copies the pieces into place and calls `FlushCache`.
+4. Jumps to our monitor.
+
+`serial.OpenMonitor` sets our monitor's speed in the upload, so it doesn't read the memory card: a failed read there would leave it at a different speed from the host. Its `ld` and other card and CD commands are as they were, and only its start-up skips the card.
+
+**Things only a console can show:**
+
+- Whether its BIOS matches. The rehearsal uses SCPH-1001, and the Yaroze's may differ. A difference in these calls, or a DMA still running during the copy, wouldn't show in the emulator. If taking over fails, use the fallback above, or stay on Sony's library for timing alone.
+- Our monitor on real hardware at all, which has only run in the emulator. Its receive path has its own timing, and the delays in `DevicePacing` came from Sony's monitor.
+- Stale pointers remain in the kernel's RAM that nothing has used so far, such as 8000E2C0h to 80046918h. If something odd happens late in a run, look there first.
 
 ### The emulator's readings
 
@@ -119,7 +132,7 @@ Each step can be a stopping point.
    To split `serial` from v1.8.0 once 2 works, build the same old code on v1.8.0. Its `Read` no longer returns the same way, so that takes a small change.
 2. **Timing on Sony's library,** which the boot disc has already loaded: `go run ./tools/hwrun -d /dev/ttyUSB0 -library sony -o results .build/serial/hwprobe.elf`.
 3. **The 9 `noboot` programs,** on Sony's library, before anything replaces it.
-4. **The clean library:** reset, then `go run ./tools/hwrun -d /dev/ttyUSB0 -library clean -o results .build/serial/hwprobe.elf`. Look at the TV too. Then a few programs, one boot each, including Terra.
+4. **The clean library:** `go run ./tools/hwrun -d /dev/ttyUSB0 -library clean -o results .build/serial/hwprobe.elf`, with no reset needed. Look at the TV too. Then a few programs, including Terra. It takes over once per boot, and a return to Sony's library needs a reset.
 5. **Experiments, if there's time:** take out `DevicePacing`'s delays one at a time, which answers the v1.8.0 question and may speed uploads. Try `Drain()` in place of the sleeps. Try `brd` once.
 
 ## Where things stood

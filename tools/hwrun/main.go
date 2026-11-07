@@ -5,7 +5,8 @@
 //	go run ./tools/hwrun -d /dev/ttyUSB0 -library sony  -o results .build/serial/hwprobe.elf
 //	go run ./tools/hwrun -d /dev/ttyUSB0 -library clean -o results .build/serial/hwprobe.elf
 //
-// With -library clean it uploads the clean image with each program.
+// With -library clean it first replaces the boot disc's monitor and library
+// with the clean ones, once per boot. Programs then return to that monitor.
 package main
 
 import (
@@ -13,6 +14,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"io"
@@ -30,16 +32,17 @@ func main() {
 	baud := flag.Int("b", 115200, "baud rate")
 	library := flag.String("library", "sony", "the library to run on: sony, as the boot disc left it, or clean")
 	imagePath := flag.String("image", "link/libps.exe.gz", "the clean image")
+	monitorPath := flag.String("monitor", ".build/serial/monitor.elf", "the clean monitor, from task build:serial")
 	out := flag.String("o", "results", "directory for the output")
 	watch := flag.Duration("watch", 60*time.Second, "how long a program runs if it prints no end mark")
 	flag.Parse()
-	if err := run(*device, *baud, *library, *imagePath, *out, *watch, flag.Args()); err != nil {
+	if err := run(*device, *baud, *library, *imagePath, *monitorPath, *out, *watch, flag.Args()); err != nil {
 		fmt.Fprintln(os.Stderr, "hwrun:", err)
 		os.Exit(1)
 	}
 }
 
-func run(device string, baud int, library, imagePath, out string, watch time.Duration, programs []string) error {
+func run(device string, baud int, library, imagePath, monitorPath, out string, watch time.Duration, programs []string) error {
 	if device == "" || len(programs) == 0 {
 		return fmt.Errorf("give -d and at least one program")
 	}
@@ -64,7 +67,15 @@ func run(device string, baud int, library, imagePath, out string, watch time.Dur
 		if err != nil {
 			return err
 		}
-		s.Image = image
+		monitor, err := serial.OpenMonitor(monitorPath, uint32(baud))
+		if err != nil {
+			return err
+		}
+		s.TakeOver, err = serial.TakeOver(monitor, image.Segments[0])
+		if err != nil {
+			return err
+		}
+		s.Marker = binary.LittleEndian.Uint32(monitor.Segments[0].Data)
 	default:
 		return fmt.Errorf("unknown library %q", library)
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"compress/gzip"
+	"encoding/binary"
 	"errors"
 	"io"
 	"maps"
@@ -60,38 +61,69 @@ func TestYarozeCleanImageInPlace(t *testing.T) {
 }
 
 // hwSession runs the hardware session's probe through hwrun as the session
-// will, and returns what it wrote. The emulated console can't be reset, so a
-// request for one ends the session, and only the clean library should make one.
-func hwSession(t *testing.T, library string, image *serial.Program, out string) string {
+// will, from the boot disc's monitor, and returns what it wrote. It runs a second
+// time on the same boot, which only needs a monitor that comes back, and the
+// reset the emulated console can't do fails the test.
+func hwSession(t *testing.T, library string, image *serial.Program, out string) (first, second string) {
 	t.Helper()
-	_, port, _ := sonyMonitor(t)
+	m, port, _ := sonyMonitor(t)
 	port.Timeout = 60 * time.Second
-	errReset := errors.New("reset asked for")
 	s := &hwrun.Session{
 		Port:    port,
-		Image:   image,
 		Library: library,
 		Out:     out,
 		Watch:   60 * time.Second,
 		Log:     io.Discard,
-		Reset:   func(why string) error { return errReset },
+		Reset:   func(why string) error { return errors.New("reset asked for: " + why) },
 	}
-	assert.NoError(t, s.Start(t.Context()))
-	err := s.Run(t.Context(), []string{serialProgram(t, "hwprobe")})
-	if image == nil {
-		assert.NoError(t, err)
-	} else if !errors.Is(err, errReset) {
-		t.Errorf("the clean library should end by asking for a reset, not %v", err)
+	if image != nil {
+		monitor, err := serial.OpenMonitor(serialProgram(t, "monitor"), 115200)
+		if !assert.NoError(t, err) {
+			t.FailNow()
+		}
+		s.TakeOver, err = serial.TakeOver(monitor, image.Segments[0])
+		if !assert.NoError(t, err) {
+			t.FailNow()
+		}
+		s.Marker = binary.LittleEndian.Uint32(monitor.Segments[0].Data)
 	}
-	data, err := os.ReadFile(filepath.Join(out, "hwprobe-"+library+".txt"))
-	if !assert.NoError(t, err) {
+	if !assert.NoError(t, s.Start(t.Context())) {
 		t.FailNow()
 	}
+	path := filepath.Join(out, "hwprobe-"+library+".txt")
+	program := serialProgram(t, "hwprobe")
+	if !assert.NoError(t, s.Run(t.Context(), []string{program})) {
+		t.FailNow()
+	}
+	data, err := os.ReadFile(path)
+	assert.NoError(t, err)
 
 	// A program with a file is skipped, which is how a session goes on later.
-	s.Reset = func(why string) error { t.Errorf("a finished program ran again: %s", why); return nil }
-	assert.NoError(t, s.Run(t.Context(), []string{serialProgram(t, "hwprobe")}))
-	return string(data)
+	before, _ := os.Stat(path)
+	assert.NoError(t, s.Run(t.Context(), []string{program}))
+	after, _ := os.Stat(path)
+	assert.Equal(t, before.ModTime(), after.ModTime(), "a finished program shouldn't run again")
+
+	// Starting again on the same boot finds the library in place.
+	if image != nil {
+		var log bytes.Buffer
+		s.Log = &log
+		assert.NoError(t, s.Start(t.Context()))
+		assert.Equal(t, true, strings.Contains(log.String(), "already in place"), log.String())
+		s.Log = io.Discard
+		seg := image.Segments[0]
+		for i, b := range seg.Data[:4096] {
+			if got := m.Bus.Read8(seg.Addr + uint32(i)); got != b {
+				t.Fatalf("byte %d of the image, at %08X, is %02X and not %02X", i, seg.Addr+uint32(i), got, b)
+			}
+		}
+	}
+
+	assert.NoError(t, os.Remove(path))
+	assert.NoError(t, s.Run(t.Context(), []string{program}))
+	again, err := os.ReadFile(path)
+	assert.NoError(t, err)
+	return string(data), string(again)
 }
 
 // readings keeps the lines of the probe's that carry results.
@@ -106,11 +138,11 @@ func readings(out string) map[string]string {
 	return lines
 }
 
-// TestYarozeCleanImage is the hardware session (spec 35) rehearsed: hwrun on the
-// boot disc's own monitor, running the session's probe under Sony's library and
-// then on the clean image, set side by side. The two pictures must hash the
-// same. The emulator's readings go in PSX_HW_OUT, as the baseline to compare a
-// console's with.
+// TestYarozeCleanImage is the hardware session (spec 35) rehearsed: hwrun from
+// the boot disc's own monitor, running the session's probe under Sony's library,
+// and then, after replacing them, on the clean library and our monitor, twice
+// each with no reset. The two pictures must hash the same. The emulator's
+// readings go in PSX_HW_OUT, as the baseline to compare a console's with.
 func TestYarozeCleanImage(t *testing.T) {
 	image := cleanImage(t)
 	seg := image.Segments[0]
@@ -119,8 +151,10 @@ func TestYarozeCleanImage(t *testing.T) {
 	for _, name := range []string{"sony", "clean"} {
 		os.Remove(filepath.Join(out, "hwprobe-"+name+".txt"))
 	}
-	sony := hwSession(t, "sony", nil, out)
-	clean := hwSession(t, "clean", image, out)
+	sony, sonyAgain := hwSession(t, "sony", nil, out)
+	clean, cleanAgain := hwSession(t, "clean", image, out)
+	assert.Equal(t, readings(sony)["scene"], readings(sonyAgain)["scene"])
+	assert.Equal(t, readings(clean)["scene"], readings(cleanAgain)["scene"])
 	a, b := readings(sony), readings(clean)
 	if len(a) == 0 {
 		t.Fatalf("no readings: %q", sony)
