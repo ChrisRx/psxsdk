@@ -244,6 +244,7 @@ tasks:
       - .build/serial/print.exe
       - .build/serial/exit.elf
       - .build/serial/crash.elf
+      - .build/serial/hwprobe.elf
       - .build/monitor/monitor.cue
     cmds:
       - mkdir -p .build/serial .build/monitor
@@ -252,6 +253,7 @@ tasks:
       - go run ./cmd/yaroze disc --opt=2 --target serial/monitor/target.json --file PRINT.EXE=.build/serial/print.exe -o .build/monitor/monitor.bin ./serial/monitor
       - go run ./cmd/yaroze build --libps resident --opt=2 -o .build/serial/exit.elf ./tests/testdata/serial/exit
       - go run ./cmd/yaroze build --libps resident --opt=2 -o .build/serial/crash.elf ./tests/testdata/serial/crash
+      - go run ./cmd/yaroze build --libps resident --opt=2 -o .build/serial/hwprobe.elf ./tests/testdata/serial/hwprobe
 
   # The same fixtures built against the resident library, onto
   # .build/hot-resident, for TestPatchGo.
