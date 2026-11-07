@@ -133,3 +133,33 @@ Seen along the way and not taken on: `SsUtKeyOn` returns 7 on clean and 0 on Son
 - Spec 23: `__divdf3` isn't 10,680 + 260 per set bit to 2 places below the last. It counts 54 bits, 1 place below the last, at 262 each, with the terms above. "Within 340" held for those 378 divisions, not in general: the worst on the held-out set is 2,904.
 - Specs 21 and 23: 10,940 isn't a short way for some values. It is a quotient with one set bit, a significand over itself.
 - Spec 31: a quotient isn't 264 per set bit, for the same reason.
+
+### Why `__divdf3` reads short in `event-event002-r3` and `test-demo-fm`
+
+`ARCHIVE_COSTS` on 120 frames shows clean short: r3 by 61,856 over 209 calls and demo-fm by 64,100 with 210 calls against 209. The routine isn't short. The gap is the vertical blank's interrupt, which the entry-to-return count includes, landing inside a different number of these calls on each side. Nothing in the library changed for this.
+
+Per call, from `TestDump` with `PROBE_WATCH` on the entry, on each program's discs, counting calls from the program only:
+
+| | r3, Sony's | r3, clean | demo-fm, Sony's | demo-fm, clean |
+|---|---|---|---|---|
+| calls | 450 | 450 | 383 | 382 |
+| at the rule's cycles exactly | 433 | 438 | 372 | 370 |
+| with an interrupt inside | 17 | 12 | 11 | 12 |
+| what an interrupt adds | 15,112 to 15,546 | 15,090 to 15,524 | 15,112 to 15,546 | 15,522 to 15,524 |
+
+- Every call without an interrupt in it takes the rule's cycles on both sides. There is no even shortfall, and the arguments are the same call for call.
+- No call in r3 has an interrupt on both sides, so the two sets are disjoint. The calls hit have nothing in common but where the blank falls.
+- The first 209 calls of r3 reproduce the figure exactly: 3,867,656 and 3,805,800, 9 interrupted on Sony's and 5 on clean.
+- demo-fm's window has 7 interrupted on Sony's and 4 on clean, plus Sony's extra call: 3,775,474 and 3,711,374, again exact.
+- Over its 382 calls, demo-fm's gap is down to 1,564. The first 450 of r3 still read 77,554, with 5 more interrupted on Sony's.
+- The counts fit chance. Time in the routine over a frame of 564,480 cycles predicts about 14 interruptions in r3's 450 calls, against 17 and 12, and about 12 in demo-fm's 382, against 11 and 12. The survey's 460 calls in 4 programs at 16,051 and 15,916 are the same 62,000 or so. That isn't re-derived per program.
+
+`probes/accdivreal` calls the routine directly on all 652 argument pairs from these calls, three times each with interrupts masked. All 652 take the same cycles on both sides, none vary between the three calls, all equal the rule, and the results are identical (98 to 20,778, mean 17,770).
+
+The two sides see different blanks because the programs' phase differs widely: r3's entries run up to 323,128 cycles apart, more than half a frame, and come back to 7,362 by the last 45 calls. The routine doesn't cause that. `sin` takes about 86% of these programs' time and is off per call, but it wasn't separated from the interrupts, so it is the likely source and not a measured one.
+
+An interrupt inside a call adds 22 cycles more on Sony's than on clean, so the handler itself is slightly short. Spec 31 has that open as the interrupt's kernel-side entry.
+
+`__floatsidf`'s 78 a call in r3 isn't a rate. 16,340 of the 209 calls' difference is one interrupt of 15,996 on Sony's, in no call on clean, which leaves 344, or 1.6 a call. It is a separate small error, not part of the `__divdf3` gap. Over r3's 450 calls without interrupts Sony's means 451.6 and clean's flat 445 to 446 (446 where sampled). Sony's varies with the integer: 44 at 0 against clean's 34, and for the smallest values 474 at 1, 466 at 2 and 3, 458 from 4 to 7, 450 at bit length 4, against clean's 446. Not taken on, as asked.
+
+A small-window `ARCHIVE_COSTS` figure on a routine called a few hundred times can swing by multiples of 15,500 without the routine being wrong. Compare calls with `PROBE_WATCH` before reading it as an error. The statements above in this spec about `__divdf3` and its callers stand: nothing in them changes.
