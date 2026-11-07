@@ -134,7 +134,7 @@ Each step can be a stopping point.
 
 ## Where things stood
 
-The library, as of `994c8e6`, on branch `libps-go`, with spec 34 done. `.build/carchive/summary-verify44.txt` is the baseline: 102 `same`, 22 `differ`, 9 `noboot`, 4 `shift`, 1 `wild`, 1 `tty`, 1 `stall`. Regressions are 34, 0, 7 on the image and 33, 0, 8 linked.
+The library, as of `994c8e6`, on branch `libps-go`, with spec 34 done. `.build/carchive/summary-verify47.txt` is the baseline since `Embed`'s fix: 86 `same`, 27 `differ`, 15 `still`, 9 `shift`, 1 `wild`, 1 `tty`, 1 `stall`. Baselines before it counted 42 programs as `same` that never loaded on either side. Regressions are 34, 0, 7 on the image and 33, 0, 8 linked.
 
 ### The 9 `noboot` programs don't need the console
 

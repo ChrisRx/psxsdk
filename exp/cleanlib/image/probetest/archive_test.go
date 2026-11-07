@@ -107,6 +107,11 @@ func verdict(a, b archiveRun) (string, string) {
 	if b.wild != a.wild && b.wild != 0 {
 		return "wild", note
 	}
+	if len(a.changes) <= 1 {
+		// One picture from each says little: the program may never have left
+		// the logo, so this mustn't read as the two libraries agreeing.
+		return "still", note
+	}
 	return "same", note
 }
 
