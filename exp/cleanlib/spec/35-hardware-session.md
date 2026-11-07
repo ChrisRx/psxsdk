@@ -20,7 +20,6 @@ In order of importance, it should tell us:
 
 Don't run the whole list of 38 programs that aren't `same`. They're on that list for differences hardware can't check without capture, and each hang means a reset and another boot from the original disc. Run these instead:
 
-- The 9 `noboot` programs, on Sony's library only, to learn whether the emulator or the archive copy is at fault: `demos-scea-ricochet`, `demos-scee-tunelfin`, `event-event001-tantank`, `event-event003-free-hijump-hijump`, `pssoft-tantank2-2`, `scee-demos-all3d2-follow`, `showcase-gasgar`, `showcase-t-tank2f`, `test-kbo3d06-3d`.
 - A few programs that print their own timings: the TIME set in `image/regress.sh` (`check`, `dungeon`, `flame`, `morph`, `offscr`, `timers`).
 
 ## The kit
@@ -130,13 +129,18 @@ Each step can be a stopping point.
 
    To split `serial` from v1.8.0 once 2 works, build the same old code on v1.8.0. Its `Read` no longer returns the same way, so that takes a small change.
 2. **Timing on Sony's library,** which the boot disc has already loaded: `go run ./tools/hwrun -d /dev/ttyUSB0 -library sony -o results .build/serial/hwprobe.elf`.
-3. **The 9 `noboot` programs,** on Sony's library, before anything replaces it.
-4. **The clean library:** `go run ./tools/hwrun -d /dev/ttyUSB0 -library clean -o results .build/serial/hwprobe.elf`, with no reset needed. Look at the TV too. Then a few programs, including Terra. It takes over once per boot, and a return to Sony's library needs a reset.
-5. **Experiments, if there's time:** take out `DevicePacing`'s delays one at a time, which answers the v1.8.0 question and may speed uploads. Try `Drain()` in place of the sleeps. Try `brd` once.
+3. **The clean library:** `go run ./tools/hwrun -d /dev/ttyUSB0 -library clean -o results .build/serial/hwprobe.elf`, with no reset needed. Look at the TV too. Then a few programs, including Terra. It takes over once per boot, and a return to Sony's library needs a reset.
+4. **Experiments, if there's time:** take out `DevicePacing`'s delays one at a time, which answers the v1.8.0 question and may speed uploads. Try `Drain()` in place of the sleeps. Try `brd` once.
 
 ## Where things stood
 
 The library, as of `994c8e6`, on branch `libps-go`, with spec 34 done. `.build/carchive/summary-verify44.txt` is the baseline: 102 `same`, 22 `differ`, 9 `noboot`, 4 `shift`, 1 `wild`, 1 `tty`, 1 `stall`. Regressions are 34, 0, 7 on the image and 33, 0, 8 linked.
+
+### The 9 `noboot` programs don't need the console
+
+They were on this plan to learn whether the emulator or the archive copy was at fault. Neither is. Their discs have too many files in the root directory for the BIOS's search, which gives up after about 1,536 bytes of directory (32 short names, 28 long ones), so it never finds `SYSTEM.CNF` and looks for `PSX.EXE`. Mednafen with SCPH-1001 stops at the logo on the same disc, and runs the game when `SYSTEM.CNF` and the executable come first in the directory.
+
+Through the monitor, in the emulator, all 9 run on both libraries. `showcase-gasgar` differs: on the clean library it comes back to the monitor's `>>` prompt within 20 s, and on Sony's it's still running.
 
 ## Results
 
