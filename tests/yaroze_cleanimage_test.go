@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"maps"
 	"os"
@@ -207,9 +208,16 @@ func TestYarozeArchiveJob(t *testing.T) {
 				t.FailNow()
 			}
 
-			// It never returns, so it ends by asking for a reset.
-			if err := s.Run(t.Context(), jobs); !errors.Is(err, errReset) {
+			// It never returns. On Sony's it ends by asking for a reset. The
+			// clean monitor resets the console when told to, and the library
+			// goes back in with no one there.
+			err = s.Run(t.Context(), jobs)
+			if library == "sony" && !errors.Is(err, errReset) {
 				t.Errorf("the program should end by asking for a reset, not %v", err)
+			}
+			if library == "clean" {
+				assert.NoError(t, err)
+				assert.Equal(t, true, strings.Contains(strings.ToLower(s.Probe(t.Context())), fmt.Sprintf(":%08x", s.Marker)))
 			}
 			data, err := os.ReadFile(filepath.Join(s.Out, jobs[0].Name+"-"+library+".txt"))
 			assert.NoError(t, err)

@@ -78,6 +78,7 @@ func rdb() {
 	dbgRegs[dbgCause] = 9 << 2 // a break
 	dbgRegs[dbgEPC] = regs[regEPC]
 	dbgSignal = 5
+	setWatching(0)
 	installVector()
 	debugging = true
 	debugLoop()

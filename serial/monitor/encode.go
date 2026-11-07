@@ -23,6 +23,7 @@ func beq(rs, rt uint32, off int) uint32     { return 4<<26 | rs<<21 | rt<<16 | u
 func bne(rs, rt uint32, off int) uint32     { return 5<<26 | rs<<21 | rt<<16 | uint32(off)&0xffff }
 func andi(rt, rs, imm uint32) uint32        { return 12<<26 | rs<<21 | rt<<16 | imm&0xffff }
 func lw(rt, base uint32, off int32) uint32  { return 0x23<<26 | base<<21 | rt<<16 | uint32(off)&0xffff }
+func lbu(rt, base uint32, off int32) uint32 { return 0x24<<26 | base<<21 | rt<<16 | uint32(off)&0xffff }
 func sw(rt, base uint32, off int32) uint32  { return 0x2b<<26 | base<<21 | rt<<16 | uint32(off)&0xffff }
 func addu(rd, rs, rt uint32) uint32         { return rs<<21 | rt<<16 | rd<<11 | 0x21 }
 func mfhi(rd uint32) uint32                 { return rd<<11 | 0x10 }
