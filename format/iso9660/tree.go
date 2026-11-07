@@ -79,6 +79,13 @@ type Dir struct {
 	Dirs    []*Dir
 	Entries []*Entry
 
+	// First names entries to move to the front when the directory runs past
+	// one block, in this order. A console's BIOS searches only the root's
+	// first block for SYSTEM.CNF and the executable, so a boot disc with many
+	// files needs them there, though the standard wants records sorted. A
+	// directory of one block stays sorted.
+	First []string
+
 	// Modified is the directory's modification time, recorded under the
 	// same condition as Entry.Modified.
 	Modified time.Time
@@ -216,6 +223,22 @@ func recordLen(idLen int, sysUse uint32) uint32 {
 		n++
 	}
 	return uint32(n) + sysUse
+}
+
+// moveFirst applies First.
+func (d *Dir) moveFirst(sysUse uint32) {
+	if d.contentSize(sysUse) <= LogicalBlockSize {
+		return
+	}
+	at := 0
+	for _, name := range d.First {
+		if i := slices.IndexFunc(d.Entries, func(e *Entry) bool { return e.Name == name }); i >= at {
+			e := d.Entries[i]
+			copy(d.Entries[at+1:i+1], d.Entries[at:i])
+			d.Entries[at] = e
+			at++
+		}
+	}
 }
 
 // contentSize computes how many bytes of directory records a directory needs,

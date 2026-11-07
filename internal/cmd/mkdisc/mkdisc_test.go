@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -358,6 +359,42 @@ func TestISO(t *testing.T) {
 
 	opts.Audio = []string{write(t, dir, "a.raw", make([]byte, psxdisc.AudioSectorSize))}
 	assert.Error(t, "cannot hold", Build(opts))
+}
+
+// TestBootFilesFirst keeps SYSTEM.CNF and the executable in the root's first
+// block, the only one the BIOS searches, when the root runs past it, and
+// leaves a root of one block sorted.
+func TestBootFilesFirst(t *testing.T) {
+	for _, tt := range []struct {
+		files int
+		first string
+	}{
+		{files: 3, first: "A00.TIM;1"},
+		{files: 60, first: "SYSTEM.CNF;1"},
+	} {
+		dir := t.TempDir()
+		for i := range tt.files {
+			write(t, dir, fmt.Sprintf("tree/A%02d.TIM", i), []byte("a"))
+		}
+		opts := NewOptions()
+		opts.Output = filepath.Join(dir, "out.bin")
+		opts.Dir = filepath.Join(dir, "tree")
+		opts.Files = []string{"ZBOOT.EXE=" + exe(t, dir)}
+		opts.Boot = "ZBOOT.EXE"
+		opts.Stdout = io.Discard
+		assert.NoError(t, Build(opts))
+
+		r, closer, err := psxdisc.Open(opts.Output)
+		if !assert.NoError(t, err) {
+			t.FailNow()
+		}
+		assert.Equal(t, tt.first, r.Root.Entries[0].Name)
+		if tt.files > 3 {
+			assert.Equal(t, "ZBOOT.EXE;1", r.Root.Entries[1].Name)
+		}
+		assert.Equal(t, tt.files+2, len(r.Root.Entries))
+		closer.Close()
+	}
 }
 
 // TestZip writes the .bin and .cue into a .zip, the same bytes as beside

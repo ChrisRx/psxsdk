@@ -138,7 +138,7 @@ The library, as of `994c8e6`, on branch `libps-go`, with spec 34 done. `.build/c
 
 ### The 9 `noboot` programs don't need the console
 
-They were on this plan to learn whether the emulator or the archive copy was at fault. Neither is. Their discs have too many files in the root directory for the BIOS's search, which gives up after about 1,536 bytes of directory (32 short names, 28 long ones), so it never finds `SYSTEM.CNF` and looks for `PSX.EXE`. Mednafen with SCPH-1001 stops at the logo on the same disc, and runs the game when `SYSTEM.CNF` and the executable come first in the directory.
+They were on this plan to learn whether the emulator or the archive copy was at fault. Neither is. The BIOS searches only the root directory's first 2,048-byte sector, and on their discs the root runs over it, with `SYSTEM.CNF` and the executable in a later sector. So it never finds `SYSTEM.CNF` and looks for `PSX.EXE`. Across the archive the split is exact: all 131 discs that boot have a root of one sector, and all 9 `noboot` discs have two or three. Mednafen with SCPH-1001 stops at the logo on the same disc, and runs the game when `SYSTEM.CNF` and the executable come first in the directory.
 
 Through the monitor, in the emulator, all 9 run on both libraries. `showcase-gasgar` differs: on the clean library it comes back to the monitor's `>>` prompt within 20 s, and on Sony's it's still running.
 
