@@ -96,9 +96,6 @@ func programSubdf3(a, b uint64) uint64 { return softSubdf3(a, b) }
 //export libps_c___muldf3
 func programMuldf3(a, b uint64) uint64 { return softMuldf3(a, b) }
 
-//export libps_c___divdf3
-func programDivdf3(a, b uint64) uint64 { return softDivdf3(a, b) }
-
 //export libps_c___fixdfsi
 func programFixdfsi(a uint64) int32 {
 	r := dFix(a)
@@ -144,9 +141,6 @@ func softTruncdfsf2(a uint64) uint32 {
 	padTrunc()
 	return r
 }
-
-//export __addsf3
-func softAddsf3(a, b uint32) uint32 { return sAdd(a, b) }
 
 //export __mulsf3
 func softMulsf3(a, b uint32) uint32 { return sMul(a, b) }
