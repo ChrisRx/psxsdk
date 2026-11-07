@@ -96,7 +96,12 @@ const (
 	regT2 = 10
 	regT3 = 11
 	regT4 = 12
+	regSP = 29
 )
+
+// monitorStack is where the clean monitor's stack starts: 16 bytes below the
+// __stack_top its target.json gives.
+const monitorStack = 0x80090000 - 16
 
 // iType is a MIPS instruction with an immediate.
 func iType(op, rs, rt, imm uint32) uint32 {
@@ -171,6 +176,11 @@ func loader(copies []copyBlock, entry uint32) []byte {
 		add(0)
 	}
 	call(tableA, callFlushCache)
+	// The monitor's stack is the top of its own space, as target.json reserves
+	// it. Left where the boot disc's monitor had it, at the top of RAM, it
+	// would be under a program's stack, and a program that reads its stack
+	// before setting it would find the monitor's leftovers there.
+	add(li(regSP, monitorStack)...)
 	add(li(regT0, entry)...)
 	add(0x01000008, 0) // jr t0
 	out := make([]byte, 0, len(code)*4)

@@ -57,6 +57,7 @@ func main() {
 	}
 	line.open(savedBaud)
 	installHook()
+	showScreen()
 	line.puts("\r\nConnected CIP ver2.0\r\nCommunication baud rate ")
 	line.putDecimal(savedBaud)
 	line.puts(" bps\r\nOK\r\n")

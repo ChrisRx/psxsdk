@@ -17,7 +17,8 @@ import (
 func flushCache()
 
 // run starts the program at pc with gp and sp, and if it returns, starts
-// the monitor again from its own startup, on its stack, leaving the
+// the monitor again from its own startup, on its stack, which is the top of
+// its own space below 80090000h (target.json), clear of a program's, leaving the
 // library as the disc's startup left it, which does not take being
 // initialized twice. It does not return.
 func run(pc, gp, sp uint32) {
@@ -28,8 +29,8 @@ func run(pc, gp, sp uint32) {
 	move $$sp, {sp}
 	jalr {pc}
 	nop
-	lui $$sp, 0x801f
-	ori $$sp, $$sp, 0xff00
+	lui $$sp, 0x8009
+	addiu $$sp, $$sp, -16
 	lui $$t0, %hi(_start)
 	addiu $$t0, $$t0, %lo(_start)
 	jr $$t0
