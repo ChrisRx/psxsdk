@@ -143,7 +143,7 @@ func installHook() {
 // the kernel's exception vector at, and resumeCode the code that starts
 // the stopped program again. Both are in .data, as dispatch is.
 var (
-	vector     = [80]uint32{1}
+	vector     = [96]uint32{1}
 	resumeCode = [64]uint32{1}
 )
 
@@ -158,19 +158,31 @@ func savedRegs(f func(r uint32)) {
 	}
 }
 
+// watching says the handler should look for a Control-C on the serial port at
+// each interrupt, which it does while a program runs and not under the
+// debugger, whose host has its own use for that byte.
+var watching uint32
+
+// setWatching sets watching. The handler alone reads it, in code the compiler
+// can't see, so the write has to be volatile to stay.
+func setWatching(on uint32) { volatile.StoreUint32(&watching, on) }
+
 // installVector puts the debugger between the program and the kernel's
 // exception handler, as installHook does for its output: the vector at 80h
 // is the same four instructions of a jump, which are copied to the end of
-// vector. Interrupts and system calls go on to the kernel. Anything else,
-// a break or a fault, stops the program: its registers are saved in
-// dbgRegs, and debugStopped runs on dbgStack.
+// vector. System calls go on to the kernel. So do interrupts, unless watching
+// is set and the serial port has a Control-C waiting, which starts the BIOS
+// again from its reset address, as the reset button does: a program that runs
+// forever would otherwise take a person at the console to stop. Anything else,
+// a break or a fault, stops the program: its registers are saved in dbgRegs,
+// and debugStopped runs on dbgStack.
 func installVector() {
 	stub := (*[4]uint32)(yaroze.Pointer(0x80))
 	to := uint32(uintptr(unsafe.Pointer(&vector)))
 	if volatile.LoadUint32(&stub[0]) != lui(k0, (to+0x8000)>>16) {
 		a := asm{code: vector[:], labels: map[string]int{}}
 		a.emit(mfc0(k0, cop0Cause), nop, andi(k0, k0, 0x7c))
-		a.branch(beq, k0, zero, "kernel")
+		a.branch(beq, k0, zero, "interrupt")
 		a.emit(addiu(k1, zero, 8<<2))
 		a.branch(beq, k0, k1, "kernel")
 		regs := uint32(uintptr(unsafe.Pointer(&dbgRegs)))
@@ -183,6 +195,15 @@ func installVector() {
 		top := uint32(uintptr(unsafe.Pointer(&dbgStack))) + uint32(len(dbgStack))*4 - 16
 		a.emit(lui(sp, (top+0x8000)>>16), addiu(sp, sp, int32(int16(top))))
 		a.jump(funcAddr(debugStopped))
+		a.label("interrupt")
+		on := uint32(uintptr(unsafe.Pointer(&watching)))
+		a.emit(lui(k1, (on+0x8000)>>16), lw(k1, k1, int32(int16(on))), nop)
+		a.branch(beq, k1, zero, "kernel")
+		a.emit(lui(k1, 0x1f80), lw(k0, k1, 0x1054), nop, andi(k0, k0, statRXReady))
+		a.branch(beq, k0, zero, "kernel")
+		a.emit(lbu(k0, k1, 0x1050), nop, addiu(k1, zero, 3))
+		a.branch(bne, k0, k1, "kernel")
+		a.emit(lui(k0, 0xbfc0), jr(k0), nop)
 		a.label("kernel")
 		for i := range stub {
 			a.emit(volatile.LoadUint32(&stub[i]))

@@ -91,6 +91,12 @@ So `serial.TakeOver` uploads the image and our monitor to high RAM with a small 
 - Our monitor on real hardware at all, which has only run in the emulator. Its receive path has its own timing, and the delays in `DevicePacing` came from Sony's monitor.
 - Stale pointers remain in the kernel's RAM that nothing has used so far, such as 8000E2C0h to 80046918h. If something odd happens late in a run, look there first.
 
+### Getting back from a program that never returns
+
+`go` on the clean monitor sets a handler on the kernel's exception vector. At each interrupt it looks for a Control-C on the serial port, and if it finds one it jumps to `bfc00000`, the BIOS's reset address. `hwrun` sends those bytes when a program has run its time, waits for the boot disc's monitor, and takes over again. It asks for the button only if that doesn't work, as with a console with its interrupts off. It needs the boot disc in the drive.
+
+Rehearsed in the emulator with `TestYarozeArchiveJob`, on `demos-scee-tunelfin`. Not yet tried on a console, where a jump to the reset address isn't the same as the button: the BIOS has to set up whatever the program left running. Sony's library has no such handler, so comparing a game on Sony's still takes the button once per program.
+
 ### The emulator's readings
 
 They're what to compare a console's with. In the emulator both are flat across the five readings. Sony's and clean's agree except:
@@ -178,6 +184,10 @@ Medians of the five readings, in the system clock with interrupts off. Sin and S
 | GsSortSprite | 1364 | 1356 | 2201 | 1518 |
 | Sin | 32077 | 32516 | 39580 | 31645 |
 | Sqrt | 26391 | 27332 | 32765 | 33236 |
+
+**Programs.** `pssoft-terra-2`, a real Net Yaroze game, uploaded in 1 minute 25 seconds and ran on the clean library. The user saw it on the TV. It printed `go` and `ResetGraph`, and no more in 45 s. Since it never returns, the old monitor couldn't get control back, and `hwrun` stopped to ask for the button. The other four programs planned then didn't run: `demos-scee-tunelfin`, `showcase-gasgar`, `scee-topten-adven`, `pssoft-airbob-2-airbob`.
+
+**Unexplained:** while Terra uploaded, the TV showed solid bright blue, where the probe's last picture should be dark blue (20, 20, 60) with a smaller bright box, a line and a sprite. Terra's picture then replaced it. It may be the TV's own no-signal color. That hasn't been checked.
 
 What this shows, and what it doesn't yet:
 

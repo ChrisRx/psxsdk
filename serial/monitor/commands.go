@@ -333,12 +333,15 @@ func setRegister(args [][]byte) {
 }
 
 // start is go: it starts the program at the stored epc, with the stored
-// gp and sp, and starts the monitor again if the program returns.
+// gp and sp, and starts the monitor again if the program returns. A Control-C
+// from the host while it runs resets the console (installVector).
 func start() {
 	sp := regs[regSP]
 	if sp == 0 {
 		sp = defaultStack
 	}
+	setWatching(1)
+	installVector()
 	flushCache()
 	run(regs[regEPC], regs[regGP], sp)
 }

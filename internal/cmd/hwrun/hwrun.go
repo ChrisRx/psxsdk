@@ -35,6 +35,13 @@ const (
 
 	// bootTimeout is how long a console gets to boot its disc after a reset.
 	bootTimeout = 3 * time.Minute
+
+	// softResetGap is the time between Control-Cs, softResetTries how many are
+	// sent, and softResetBoot how long the disc then gets to boot, less than
+	// bootTimeout since it's only a wait before asking for the button.
+	softResetGap   = 500 * time.Millisecond
+	softResetTries = 10
+	softResetBoot  = 90 * time.Second
 )
 
 // Job is a program to run, with any files its batch loads into RAM first.
@@ -173,6 +180,12 @@ func (s *Session) Start(ctx context.Context) error {
 	return err
 }
 
+// Probe returns the monitor's reply to reading the word Start's check reads.
+func (s *Session) Probe(ctx context.Context) string {
+	reply, _ := s.mon.Command(ctx, fmt.Sprintf("dw %08x 4", monitorStart))
+	return reply
+}
+
 // Run runs each program.
 func (s *Session) Run(ctx context.Context, jobs []Job) error {
 	for _, job := range jobs {
@@ -252,8 +265,43 @@ func (s *Session) afterFailure(ctx context.Context, err error) error {
 	return errors.Join(err, s.reset(ctx, "a step failed"))
 }
 
-// reset asks for the reset button and waits for the monitor.
+// softReset asks the clean monitor's handler to reset the console, by sending
+// Control-C until it has rebooted, and reports whether the boot disc's monitor
+// came back. The program may take a byte for itself if it's printing as the
+// byte comes, so it sends more than one. It can't help a console with its
+// interrupts off.
+func (s *Session) softReset(ctx context.Context) bool {
+	if s.TakeOver == nil {
+		return false
+	}
+	fmt.Fprintln(s.Log, "resetting the console from the serial port")
+	timeout := s.Port.Timeout
+	defer func() { s.Port.Timeout = timeout }()
+	s.Port.Timeout = softResetGap
+	back := false
+	for i := 0; i < softResetTries && !back; i++ {
+		if _, err := s.Port.Write([]byte{0x03}); err != nil {
+			return false
+		}
+		_, err := s.Port.ReadUntil(ctx, greeting)
+		back = err == nil
+	}
+	s.Port.Timeout = softResetBoot
+	if !back {
+		if _, err := s.Port.ReadUntil(ctx, greeting); err != nil {
+			return false
+		}
+	}
+	_, err := s.Port.ReadUntil(ctx, ">>")
+	return err == nil
+}
+
+// reset gets the console back, by itself if it can and otherwise by asking for
+// the reset button, and waits for the monitor.
 func (s *Session) reset(ctx context.Context, why string) error {
+	if s.softReset(ctx) {
+		return s.Start(ctx)
+	}
 	if err := s.Reset(why); err != nil {
 		return err
 	}
