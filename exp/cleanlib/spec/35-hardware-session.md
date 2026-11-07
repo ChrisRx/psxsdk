@@ -43,21 +43,57 @@ This is why the tools look as they do.
 
 ## Built and not built
 
-Built:
+Built, and rehearsed in the emulator on the boot disc's own monitor and Sony's BIOS:
 
-- `tools/sioloop`, the adapter check, tested only against fakes.
-- `yaroze sio` (SIOCONS in Go, `-p DEVICE,BAUD`, or `DTLH3000` in the environment) and `tools/sioload`, on `serial`. The console side is rehearsed by `go test ./tests -run 'TestYaroze|TestMonitor|TestDebugger|TestSiocons'`, which needs `PSX_SONY_BIOS` (`$HOME/.mednafen/firmware/scph1001.bin`) and `PSX_YAROZE_BOOT` (`$HOME/Downloads/nyboot/Net Yaroze Boot Disc (USA, Europe)_redump.zip`). It takes about 6 minutes and passes on both monitors.
-- The fallback, `.build/sioload-v1.0.0`: the last `sioload` on v1.0.0, with all the old delays. It takes ECOFF files only. To rebuild it, extract `go.mod go.sum tools/sioload format/ecoff` from `751f0fd~1` with `git archive` into an empty directory, and run `GOFLAGS=-mod=mod go build ./tools/sioload` there.
+- **`tools/hwrun`** (`internal/cmd/hwrun`), the runner. It uploads each program, runs it, keeps what it prints in `results/NAME-LIBRARY.txt`, skips any program with a file so that a session can stop and go on later, and asks for the reset button when the monitor won't come back. Only the path that ends by asking for a reset has been rehearsed: the emulated console can't be reset, so `reset`'s wait for the monitor afterward has never run.
+- **`tests/testdata/serial/hwprobe`**, the probe, built by `task build:serial` onto `.build/serial/hwprobe.elf`. It prints `T` lines of five readings of the system clock (the first with a cold instruction cache), `S` lines at an eighth of the clock for long routines, `F frame`, and `H scene`, a hash of a drawn picture. Interrupts are off while it measures. Its readings include the `null` line's.
+- **`serial.Relocated`**, how the clean library gets onto the console. See below.
+- **`tools/sioloop`**, the adapter check, tested only against fakes.
+- **`yaroze sio`** (SIOCONS in Go, `-p DEVICE,BAUD`, or `DTLH3000` in the environment) and `tools/sioload`, on `serial`.
+- **The fallback, `.build/sioload-v1.0.0`:** the last `sioload` on v1.0.0, with all the old delays. It takes ECOFF files only. To rebuild it, extract `go.mod go.sum tools/sioload format/ecoff` from `751f0fd~1` with `git archive` into an empty directory, and run `GOFLAGS=-mod=mod go build ./tools/sioload` there.
 
-Not built, and needed first:
+To run the rehearsal, about 90 seconds:
 
-- **Loading the clean image.** The boot disc leaves Sony's library at 80010000h and its monitor at 80068000h. The clean image ends at 80066288h, so it fits below the monitor, but it isn't known whether the monitor needs Sony's library while it's overwritten, nor what its interrupts do. Rehearse with the real boot disc image in the emulator. If overwriting in place fails, upload the image to high RAM with a small loader that copies it once the monitor hands over.
-- **Static programs** need relinking at 80090000h (`--defsym=__load=0x80090000`), because the clean target's default of 80010000h overwrites the monitor as it loads.
-- **Timing probes** that print over the cable: the same routines under both libraries, by the console's root counters.
-- **Screen checksum** printed as text, so both libraries can be compared without capture.
-- **A runner:** loads each program, runs it, keeps what it prints, and pauses for a reset when the monitor goes silent. A crash leaves the console parked in the BIOS. It should resume where it stopped, since a session may be split.
+```
+PSX_HW_OUT=$PWD/.build/hardware \
+PSX_SONY_BIOS=$HOME/.mednafen/firmware/scph1001.bin \
+PSX_YAROZE_BOOT="$HOME/Downloads/nyboot/Net Yaroze Boot Disc (USA, Europe)_redump.zip" \
+go test ./tests -run TestYarozeCleanImage -count=1 -v
+```
 
-Test all of it against the emulated port before the session.
+The other serial tests use the same two variables: `go test ./tests -run 'TestYaroze|TestMonitor|TestDebugger|TestSiocons'`, about 6 minutes, passes on both monitors.
+
+Not built:
+
+- **Programs with data files.** `hwrun` uploads one executable. Those needing data in RAM, which may include the 9 `noboot` programs, need their `auto` batch, or `yaroze sio` by hand.
+- **Static programs.** They need relinking at 80090000h (`--defsym=__load=0x80090000`), because the clean target's default of 80010000h overwrites the monitor as it loads. Nothing has been tried.
+
+### Loading the clean library, as rehearsed
+
+Three things were tried, and the rehearsal found why the first two don't work:
+
+1. **Uploading the image straight over Sony's fails.** The monitor goes silent once the upload reaches 80012000h, 8 KB in, as it still needs that library. `TestYarozeCleanImageInPlace` records this.
+2. **Uploading our monitor with the image fails.** Our monitor crashes with an address error at 8006D264h, in `main.disassemble`, called from nothing at start-up. The likely cause is a handler Sony's monitor registered in the kernel, whose address is now in our code. Clearing the kernel's state from the loader might fix it, but that's a riskier thing to do to a real console than this is worth. If resets turn out to be a burden, come back to this.
+3. **What works:** `serial.Relocated` uploads the image to high RAM with a small loader, and the program starts at the loader. It turns interrupts off, masks them, copies the image down, calls the kernel's FlushCache and jumps to the program. Sony's monitor stays in place above the image, and printing through it still works.
+
+**Each run on the clean library ends with a reset,** because Sony's monitor doesn't come back when a program returns there. So it's one boot of the original disc per run on the clean library, and `hwprobe` is one program for that reason. Runs on Sony's library need no reset. Do those first, and reset before moving to clean, since a clean run replaces Sony's library until the next boot.
+
+A real console may differ: a DMA still running during the copy, say, which the emulator wouldn't show.
+
+### The emulator's readings
+
+They're what to compare a console's with. In the emulator both are flat across the five readings. Sony's and clean's agree except:
+
+| Reading | Sony's | Clean |
+|---|---|---|
+| GsSortLine, this long line | 514 | 548 |
+| GsSortSprite, rotated | 1,364 | 1,356 |
+| RotMatrix | 288 | 286 |
+| `__muldf3`, 3.25 x 1.5 | 3,898 | 3,880 |
+| Sin(1.25), eighths | 32,077 | 32,516 |
+| Sqrt(2.5), eighths | 26,391 | 27,332 |
+
+Those are gaps the emulator already shows, listed so they aren't mistaken for what the console adds. The picture's hash is 882646469 on both. `frame` is a wrapped count of eighths: add 65,536. The two sides read 5,240 and 5,233.
 
 ## Before the session
 
@@ -72,7 +108,7 @@ It reports bytes returned, whether CTS follows RTS, CTS lag, the time to read CT
 
 Each step can be a stopping point.
 
-1. **Cable check:** boot, reach the `>>` prompt, write and read a little memory. Measure the upload rate. If it fails, change one thing at a time:
+1. **Cable check:** boot, reach the `>>` prompt, write a little memory and check it with `dw`. Measure the upload rate. If it fails, change one thing at a time:
 
    | Try | Tool | If it works | If it fails |
    |---|---|---|---|
@@ -81,14 +117,14 @@ Each step can be a stopping point.
    | 3 | `SIOCONS.EXE` in DOSBox | See what the old `sioload` lacks. Today's OS and driver are also new since 2020 | Suspect the adapter, cable or console |
 
    To split `serial` from v1.8.0 once 2 works, build the same old code on v1.8.0. Its `Read` no longer returns the same way, so that takes a small change.
-2. **Timing on Sony's library,** which the boot disc has already loaded.
-3. **The clean library:** load the image, repeat the same probes, then the program checks.
-4. **The 9 `noboot` programs,** on Sony's library.
+2. **Timing on Sony's library,** which the boot disc has already loaded: `go run ./tools/hwrun -d /dev/ttyUSB0 -library sony -o results .build/serial/hwprobe.elf`.
+3. **The 9 `noboot` programs,** on Sony's library, before anything replaces it.
+4. **The clean library:** reset, then `go run ./tools/hwrun -d /dev/ttyUSB0 -library clean -o results .build/serial/hwprobe.elf`. Look at the TV too. Then a few programs, one boot each, including Terra.
 5. **Experiments, if there's time:** take out `DevicePacing`'s delays one at a time, which answers the v1.8.0 question and may speed uploads. Try `Drain()` in place of the sleeps. Try `brd` once.
 
 ## Where things stood
 
-As of `994c8e6`, on branch `libps-go`, with spec 34 done. `.build/carchive/summary-verify44.txt` is the baseline: 102 `same`, 22 `differ`, 9 `noboot`, 4 `shift`, 1 `wild`, 1 `tty`, 1 `stall`. Regressions are 34, 0, 7 on the image and 33, 0, 8 linked.
+The library, as of `994c8e6`, on branch `libps-go`, with spec 34 done. `.build/carchive/summary-verify44.txt` is the baseline: 102 `same`, 22 `differ`, 9 `noboot`, 4 `shift`, 1 `wild`, 1 `tty`, 1 `stall`. Regressions are 34, 0, 7 on the image and 33, 0, 8 linked.
 
 ## Results
 
