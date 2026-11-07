@@ -23,6 +23,8 @@ Time by cycles only.
 
 `GsInitCoordinate2` is assembly on the image and stays Go on static builds, which inline it. Both begin with a non-branch now. `bcopy` with a null source can't keep its time and got 4 to 6 cycles slower: 12 and 14, against Sony's 4. On Sony's call a nil `base` writes to memory at 0, and now the image does too.
 
-Moving a first instruction into the jump's delay slot took 2 cycles off a routine beginning with `lui`, but none off `bcopy`, which begins with `lbu`: by the probe still 12, 204 and 3,084 at lengths 0, 16 and 256, against Sony's 10, 202 and 3,082. So that first instruction shouldn't be a load, on this emulator's timing.
+Moving a first instruction into the jump's delay slot takes 2 cycles off either kind: a load gains as `lui` does, since the emulator charges only the instruction fetch. `bcopy` now reads 10, 202 and 3,082 at lengths 0, 16 and 256, Sony's times. An earlier version of this section said a load gains nothing, from a misread of a stale probe output.
 
-`GsInitCoordinate2`'s mean hides errors in opposite directions, by the agent's figures before the delay slot: 52 against Sony's 46 with `super` nil, and 54 against 58 with one.
+`GsInitCoordinate2`'s mean hid errors in opposite directions. It now takes Sony's 46 with `super` nil and 58 with one.
+
+`bcopy` with a null source stays at 10 and 12 against Sony's 4. It needs at least 5 instructions and only 4 fit Sony's time through the entry, and testing null first would slow the n<=0 path, which programs do use.

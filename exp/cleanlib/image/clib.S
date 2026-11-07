@@ -114,7 +114,8 @@ _dbl_shift:
 	.size _dbl_shift, .-_dbl_shift
 
 # GsInitCoordinate2(super, base): gs3d_static.go says what it does. In assembly so that its
-# first instruction is not a branch (spec 33).
+# first instruction is not a branch (spec 33), and each path takes Sony's time: 46 cycles
+# with a null super and 58 with one.
 	.section .text.GsInitCoordinate2, "ax", @progbits
 	.align 2
 	.globl GsInitCoordinate2
@@ -122,7 +123,6 @@ _dbl_shift:
 GsInitCoordinate2:
 	lui	$at, %hi(GsIDMATRIX)
 	addiu	$v0, $at, %lo(GsIDMATRIX)
-	NOPS	2
 	lw	$at, %lo(GsIDMATRIX)($at)
 	lw	$v1, 16($v0)
 	lw	$a2, 20($v0)
@@ -144,6 +144,7 @@ GsInitCoordinate2:
 	beqz	$a0, 1f
 	sw	$zero, 0($a1)
 	sw	$a1, 76($a0)
+	NOPS	5
 1:	jr	$ra
 	nop
 	.size GsInitCoordinate2, .-GsInitCoordinate2
