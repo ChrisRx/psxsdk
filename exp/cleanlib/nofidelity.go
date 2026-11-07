@@ -5,6 +5,8 @@ package cleanlib
 // A program's static build, with nothing of Sony's time or leftover memory to
 // match: fidelity.go's operations, empty, for the compiler to remove (spec 30).
 
+const spinTurn = 12
+
 //go:inline
 func spinCycles(c uint32) {}
 
@@ -27,10 +29,49 @@ func spaceApart(n int, v uint32) {}
 func spaceAt(p *uint32) {}
 
 //go:inline
+func nops(n int) {}
+
+//go:inline
 func delay(n uint32) {}
 
 //go:inline
+func padPow(x float64) {}
+
+//go:inline
+func padPowInt() {}
+
+//go:inline
+func kromCharTime(c uint16) {}
+
+//go:inline
+func tickVoiceTime(sv *sndVoice, e uint16, settled, live *uint32) {}
+
+//go:inline
+func tickWordsTime(settled, written, live uint32) {}
+
+//go:inline
 func imagePad(c uint32) {}
+
+//go:inline
+func libTablePad() {}
+
+//go:inline
+func cdStartPad() {}
+
+//go:inline
+func ttyPlainPad() {}
+
+//go:inline
+func ttyFirstDigPad() {}
+
+//go:inline
+func ttyDigitPad() {}
+
+//go:inline
+func ttyAfterConvPad() {}
+
+//go:inline
+func ttyNewlinePad() {}
 
 // padReadingStart starts the kernel's reading of the controllers and leaves
 // the vertical blank's acknowledgement to the library, which the driver would

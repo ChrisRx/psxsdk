@@ -178,9 +178,9 @@ func fmtLiteral(dst, f uintptr) (uintptr, uintptr) {
 			return dst, f
 		}
 		if dst == fmtTTY {
-			// A byte with the top bit set moves no column but for a few, and is Sony's
-			// 570 by going straight to the write.
-			if c >= 0x80 && c != 0xc7 && (c < 0xa4 || c > 0xa6) {
+			// A byte with the top bit set moves no column unless its class says it prints
+			// (highClass), and is Sony's 570 by going straight to the write.
+			if c >= 0x80 && highClass(c)&0x97 == 0 {
 				volatile.StoreUint8(&ttyChar, c)
 				libps_biosB(biosWrite, 1, uintptr(unsafe.Pointer(&ttyChar)), 1, 0)
 			} else {

@@ -86,6 +86,12 @@ type sndVoice struct {
 	// was keyed on, when it was last taken (a count of key ons) and its
 	// tone's priority.
 	keyed bool
+
+	// quiet is how many ticks in a row have read 0, keyed or not, up to silentReads. Sony's
+	// tick takes longer over a voice at the top (fidelity.go). From the start-up its
+	// count starts at 2: all but the first 14 ticks of a program take the longer way.
+	quiet uint8
+
 	// fresh is set from a key on to the end of the next tick: such a
 	// voice is not free even when keyed off again before that.
 	fresh bool
@@ -224,11 +230,13 @@ func soundBegin() {
 	// interrupt handler acknowledges the channel.
 	spuSet(spuCtrl, 0xc000)
 	spinCycles(startCtrl)
+	imagePad(residentSoundPad)
+	EnterCriticalSection()
 	dmaInterrupt.Get()
 	dmaInterrupt.Set(dicrMaster | dicrSPUEnable)
-	imagePad(residentSoundPad)
 	ev := libps_biosB(biosOpenEvent, spuEventClass, 0x20, evModeNoIntr, 0)
 	libps_biosB(biosEnableEvent, uintptr(ev), 0, 0, 0)
+	ExitCriticalSection()
 	spinCycles(startEvent)
 	spuSet(spuRevBase, 0xfffe)
 	// 7.
@@ -269,7 +277,11 @@ func soundBegin() {
 	spuSetMask(spuKeyOn, 0)
 	spuSetMask(spuReverb, 0)
 	for i := range snd.voices {
-		snd.voices[i] = sndVoice{seq: -1, vab: -1}
+		snd.voices[i] = sndVoice{
+			seq:   -1,
+			vab:   -1,
+			quiet: 2,
+		}
 	}
 	snd.lastNoise = -1
 	memInit()
@@ -277,7 +289,9 @@ func soundBegin() {
 	spuCount(1000)
 	imagePad(residentSoundEndPad)
 	// The controllers' and the vertical blank's acknowledgement handed to
-	// the kernel and back, each with the interrupts masked.
+	// the kernel and back, each with the interrupts masked, in a critical
+	// section as Sony's does.
+	EnterCriticalSection()
 	m := iMask.Get()
 	iMask.Set(0)
 	libps_biosB(biosClearPad, 1, 0, 0, 0)
@@ -288,6 +302,7 @@ func soundBegin() {
 	libps_biosB(biosClearPad, 0, 0, 0, 0)
 	libps_biosC(biosClearRCnt, 3, 0, 0, 0)
 	iMask.Set(m | irqVBlank)
+	ExitCriticalSection()
 	// The tick runs at every vertical blank from here (spec 07): a blank
 	// that comes earlier in the start-up is counted but not ticked, as in
 	// the reference.
@@ -373,8 +388,7 @@ func parkVoice(v uint32) {
 const (
 	tickReadsPad = 278  // before the reads
 	tickReadGap  = 32   // from one envelope read to the next; the loop's own work is 12
-	tickWordsPad = 2582 // before the six words
-	tickExitPad  = 434  // after them
+	tickExitPad  = 362  // after them
 )
 
 // tickReads holds the envelopes a tick reads until it keeps them. It is
@@ -390,6 +404,7 @@ var tickReads [spuVoices]uint16
 func soundTick() {
 	pace(tickReadsPad)
 	space(1)
+	nops(10)
 	reads := &tickReads
 	for v := range snd.voices {
 		reads[v] = spuGet(uint32(v*16 + spuEnv))
@@ -398,11 +413,13 @@ func soundTick() {
 	if snd.stopAsked {
 		stopSequences()
 	}
+	written := uint32(0)
 	for v := range snd.voices {
 		sv := &snd.voices[v]
 		if sv.dirty == 0 {
 			continue
 		}
+		written++
 		for r := range voiceRegs {
 			if sv.dirty&(1<<r) != 0 {
 				spuSet(uint32(v*16+r*2), sv.regs[r])
@@ -410,11 +427,13 @@ func soundTick() {
 		}
 		sv.dirty = 0
 	}
+	settled, live := uint32(0), uint32(0)
 	for v := range snd.voices {
 		sv := &snd.voices[v]
 		e := reads[v]
 		sv.env = e
 		sv.fresh = false
+		tickVoiceTime(sv, e, &settled, &live)
 		if sv.keyed {
 			if e != 0 {
 				sv.zeros = 0
@@ -427,8 +446,7 @@ func soundTick() {
 			}
 		}
 	}
-	pace(tickWordsPad)
-	space(2)
+	tickWordsTime(settled, written, live)
 	spuSetMask(spuKeyOff, snd.keyOff)
 	spuSetMask(spuKeyOn, snd.keyOn)
 	spuSetMask(spuReverb, snd.reverb)

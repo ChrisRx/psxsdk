@@ -71,13 +71,19 @@ func cardStart() {
 	// The driver reads the controllers too, into the buffers the
 	// controller driver was given: without them, into address 0.
 	padStart()
+	EnterCriticalSection()
 	for i, spec := range cardSpecs {
 		card.sw[i] = libps_biosB(biosOpenEvent, cardSwClass, spec, evModeNoIntr, 0)
 	}
 	for i, spec := range cardSpecs {
 		card.hw[i] = libps_biosB(biosOpenEvent, cardHwClass, spec, evModeNoIntr, 0)
 	}
+	ExitCriticalSection()
 	imagePad(residentCardPad)
+	// The kernel's start of the driver turns the interrupts back on itself,
+	// so that a vertical blank during InitCard waits until the driver runs
+	// and the driver's first frame is that blank's.
+	EnterCriticalSection()
 	libps_biosB(biosInitCard, 1, 0, 0, 0)
 	libps_biosB(biosStartCard, 0, 0, 0, 0)
 	libps_biosA(biosBuInit, 0, 0, 0, 0)
@@ -88,6 +94,7 @@ func cardStart() {
 	for _, ev := range card.hw {
 		libps_biosB(biosEnableEvent, uintptr(ev), 0, 0, 0)
 	}
+	ExitCriticalSection()
 }
 
 // cardFile starts the card driver if name is on a memory card ("bu").

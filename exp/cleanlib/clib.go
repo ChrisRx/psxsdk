@@ -379,12 +379,8 @@ func libToupper(c int32) int32 {
 	switch {
 	case b >= 'a' && b <= 'z':
 		b -= 32
-	case b == 0xa5:
-		b = 0x85
-	case b == 0xa6:
-		b = 0x86
-	case b == 0xc7:
-		b = 0xa7
+	case highClass(b)&2 != 0:
+		b -= 32
 	}
 	return int32(b)
 }
@@ -395,10 +391,8 @@ func libTolower(c int32) int32 {
 	switch {
 	case b >= 'A' && b <= 'Z':
 		b += 32
-	case b >= 0xa4 && b <= 0xa6:
-		b += 0x20
-	case b == 0xc7:
-		b = 0xe7
+	case highClass(b)&1 != 0:
+		b += 32
 	}
 	return int32(b)
 }

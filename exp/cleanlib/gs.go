@@ -146,6 +146,7 @@ func GsInitGraph(w, h, intmode, dith, vrammode uint16) {
 		setOFY(0)
 	}
 	gs.draw(0)
+	classSetInitGraph()
 	imagePad(residentInitGraphPad)
 }
 
@@ -165,6 +166,7 @@ func interlace(h, intmode uint16) uint8 {
 func resetGPU() {
 	drain()
 	ttyPrintf(resetLine, 0x8004829c, 0x800482e4)
+	imagePad(residentResetLinePad)
 	libStart()
 	libps_biosA(biosGPUCommand, 0x0004829c, 0, 0, 0)
 	// As Sony's library does around the reset (spec 08): every interrupt
@@ -181,6 +183,7 @@ func resetGPU() {
 	// resetRest.
 	clearBytes(unsafe.Pointer(&queue.reqs), unsafe.Sizeof(queue.reqs))
 	spin(resetRest)
+	imagePad(residentResetPad)
 	// The interrupts as they were, which libStart left with the vertical
 	// blank's and the DMA's on, with any enabled since.
 	iMask.Set(iMask.Get() | mask)
@@ -212,10 +215,14 @@ func startup() {
 // system's event, at the sound system's end and before the card driver.
 // GsInitGraph's is the 30,000 by which Sony's call is longer, every call.
 const (
-	residentEntryPad     = 6000
-	residentSoundPad     = 63000
-	residentSoundEndPad  = 13000
-	residentCardPad      = 1500
+	residentEntryPad     = 7032
+	residentResetLinePad = 954
+	residentResetPad     = 1078
+	residentPadPad       = 42
+	residentGetstatPad   = 160
+	residentSoundPad     = 63200
+	residentSoundEndPad  = 12430
+	residentCardPad      = 318
 	residentInitGraphPad = 30000
 )
 
@@ -318,10 +325,10 @@ func GsDefDispBuff(x0, y0, x1, y1 uint16) {
 	gs.draw(activeBuf())
 }
 
-// GsGetActiveBuff returns the buffer being drawn into, 0 or 1.
+// GsGetActiveBuff returns the buffer being drawn into, 0 or 1, in the target's assembly.
 //
 //export GsGetActiveBuff
-func GsGetActiveBuff() int32 { return int32(activeBuf()) }
+func GsGetActiveBuff() int32
 
 // GsSwapDispBuff shows the buffer just drawn, turning the display on, and
 // makes the other the one drawn into.
@@ -339,17 +346,17 @@ func GsSwapDispBuff() {
 	psdCNT++
 	// Sony's copies the display environment a byte at a time before
 	// GP1 03h (spec 08); the two PutDrawEnv of draw carry their own pace.
-	pace(swapDispBuffPad)
+	pace(swapDispBuffPad - spinTurn)
+	nops(2)
 }
 
 // GsSetWorkBase sets where the sorts build their packets, each advancing
 // it past what it wrote.
 //
+// In the target's assembly.
+//
 //export GsSetWorkBase
-//go:noinline
-func GsSetWorkBase(p unsafe.Pointer) {
-	gsOUT_PACKET_P = p
-}
+func GsSetWorkBase(p unsafe.Pointer)
 
 // packet takes n words from the packet area for a packet, its link word
 // and n-1 words of commands, and advances the area past them.
@@ -389,6 +396,7 @@ func GsClearOt(offset, point uint16, ot *GsOT) {
 	ot.Tag = (*uint32)(last)
 	// Sony's times its wait for the channel, with a time read (spec 08).
 	pace(clearOtPad)
+	nops(2)
 }
 
 // DMA channel 6, which clears ordering tables.
@@ -432,6 +440,7 @@ func GsSortClear(r, g, b uint8, ot *GsOT) {
 	p[3] = pair(w, gs.height)
 	link(at(ot.Tag), p)
 	pace(sortClearPad)
+	nops(3)
 }
 
 // GsDrawOt starts the GPU drawing ot, from Tag, and returns without

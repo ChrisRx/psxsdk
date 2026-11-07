@@ -478,21 +478,30 @@ func mathPow(x, y float64) float64 {
 		errMath(mathEDOM)
 		return 0
 	}
-	return mathExp(y * mathLog(x))
+	r := mathExp(y * mathLog(x))
+	padPow(x)
+	return r
 }
 
 // powInt is x^n, the bits of |n| from the lowest, the base squared for
-// each; 1/x is the base for a negative n.
+// each past the top bit's; 1/x is the base for a negative n. The first bit set
+// takes the base as it is, with no product: Sony's time is one product for each
+// squaring and each bit after the first (2 takes one, 3 two, 10 four).
 func powInt(x float64, n int32) float64 {
 	if n < 0 {
 		x = div(1, x)
 		n = -n
 	}
-	p := 1.0
+	var p float64
+	first := true
 	b := x
 	for n > 0 {
 		if n&1 != 0 {
-			p *= b
+			if first {
+				p, first = b, false
+			} else {
+				p = mul(p, b)
+			}
 		}
 		n >>= 1
 		// Not squared past the top bit, as math_errno shows: pow(2, 1000)
@@ -502,6 +511,7 @@ func powInt(x float64, n int32) float64 {
 			b = mul(b, b)
 		}
 	}
+	padPowInt()
 	return p
 }
 

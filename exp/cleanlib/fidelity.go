@@ -3,6 +3,7 @@
 package cleanlib
 
 import (
+	"device"
 	"math/bits"
 	"unsafe"
 
@@ -93,6 +94,15 @@ func spaceApart(n int, v uint32) {
 //
 //go:inline
 func spaceAt(p *uint32) { volatile.StoreUint32(p, 0) }
+
+// nops spends 2 cycles a nop, in line, for what a store would not fit.
+//
+//go:inline
+func nops(n int) {
+	for range n {
+		device.Asm("nop")
+	}
+}
 
 // delay spends n instructions and the call. In assembly, for what a Go call needs to
 // spend exactly.
@@ -313,3 +323,85 @@ func padSin(b uint64) {
 // What converting between float and double takes on Sony's, beyond the work.
 func padExtend() { delay(70) }
 func padTrunc()  { delay(64) }
+
+// tickVoiceTime counts a voice's read for tickWordsTime.
+//
+//go:inline
+func tickVoiceTime(sv *sndVoice, e uint16, settled, live *uint32) {
+	if e != 0 {
+		sv.quiet = 0
+		*live++
+	} else if sv.quiet < silentReads {
+		sv.quiet++
+	} else {
+		*settled++
+	}
+}
+
+// tickWordsTime spends what the tick takes before its six words, from the last envelope
+// read, over a run of spec/probes/voices: 3,124 cycles on Sony's with every voice's count
+// still going, which here is its base, and 18 more for each voice settled at the top,
+// which the count itself costs here. Sony's is 8 less for 24 live voices and 42 more for each
+// voice it writes, where the clean loops take 29 less for a live voice and 126 more for
+// one written.
+func tickWordsTime(settled, written, live uint32) {
+	spaceWith(1, settled)
+	spend(uint32(max(0, tickWordsBase+tickLivePad*int32(live)+tickWrittenPad*int32(written))))
+	nops(5)
+}
+
+const (
+	tickWordsBase  = 827
+	tickWrittenPad = -84
+	tickLivePad    = 29
+)
+
+// kromCharTime evens out what glyphFor takes by the character, for Krom2Tim. Sony's time
+// hardly changes with it, and glyphFor's table walk does: these are what each range
+// is short of the longest, on pssoft-koro-koro's 283 strings of one character.
+func kromCharTime(c uint16) {
+	var n uint32
+	switch {
+	case c >= '0' && c <= '9', c >= 0x824f && c <= 0x8258:
+		n = 404
+	case c >= 'A' && c <= 'Z', c >= 0x8260 && c <= 0x8279:
+		n = 356
+	case c >= 'a' && c <= 'z', c >= 0x8281 && c <= 0x829a:
+		n = 310
+	case c >= 0x829f && c <= 0x82f1:
+		n = 162
+	case c >= 0x8340 && c <= 0x837e:
+		n = 64
+	case c >= 0x8380 && c <= 0x83ff:
+		n = 0
+	default:
+		n = 810
+	}
+	spend(14 + n)
+}
+
+// padPow spends what a pow by a power that isn't whole takes beyond exp and log here. This
+// is a fit over a probe of 26 x by 5 y, within about 20,000 of Sony's for most and
+// 33,000 at worst: what Sony's does in that time isn't known. It follows x's binary
+// exponent e, and more for a power of two with e odd.
+func padPow(x float64) {
+	b := *(*uint64)(unsafe.Pointer(&x))
+	if b == 1023<<dFracBits {
+		spinCycles(31000)
+		return
+	}
+	e := int32(b>>dFracBits&dExpMax) - 1023
+	if e < 0 {
+		e = -e
+	}
+	c := 45000 + 2000*uint32(e)
+	if b&dFracMask == 0 && e&1 != 0 {
+		c += 15000
+	}
+	spinCycles(c)
+}
+
+// padPowInt is what a pow by a whole power takes around its products, beyond the work here.
+func padPowInt() { spinCycles(powIntPad) }
+
+const powIntPad = 4368
