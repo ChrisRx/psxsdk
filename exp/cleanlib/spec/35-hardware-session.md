@@ -144,4 +144,43 @@ Through the monitor, in the emulator, all 9 run on both libraries. `showcase-gas
 
 ## Results
 
-None yet.
+First session, 2026-11-07, on the Net Yaroze kit, booted from the original disc with its saved 115200 baud. The adapter is a Prolific PL2303 (`usb-Prolific_Technology_Inc._USB-Serial_Controller_D`). The console was reached from `serial` on go.bug.st/serial v1.8.0, with `DevicePacing`. The clean library is the committed `link/libps.exe.gz` of `f60e194`. The loopback test wasn't run, and `/dev/ttyUSB0` needed access granted first, since this account isn't in `dialout`.
+
+- **The cable and the tools work** on the first try. `dw` answers in about 115 ms. Writes of 256, 4,096 and 65,536 bytes read back right at both ends, the largest at 6.6 KB/s. No RTS was used.
+- **`serial.TakeOver` works on the console, with no reset.** Afterward `dw 80068000 4` answers 240bffff, our monitor's first word, and the prompt is back.
+- **The clean library runs on a real console,** and draws the same picture: the scene hash is 882646469 on both libraries, and on the emulator.
+- **Three runs repeat closely.** Clean twice gives readings within a few counts of each other, and `divdf3`'s are identical.
+
+Medians of the five readings, in the system clock with interrupts off. Sin and Sqrt are in eighths of it. Each includes the `null` reading.
+
+| Reading | Emulator, Sony | Emulator, clean | Console, Sony | Console, clean |
+|---|---|---|---|---|
+| null | 20 | 20 | 36 | 36 |
+| loadRAM | 2074 | 2074 | 2363 | 2363 |
+| storeRAM | 2076 | 2076 | 1052 | 1052 |
+| rand | 56 | 56 | 69 | 69 |
+| GetClut | 46 | 46 | 42 | 42 |
+| GetTPage | 134 | 134 | 125 | 139 |
+| GsGetActiveBuff | 40 | 40 | 46 | 47 |
+| GsSetWorkBase | 42 | 42 | 44 | 45 |
+| GsInitCoordinate2 | 86 | 86 | 164 | 119 |
+| TransMatrix | 56 | 56 | 77 | 67 |
+| RotMatrix | 288 | 286 | 271 | 346 |
+| MulMatrix0 | 170 | 170 | 230 | 191 |
+| ApplyMatrix | 88 | 88 | 120 | 111 |
+| RotTransPers | 75 | 75 | 81 | 81 |
+| memmove256 | 2106 | 2108 | 1085 | 1086 |
+| addsf3 | 186 | 186 | 162 | 148 |
+| muldf3 | 3898 | 3880 | 4498 | 5424 |
+| divdf3 | 19616 | 19616 | 24731 | 9827 |
+| GsSortLine | 514 | 548 | 898 | 904 |
+| GsSortBoxFill | 514 | 514 | 961 | 554 |
+| GsSortSprite | 1364 | 1356 | 2201 | 1518 |
+| Sin | 32077 | 32516 | 39580 | 31645 |
+| Sqrt | 26391 | 27332 | 32765 | 33236 |
+
+What this shows, and what it doesn't yet:
+
+- **The emulator's cost model is far from a console's.** Stores and copies cost about twice what they should, loads about 12% too little, and the routines that write to the GPU's packet area run about 1.7 times slower on a console than in the emulator.
+- **Agreeing in the emulator doesn't mean agreeing on a console.** Reading by reading, the two libraries that the emulator has equal differ by up to 2.5 times here. `divdf3` is the extreme, and `GsSortBoxFill`, `GsSortSprite` and `Sin` are also much faster on clean, while `RotMatrix` and `muldf3` are slower. So cycle matching against the emulator doesn't carry over, and any more of it should wait for a better cost model.
+- **Why isn't known.** The instruction cache, with each library's own layout, and the RAM's and bus's costs are the suspects, and nothing has separated them. A difference in these readings may belong to the code or only to where it sits.
