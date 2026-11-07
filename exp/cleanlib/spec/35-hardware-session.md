@@ -196,7 +196,9 @@ Medians of the five readings, in the system clock with interrupts off. Sin and S
 | `scee-topten-adven` | 2 min 21 s | `ResetGraph` | reset from the cable |
 | `pssoft-airbob-2-airbob` | 1 min 42 s | `ResetGraph`, the pad driver | reset from the cable |
 
-`showcase-gasgar` returns to the monitor on the clean library on a console, as in the emulator, where Sony's keeps it running. It's a difference in behavior, and isn't explained. `demos-scee-tunelfin` reached `level updating` 2 in 45 s, where the emulator reaches 4.
+`showcase-gasgar` returns to the monitor on the clean library on a console, as in the emulator, where Sony's keeps it running. It's a difference in behavior, and isn't explained. Watched on the TV in a second run, it shows nothing: the screen stays black from upload to the prompt, so it leaves during its startup, before its first frame.
+
+**Watched on the TV:** `pssoft-terra-2` looked normal, and the reboot from the cable went to the boot disc's screens as a press of reset does. The screen is black while the library goes in and while a program uploads, since our monitor draws nothing. `demos-scee-tunelfin` reached `level updating` 2 in 45 s, where the emulator reaches 4.
 
 **Unexplained:** while Terra uploaded, the TV showed solid bright blue, where the probe's last picture should be dark blue (20, 20, 60) with a smaller bright box, a line and a sprite. Terra's picture then replaced it. It may be the TV's own no-signal color. That hasn't been checked.
 
