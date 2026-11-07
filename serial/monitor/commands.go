@@ -332,6 +332,22 @@ func setRegister(args [][]byte) {
 	line.puts("\r\n")
 }
 
+// stackClear is how much of a program's stack go zeroes before starting it.
+const stackClear = 0x4000
+
+// clearStack zeroes the stackClear bytes below a program's stack pointer. Some
+// programs read their stack before they set it, and what was left there
+// otherwise is what the boot disc's monitor and TakeOver's loader left, which
+// sends showcase-gasgar down its quit path at once. The monitor's own stack
+// is below 80090000h, so this is clear of it.
+func clearStack(sp uint32) {
+	from := (sp - stackClear) &^ 3
+	words := unsafe.Slice((*uint32)(yaroze.Pointer(uintptr(from))), stackClear/4)
+	for i := range words {
+		words[i] = 0
+	}
+}
+
 // start is go: it starts the program at the stored epc, with the stored
 // gp and sp, and starts the monitor again if the program returns. A Control-C
 // from the host while it runs resets the console (installVector).
@@ -340,6 +356,7 @@ func start() {
 	if sp == 0 {
 		sp = defaultStack
 	}
+	clearStack(sp)
 	setWatching(1)
 	installVector()
 	flushCache()
