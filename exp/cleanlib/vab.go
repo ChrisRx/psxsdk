@@ -55,10 +55,6 @@ type vab struct {
 
 	// base and size are the bank's sound memory.
 	base, size uint32
-
-	// halves is how many of the header's VAG address halves a key on reads:
-	// two for each of the programs the header counted at SsVabTransfer.
-	halves int
 }
 
 var vabs [vabMax]vab
@@ -82,19 +78,14 @@ func (b *vab) programs() int {
 // SsUtKeyOn.
 const vagNoise = 0xff
 
-// vagHalves is the table of VAG address halves a key on reads, by the rules
-// of half.
+// vagHalves is how many VAG address halves the program entries hold.
 const vagHalves = 256
 
 // half returns the VAG address half h, in 8-byte units of sound memory: the
 // halves at bytes 12 to 15 of the program entries, taken in sequence, hold
-// the VAGs' addresses from the first entry's first half. Only the first
-// b.halves are read from the header, and the rest of the table holds FFFFh
-// whatever the header does (spec 05, "The VAG index").
+// the VAGs' addresses from the first entry's first half, whatever the bank's
+// program count. One past the 128 entries gives 0 (spec 05, "The VAG index").
 func (b *vab) half(h int) uint16 {
-	if h >= b.halves && h < vagHalves {
-		return 0xffff
-	}
 	if h >= vagHalves {
 		return 0
 	}
@@ -181,7 +172,9 @@ func memFree(addr, size uint32) {
 // result is a whole word here and in the other sound calls, though the C
 // headers say short: a Go int16 comes back with the high half of v0 clear,
 // where Sony's -1 is all 32 bits (spec 23). The header has to be on a word
-// boundary, as Sony's does: at an offset of 2 its call never returns.
+// boundary, as Sony's does: at an offset of 2 its call never returns. A VAG
+// count of 0 or above 255, or sizes that come to nothing, are refused before
+// anything is written or taken (spec 36).
 //
 //export SsVabTransfer
 func SsVabTransfer(vh, vb *uint8, vabid, mode int16) int32 {
@@ -208,13 +201,16 @@ func SsVabTransfer(vh, vb *uint8, vabid, mode int16) int32 {
 	ps := int(*(*uint16)(unsafe.Add(h, 18)))
 	b.mvol = *(*uint8)(unsafe.Add(h, 24))
 	b.hdr = h
-	b.halves = 2 * ps
 	b.progs = (*[vabPrograms]vabProg)(unsafe.Add(h, vabHeader))
 	b.tones = unsafe.Add(h, vabHeader+vabPrograms*vabProgSize)
 	sizes := (*[256]uint16)(unsafe.Add(b.tones, ps*vabTones*vabToneSize))
 	var total uint32
 	for i := 1; i < 256; i++ {
 		total += uint32(sizes[i]) << 3
+	}
+	vs := int(*(*uint16)(unsafe.Add(h, 22)))
+	if vs == 0 || vs > 255 || total == 0 {
+		return -1
 	}
 	base, ok := memAlloc(total)
 	if !ok {
@@ -234,7 +230,6 @@ func SsVabTransfer(vh, vb *uint8, vabid, mode int16) int32 {
 			k++
 		}
 	}
-	vs := int(*(*uint16)(unsafe.Add(h, 22)))
 	at := base
 	for i := 1; i < 256; i++ {
 		if i <= vs+1 {
