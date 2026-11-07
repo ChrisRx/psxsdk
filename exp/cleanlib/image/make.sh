@@ -65,8 +65,23 @@ python3 -I "$HERE/gen.py" . "$OUT" "$OUT/exports.txt"
 link
 link
 cp "$SYS/map.txt" "$OUT/map1.txt"
+# The public entry points alone, for the comparison tools to name calls by: tools
+# on the implementation side read this rather than the map.
+awk 'NF == 5 && $5 ~ /^\.fix\./ { print $1, substr($5, 6) }' "$OUT/map1.txt" > "$OUT/entries.txt"
 python3 -I "$HERE/gen.py" . "$OUT" "$OUT/exports.txt" "$OUT/map1.txt"
 link
+# One more link, for the first instructions that go in delay slots: the stubs' sizes
+# don't change, so nothing moves, and generating again has to give the same stubs.
+heads() {
+  cp "$SYS/map.txt" "$OUT/map2.txt"
+  go run ./"$HERE"/imgtool "$WORK/prog.elf" "$WORK/flat.exe" >/dev/null
+  python3 -I "$HERE/gen.py" . "$OUT" "$OUT/exports.txt" "$OUT/map1.txt" "$OUT/map2.txt" "$WORK/flat.exe" >/dev/null
+}
+heads
+cp "$OUT/playstation-yaroze-cleanimage.S" "$WORK/stubs.S"
+link
+heads
+cmp "$WORK/stubs.S" "$OUT/playstation-yaroze-cleanimage.S"
 cp "$WORK/prog.elf" "$OUT/image.elf"
 go run ./tools/mips1fix "$OUT/image.elf" | tail -1
 go run ./"$HERE"/imgtool "$OUT/image.elf" "$OUT/libps.exe"

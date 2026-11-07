@@ -20,7 +20,7 @@ with `PSX_BIOS` at the retail BIOS and `$PWD/../../../../.build/carchive/probete
   call of both images, the cycles from "Execute !", until cycle 3,800,000.
 - `ARCHIVE_COSTS="NAME:FRAMES..." -test.run 'TestArchiveCosts' -test.v` compares the time
   in each library entry over a program's first frames, largest difference first. The
-  public entry names are all it prints. Do not look in `map1.txt` yourself.
+  public entry names are all it prints.
 
 ## GsLinkObject4 changes the model
 
