@@ -35,6 +35,7 @@ package transform
 import (
 	"fmt"
 	"go/scanner"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -52,8 +53,8 @@ func CheckFrameAllocs(mod llvm.Module) []error {
 
 	// The functions that wait for the screen, and those that allocate, by
 	// way of direct calls.
-	waits := callersOf(vsync)
-	allocates := callersOf(alloc)
+	waits := callersOf(vsync, nil)
+	allocates := callersOf(alloc, allocatesOnPurpose)
 
 	// Function values, by type, for the calls through one.
 	values := make(map[llvm.Type][]llvm.Value)
@@ -149,7 +150,11 @@ func CheckFrameAllocs(mod llvm.Module) []error {
 					if callee := c.CalledValue(); !callee.IsAFunction().IsNil() {
 						what = shortName(callee.Name())
 					}
-					site, in = c, ""
+					in = ""
+					if pos := keepsError(call, "").Pos; pos.Line > 0 {
+						in = fmt.Sprintf(", at %s:%d", filepath.Base(pos.Filename), pos.Line)
+					}
+					site = c
 					break
 				}
 			}
@@ -197,8 +202,9 @@ func allocatesOnPurpose(fn llvm.Value) bool {
 }
 
 // callersOf returns fn and the functions that call it, directly or through
-// functions that do.
-func callersOf(fn llvm.Value) map[llvm.Value]bool {
+// functions that do, but not through a function skip reports, nor that
+// function itself.
+func callersOf(fn llvm.Value, skip func(llvm.Value) bool) map[llvm.Value]bool {
 	set := map[llvm.Value]bool{fn: true}
 	work := []llvm.Value{fn}
 	for len(work) > 0 {
@@ -209,7 +215,7 @@ func callersOf(fn llvm.Value) map[llvm.Value]bool {
 				continue
 			}
 			caller := use.InstructionParent().Parent()
-			if !set[caller] {
+			if !set[caller] && (skip == nil || !skip(caller)) {
 				set[caller] = true
 				work = append(work, caller)
 			}

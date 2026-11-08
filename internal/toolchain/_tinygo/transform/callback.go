@@ -35,7 +35,7 @@ func CheckCallbacks(mod llvm.Module) []error {
 	alloc := mod.NamedFunction("runtime.alloc")
 	var allocates map[llvm.Value]bool
 	if !alloc.IsNil() {
-		allocates = callersOf(alloc)
+		allocates = callersOf(alloc, nil)
 	}
 
 	// The functions the interrupt runs, and the call that first reaches

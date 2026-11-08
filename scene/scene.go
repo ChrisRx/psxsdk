@@ -192,7 +192,8 @@ type Scene struct {
 	name string // the disc file the scene came from, when it is one of files
 
 	// Missing is the disc path Load could not find loaded among its files,
-	// when it returns ErrMissing.
+	// when it returns ErrMissing: the scene's own memory, good until the
+	// next Load.
 	Missing string
 
 	objectNames [MaxObjects][16]byte
@@ -203,9 +204,15 @@ type Scene struct {
 	objectFields [MaxObjects][2]int32
 	ready        bool
 
-	// What Load was given, for reload.
-	data []uint32
-	src  Source
+	// What Load was given, for reload, and the files LoadFiles was given,
+	// for src to point at.
+	data  []uint32
+	src   Source
+	files Files
+
+	// path holds the disc path parse is looking up, and missingPath the one
+	// Missing names.
+	path, missingPath [32]byte
 }
 
 // A Layer is one of the scene's tile maps: the library's background, whose
@@ -371,11 +378,10 @@ func (s *Scene) Ready() bool { return s.ready }
 // read and ErrMissing, with Missing set, for a texture or model src does
 // not have or has not loaded.
 //
-// What it allocates is never freed, as with any allocation here, but a
-// frame loop may call it to change the level, which the pragma below tells
-// the build.
-//
-//go:allocates
+// It allocates nothing, so a frame loop may call it to change the level;
+// the Source it is given it keeps, for Reload, so that one made for the
+// call, as scene.Files(files) is, is allocated each time. LoadFiles keeps
+// the disc's files in the scene instead.
 func (s *Scene) Load(data []uint32, src Source) error {
 	if err := s.parse(data, src); err != nil {
 		return err
@@ -394,6 +400,14 @@ func (s *Scene) Load(data []uint32, src Source) error {
 	return nil
 }
 
+// LoadFiles is Load with the files registered with package disc as the
+// source, kept in the scene, so that changing the level allocates no
+// Source for them, as scene.Files(files) would each time.
+func (s *Scene) LoadFiles(data []uint32, files []*disc.File) error {
+	s.files = files
+	return s.Load(data, &s.files)
+}
+
 // Name is the disc path of the file the scene was loaded from, when the
 // data given to Load was one of its files, or "".
 func (s *Scene) Name() string { return s.name }
@@ -403,9 +417,7 @@ func (s *Scene) Name() string { return s.name }
 // did, so that a program that draws a room through its own stage.Setting
 // can load the room again. Draw calls it; a program that does not Draw
 // calls it itself each frame. A file it cannot read leaves the scene as
-// it was. Like Load, it allocates when it reads the file again.
-//
-//go:allocates
+// it was.
 func (s *Scene) Reload() bool {
 	if live.scene != s || volatile.LoadUint32(&live.reload) == 0 {
 		return false
@@ -485,9 +497,9 @@ func (s *Scene) parse(data []uint32, src Source) error {
 	at := headerWords
 	s.NTextures = nt
 	for i := range nt {
-		w := src.Lookup(pathString(data[at : at+pathWords]))
+		w := src.Lookup(s.pathString(data[at : at+pathWords]))
 		if w == nil {
-			s.Missing = pathString(data[at : at+pathWords])
+			s.Missing = s.missing(data[at : at+pathWords])
 			return ErrMissing
 		}
 		s.Textures[i] = yaroze.TIM(w)
@@ -495,9 +507,9 @@ func (s *Scene) parse(data []uint32, src Source) error {
 	}
 	s.NModels = nm
 	for i := range nm {
-		w := src.Lookup(pathString(data[at : at+pathWords]))
+		w := src.Lookup(s.pathString(data[at : at+pathWords]))
 		if w == nil {
-			s.Missing = pathString(data[at : at+pathWords])
+			s.Missing = s.missing(data[at : at+pathWords])
 			return ErrMissing
 		}
 		s.Models[i] = yaroze.TMD(w)
@@ -790,10 +802,19 @@ func nameString(name *[16]byte) string {
 	return unsafe.String(&name[0], n)
 }
 
-// pathString is a disc path from its padded words; it allocates, and is
-// only for Missing.
-func pathString(words []uint32) string {
-	var b [32]byte
+// missing returns the disc path in words for Missing, a string over the
+// scene's own buffer, so that a failed load allocates nothing either.
+func (s *Scene) missing(words []uint32) string {
+	p := s.pathString(words)
+	copy(s.missingPath[:], p)
+	return unsafe.String(&s.missingPath[0], len(p))
+}
+
+// pathString is a disc path from its padded words, as a string over the
+// scene's own buffer, good until the next one: a Source only looks it up,
+// and a frame loop that loads a level allocates nothing for it.
+func (s *Scene) pathString(words []uint32) string {
+	b := &s.path
 	for i, w := range words {
 		b[4*i], b[4*i+1], b[4*i+2], b[4*i+3] = byte(w), byte(w>>8), byte(w>>16), byte(w>>24)
 	}
@@ -801,12 +822,13 @@ func pathString(words []uint32) string {
 	for n < len(b) && b[n] != 0 {
 		n++
 	}
-	return string(b[:n])
+	return unsafe.String(&b[0], n)
 }
 
 // A Source gives a scene its textures and models: the words a file has
 // been loaded into, by the file's disc path, or nil for one it does not
-// have or has not loaded.
+// have or has not loaded. The path is good for the call only, a string
+// over the scene's own buffer, and a Source that keeps a name copies it.
 type Source interface {
 	Lookup(path string) []uint32
 }
@@ -850,12 +872,17 @@ type Archive struct {
 	words [MaxTextures + MaxModels][]uint32
 }
 
-// NewArchive makes an opened archive a Source. It allocates the Source, as
-// Load allocates what it loads.
+// NewArchive makes an opened archive a Source. It allocates the Source, so
+// it is made once, which the pragma tells the build.
 //
 //go:allocates
 func NewArchive(a archive.Archive) *Archive { return &Archive{a: a} }
 
+// Lookup finds the entry the path names, unpacking a packed one into new
+// memory the first time and keeping it, so that the archive allocates at
+// most once an entry, however often a scene is loaded.
+//
+//go:allocates
 func (ar *Archive) Lookup(path string) []uint32 {
 	name := path
 	for i := len(path) - 1; i >= 0; i-- {
@@ -881,7 +908,7 @@ func (ar *Archive) Lookup(path string) []uint32 {
 		}
 	}
 	if ar.n < len(ar.names) {
-		ar.names[ar.n] = name
+		ar.names[ar.n] = e.Name // the archive's own, not path, which is the caller's
 		ar.words[ar.n] = w
 		ar.n++
 	}
