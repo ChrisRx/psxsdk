@@ -11,11 +11,16 @@ import (
 )
 
 // The fixtures task build:hot writes: v1 built with --hot onto a disc,
-// its ELF, and the patch for v2 built against it.
+// its ELF, and the patch for v2 built against it; and the same for v3 and
+// v4.
 const (
 	disc  = "../../.build/hot/v1.cue"
 	base  = "../../.build/hot/prog.elf"
 	patch = "../../.build/hot/v2.patch.elf"
+
+	disc3  = "../../.build/hot/v3.cue"
+	base3  = "../../.build/hot/prog3.elf"
+	patch4 = "../../.build/hot/v4.patch.elf"
 )
 
 // TestPatch runs v1, which prints a line on teal and counts frames, and
@@ -66,4 +71,37 @@ func TestPatch(t *testing.T) {
 	assert.Equal(t, true, bg.R > 150 && bg.B < 50, "v2's background is orange, not %v", bg)
 	assert.Equal(t, true, m.Read32(m.Sym("main.frames")) > count, "v2 should keep counting")
 	m.RunFrames(60)
+}
+
+// TestPatchMainLocals runs v3, which counts in a struct made in main, and
+// applies v4's patch, which makes a new object before that one and counts
+// by two on orange: the count goes on from where it was, since the running
+// loop body's captured struct is v3's, whatever the patch calls its
+// globals, and the new body counts in it.
+func TestPatchMainLocals(t *testing.T) {
+	data, err := os.ReadFile(patch4)
+	if err != nil {
+		t.Skipf("no patch to apply (run task build:hot): %v", err)
+	}
+	p, err := hot.Parse(data)
+	assert.NoError(t, err)
+
+	m := emutest.Boot(t, emutest.BIOS(emutest.BIOSFromEnv(t)), emutest.Disc(disc3), emutest.Symbols(base3))
+	m.RunUntilTTY("Execute !", 30*emutest.Second)
+	m.RunUntilCount("main.frames", 30, 20*emutest.Second)
+	before := m.Read32(m.Sym("main.frames"))
+	bg := m.Display().RGBAAt(300, 200)
+	assert.Equal(t, true, bg.R < 100 && bg.B > 100, "v3's background is teal, not %v", bg)
+
+	applied := false
+	p.ApplyAt(m.Machine, func() { applied = true })
+	m.RunFrames(2)
+	assert.Equal(t, true, applied, "the patch should have been applied at VSync")
+	at := m.Read32(m.Sym("main.frames"))
+	assert.Equal(t, true, at >= before, "the count should go on from v3's, not start again: %d after %d", at, before)
+	m.RunFrames(10)
+	later := m.Read32(m.Sym("main.frames"))
+	assert.Equal(t, true, later-at >= 18 && later-at <= 22, "v4 should count by two: %d in 10 frames", later-at)
+	bg = m.Display().RGBAAt(300, 200)
+	assert.Equal(t, true, bg.R > 150 && bg.B < 50, "v4's background is orange, not %v", bg)
 }
