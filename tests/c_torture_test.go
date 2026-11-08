@@ -72,7 +72,7 @@ var tortureYarozeExpected = map[string]tortureFailure{
 }
 
 // GCC's own c-torture execute tests, compiled by the GCC 2.95.3 from the
-// mipsel-ecoff-toolchain repository and run in the emulator. Each program checks
+// yaroze-toolchain repository and run in the emulator. Each program checks
 // its own results and aborts on a wrong one, so unlike comparing compilers this
 // holds the compiler to the right answer, and it can find what a whole family of
 // builds gets wrong: a misaligned _end and a broken conversion in libgcc were

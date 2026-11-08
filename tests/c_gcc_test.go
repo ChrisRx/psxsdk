@@ -49,7 +49,7 @@ var gccCFlags = []string{
 // as "exact:", for adding to the list.
 //
 // PSX_WEBARCHIVE is the archive's site directory. PSX_GCC is an SDK installed
-// from the mipsel-ecoff-toolchain repository, by make install or nix
+// from the yaroze-toolchain repository, by make install or nix
 // build .#libyaroze, with mipsel-none-elf-gcc on PATH. It takes a while:
 //
 //	go test ./tests -run TestCMatchesGCC -timeout 60m -parallel 10
