@@ -1122,7 +1122,7 @@ new file mode 100644
 index 0000000..6e68fa1
 --- /dev/null
 +++ b/cmd/tinygo-wasm/main.go
-@@ -0,0 +1,164 @@
+@@ -0,0 +1,168 @@
 +// Command tinygo-wasm is the TinyGo compiler as a WebAssembly program: the
 +// build command alone, for compiling a program in a browser.
 +//
@@ -1154,6 +1154,7 @@ index 0000000..6e68fa1
 +
 +	"github.com/tinygo-org/tinygo/builder"
 +	"github.com/tinygo-org/tinygo/compileopts"
++	"github.com/tinygo-org/tinygo/diagnostics"
 +	"github.com/tinygo-org/tinygo/goenv"
 +	"github.com/tinygo-org/tinygo/loader"
 +)
@@ -1276,7 +1277,10 @@ index 0000000..6e68fa1
 +		fmt.Fprintf(os.Stderr, "memstats: NumGC %d, Sys %d MB, HeapSys %d MB, HeapInuse %d MB, TotalAlloc %d MB, Mallocs %d\n", m.NumGC, m.Sys>>20, m.HeapSys>>20, m.HeapInuse>>20, m.TotalAlloc>>20, m.Mallocs)
 +	}
 +	if err != nil {
-+		fmt.Fprintln(os.Stderr, "error:", err)
++		// Each error of the build on a line of its own, as the tinygo
++		// command prints them, rather than only the first, with paths
++		// relative to the host's directory when it says, in PWD.
++		diagnostics.CreateDiagnostics(err).WriteTo(os.Stderr, os.Getenv("PWD"))
 +		return 1
 +	}
 +	if result.Binary != "" && result.Binary != *output {
