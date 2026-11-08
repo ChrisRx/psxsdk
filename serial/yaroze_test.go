@@ -259,6 +259,19 @@ func TestPacing(t *testing.T) {
 	assert.Equal(t, true, time.Since(start) >= 60*time.Millisecond, "the load, header and two blocks should each pause")
 }
 
+func TestAwaitBusy(t *testing.T) {
+	f, p, _ := setup(t)
+	f.cts = false
+	start := time.Now()
+	assert.NoError(t, p.awaitBusy(t.Context(), time.Second))
+	assert.Equal(t, true, time.Since(start) < 100*time.Millisecond, "a console that has lowered CTS ends the wait")
+
+	f.cts = true
+	start = time.Now()
+	assert.NoError(t, p.awaitBusy(t.Context(), 20*time.Millisecond))
+	assert.Equal(t, true, time.Since(start) >= 20*time.Millisecond, "one that keeps CTS up costs the whole wait")
+}
+
 func TestOpenProgram(t *testing.T) {
 	dir := t.TempDir()
 
