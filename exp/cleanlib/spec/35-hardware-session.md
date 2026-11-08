@@ -207,3 +207,29 @@ What this shows, and what it doesn't yet:
 - **The emulator's cost model is far from a console's.** Stores and copies cost about twice what they should, loads about 12% too little, and the routines that write to the GPU's packet area run about 1.7 times slower on a console than in the emulator.
 - **Agreeing in the emulator doesn't mean agreeing on a console.** Reading by reading, the two libraries that the emulator has equal differ by up to 2.5 times here. `divdf3` is the extreme, and `GsSortBoxFill`, `GsSortSprite` and `Sin` are also much faster on clean, while `RotMatrix` and `muldf3` are slower. So cycle matching against the emulator doesn't carry over, and any more of it should wait for a better cost model.
 - **Why isn't known.** The instruction cache, with each library's own layout, and the RAM's and bus's costs are the suspects, and nothing has separated them. A difference in these readings may belong to the code or only to where it sits.
+
+### Evening, 2026-11-07: the monitor's screen and gasgar
+
+**The monitor's screen.** `227484f` added a purple CLEAN MONITOR screen, drawn straight to the GPU, so that a black TV can't be mistaken for a fault. It showed in the emulator. On the console it didn't:
+
+- The monitor never sent its greeting, and `hwrun` couldn't take over. The TV kept the boot disc monitor's last screen, shifted a little to the right. With the greeting moved before the drawing, the monitor answered, and the TV did the same.
+- GPUSTAT, read through the monitor, was 10022400h. Bit 10 shows GP0(E1h) took effect and the display settings did too, which is the shift. Bit 26, ready for a command, stayed 0, so the drawing loop gave up and turned the display on over the old picture.
+- By hand, `sw 1f801814 01000000` (GP1(01h), reset the command buffer) set bit 26, and a GP0(02h) fill then turned the TV purple, which the user saw as lavender on the 10-inch Sony monitor. So a command the GPU was partway through taking, from the boot disc's monitor, blocks it, and GP1(00h) doesn't drop it on a console.
+- With GP1(01h) put straight after GP1(00h) in the code, the console was stuck the same way: GPUSTAT 90022400h. Replayed by hand afterward, one command at a time, GP1(01h), E1h, E3h, E4h and E5h each left bit 26 set. So it's likely the timing: GP1(01h) sent while GP1(00h) is still under way. That isn't proved.
+- The working tree's version waits after each reset, resets the command buffer again if the GPU won't take a word, and if it still won't, leaves the GPU with its buffer reset and the display off, so that a program's `ResetGraph` isn't blocked. Not yet tried on a console.
+
+**gasgar.** The fix in `227484f`, zeroing the 16 KB under a program's stack, isn't tested on a console yet. In both runs with the screen code, gasgar printed the pad driver line and no `ResetGraph` in 45 s, where before the screen code it printed `ResetGraph` twice and left. The GPU the screen code left blocked would stop `ResetGraph`, so those runs say nothing about the stack. The TV showed the shifted old picture throughout.
+
+**Rebooting from the monitor.** `sr epc bfc00000` and then `go`, typed to the clean monitor, reboots the console from the disc, as the serial reset does, with no button. That's how the console was brought back to Sony's monitor to load a new clean monitor. `hwrun` only takes over when the word at 80068000h isn't the clean monitor's, which is the same in every build, so a console with an older clean monitor keeps it until it's rebooted.
+
+**Sony's monitor draws on the TV:** the boot disc's monitor shows each command and transfer on screen (`ADRS`, `SIZE`, `INTO BURST TRANSFER`, a sum, `DONE.`), on a semitransparent panel.
+
+**The adapter** is USB 067b:2303. `/dev/ttyUSB0` is root's and group `dialout`'s, and this account isn't in that group. The user plans a udev rule (`TAG+="uaccess"` on that ID) so access doesn't need granting at each plug-in.
+
+**Next session, in order:**
+
+1. Boot the disc and connect. Check the clean monitor's screen: the purple CLEAN MONITOR, or at worst a black screen with the monitor answering.
+2. `showcase-gasgar` on the clean library, watched, for the stack fix.
+3. Try one small `ReadMemory`, which is the only use of RTS from the host and the only thing the loopback test would still answer. If it stalls, nothing else needs it.
+4. The same programs on Sony's library, one reset press each, for the comparison.
+
