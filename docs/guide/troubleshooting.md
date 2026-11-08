@@ -47,11 +47,17 @@ Sony's [checklist for models](../manuals/faq.md#why-cant-i-see-my-3d-model):
 
 A Go panic on the console prints its message and stops, and the picture freezes. The message is in what `psxemu` prints, and in `TTY()` from a test. The usual one is an index out of range, often from code written after C, which let a program read one past the end of an array. The emulator reports an illegal instruction or a misaligned access where it happens, with the registers and the instructions before it.
 
-"out of memory" is the heap: the files a program loads and anything allocated, which is never freed. Allocating in the frame loop runs out in time. Passing the address of a local variable to a library function allocates it on every call, so a program keeps such things in package-level variables.
+"out of memory" is the heap: the files a program loads and anything allocated, which is never freed. Allocating in the frame loop runs out in time. A variable whose address is only passed to the library stays on the stack, but one the library keeps after the call, such as the packet area `GsSetWorkBase` is given, has to outlive the function it is made in, so it is allocated wherever it is made. Made in the frame loop, it would be allocated every frame, which the build refuses, as `yaroze vet` does: such things belong in package-level variables, or in `main`.
+
+A build that stops with "... allocates each time the frame loop runs it" has found such an allocation: in the program's own code, a call of the standard library, such as `strconv.Itoa` or `+` on strings, or a call in package `main` of another package's function that allocates. Make what it makes once, before the loop, in a package-level variable or a variable of `main`, and reuse it: a `yaroze.Buffer` for text, an array for what a slice would hold. A function that allocates on purpose, as loading a level does, says so with `//go:allocates` in its doc comment, and the frame loop may call it. `scene.Scene.Load` has it.
+
+A build that stops with "... allocates in ..., which the vertical blank interrupt runs" or "... waits, in ..., which the vertical blank interrupt runs" is about the func given to `yaroze.OnVSync`: it runs with interrupts off, so it must not allocate, nor wait for anything, which would never come. Allocate before installing it, and wait in the frame loop.
+
+A build that stops with "GsSetWorkBase keeps outpacketp, so the variable passed is allocated each time ... runs here" or "LoadImage goes on with p until DrawSync, but the variable passed is on the stack of ..." is the same rule: the library keeps the variable, from a call such as `GsSetWorkBase` or `LoadImage`, longer than the function it belongs to runs. Make it a package-level variable or a variable of `main`, or, for `LoadImage` and `StoreImage`, call `DrawSync` before the function returns.
 
 ## It is slow
 
-`psxemu --profile` shows where a frame's time goes. Ranging over a large array by value copies it on every iteration, so range over a pointer to it. Floating point is emulated, so the arithmetic is fixed point. `--polygons` counts what the GPU drew each frame. `Screen.Interval` of 2 halves the frame rate evenly when a frame cannot fit.
+`psxemu --profile` shows where a frame's time goes. Ranging over a large array by value copies it each time the loop runs, so range over a pointer to it. Floating point is emulated, so the arithmetic is fixed point. `--polygons` counts what the GPU drew each frame. `Screen.Interval` of 2 halves the frame rate evenly when a frame cannot fit.
 
 ## No sound
 

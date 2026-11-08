@@ -32,14 +32,38 @@ func FntPrint(s *byte) int32
 //export KanjiFntPrint
 func KanjiFntPrint(s *byte) int32
 
-// VSyncCallback installs f to run at the start of every vertical blank,
-// or removes the callback with f 0. It takes an address rather than a Go
-// func, because the caller is C and a Go func value is a pair. Interrupts
-// are off while f runs, so it must be quick, and it must not allocate or
-// block.
+// VSyncCallback installs the C function at f to run at the start of every
+// vertical blank, or removes the callback with f 0. A Go program uses
+// OnVSync, which installs one that calls a Go func.
 //
 //export VSyncCallback
 func VSyncCallback(f uintptr)
+
+// OnVSync has f run at the start of every vertical blank, from the
+// library's interrupt, or stops it with nil. Interrupts are off while f
+// runs, so it must be quick, and it must not allocate or wait for anything,
+// which the build refuses in f and in what it calls.
+func OnVSync(f func()) {
+	VSyncCallback(0) // f is two words, not to be called half written
+	vsyncFunc = f
+	if f != nil {
+		h := vsyncHandler
+		VSyncCallback((*[2]uintptr)(unsafe.Pointer(&h))[1])
+	}
+}
+
+// vsyncFunc is what OnVSync was given.
+var vsyncFunc func()
+
+// vsyncHandler is what the library calls, a function and not a closure, so
+// that its address alone is enough to call it: a Go func value is the
+// address and a context, which a C caller does not pass, and which a
+// function that is not a closure does not use.
+func vsyncHandler() {
+	if f := vsyncFunc; f != nil {
+		f()
+	}
+}
 
 // GsGetWorkBase returns the next free byte of the packet area handed to
 // GsSetWorkBase, which is how much of it the frame has used so far.
@@ -170,7 +194,13 @@ func CdControlB(com uint8, param *uint8, result *uint8) int32
 // in the given mode, and returns 0 if the read could not be started. The
 // read goes on in the background, and CdReadSync waits for it.
 //
+// The library goes on with buf after it returns, until CdReadSync, so a
+// variable passed as buf has to outlive that: one of a function other than
+// main needs CdReadSync before the function returns. yaroze vet and the
+// build say where a program does otherwise.
+//
 //export CdRead
+//go:keeps buf CdReadSync
 func CdRead(sectors int32, buf *uint32, mode int32) int32
 
 // CdIntToPos converts a sector number to the position the drive takes, in

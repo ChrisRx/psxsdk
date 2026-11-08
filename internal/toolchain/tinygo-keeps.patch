@@ -1,0 +1,139 @@
+--- a/compiler/symbol.go
++++ b/compiler/symbol.go
+@@ -38,6 +38,10 @@
+ 	noheap        bool       // go:noheap
+ 	variadic      bool       // go:variadic (CGo only)
+ 	inline        inlineType // go:inline
++
++	// go:keeps: each parameter named, and the function after which it is
++	// not kept, if any.
++	keeps map[string]string
+ }
+ 
+ type inlineType int
+@@ -275,10 +279,24 @@
+ 		nocapture := c.ctx.CreateEnumAttribute(nocaptureKind, 0)
+ 		for i, typ := range paramTypes {
+ 			if typ.TypeKind() == llvm.PointerTypeKind {
++				// A parameter a //go:keeps pragma names is marked for
++				// transform.CheckKeeps, and one kept for good is left able
++				// to escape, so that what is passed to it lives on.
++				until, kept := info.keeps[paramInfos[i].name]
++				if kept {
++					llvmFn.AddAttributeAtIndex(i+1, c.ctx.CreateStringAttribute("tinygo-keeps", strings.TrimSpace(paramInfos[i].name+" "+until)))
++					delete(info.keeps, paramInfos[i].name)
++					if until == "" {
++						continue
++					}
++				}
+ 				llvmFn.AddAttributeAtIndex(i+1, nocapture)
+ 			}
+ 		}
+ 	}
++	for name := range info.keeps {
++		c.addError(fn.Pos(), fmt.Sprintf("//go:keeps names %s, which is not a pointer parameter of this exported declaration", name))
++	}
+ 
+ 	// Build the function if needed.
+ 	c.maybeCreateSyntheticFunction(fn, llvmFn)
+@@ -543,6 +561,22 @@
+ 			if slices.Contains(f.Pkg.Pkg.Imports(), types.Unsafe) {
+ 				info.nobounds = true
+ 			}
++		case "//go:keeps":
++			// The PlayStation targets' bindings: a parameter the C function
++			// keeps after it returns, which cgo's rule would have it not,
++			// and the function after which it no longer does, if any.
++			if (len(parts) != 2 && len(parts) != 3) || len(f.Blocks) != 0 {
++				c.addError(f.Pos(), "//go:keeps takes a parameter and maybe a function, on a declaration")
++				continue
++			}
++			if info.keeps == nil {
++				info.keeps = make(map[string]string)
++			}
++			until := ""
++			if len(parts) == 3 {
++				until = parts[2]
++			}
++			info.keeps[parts[1]] = until
+ 		case "//go:noescape":
+ 			// Don't let pointer parameters escape.
+ 			// Following the upstream Go implementation, we only do this for
+--- a/compiler/compiler.go
++++ b/compiler/compiler.go
+@@ -186,6 +186,7 @@
+ 	unwindReturn       llvm.BasicBlock
+ 	asyncifyCatchIndex int
+ 	difunc             llvm.Metadata
++	callPos            token.Pos // the instruction being made, for addCallPosition
+ 	dilocals           map[*types.Var]llvm.Metadata
+ 	initInlinedAt      llvm.Metadata            // fake inlinedAt position
+ 	initPseudoFuncs    map[string]llvm.Metadata // fake "inlined" functions for proper init debug locations
+@@ -1573,6 +1574,8 @@
+ 	if b.Debug {
+ 		b.setDebugLocation(getPos(instr))
+ 	}
++	b.callPos = getPos(instr)
++	defer func() { b.callPos = token.NoPos }()
+ 
+ 	switch instr := instr.(type) {
+ 	case ssa.Value:
+@@ -2546,6 +2549,34 @@
+ 	return min(maxSize, (uint64(1)<<goHeapAddressBits)/elementSize)
+ }
+ 
++// addCallPosition gives a call in a package outside the standard library
++// its position, as tinygo.pos metadata: the file, line and column, and the
++// package the call is in. The passes that report on a call
++// (transform.CheckKeeps and transform.CheckFrameAllocs) say where it is
++// from it when there is no DWARF: on the PlayStation targets, an R3000A,
++// whose compiler leaves it out. Every call createCall makes has the
++// position of the instruction it is made for, an allocation's call of
++// runtime.alloc among them. Metadata, unlike an attribute, does not keep
++// the optimizer from merging calls, so the code is what it would be
++// without.
++func (b *builder) addCallPosition(call llvm.Value, pos token.Pos) {
++	if b.Debug || b.CPU != "mips1" || !pos.IsValid() || b.fn == nil || b.fn.Pkg == nil {
++		return
++	}
++	path := b.fn.Pkg.Pkg.Path()
++	if first, _, _ := strings.Cut(path, "/"); path != "main" && !strings.Contains(first, ".") {
++		return
++	}
++	p := b.program.Fset.Position(pos)
++	i32 := b.ctx.Int32Type()
++	call.SetMetadata(b.ctx.MDKindID("tinygo.pos"), b.ctx.MDNode([]llvm.Metadata{
++		b.ctx.ConstString(p.Filename, false).ConstantAsMetadata(),
++		llvm.ConstInt(i32, uint64(p.Line), false).ConstantAsMetadata(),
++		llvm.ConstInt(i32, uint64(p.Column), false).ConstantAsMetadata(),
++		b.ctx.ConstString(path, false).ConstantAsMetadata(),
++	}))
++}
++
+ // createExpr translates a Go SSA expression to LLVM IR. This can be zero, one,
+ // or multiple LLVM IR instructions and/or runtime calls.
+ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
+--- a/compiler/calls.go
++++ b/compiler/calls.go
+@@ -87,6 +87,7 @@
+ func (b *builder) createCall(fnType llvm.Type, fn llvm.Value, args []llvm.Value, name string) llvm.Value {
+ 	expanded := b.expandFormalParams(args)
+ 	call := b.CreateCall(fnType, fn, expanded, name)
++	b.addCallPosition(call, b.callPos)
+ 	if !fn.IsAFunction().IsNil() {
+ 		if cc := fn.FunctionCallConv(); cc != llvm.CCallConv {
+ 			// Set a different calling convention if needed.
+--- a/transform/optimizer.go
++++ b/transform/optimizer.go
+@@ -110,6 +110,11 @@
+ 		// For the PlayStation targets, what is allocated once becomes a
+ 		// global (transform/once.go).
+ 		HoistOnceAllocs(mod, config)
++		// What the library keeps that the program would lose
++		// (transform/keeps.go).
++		if errs := CheckKeeps(mod, config); len(errs) > 0 {
++			return errs
++		}
+ 		OptimizeStringToBytes(mod)
+ 		OptimizeStringEqual(mod)
+ 

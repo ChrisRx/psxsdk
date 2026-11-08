@@ -187,7 +187,11 @@ func (e Entry) Unpack(dst []uint32) ([]uint32, error) {
 	return dst[:e.Words()], nil
 }
 
-// Load unpacks the entry into new memory.
+// Load unpacks the entry into new memory, which is never freed: a frame
+// loop calls it to change the level, not every frame, and Unpack reuses
+// memory of the program's own.
+//
+//go:allocates
 func (e Entry) Load() ([]uint32, error) {
 	return e.Unpack(make([]uint32, e.Words()))
 }

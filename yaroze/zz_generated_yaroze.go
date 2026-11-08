@@ -55,7 +55,13 @@ func CdReadExec(file *byte) *EXEC
 // the absolute path on the disc as CString makes it, "\DIR\NAME.EXT;1";
 // with file nil the read carries on from where the last one stopped.
 //
+// The library goes on with addr after it returns, until CdReadSync, so a
+// variable passed as addr has to outlive that: one of a function other
+// than main needs CdReadSync before the function returns. yaroze vet and
+// the build say where a program does otherwise.
+//
 //export CdReadFile
+//go:keeps addr CdReadSync
 func CdReadFile(file *byte, addr *uint32, nbyte int32) int32
 
 // CdReadSync reports on the read CdReadFile, CdReadExec or CdRead
@@ -245,7 +251,12 @@ func GsGetLws(m *GsCOORDINATE2, outw *MATRIX, outs *MATRIX)
 // palette go in video memory and where they are in memory. im points to
 // the word after the file's ID, which is the file's second word.
 //
+// The library keeps im after it returns, for good, so it has to be a
+// package-level variable, a variable of main, or memory that is never
+// reused. yaroze vet and the build say where a program does otherwise.
+//
 //export GsGetTimInfo
+//go:keeps im
 func GsGetTimInfo(im *uint32, tim *GsIMAGE)
 
 // GsInit3D sets up the library's 3D side, after GsInitGraph and before
@@ -261,14 +272,27 @@ func GsInit3D()
 // Flg to zero and makes base super's Sub. Param and Workm are left
 // alone.
 //
+// The library keeps super after it returns, for good, so it has to be a
+// package-level variable, a variable of main, or memory that is never
+// reused. The library keeps base after it returns, for good, so it has to
+// be a package-level variable, a variable of main, or memory that is never
+// reused. yaroze vet and the build say where a program does otherwise.
+//
 //export GsInitCoordinate2
+//go:keeps super
+//go:keeps base
 func GsInitCoordinate2(super *GsCOORDINATE2, base *GsCOORDINATE2)
 
 // GsInitFixBg16 prepares the work area GsSortFixBg16 builds its packets
 // in, once, for a background of 16 by 16 cells. For a screen W by H
 // pixels the area needs ((W/16+1)*(H/16+2)*6+4)*2+2 words.
 //
+// The library keeps work after it returns, for good, so it has to be a
+// package-level variable, a variable of main, or memory that is never
+// reused. yaroze vet and the build say where a program does otherwise.
+//
 //export GsInitFixBg16
+//go:keeps work
 func GsInitFixBg16(bg *GsBG, work *uint32)
 
 // GsInitGraph sets up the graphics system for a display of x by y pixels,
@@ -419,7 +443,12 @@ func GsSetView2(pv *GsVIEW2) int32
 // declared as words and passed through Packets, since the library stores
 // words.
 //
+// The library keeps outpacketp after it returns, for good, so it has to be
+// a package-level variable, a variable of main, or memory that is never
+// reused. yaroze vet and the build say where a program does otherwise.
+//
 //export GsSetWorkBase
+//go:keeps outpacketp
 func GsSetWorkBase(outpacketp *PACKET)
 
 // GsSortBoxFill sorts a filled rectangle into ot at depth pri.
@@ -447,7 +476,12 @@ func GsSortFastSprite(sp *GsSPRITE, ot *GsOT, pri uint16)
 // GsInitFixBg16 prepared, which is where the packets go rather than the
 // area GsSetWorkBase gave.
 //
+// The library keeps work after it returns, for good, so it has to be a
+// package-level variable, a variable of main, or memory that is never
+// reused. yaroze vet and the build say where a program does otherwise.
+//
 //export GsSortFixBg16
+//go:keeps work
 func GsSortFixBg16(bg *GsBG, work *uint32, otp *GsOT, pri uint16)
 
 // GsSortGLine sorts a line shaded between two colors into ot at depth
@@ -543,7 +577,13 @@ func Load(a0 *byte, a1 *EXEC) int32
 // as soon as the transfer is queued, so DrawSync waits for it; clipping
 // and the drawing offset do not apply.
 //
+// The library goes on with p after it returns, until DrawSync, so a
+// variable passed as p has to outlive that: one of a function other than
+// main needs DrawSync before the function returns. yaroze vet and the
+// build say where a program does otherwise.
+//
 //export LoadImage
+//go:keeps p DrawSync
 func LoadImage(rect *RECT, p *uint32) int32
 
 // LoadTest reads the header of the executable named a0 into a1 without
@@ -692,7 +732,12 @@ func SsSeqGetVol(a0 int16, a1 int16, a2 *int16, a3 *int16)
 // SsSeqOpen opens the sequence, the SEQ file, at a0, to play on the sound
 // bank a1, and returns its number, or -1 if 32 are already open.
 //
+// The library keeps a0 after it returns, for good, so it has to be a
+// package-level variable, a variable of main, or memory that is never
+// reused. yaroze vet and the build say where a program does otherwise.
+//
 //export SsSeqOpen
+//go:keeps a0
 func SsSeqOpen(a0 *uint32, a1 int16) int16
 
 // SsSeqPause pauses the sequence a0, until SsSeqReplay.
@@ -869,7 +914,12 @@ func SsVabClose(a0 int16)
 // the bank's id, from 0 to 15, or a negative error: -1 for no free id or
 // a bad header, -2 for bad waveforms.
 //
+// The library keeps a0 after it returns, for good, so it has to be a
+// package-level variable, a variable of main, or memory that is never
+// reused. yaroze vet and the build say where a program does otherwise.
+//
 //export SsVabTransfer
+//go:keeps a0
 func SsVabTransfer(a0 *uint8, a1 *uint8, a2 int16, a3 int16) int16
 
 // StartRCnt starts the root counter spec and enables its interrupt,
@@ -882,7 +932,13 @@ func StartRCnt(a0 uint32) int32
 // p. It returns as soon as the transfer is queued, so DrawSync waits for
 // it; clipping and the drawing offset do not apply.
 //
+// The library goes on with p after it returns, until DrawSync, so a
+// variable passed as p has to outlive that: one of a function other than
+// main needs DrawSync before the function returns. yaroze vet and the
+// build say where a program does otherwise.
+//
 //export StoreImage
+//go:keeps p DrawSync
 func StoreImage(rect *RECT, p *uint32) int32
 
 // TestCard tests the memory card in slot a0, 0 or 1, and returns 0 for

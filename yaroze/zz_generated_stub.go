@@ -41,6 +41,11 @@ func CdReadExec(file *byte) *EXEC { panic(stub("CdReadExec")) }
 // read goes on in the background and CdReadSync waits for it. file is
 // the absolute path on the disc as CString makes it, "\DIR\NAME.EXT;1";
 // with file nil the read carries on from where the last one stopped.
+//
+// The library goes on with addr after it returns, until CdReadSync, so a
+// variable passed as addr has to outlive that: one of a function other
+// than main needs CdReadSync before the function returns. yaroze vet and
+// the build say where a program does otherwise.
 func CdReadFile(file *byte, addr *uint32, nbyte int32) int32 { panic(stub("CdReadFile")) }
 
 // CdReadSync reports on the read CdReadFile, CdReadExec or CdRead
@@ -182,6 +187,10 @@ func GsGetLws(m *GsCOORDINATE2, outw *MATRIX, outs *MATRIX) { panic(stub("GsGetL
 // GsGetTimInfo reads a TIM image's header into tim: where its pixels and
 // palette go in video memory and where they are in memory. im points to
 // the word after the file's ID, which is the file's second word.
+//
+// The library keeps im after it returns, for good, so it has to be a
+// package-level variable, a variable of main, or memory that is never
+// reused. yaroze vet and the build say where a program does otherwise.
 func GsGetTimInfo(im *uint32, tim *GsIMAGE) { panic(stub("GsGetTimInfo")) }
 
 // GsInit3D sets up the library's 3D side, after GsInitGraph and before
@@ -194,11 +203,21 @@ func GsInit3D() { panic(stub("GsInit3D")) }
 // super as its parent, which is WORLD for a top-level one. It also sets
 // Flg to zero and makes base super's Sub. Param and Workm are left
 // alone.
+//
+// The library keeps super after it returns, for good, so it has to be a
+// package-level variable, a variable of main, or memory that is never
+// reused. The library keeps base after it returns, for good, so it has to
+// be a package-level variable, a variable of main, or memory that is never
+// reused. yaroze vet and the build say where a program does otherwise.
 func GsInitCoordinate2(super *GsCOORDINATE2, base *GsCOORDINATE2) { panic(stub("GsInitCoordinate2")) }
 
 // GsInitFixBg16 prepares the work area GsSortFixBg16 builds its packets
 // in, once, for a background of 16 by 16 cells. For a screen W by H
 // pixels the area needs ((W/16+1)*(H/16+2)*6+4)*2+2 words.
+//
+// The library keeps work after it returns, for good, so it has to be a
+// package-level variable, a variable of main, or memory that is never
+// reused. yaroze vet and the build say where a program does otherwise.
 func GsInitFixBg16(bg *GsBG, work *uint32) { panic(stub("GsInitFixBg16")) }
 
 // GsInitGraph sets up the graphics system for a display of x by y pixels,
@@ -314,6 +333,10 @@ func GsSetView2(pv *GsVIEW2) int32 { panic(stub("GsSetView2")) }
 // area large enough for everything the frame will sort; the areas are
 // declared as words and passed through Packets, since the library stores
 // words.
+//
+// The library keeps outpacketp after it returns, for good, so it has to be
+// a package-level variable, a variable of main, or memory that is never
+// reused. yaroze vet and the build say where a program does otherwise.
 func GsSetWorkBase(outpacketp *PACKET) { panic(stub("GsSetWorkBase")) }
 
 // GsSortBoxFill sorts a filled rectangle into ot at depth pri.
@@ -334,6 +357,10 @@ func GsSortFastSprite(sp *GsSPRITE, ot *GsOT, pri uint16) { panic(stub("GsSortFa
 // by the pixel, and there is no rotation or scaling. work is the area
 // GsInitFixBg16 prepared, which is where the packets go rather than the
 // area GsSetWorkBase gave.
+//
+// The library keeps work after it returns, for good, so it has to be a
+// package-level variable, a variable of main, or memory that is never
+// reused. yaroze vet and the build say where a program does otherwise.
 func GsSortFixBg16(bg *GsBG, work *uint32, otp *GsOT, pri uint16) { panic(stub("GsSortFixBg16")) }
 
 // GsSortGLine sorts a line shaded between two colors into ot at depth
@@ -412,6 +439,11 @@ func Load(a0 *byte, a1 *EXEC) int32 { panic(stub("Load")) }
 // video memory, which is how textures and palettes get there. It returns
 // as soon as the transfer is queued, so DrawSync waits for it; clipping
 // and the drawing offset do not apply.
+//
+// The library goes on with p after it returns, until DrawSync, so a
+// variable passed as p has to outlive that: one of a function other than
+// main needs DrawSync before the function returns. yaroze vet and the
+// build say where a program does otherwise.
 func LoadImage(rect *RECT, p *uint32) int32 { panic(stub("LoadImage")) }
 
 // LoadTest reads the header of the executable named a0 into a1 without
@@ -513,6 +545,10 @@ func SsSeqGetVol(a0 int16, a1 int16, a2 *int16, a3 *int16) { panic(stub("SsSeqGe
 
 // SsSeqOpen opens the sequence, the SEQ file, at a0, to play on the sound
 // bank a1, and returns its number, or -1 if 32 are already open.
+//
+// The library keeps a0 after it returns, for good, so it has to be a
+// package-level variable, a variable of main, or memory that is never
+// reused. yaroze vet and the build say where a program does otherwise.
 func SsSeqOpen(a0 *uint32, a1 int16) int16 { panic(stub("SsSeqOpen")) }
 
 // SsSeqPause pauses the sequence a0, until SsSeqReplay.
@@ -638,6 +674,10 @@ func SsVabClose(a0 int16) { panic(stub("SsVabClose")) }
 // id to open it as, or -1 to be given a free one, and a3 is 1. It returns
 // the bank's id, from 0 to 15, or a negative error: -1 for no free id or
 // a bad header, -2 for bad waveforms.
+//
+// The library keeps a0 after it returns, for good, so it has to be a
+// package-level variable, a variable of main, or memory that is never
+// reused. yaroze vet and the build say where a program does otherwise.
 func SsVabTransfer(a0 *uint8, a1 *uint8, a2 int16, a3 int16) int16 { panic(stub("SsVabTransfer")) }
 
 // StartRCnt starts the root counter spec and enables its interrupt,
@@ -647,6 +687,11 @@ func StartRCnt(a0 uint32) int32 { panic(stub("StartRCnt")) }
 // StoreImage copies the rectangle rect of video memory out to memory at
 // p. It returns as soon as the transfer is queued, so DrawSync waits for
 // it; clipping and the drawing offset do not apply.
+//
+// The library goes on with p after it returns, until DrawSync, so a
+// variable passed as p has to outlive that: one of a function other than
+// main needs DrawSync before the function returns. yaroze vet and the
+// build say where a program does otherwise.
 func StoreImage(rect *RECT, p *uint32) int32 { panic(stub("StoreImage")) }
 
 // TestCard tests the memory card in slot a0, 0 or 1, and returns 0 for

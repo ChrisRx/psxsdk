@@ -18,7 +18,8 @@ clang -target mipsel-none-elf -march=mips1 -msoft-float -std=gnu89 -fsyntax-only
 clang ... -Xclang -fdump-record-layouts-complete hdr.c  # offsets and sizes
 
 $ hdr2go --layouts layouts.txt --header libps.h --package yaroze \
-    --out yaroze --doc yaroze/libps.txt --skip GsLinkObject4 < ast.json
+    --out yaroze --doc yaroze/libps.txt --keeps yaroze/keeps.txt \
+    --skip GsLinkObject4 < ast.json
 30 structs, 2 aliases, 165 functions (named=31 known=33 sizes=35)
 ```
 

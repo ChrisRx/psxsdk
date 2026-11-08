@@ -370,6 +370,12 @@ func (s *Scene) Ready() bool { return s.ready }
 // projection and the lights. It returns ErrFormat for a file it cannot
 // read and ErrMissing, with Missing set, for a texture or model src does
 // not have or has not loaded.
+//
+// What it allocates is never freed, as with any allocation here, but a
+// frame loop may call it to change the level, which the pragma below tells
+// the build.
+//
+//go:allocates
 func (s *Scene) Load(data []uint32, src Source) error {
 	if err := s.parse(data, src); err != nil {
 		return err
@@ -397,7 +403,9 @@ func (s *Scene) Name() string { return s.name }
 // did, so that a program that draws a room through its own stage.Setting
 // can load the room again. Draw calls it; a program that does not Draw
 // calls it itself each frame. A file it cannot read leaves the scene as
-// it was.
+// it was. Like Load, it allocates when it reads the file again.
+//
+//go:allocates
 func (s *Scene) Reload() bool {
 	if live.scene != s || volatile.LoadUint32(&live.reload) == 0 {
 		return false
@@ -839,7 +847,10 @@ type Archive struct {
 	words [MaxTextures + MaxModels][]uint32
 }
 
-// NewArchive makes an opened archive a Source.
+// NewArchive makes an opened archive a Source. It allocates the Source, as
+// Load allocates what it loads.
+//
+//go:allocates
 func NewArchive(a archive.Archive) *Archive { return &Archive{a: a} }
 
 func (ar *Archive) Lookup(path string) []uint32 {
