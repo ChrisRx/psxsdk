@@ -111,3 +111,9 @@ No archive line changed.
 - Whether Sony's drops a queued image at `ResetGraph(1)`.
 - `StoreImage` and `LoadImage` queued behind a request that is itself waiting: the image goes at a later interrupt, the vertical blank's at worst. Only an image behind a running frame was tried.
 - The time a queued call takes to return on Sony's console (155 and 150 eighths) is not matched: the clean one returns with the free path's pace.
+
+### On a console, 2026-11-08
+
+`imgq` on the clean library (`.build/hardware/imgq10`) now matches Sony's on the console: `LoadImage` behind `GsDrawOt` returns after 214 to 216 eighths (Sony's 153 to 160), `StoreImage` after 220 to 223 (150 to 152) with its buffer untouched on return, and the image goes after the drawing, 128 of 128. In `watch`, the drawing's DMA ends at 23,326 and the CPU is then away for 8,332 eighths until the GPU is ready, as on Sony's. `DrawSync(1)` gives 1 then 2, as in the emulator.
+
+gasgar on the clean library still flashes as badly as before, so `LoadImage` waiting for the drawing was not its cause.
