@@ -162,9 +162,8 @@ func command(l []byte) {
 			regs[regEPC] = hex(args[0])
 		}
 		start()
-	// The host says it has a byte of a binary read by turning its RTS off
-	// for a few microseconds, which an interrupt handler running then would
-	// hide, so a binary session runs with interrupts off.
+	// A binary session runs with interrupts off, so that a handler can't
+	// take the bytes the session is waiting for.
 	case is(name, "bwr"):
 		yaroze.EnterCriticalSection()
 		binaryWrite()
@@ -420,9 +419,15 @@ func binaryWrite() {
 }
 
 // binaryRead is brd, which goes as bwr does the other way: for each 02h
-// the host sends, a block of RAM and its sum, each byte waiting for the
-// host to say it has it, then the host's Y, or N to have it again. A short
-// block is made up with what is in RAM after it.
+// the host sends, a block of RAM and its sum, then the host's Y, or N to
+// have it again. A short block is made up with what is in RAM after it.
+//
+// The boot disc's monitor waits for the host to pulse its RTS off and on
+// after each byte. This one only holds a byte while the host's RTS is off,
+// as putc does for any byte, which a host that pulses works with all the
+// same. On a USB adapter each change of RTS takes about 2 ms, so a pulse a
+// byte made a block take 8.5 s; a host that pulses once for each read it
+// makes, as Port does, gets a block in a fraction of a second.
 func binaryRead() {
 	line.puts("binary\r")
 	for line.getc() == transferStart {
@@ -435,7 +440,7 @@ func binaryRead() {
 			var sum byte
 			for _, b := range memory(addr, blockSize) {
 				sum += b
-				line.putAcked(b)
+				line.putc(b)
 			}
 			line.putc(sum)
 			if line.getc() == 'Y' {
