@@ -16,12 +16,49 @@ var (
 // gpuReady is GPUSTAT's bit for a GP0 command word being taken.
 const gpuReady = 1 << 26
 
-func gpuCommand(words ...uint32) {
-	for _, w := range words {
-		for volatile.LoadUint32(gpuStat)&gpuReady == 0 {
-		}
-		volatile.StoreUint32(gp0, w)
+// gpuWaitLimit is how many times gpuWord reads GPUSTAT before it gives up on
+// the GPU. The screen is a help, and must never stop the monitor starting.
+const gpuWaitLimit = 100000
+
+// gpuOK is cleared once the GPU fails to take a word, and the rest of the
+// screen is skipped.
+var gpuOK bool
+
+// gpuSettle reads GPUSTAT n times, as a pause the GPU can count on.
+func gpuSettle(n int) {
+	for range n {
+		volatile.LoadUint32(gpuStat)
 	}
+}
+
+// gpuWaitReady waits for the GPU to take a GP0 word, up to gpuWaitLimit reads
+// of GPUSTAT, and reports whether it will.
+func gpuWaitReady() bool {
+	for range gpuWaitLimit {
+		if volatile.LoadUint32(gpuStat)&gpuReady != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// gpuWord sends a GP0 word once the GPU will take it. If it won't, the
+// command buffer is reset, which on a console drops a command the GPU was
+// stuck partway through, and it's tried once more before the screen is given
+// up.
+func gpuWord(w uint32) {
+	if !gpuOK {
+		return
+	}
+	if !gpuWaitReady() {
+		volatile.StoreUint32(gp1, 0x01000000)
+		gpuSettle(1000)
+		if !gpuWaitReady() {
+			gpuOK = false
+			return
+		}
+	}
+	volatile.StoreUint32(gp0, w)
 }
 
 // Colors of the monitor's screen, as GP0 takes them: blue in the high byte.
@@ -66,20 +103,26 @@ func glyph(c byte) [7]byte {
 // then starts from as the disc left it, and resets the GPU first, since a
 // program that returned may have left it in any state.
 func showScreen() {
-	volatile.StoreUint32(gp1, 0x00000000)                         // reset
+	volatile.StoreUint32(gp1, 0x00000000) // reset
+	gpuSettle(1000)
+	// The reset doesn't drop a command the GPU is partway through taking, as
+	// the boot disc's monitor leaves one on a console, and then the GPU never
+	// says it's ready for another. Resetting the command buffer does, once
+	// the reset is done: sent straight after it, on a console it isn't.
+	volatile.StoreUint32(gp1, 0x01000000)
+	gpuSettle(1000)
 	volatile.StoreUint32(gp1, 0x08000001)                         // 320 by 240, NTSC
 	volatile.StoreUint32(gp1, 0x06000000|(0x260+320*8)<<12|0x260) // horizontal range
 	volatile.StoreUint32(gp1, 0x07000000|(16+240)<<10|16)         // vertical range
 	volatile.StoreUint32(gp1, 0x05000000)                         // display from 0,0
-	gpuCommand(
-		0xe1000400,             // drawing to the displayed area allowed
-		0xe3000000,             // drawing area from 0,0
-		0xe4000000|239<<10|319, // to 319,239
-		0xe5000000,             // no offset
-		0x02000000|screenColor, // fill
-		0,                      // from 0,0
-		240<<16|320,            // 320 by 240
-	)
+	gpuOK = true
+	gpuWord(0xe1000400)                 // drawing to the displayed area allowed
+	gpuWord(0xe3000000)                 // drawing area from 0,0
+	gpuWord(0xe4000000 | 239<<10 | 319) // to 319,239
+	gpuWord(0xe5000000)                 // no offset
+	gpuWord(0x02000000 | screenColor)   // fill
+	gpuWord(0)                          // from 0,0
+	gpuWord(240<<16 | 320)              // 320 by 240
 	const dot = 6
 	for row, word := range [2]string{"CLEAN", "MONITOR"} {
 		w := len(word)*6*dot - dot
@@ -93,10 +136,18 @@ func showScreen() {
 						continue
 					}
 					px, py := x0+(i*6+x)*dot, y0+y*dot
-					gpuCommand(0x60000000|letterColor, uint32(py)<<16|uint32(px), dot<<16|dot)
+					gpuWord(0x60000000 | letterColor)
+					gpuWord(uint32(py)<<16 | uint32(px))
+					gpuWord(dot<<16 | dot)
 				}
 			}
 		}
+	}
+	if !gpuOK {
+		// Leave the GPU able to take a program's commands, with the display
+		// off as the reset left it, rather than showing whatever is in VRAM.
+		volatile.StoreUint32(gp1, 0x01000000)
+		return
 	}
 	volatile.StoreUint32(gp1, 0x03000000) // display on
 }
