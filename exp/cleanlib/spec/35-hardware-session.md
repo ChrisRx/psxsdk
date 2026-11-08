@@ -245,7 +245,7 @@ What this shows, and what it doesn't yet:
 - The fix waits for bit 26 only before a command's first word and writes parameters straight after. The purple CLEAN MONITOR screen then showed on the console.
 - Last night's GPUSTAT `10022400`, with bit 10 set and bit 26 clear, fits the same cause: E1h was taken, then the fill's first word, with the monitor waiting for its parameter.
 
-**RTS works.** `ReadMemory` (`brd`, the only use of RTS from the host) read 16 bytes and 1 KB at 80068000h correctly, and the monitor answered after. Both took 8.5 s, so the time is a fixed cost around the transfer, not per byte; not looked into.
+**RTS works.** `ReadMemory` (`brd`, the only use of RTS from the host) read 16 bytes and 1 KB at 80068000h correctly, and the monitor answered after. Both took 8.5 s. That wasn't a fixed cost: `brd` always sends whole 2,048-byte blocks, and the boot disc's monitor waits for an RTS pulse after every byte. On this adapter each change of RTS is a USB control transfer of 2 ms, so a pulse is 4 ms and a block 8.5 s. The clean monitor now holds a byte only while the host's RTS is off, as it does for any byte, and the host pulses once per read it makes. A block now takes about 0.33 s: 16 bytes in 0.67 s, 8 KB in 1.68 s, with words on both sides of each block boundary matching `dw`. Reads through the boot disc's monitor are unchanged.
 
 **The four programs on Sony's library**, one reset press each, then gasgar and tunelfin on clean again for comparison. Raw output in `.build/hardware/sony` and `.build/hardware/day2-clean`.
 
@@ -257,7 +257,7 @@ What this shows, and what it doesn't yet:
 | `pssoft-airbob-2-airbob` | looks and sounds fine | looked normal last night |
 
 - **gasgar's flashing is the clean library's**, and the emulator doesn't show it: there the two libraries draw gasgar identically for 1,200 frames. It's the first console-only picture difference. A first step offline: make the emulator clear GPUSTAT bit 26 while parameters are owed, as the console does, and see whether clean gasgar then flashes there.
-- **tunelfin froze on Sony's library and not on clean**, at frame 2998 by its own counter. Clean went past it. Not yet known whether Sony's freeze happens every run.
+- **tunelfin froze on Sony's library and not on clean**, at frame 2998 by its own counter. Clean went past it. Not yet known whether Sony's freeze happens every run. Deferred to a later session. The user expects Sony's freezes in the emulator too, which a run past frame 3000 on both libraries would confirm: the archive comparisons stop at 1,200 frames.
 - **The pad driver line.** Clean prints `PS-X Control PAD Driver  Ver 3.0` and `addr=8004d724` whenever a program starts the pads. Sony's printed neither in any of the four. A guess, unconfirmed: Sony's prints it only on the first start after boot, which the boot disc itself uses up.
 - Upload times on Sony's monitor were close to clean's: gasgar 1m37s against 1m31s, tunelfin 1m27s against 1m25s, adven 2m31s against 2m21s, airbob 1m45s against 1m42s.
 

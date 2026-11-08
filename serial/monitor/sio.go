@@ -91,19 +91,6 @@ func (s *sio) putc(c byte) {
 	volatile.StoreUint8(sioData, c)
 }
 
-// putAcked sends a byte of a binary read, then waits for the host to turn
-// its RTS off and on again, which is how it says it has taken the byte.
-// The host's RTS is off for a few microseconds, so the wait is a bare loop
-// on the status: one that moved received bytes to ring as well could miss
-// it, and the host sends nothing while it reads a block anyway.
-func (s *sio) putAcked(c byte) {
-	s.putc(c)
-	for stat()&statCTS != 0 {
-	}
-	for stat()&statCTS == 0 {
-	}
-}
-
 // putBytes sends b. The monitor writes out bytes it has with this rather
 // than making them a string, which would take memory its heap, never
 // collected, does not give back.
