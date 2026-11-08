@@ -73,17 +73,17 @@ type Pacing struct {
 	Run        time.Duration // after the monitor has echoed go
 }
 
-// DevicePacing is the delays of the loader that worked on a real console
-// through a USB serial adapter. They came from manual testing, on an older
-// serial library, and no root cause is known: without Header that loader
-// failed waiting for CTS, and without BlockStart it hung. They stay until a
-// console shows they can go. The emulated line needs none.
+// DevicePacing is the delays a real console needs through a USB serial
+// adapter. The boot disc's monitor needs Header and BlockStart: without
+// either it ends a binary write at its first block, as tried on a console.
+// A likely cause, not proved, is that it draws its panel on the TV after a
+// header and after each block's 02h, while the host's check of CTS before
+// each byte, a USB transfer of about 2 ms, sees it late. The clean monitor
+// needs none, and neither does the emulated line. The other delays, of the
+// loader these came from, were tried at zero on a console and aren't needed.
 var DevicePacing = Pacing{
-	Load:       500 * time.Millisecond,
-	Reply:      100 * time.Millisecond,
 	Header:     100 * time.Millisecond,
 	BlockStart: time.Millisecond,
-	Run:        2 * time.Second,
 }
 
 // Devices returns the names of the host's serial devices.
