@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -92,7 +93,9 @@ const guestC = "/.yaroze/c"
 // packet memory between types, counts on overflow wrapping and reads what it
 // never set: given an uninitialized pointer, clang deletes the rest of the
 // function and what follows its call, and the program runs on into whatever
-// comes next in memory.
+// comes next in memory. -fno-builtin also makes alloca a call to a function
+// there is none of, where GCC had it built in, so alloca is defined to the
+// builtin, as glibc's alloca.h does.
 func cFlags(opt string) []string {
 	return []string{
 		"--target=mipsel-unknown-none-elf", "-march=mips1", "-mfloat-abi=soft", "-mno-abicalls", "-fno-pic", "-G0",
@@ -101,6 +104,7 @@ func cFlags(opt string) []string {
 		"-fno-strict-aliasing", "-fwrapv", "-fno-delete-null-pointer-checks", "-ftrivial-auto-var-init=zero",
 		"-Wno-return-mismatch", "-Wno-int-conversion", "-Wno-incompatible-pointer-types",
 		"-Wno-implicit-function-declaration", "-Wno-implicit-int",
+		"-Dalloca(n)=__builtin_alloca(n)",
 	}
 }
 
@@ -136,14 +140,13 @@ func (w *Wasm) CompileC(ctx context.Context, b *CBuild) error {
 	for i, src := range b.Sources {
 		obj := fmt.Sprintf("%s/c%d-%d.o", guestTmp, w.builds, i)
 		w.builds++
-		args := append([]string{"clang"}, flags...)
 		if strings.EqualFold(filepath.Ext(src), ".s") {
-			args = append(args, "-x", "assembler-with-cpp")
-		} else {
-			args = append(args, "-x", "c")
-		}
-		args = append(args, "-c", filepath.ToSlash(src), "-o", obj)
-		if err := tool.run(ctx, stderr, args); err != nil {
+			args := append([]string{"clang"}, flags...)
+			args = append(args, "-x", "assembler-with-cpp", "-c", filepath.ToSlash(src), "-o", obj)
+			if err := tool.run(ctx, stderr, args); err != nil {
+				return fmt.Errorf("compiling %s: %w", filepath.Base(src), err)
+			}
+		} else if err := w.compileC(ctx, tool, stderr, flags, src, obj); err != nil {
 			return fmt.Errorf("compiling %s: %w", filepath.Base(src), err)
 		}
 		objects = append(objects, obj)
@@ -174,6 +177,54 @@ func (w *Wasm) CompileC(ctx context.Context, b *CBuild) error {
 		return err
 	}
 	return os.WriteFile(b.Output, elf, 0o666)
+}
+
+// compileC compiles the C file src to obj in two steps, clang's front end
+// and then its optimizer and code generator, with the IR between them
+// rewritten by cRewrite. With the same flags, the two steps generate what
+// one does: the front end runs at the optimization level asked for, so it
+// emits what that level wants, such as lifetime markers, and only the
+// passes wait.
+func (w *Wasm) compileC(ctx context.Context, tool cTool, stderr io.Writer, flags []string, src, obj string) error {
+	ir := strings.TrimSuffix(obj, ".o") + ".ll"
+	args := append([]string{"clang"}, flags...)
+	args = append(args, "-Xclang", "-disable-llvm-passes", "-fno-discard-value-names",
+		"-x", "c", "-S", "-emit-llvm", filepath.ToSlash(src), "-o", ir)
+	if err := tool.run(ctx, stderr, args); err != nil {
+		return err
+	}
+	host := filepath.Join(w.tmp, filepath.Base(ir))
+	data, err := os.ReadFile(host)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(host, cRewrite(data), 0o666); err != nil {
+		return err
+	}
+	args = append([]string{"clang"}, flags...)
+	args = append(args, "-x", "ir", "-c", ir, "-o", obj)
+	return tool.run(ctx, stderr, args)
+}
+
+// retvalSlot is the front end's slot for a function's return value, which
+// each return statement stores to and the function's one ret loads from. The
+// names are clang's own, kept by -fno-discard-value-names, and the first
+// variable to want a name takes it, before any of the program's.
+var retvalSlot = regexp.MustCompile(`(?m)^  %retval = alloca (.+), align (\d+)$`)
+
+// cRewrite changes the front end's IR before it is optimized, for what C
+// written for a GCC of 1996 means. A function that ends without a return
+// statement returned whatever was in v0 under GCC, and its callers often
+// test it. To clang the value is undefined, and once it is known that a
+// function returns nothing else, the optimizer takes the code that tests it
+// for code that never runs and deletes it, along with the rest of the
+// caller: a loop with such a test in it becomes a loop that does nothing,
+// forever. So the slot starts at zero, as -ftrivial-auto-var-init=zero has
+// local variables do, and a function that falls off its end returns 0. The
+// store is dead in a function that always returns a value, and the
+// optimizer removes it.
+func cRewrite(ir []byte) []byte {
+	return retvalSlot.ReplaceAll(ir, []byte("$0\n  store $1 zeroinitializer, ptr %retval, align $2"))
 }
 
 // cDir is where the C files are unpacked, and what is compiled from them
