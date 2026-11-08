@@ -94,6 +94,11 @@ const queueLen = 32
 // E5h words filled in as the request goes out, with the drawing area's
 // corners and offset as the GPU then reports them (GP1 10000003h to
 // 10000005h, answered through GPUREAD).
+//
+// A restore of imageLoad or imageStore makes the request a LoadImage or a
+// StoreImage that had to wait. Its env holds an empty packet list, the
+// rectangle's corner and size, packed as pair packs them, and the caller's
+// pixels: startHead sends the image (startImage), then starts the list.
 type request struct {
 	list    uintptr
 	env     [16]uint32
@@ -110,6 +115,10 @@ var queue struct {
 
 	// running is 1 while the request at head is going out.
 	running uint32
+
+	// later is 1 from imageEnter's finding that an image call can go into
+	// the queue until the call asks (imageLater).
+	later uint32
 }
 
 // DMA channel 2's interrupt enable and flag in DICR, and the master
@@ -118,6 +127,12 @@ const (
 	dicrGPUEnable = 1 << 18
 	dicrGPUFlag   = 1 << 26
 	dicrMaster    = 1 << 23
+)
+
+// The restore values that mark an image request, beyond any index into env.
+const (
+	imageLoad  = 0x100
+	imageStore = 0x200
 )
 
 // libps_draw_check advances the drawing queue if channel 2 has finished,
@@ -151,19 +166,57 @@ func queued() uint32 {
 
 // drawDone is called from the interrupt handler when channel 2 may have
 // finished: it acknowledges the interrupt and, if the GPU is free, moves
-// the queue on.
+// the queue on. With the GPU still drawing, an image waiting next goes
+// once it has finished (imageTurn).
+//
+//go:inline
 func drawDone() {
 	if d := dmaInterrupt.Get(); d&dicrGPUFlag != 0 {
 		dmaInterrupt.Set(d&0x00ffffff | dicrGPUFlag)
 	}
 	if queue.head != queue.tail {
-		if gpuIdle() {
+		if gpuIdle() || imageTurn() {
 			drawNext()
 		}
 		return
 	}
 	// Sony's handler takes its time here whether anything is queued or not.
 	nops(24)
+}
+
+// imageTurn is drawDone's work when the GPU is not yet free, kept out of it
+// so that the handler's usual path takes the time it did before spec 39. If
+// the channel has sent all of what is running and an image is next, it
+// waits for the GPU to finish drawing and reports true, for drawDone to
+// send the image, as Sony's handler does (spec 39). Interrupts must be off.
+//
+//go:noinline
+func imageTurn() bool {
+	if dmaGPUControl.Get()&dmaBusy != 0 || !imageNext() {
+		return false
+	}
+	for gp1.Get()&gpuStatReady == 0 {
+	}
+	return true
+}
+
+// imageNext reports whether the request after the one running is an image.
+func imageNext() bool {
+	i := queue.head + queue.running
+	return i != queue.tail && queue.reqs[i%queueLen].restore >= imageLoad
+}
+
+// imagesWaiting returns how many image requests wait behind the one running.
+//
+//go:inline
+func imagesWaiting() uint32 {
+	n := uint32(0)
+	for i := queue.head + queue.running; i != queue.tail; i++ {
+		if queue.reqs[i%queueLen].restore >= imageLoad {
+			n++
+		}
+	}
+	return n
 }
 
 // drawNext, with the GPU free, retires the request that was running and
@@ -190,9 +243,9 @@ func drawNext() {
 // measured on the same probe. The paced calls are not inlined, so that
 // each costs the same from every caller, as a call of Sony's does.
 const (
-	loadImagePad       = 158  // LoadImage, with the sizes' pads below
-	storeImagePad      = 242  // StoreImage, with the sizes' pads below
-	clearImagePad      = 50   // ClearImage, a rectangle (60h): 730
+	loadImagePad       = 134  // LoadImage, with the sizes' pads below
+	storeImagePad      = 230  // StoreImage, with the sizes' pads below
+	clearImagePad      = 26   // ClearImage, a rectangle (60h): 730, with clearImageSpace
 	clearFillPad       = 98   // ClearImage, a fill (02h): 586, measured the same way
 	clearOtPad         = 158  // GsClearOt: 272 on average in the web archive (spec 22)
 	sortClearPad       = 14   // GsSortClear: 162 in the same
@@ -213,14 +266,29 @@ const (
 	// 652 and 662 plus the words with no block at all. WordSpace is the
 	// word's pad, BlockSpace an image with blocks', WholeSpace one of whole
 	// blocks' on top of it and NoBlockSpace one of words alone's.
+	//
+	// Spec 39's queue checks cost LoadImage 14 cycles and StoreImage 4 on
+	// the way to the transfer, and ClearImage's rectangle 14 in startHead.
+	// They come off the pads in whole turns of spin (24, 12 and 24), and
+	// the stores after them give the rest back, measured on
+	// spec/probes/storeimage and drawq to Sony's times as before: each
+	// call's total is what it was, every size. A store costs 2 or 4 by
+	// where it falls, so the counts are what the probes gave, not the sums.
 	loadImageWordSpace     = 3
-	loadImageBlockSpace    = 1
+	loadImageBlockSpace    = 6
 	loadImageWholeSpace    = 2
-	loadImageNoBlockSpace  = 3
+	loadImageNoBlockSpace  = 7
 	storeImageWordSpace    = 3
-	storeImageBlockSpace   = 1
+	storeImageBlockSpace   = 5
 	storeImageWholeSpace   = 2
-	storeImageNoBlockSpace = 4
+	storeImageNoBlockSpace = 8
+
+	// clearImageSpace is the rest of ClearImage's rectangle's time past
+	// clearImagePad, and the NoSize spaces the image calls of no size's,
+	// past theirs.
+	clearImageSpace       = 4
+	loadImageNoSizeSpace  = 3
+	storeImageNoSizeSpace = 2
 
 	// The font's costs, in 2-cycle stores (spec 08, "FntPrint and FntFlush
 	// by the character"). FntPrint spends fntPrintChar stores on each
@@ -358,9 +426,13 @@ func startHead() {
 		p = uintptr(unsafe.Pointer(&r.env))
 	}
 	if r.restore != 0 {
-		for k := range uint32(3) {
-			gp1.Set(gp1InfoDrawArea1 + k)
-			r.env[r.restore+k] = (0xe3+k)<<24 | gp0.Get()&0xffffff // GPUREAD
+		if r.env[0] == endOfList {
+			startImage(r)
+		} else {
+			for k := range uint32(3) {
+				gp1.Set(gp1InfoDrawArea1 + k)
+				r.env[r.restore+k] = (0xe3+k)<<24 | gp0.Get()&0xffffff // GPUREAD
+			}
 		}
 	}
 	queue.running = 1
@@ -424,17 +496,22 @@ func sendList(p unsafe.Pointer) {
 
 // imageEnter begins LoadImage or StoreImage as enqueue begins a request:
 // with the watch started and interrupts masked, once the queue is empty
-// and the GPU free. It returns I_MASK for queueLeave. Sony's library
-// would queue the image behind the drawing; the GPU in the emulator is
-// always free by then, so the clean library waits for the queue instead,
-// with interrupts on. idle reports that it had no need to, which is when
-// Sony's call clips the caller's rectangle (spec 21).
+// and the GPU free. It returns I_MASK for queueLeave. idle reports that it
+// had no need to wait, which is when Sony's call clips the caller's
+// rectangle (spec 21). When the GPU is busy with what is queued and the
+// drawing's end will start an image behind it (imageMayQueue), it returns
+// at once instead, with idle false and queue.later set, for the caller to
+// queue the image (imageLater, queueLoad, queueStore). Otherwise it waits for the
+// queue, with interrupts on, as it did before spec 39.
 func imageEnter() (m uint32, idle bool) {
 	libStart()
 	m = queueEnter()
 	idle = true
 	for !queueFree() || queued() > queue.running {
 		idle = false
+		if imageMayQueue() {
+			return m, false
+		}
 		iMask.Set(m)
 		drain()
 		m = queueEnter()
@@ -449,20 +526,185 @@ func imageEnter() (m uint32, idle bool) {
 	return m, idle
 }
 
+// imageMayQueue reports whether an image call that found the GPU busy may go
+// into the queue, as Sony's library does (spec 39), and if so sets
+// queue.later for imageLater. Interrupts must be off. A queued image starts
+// from drawDone once what is ahead of it has gone out and the GPU has
+// finished drawing (imageTurn), so a call is not queued when nothing would
+// start it: when the channel has finished and nothing waits, the GPU drawing
+// the last of it, since channel 2's completion has come and gone. Nor is one
+// that finds the queue full. Those wait.
+//
+//go:noinline
+func imageMayQueue() bool {
+	if queued() >= queueLen || dmaGPUControl.Get()&dmaBusy == 0 && queued() <= queue.running {
+		return false
+	}
+	queue.later = 1
+	return true
+}
+
+// imageLater reports whether imageEnter left the call for the queue, and
+// clears the mark. The caller then queues it (queueImage).
+//
+//go:noinline
+func imageLater() bool {
+	later := queue.later != 0
+	queue.later = 0
+	return later
+}
+
+// queueLoad and queueStore put a LoadImage or StoreImage of the rectangle
+// r and the pixels at p into the queue, after imageEnter found that it
+// could go there (imageLater), and report whether they did. Interrupts must
+// be off. Pixels on the stack are not queued, since they would be gone by
+// the time the image goes: the library's own, the font's palette and the
+// kanji's glyphs, are there. Then the caller waits (imageWait). These are
+// calls of their own, so that the image calls' code changes as little as
+// it can when the GPU is free.
+//
+//go:noinline
+func queueLoad(r RECT, p unsafe.Pointer) bool {
+	if onStack(p) {
+		return false
+	}
+	r.W, r.H = imageSize(r)
+	return queueImage(r, p, imageLoad)
+}
+
+//go:noinline
+func queueStore(r *RECT, p *uint32) bool {
+	if onStack(unsafe.Pointer(p)) {
+		return false
+	}
+	w, h := imageSize(*r)
+	return queueImage(RECT{X: r.X, Y: r.Y, W: w, H: h}, unsafe.Pointer(p), imageStore)
+}
+
+// onStack reports whether p is on the stack, at or above the stack
+// pointer, or in the scratchpad, which channel 2 cannot reach and where a
+// program may keep its stack.
+//
+//go:noinline
+func onStack(p unsafe.Pointer) bool {
+	a := uintptr(p) & 0x1fffffff
+	sp := device.AsmFull("move {}, $$sp", nil) & 0x1fffffff
+	return a >= 0x1f800000 || sp < 0x800000 && a >= sp
+}
+
+// imageWait is imageEnter's wait, for an image call imageEnter left for the
+// queue that cannot go there after all: it waits for the queue, with
+// interrupts on, and returns I_MASK as imageEnter does.
+//
+//go:noinline
+func imageWait(m uint32) uint32 {
+	for !queueFree() || queued() > queue.running {
+		iMask.Set(m)
+		drain()
+		m = queueEnter()
+	}
+	drawNext()
+	drawWatch.mark(drawNoLimit)
+	for gp1.Get()&gpuStatReady == 0 {
+	}
+	return m
+}
+
+// queueImage puts the image call kind, imageLoad or imageStore, of the
+// rectangle r, its size kept within video memory, and the pixels at p into
+// the queue, and reports whether it did. One of no size is left out, having
+// nothing to send. Channel 2's completion is made to interrupt the CPU
+// while an image waits, for drawDone to start it; if the channel finished
+// before that, with nothing waiting, no interrupt will come, and the image
+// is not queued after all.
+func queueImage(r RECT, p unsafe.Pointer, kind uint32) bool {
+	if r.W == 0 || r.H == 0 {
+		return true
+	}
+	d := dmaInterrupt.Get() & 0x00ffffff
+	dmaInterrupt.Set(d | dicrGPUEnable)
+	if dmaGPUControl.Get()&dmaBusy == 0 && queued() <= queue.running {
+		dmaInterrupt.Set(d)
+		return false
+	}
+	q := &queue.reqs[queue.tail%queueLen]
+	q.list = 0
+	q.env[0] = endOfList
+	q.env[1] = pair(r.X, r.Y)
+	q.env[2] = pair(r.W, r.H)
+	q.env[3] = uint32(uintptr(p))
+	q.restore = kind
+	queue.tail++
+	return true
+}
+
+// startImage sends the image request r, which has come to the head of the
+// queue with the GPU free, for startHead, and waits for the transfer to
+// end: startHead then starts the request's empty packet list, which has
+// the channel move the queue on as any request does. Interrupts must be
+// off. With no image waiting behind it, channel 2's completion stops
+// interrupting the CPU (queueImage); after ResetGraph(1) has emptied the
+// queue with images in it, drawDone acknowledges it until the next.
+//
+//go:inline
+func startImage(r *request) {
+	if imagesWaiting() == 1 {
+		dmaInterrupt.Set(dmaInterrupt.Get()&0x00ffffff&^dicrGPUEnable | dicrGPUFlag)
+	}
+	for gp1.Get()&gpuStatReady == 0 {
+	}
+	rect := RECT{
+		X: int16(r.env[1]),
+		Y: int16(r.env[1] >> 16),
+		W: int16(r.env[2]),
+		H: int16(r.env[2] >> 16),
+	}
+	p := unsafe.Pointer(uintptr(r.env[3]))
+	if r.restore == imageLoad {
+		sendImage(rect, p)
+	} else {
+		readImage(rect, (*uint32)(p))
+	}
+	for dmaGPUControl.Get()&dmaBusy != 0 {
+	}
+}
+
 // loadImage copies the image at p, of 16-bit pixels, into the rectangle r
 // of video memory. As the reference library does, the CPU writes the
 // words that do not make a whole block of 16, from the start of the
 // image, and DMA the rest, which goes on after it returns: the next call
 // that uses the GPU waits for it. A size that comes to nothing sends nothing.
+// With the GPU busy, the image goes into the queue instead (imageEnter).
 // It reports whether the queue was idle when it came.
 func loadImage(r RECT, p unsafe.Pointer) bool {
-	r.W, r.H = imageSize(r)
 	m, idle := imageEnter()
+	if !idle && imageLater() {
+		if queueLoad(r, p) {
+			queueLeave(m)
+			pace(loadImagePad)
+			return false
+		}
+		m = imageWait(m)
+	}
+	r.W, r.H = imageSize(r)
 	if r.W == 0 || r.H == 0 {
+		space(loadImageNoSizeSpace)
 		queueLeave(m)
 		pace(loadImagePad)
 		return idle
 	}
+	sendImage(r, p)
+	queueLeave(m)
+	pace(loadImagePad)
+	return idle
+}
+
+// sendImage sends the image at p to the rectangle r of video memory, for
+// loadImage, with the GPU ready for it: the CPU's words, then the blocks
+// by DMA, which it does not wait for.
+//
+//go:inline
+func sendImage(r RECT, p unsafe.Pointer) {
 	gp1.Set(gp1DMAOff)
 	gp0.Set(0x01000000) // clear the texture cache
 	gp0.Set(0xa0000000)
@@ -490,9 +732,6 @@ func loadImage(r RECT, p unsafe.Pointer) bool {
 	} else {
 		space(loadImageNoBlockSpace)
 	}
-	queueLeave(m)
-	pace(loadImagePad)
-	return idle
 }
 
 // imageSize returns the size of an image kept within video memory: a negative

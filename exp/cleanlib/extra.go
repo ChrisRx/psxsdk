@@ -76,7 +76,8 @@ func PopMatrix()
 // the next call that uses the GPU sees the channel busy, and DrawSync waits.
 // A size that comes to nothing moves nothing: the GPU would have no pixels to
 // wait for. With the queue idle, the size kept within video memory is left in
-// rect too (spec 21).
+// rect too (spec 21). With the GPU busy, the call goes into the queue and p
+// is written when its turn comes (imageEnter).
 //
 //export StoreImage
 //go:noinline
@@ -85,23 +86,45 @@ func StoreImage(rect *RECT, p *uint32) int32 {
 	m, idle := imageEnter()
 	if idle {
 		rect.W, rect.H = w, h
+	} else if imageLater() {
+		if queueStore(rect, p) {
+			queueLeave(m)
+			pace(storeImagePad)
+			imageCallLeaves()
+			return 0
+		}
+		m = imageWait(m)
 	}
 	if w == 0 || h == 0 {
+		space(storeImageNoSizeSpace)
 		queueLeave(m)
 		pace(storeImagePad)
 		imageCallLeaves()
 		return 0
 	}
+	readImage(RECT{X: rect.X, Y: rect.Y, W: w, H: h}, p)
+	queueLeave(m)
+	pace(storeImagePad)
+	imageCallLeaves()
+	return 0
+}
+
+// readImage reads the rectangle r of video memory into p, for StoreImage,
+// with the GPU ready for it: the CPU's words, then the blocks by DMA, which
+// it does not wait for.
+//
+//go:inline
+func readImage(r RECT, p *uint32) {
 	// The DMA direction off first, as the reference does.
 	gp1.Set(gp1DMAOff)
 	gp0.Set(0x01000000)
 	gp0.Set(0xc0000000)
-	gp0.Set(pair(rect.X, rect.Y))
-	gp0.Set(pair(w, h))
+	gp0.Set(pair(r.X, r.Y))
+	gp0.Set(pair(r.W, r.H))
 	// GPUSTAT read until the GPU has the pixels to send.
 	for gp1.Get()&gpuStatSend == 0 {
 	}
-	words := (int(w)*int(h) + 1) / 2
+	words := (int(r.W)*int(r.H) + 1) / 2
 	const block = 16
 	head := words % block
 	dst := unsafe.Slice(at(p), head)
@@ -123,10 +146,6 @@ func StoreImage(rect *RECT, p *uint32) int32 {
 	} else {
 		space(storeImageNoBlockSpace)
 	}
-	queueLeave(m)
-	pace(storeImagePad)
-	imageCallLeaves()
-	return 0
 }
 
 // ClearImage fills the rectangle rect of video memory with r, g, b, queued
@@ -173,6 +192,7 @@ func ClearImage(rect *RECT, r, g, b uint8) int32 {
 	if enqueue(0, p[:], 8) {
 		rect.W, rect.H = w, h
 	}
+	space(clearImageSpace)
 	pace(clearImagePad)
 	imageCallLeaves()
 	return 0
