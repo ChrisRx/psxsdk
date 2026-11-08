@@ -247,6 +247,8 @@ What this shows, and what it doesn't yet:
 
 **RTS works.** `ReadMemory` (`brd`, the only use of RTS from the host) read 16 bytes and 1 KB at 80068000h correctly, and the monitor answered after. Both took 8.5 s. That wasn't a fixed cost: `brd` always sends whole 2,048-byte blocks, and the boot disc's monitor waits for an RTS pulse after every byte. On this adapter each change of RTS is a USB control transfer of 2 ms, so a pulse is 4 ms and a block 8.5 s. The clean monitor now holds a byte only while the host's RTS is off, as it does for any byte, and the host pulses once per read it makes. A block now takes about 0.33 s: 16 bytes in 0.67 s, 8 KB in 1.68 s, with words on both sides of each block boundary matching `dw`. Reads through the boot disc's monitor are unchanged.
 
+**The pacing delays.** With all of them at zero, the clean monitor took 10 commands at 8 ms each, three 64 KB writes at about the line's speed (5.8 s) with every byte read back right, and a program upload and run. The boot disc's monitor didn't: without `Header` (100 ms after a write's header) or `BlockStart` (1 ms after a block's 02h) it ended the binary write at its first block. With both, and `Reply`, `Load` and `Run` at zero, a full `hwrun` cycle passed: takeover, upload, run, reset from the cable, takeover again. The clean library now goes in in 48 s, not 1 min 8 s, and tunelfin uploads in 55 s, not 1 min 25 s. `Reply` had been 100 ms after every command and every block.
+
 **The four programs on Sony's library**, one reset press each, then gasgar and tunelfin on clean again for comparison. Raw output in `.build/hardware/sony` and `.build/hardware/day2-clean`.
 
 | Program | Sony's | Clean |
