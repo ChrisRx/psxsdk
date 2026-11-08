@@ -42,6 +42,19 @@ async function fetchModule(url) {
 	return WebAssembly.compileStreaming(res);
 }
 
+// fetchCompiler fetches the compiler from where compiler.json says, which
+// the site's build wrote: R2, by the key of the compiler it was built
+// with, or beside the page. It is gzipped, and decompressed as it arrives.
+async function fetchCompiler() {
+	const where = await fetch(versioned("compiler.json"));
+	if (!where.ok) throw new Error(`compiler.json: ${where.status} ${where.statusText}`);
+	const { url } = await where.json();
+	const res = await fetch(url);
+	if (!res.ok) throw new Error(`${url}: ${res.status} ${res.statusText}`);
+	const body = res.body.pipeThrough(new DecompressionStream("gzip"));
+	return WebAssembly.compileStreaming(new Response(body, { headers: { "Content-Type": "application/wasm" } }));
+}
+
 // The converters, each fetched the first time a generate line names it.
 const tools = new Map(); // name to a promise of its module
 function loadTool(name) {
@@ -73,7 +86,7 @@ async function fetchTar(url) {
 async function load(log) {
 	log("Loading the compiler…\n");
 	const [tinygo, discgen, mips1fix, eco2exe, mkdisc, tar] = await Promise.all([
-		fetchModule("tinygo.wasm"),
+		fetchCompiler(),
 		fetchModule(versioned("tools/discgen.wasm")),
 		fetchModule(versioned("tools/mips1fix.wasm")),
 		fetchModule(versioned("tools/eco2exe.wasm")),
