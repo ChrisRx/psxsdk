@@ -203,7 +203,7 @@ func readSave() bool {
 		return false
 	}
 	data := save[2*yaroze.CardSector:]
-	if string(data[:len(mark)]) != mark {
+	if !hasMark(data) {
 		return false
 	}
 	number = getInt(data[16:])
@@ -299,4 +299,16 @@ func draw() {
 	}
 	text.WriteString("\n").WriteString(message).WriteString("\n")
 	text.Print()
+}
+
+// hasMark reports whether data starts with mark, compared a byte at a time:
+// string(data[:len(mark)]) would copy the bytes into a new string, which
+// with no collector running is never freed.
+func hasMark(data []byte) bool {
+	for i := range len(mark) {
+		if data[i] != mark[i] {
+			return false
+		}
+	}
+	return true
 }

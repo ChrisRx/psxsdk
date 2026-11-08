@@ -1,0 +1,12 @@
+--- a/transform/optimizer.go
++++ b/transform/optimizer.go
+@@ -107,6 +107,9 @@
+ 				}
+ 			},
+ 		)
++		// For the PlayStation targets, what is allocated once becomes a
++		// global (transform/once.go).
++		HoistOnceAllocs(mod, config)
+ 		OptimizeStringToBytes(mod)
+ 		OptimizeStringEqual(mod)
+ 

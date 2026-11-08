@@ -28,12 +28,16 @@ func FntPrint(s *byte) int32 { panic(stub("FntPrint")) }
 // stream.
 func KanjiFntPrint(s *byte) int32 { panic(stub("KanjiFntPrint")) }
 
-// VSyncCallback installs f to run at the start of every vertical blank,
-// or removes the callback with f 0. It takes an address rather than a Go
-// func, because the caller is C and a Go func value is a pair. Interrupts
-// are off while f runs, so it must be quick, and it must not allocate or
-// block.
+// VSyncCallback installs the C function at f to run at the start of every
+// vertical blank, or removes the callback with f 0. A Go program uses
+// OnVSync, which installs one that calls a Go func.
 func VSyncCallback(f uintptr) { panic(stub("VSyncCallback")) }
+
+// OnVSync has f run at the start of every vertical blank, from the
+// library's interrupt, or stops it with nil. Interrupts are off while f
+// runs, so it must be quick, and it must not allocate or wait for anything,
+// which the build refuses in f and in what it calls.
+func OnVSync(f func()) { panic(stub("OnVSync")) }
 
 // GsGetWorkBase returns the next free byte of the packet area handed to
 // GsSetWorkBase, which is how much of it the frame has used so far.
@@ -108,6 +112,11 @@ func CdControlB(com uint8, param *uint8, result *uint8) int32 { panic(stub("CdCo
 // CdRead reads sectors into buf from the position the last CdlSetloc gave,
 // in the given mode, and returns 0 if the read could not be started. The
 // read goes on in the background, and CdReadSync waits for it.
+//
+// The library goes on with buf after it returns, until CdReadSync, so a
+// variable passed as buf has to outlive that: one of a function other than
+// main needs CdReadSync before the function returns. yaroze vet and the
+// build say where a program does otherwise.
 func CdRead(sectors int32, buf *uint32, mode int32) int32 { panic(stub("CdRead")) }
 
 // CdIntToPos converts a sector number to the position the drive takes, in

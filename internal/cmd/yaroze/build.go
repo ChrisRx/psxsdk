@@ -101,6 +101,9 @@ func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
 	if cproject.Is(pkg) {
 		return f.buildC(ctx, c, pkg, tmp, exe, elf)
 	}
+	if err := vetPackage(pkg, os.Stderr); err != nil {
+		return err
+	}
 	b := &toolchain.Build{
 		Package: pkg,
 		Opt:     f.opt,

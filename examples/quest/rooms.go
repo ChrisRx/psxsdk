@@ -92,11 +92,16 @@ var rooms = [...]room{
 	},
 }
 
+// source is the disc's files as the scene looks its textures up in them,
+// made once: scene.Files(files) in load would allocate it each time a room
+// is entered, and never free it.
+var source scene.Source = scene.Files(files)
+
 // load reads the room's file into world and places it; the files are
 // given so that the scene knows its name, which the playground's live
 // view goes by.
 func (r *room) load() {
-	if err := world.Load(r.file.Data(), scene.Files(files)); err != nil {
+	if err := world.Load(r.file.Data(), source); err != nil {
 		failed = r.file
 		return
 	}

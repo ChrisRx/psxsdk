@@ -53,8 +53,9 @@ var (
 	world   scene.Scene
 	turning = true
 
-	// Where the scenes draw from: the disc's files and the archive.
-	sources scene.Sources
+	// Where the scenes draw from: the disc's files and the archive, made
+	// once by open.
+	source scene.Source
 
 	// The scenes, in the order Start goes through them.
 	scenes = [...]*disc.File{&cubesDAT, &towerDAT}
@@ -79,13 +80,7 @@ func main() {
 				yaroze.Print("could not read ")
 				yaroze.Print(loader.Failed().Name)
 			case done:
-				a, err := archive.Open(levelARC.Data())
-				if err != nil {
-					yaroze.Print(err.Error())
-					continue
-				}
-				sources = scene.Sources{scene.Files(files), scene.NewArchive(a)}
-				if err := world.Load(scenes[which].Data(), sources); err != nil {
+				if err := open(); err != nil {
 					yaroze.Print(err.Error())
 				}
 			}
@@ -94,7 +89,7 @@ func main() {
 
 		if pad.Pressed(yaroze.PADstart) {
 			which = (which + 1) % len(scenes)
-			if err := world.Load(scenes[which].Data(), sources); err != nil {
+			if err := world.Load(scenes[which].Data(), source); err != nil {
 				yaroze.Print(err.Error())
 				continue
 			}
@@ -128,4 +123,18 @@ func main() {
 		}
 		text.Print()
 	}
+}
+
+// open makes where the scenes draw from, once the files are loaded, and
+// loads the first scene. It allocates the sources, which the pragma tells
+// the build is meant: the frame loop calls it once.
+//
+//go:allocates
+func open() error {
+	a, err := archive.Open(levelARC.Data())
+	if err != nil {
+		return err
+	}
+	source = scene.Sources{scene.Files(files), scene.NewArchive(a)}
+	return world.Load(scenes[which].Data(), source)
 }
