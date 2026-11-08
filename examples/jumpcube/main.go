@@ -200,15 +200,10 @@ func main() {
 	}
 }
 
-// source is the disc's files as the scene looks its textures up in them,
-// made once: scene.Files(files) in start would allocate it each time the
-// level starts again, and never free it.
-var source scene.Source = scene.Files(files)
-
 // start loads the level, which puts back the coins taken, and puts the
 // hero where it starts.
 func start(b yaroze.RECT) {
-	if err = world.Load(levelDAT.Data(), source); err != nil {
+	if err = world.LoadFiles(levelDAT.Data(), files); err != nil {
 		return
 	}
 	read(b)

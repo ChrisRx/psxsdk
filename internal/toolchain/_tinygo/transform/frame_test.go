@@ -34,7 +34,7 @@ func TestCheckFrameAllocs(t *testing.T) {
 		"main.go:12:8: this" + tail + fix,
 		"main.go:13:16: strconv.Itoa" + tail + fix,
 		"main.go:14:9: joining strings with +" + tail + fix,
-		"main.go:15:12: lib.Load" + tail + fix,
+		"main.go:15:12: lib.Load" + tail + ", at lib.go:30" + fix,
 		"main.go:21:7: this" + tail + fix,
 		"main.go:23:4: this" + tail + fix,
 	}
