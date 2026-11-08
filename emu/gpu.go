@@ -103,6 +103,9 @@ type gpu struct {
 	ic     *ic
 	timers *timers
 	stop   func(error)
+
+	// time is the GPU's drawing time, under SetDrawTime (gpu_time.go).
+	time drawTime
 }
 
 // newGPU returns a GPU with its display off, reporting an error that stops
@@ -136,6 +139,9 @@ func (g *gpu) Read32(off uint32) uint32 {
 	case 0:
 		return g.gpuread()
 	case 4:
+		if g.drawing() {
+			return (g.gpustat | gpustatReadyBits) &^ gpustatReadyCmd
+		}
 		return g.gpustat | gpustatReadyBits
 	}
 	return 0
@@ -391,6 +397,13 @@ func (g *gpu) polygon() {
 	if quad {
 		g.triangle(d.v[1], d.v[2], d.v[3], d)
 	}
+	if g.time.on {
+		n := triangleArea(d.v[0], d.v[1], d.v[2])
+		if quad {
+			n += triangleArea(d.v[1], d.v[2], d.v[3])
+		}
+		g.charge(n)
+	}
 	g.state = gpuRecvCmd
 }
 
@@ -435,6 +448,10 @@ func (g *gpu) line() {
 		vertex{x: int16(p1), y: int16(p1 >> 16)},
 		bgr555(g.buf[0]&0xffffff),
 	)
+	if g.time.on {
+		dx, dy := int(int16(p1))-int(int16(p0)), int(int16(p1>>16))-int(int16(p0>>16))
+		g.charge(max(dx, -dx, dy, -dy))
+	}
 	g.state = gpuRecvCmd
 }
 
@@ -463,6 +480,14 @@ func (g *gpu) rectangle() {
 		d.v0.c = 0x808080
 	}
 	g.drawRect(d)
+	if g.time.on {
+		w, h := int(d.width), int(d.height)
+		if size != 0 {
+			w = [4]int{0, 1, 8, 16}[size]
+			h = w
+		}
+		g.charge(w * h)
+	}
 	g.state = gpuRecvCmd
 }
 
@@ -484,6 +509,7 @@ func (g *gpu) fill() {
 			fill16(g.vram[y*vramWidth+x0:y*vramWidth+x1], color)
 		}
 	}
+	g.charge(w * h)
 	g.state = gpuRecvCmd
 }
 
@@ -503,6 +529,7 @@ func (g *gpu) copyVRAM() {
 			}
 		}
 	}
+	g.charge(int(w * h))
 	g.state = gpuRecvCmd
 }
 

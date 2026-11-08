@@ -52,6 +52,13 @@ type dma struct {
 	// pending counts the steps until a channel's completion flag is set.
 	pending [7]int
 
+	// Under SetDrawTime, gpuEnd is when the GPU's transfer is next due to
+	// move on: a held list to start (gpuHeld), or a running one to end,
+	// with gpuWords the words it sent. It is 0 otherwise.
+	gpuEnd   uint64
+	gpuHeld  bool
+	gpuWords int
+
 	// settled is DICR as the last update left it.
 	settled uint32
 
@@ -251,6 +258,10 @@ func (d *dma) transferGPU() {
 	case 1:
 		d.transferGPURequest()
 	case 2:
+		if d.gpu.time.on {
+			d.transferGPUTimed()
+			return
+		}
 		d.transferGPULinked()
 	}
 	*chcr &^= chcrBusy | chcrTrigger
@@ -410,8 +421,11 @@ func (d *dma) update() {
 func (d *dma) settle() {
 	// With nothing pending and DICR as the last update left it, an update
 	// would recompute the same signal and change nothing.
+	if d.gpuEnd != 0 {
+		d.gpuDue()
+	}
 	p := &d.pending
-	if p[0]|p[1]|p[2]|p[3]|p[4]|p[5]|p[6] == 0 && d.dicr == d.settled {
+	if p[0]|p[1]|p[2]|p[3]|p[4]|p[5]|p[6] == 0 && d.dicr == d.settled && d.gpuEnd == 0 {
 		d.active = false
 		return
 	}
