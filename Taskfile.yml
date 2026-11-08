@@ -377,14 +377,19 @@ tasks:
       - task: playground:tools
       - task: playground:sysroot
 
+  # Where the playground fetches its compiler from, play/compiler.json: R2,
+  # for the compiler yaroze embeds, or beside the page for one the compiler
+  # task built (web/compiler/site-compiler.sh).
   playground:compiler:
     sources:
       - .build/compiler/tinygo.wasm
+      - cmd/yaroze/wasm/full.json
+      - cmd/yaroze/wasm/tinygo.wasm.gz
+      - web/compiler/site-compiler.sh
     generates:
-      - .build/site/play/tinygo.wasm
+      - .build/site/play/compiler.json
     cmds:
-      - mkdir -p .build/site/play
-      - cp .build/compiler/tinygo.wasm .build/site/play/tinygo.wasm
+      - web/compiler/site-compiler.sh .build/site/play
 
   # The disc tools, the converters the page runs from a program's
   # go:generate lines, and gofmt, for the playground's Format button and

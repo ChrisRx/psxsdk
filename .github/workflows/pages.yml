@@ -3,12 +3,15 @@ name: Pages
 # Builds the site, every example's disc, the emulator and the playground,
 # and publishes it to GitHub Pages as this workflow's artifact. The
 # playground's compiler is the one yaroze embeds, cmd/yaroze/wasm/
-# tinygo.wasm.gz, and the compiled C and assembly in its sysroot's cache
-# come from the sysroot embedded beside it, so the checkout is all this
-# needs: no compiler is built or downloaded here, and the Compiler workflow
-# is for making those files when the recipe changes. A push to main
-# deploys the site. A pull request only builds it, which catches a change
-# that breaks an example.
+# tinygo.wasm.gz, which the page fetches from R2 by its key, and the
+# compiled C and assembly in its sysroot's cache come from the sysroot
+# embedded beside it, so the checkout is all this needs: no compiler is
+# built here, and the Compiler workflow is for making those files when the
+# recipe changes. A push to main deploys the site. A pull request from this
+# repository deploys it to Cloudflare Pages instead, as a preview of its
+# own, since GitHub Pages has only the one site, and comments with the
+# link; one from a fork only builds it, which catches a change that breaks
+# an example, since forks do not get the secrets.
 on:
   push:
     branches: [ "main" ]
@@ -16,11 +19,19 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+# Only a pull request's latest commit matters; main's deployments queue.
+concurrency:
+  group: pages-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
 
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
     - uses: actions/checkout@v4
 
@@ -54,6 +65,26 @@ jobs:
       uses: actions/upload-pages-artifact@v3
       with:
         path: .build/site
+
+    - name: Deploy the preview to Cloudflare Pages
+      id: preview
+      if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+      uses: cloudflare/wrangler-action@v4
+      with:
+        apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        command: pages deploy .build/site --project-name=psxsdk --branch=pr-${{ github.event.pull_request.number }}
+
+    - name: Comment with the preview's link
+      if: steps.preview.outcome == 'success'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        NUMBER: ${{ github.event.pull_request.number }}
+        URL: ${{ steps.preview.outputs.pages-deployment-alias-url }}
+        SHA: ${{ github.event.pull_request.head.sha }}
+      run: |
+        gh pr comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --edit-last --create-if-none \
+          --body "Site preview: $URL (from $SHA). Playground: $URL/play/"
 
   deploy:
     if: github.event_name != 'pull_request'
