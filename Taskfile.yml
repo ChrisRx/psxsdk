@@ -463,8 +463,10 @@ tasks:
     cmds:
       # The patched TinyGo tree's tinygo-sysroot, built here when the
       # compiler task has not: it links LLVM, so it builds in the
-      # playground shell.
-      - test -x {{.TREE}}/build/tinygo-sysroot || (cd {{.TREE}} && GOFLAGS=-mod=mod go build -tags llvm22 -ldflags "-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=$(clang-22 -print-resource-dir)" -o build/tinygo-sysroot ./cmd/tinygo-sysroot)
+      # playground shell. go-llvm names the system's LLVM headers, which a
+      # runner may have of another build than the shell's library, with
+      # Xtensa say, so the shell's come first.
+      - test -x {{.TREE}}/build/tinygo-sysroot || (cd {{.TREE}} && CGO_CPPFLAGS="-I$(llvm-config --includedir)" GOFLAGS=-mod=mod go build -tags llvm22 -ldflags "-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=$(clang-22 -print-resource-dir)" -o build/tinygo-sysroot ./cmd/tinygo-sysroot)
       - rm -rf .build/sysroot
       - '{{.TREE}}/build/tinygo-sysroot -target=playstation-yaroze -o .build/sysroot ./examples/... ./docs/tutorial/hello'
       - |
