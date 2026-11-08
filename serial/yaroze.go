@@ -174,7 +174,7 @@ func (m *Monitor) sendHeader(ctx context.Context, addr uint32, size int) error {
 	if err := m.port.Send(ctx, head); err != nil {
 		return err
 	}
-	return m.port.pause(ctx, m.port.Pacing.Header)
+	return m.port.awaitBusy(ctx, m.port.Pacing.Header)
 }
 
 // endTransfer ends binary mode and waits for the monitor's prompt.
@@ -199,7 +199,7 @@ func (m *Monitor) sendBlock(ctx context.Context, block []byte) error {
 		if err := m.port.SendByte(ctx, blockStart); err != nil {
 			return err
 		}
-		if err := m.port.pause(ctx, m.port.Pacing.BlockStart); err != nil {
+		if err := m.port.awaitBusy(ctx, m.port.Pacing.BlockStart); err != nil {
 			return err
 		}
 		if err := m.port.Send(ctx, block); err != nil {
