@@ -786,8 +786,8 @@ func SsSeqSetVol(a0 int16, a1 int16, a2 int16)
 //export SsSeqStop
 func SsSeqStop(a0 int16)
 
-// SsSetMVol sets the main volume, left and right, from 0 to 127. It has
-// to be set before anything is played.
+// SsSetMVol sets the main volume, left and right, from 0 to 127. It
+// starts at 127, set before main runs.
 //
 //export SsSetMVol
 func SsSetMVol(a0 int16, a1 int16)

@@ -5,8 +5,9 @@ package yaroze
 // library keeps as a pointer from the one to the other, and where the
 // model is in that system, which Draw makes the coordinate system's matrix
 // each frame. Init ties the two together, so the object must not be copied
-// afterwards; it is a package-level variable, like everything a frame
-// draws.
+// afterwards, which go vet reports as it does a copied lock. It is made
+// once, like everything a frame draws: a package-level variable, or a
+// variable of main, which the compiler places as it would one.
 //
 //	var cube yaroze.Object
 //	cube.Init(yaroze.WORLD)
@@ -15,6 +16,7 @@ package yaroze
 //	cube.Rotation.Vy += 16
 //	cube.Draw(ot)
 type Object struct {
+	_ noCopy
 	GsDOBJ2
 	Coord GsCOORDINATE2
 
@@ -57,3 +59,10 @@ func (o *Object) Draw(ot *GsOT) {
 	o.Coord.Flg = 0
 	o.GsDOBJ2.Draw(ot)
 }
+
+// noCopy makes go vet's copylocks check report a copy of the struct it is
+// in, by having the methods it looks for. It takes no space.
+type noCopy struct{}
+
+func (*noCopy) Lock()   {}
+func (*noCopy) Unlock() {}

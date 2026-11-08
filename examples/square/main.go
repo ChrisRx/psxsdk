@@ -123,7 +123,6 @@ func setupCube() {
 // for ever. Sound that does not load leaves the program silent rather than
 // stopped.
 func startMusic() {
-	yaroze.SsSetMVol(127, 127)
 	bank, _ = yaroze.OpenBank(std0VH.Data(), std0VB.Data())
 	song, _ = bank.Sequence(sample1SEQ.Data())
 	song.SetVolume(127, 127)

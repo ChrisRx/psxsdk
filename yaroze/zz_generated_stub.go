@@ -581,8 +581,8 @@ func SsSeqSetVol(a0 int16, a1 int16, a2 int16) { panic(stub("SsSeqSetVol")) }
 // SsSeqStop stops the sequence a0.
 func SsSeqStop(a0 int16) { panic(stub("SsSeqStop")) }
 
-// SsSetMVol sets the main volume, left and right, from 0 to 127. It has
-// to be set before anything is played.
+// SsSetMVol sets the main volume, left and right, from 0 to 127. It
+// starts at 127, set before main runs.
 func SsSetMVol(a0 int16, a1 int16) { panic(stub("SsSetMVol")) }
 
 // SsSetMute mutes all sound with SS_MUTE_ON and restores it with

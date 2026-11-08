@@ -58,7 +58,7 @@ A polygon is drawn from the side its corners go round clockwise on the screen. T
 
 The SPU plays 24 voices at once from samples in sound RAM, each a VAG of the SPU's ADPCM. A bank, a VAB, groups the samples into programs, instruments of up to 16 tones, each tone a sample over a range of notes with its own envelope. A sequence, a SEQ, is a MIDI score that plays the bank's programs. A sound effect is a note played by hand with `SsUtKeyOn`.
 
-`OpenBank` sends a bank to the SPU and `Sequence` opens a score on it. `SsSetMVol` has to be called before anything sounds. A tone plays its sample at the sample's own rate at its center note, and faster for higher notes. The boot disc's General MIDI bank plays any General MIDI score, but takes most of sound RAM, so a game with effects of its own usually makes a bank of only the instruments it needs ([MIDI on the PlayStation](../manuals/faq.md#whats-the-deal-with-midi-on-the-psx)). [Making data](data.md) says how.
+`OpenBank` sends a bank to the SPU and `Sequence` opens a score on it. The master volume, `SsSetMVol`, starts at full. A tone plays its sample at the sample's own rate at its center note, and faster for higher notes. The boot disc's General MIDI bank plays any General MIDI score, but takes most of sound RAM, so a game with effects of its own usually makes a bank of only the instruments it needs ([MIDI on the PlayStation](../manuals/faq.md#whats-the-deal-with-midi-on-the-psx)). [Making data](data.md) says how.
 
 ## Controllers
 

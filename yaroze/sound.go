@@ -17,9 +17,8 @@ type Bank struct {
 // OpenBank is SsVabTransfer: it reads the bank's header, the VH file in vh,
 // sends its waveforms, the VB file in vb, to the SPU, and returns the bank
 // and whether it was accepted. Each is a file's words, as package disc reads
-// them. SsSetMVol has to be called before anything plays. A bank that was
-// not accepted has a negative ID, and its methods do nothing; nor is one
-// with either file empty sent.
+// them. A bank that was not accepted has a negative ID, and its methods do
+// nothing; nor is one with either file empty sent.
 func OpenBank(vh, vb []uint32) (Bank, bool) {
 	if len(vh) == 0 || len(vb) == 0 {
 		return Bank{-1}, false
