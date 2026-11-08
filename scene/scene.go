@@ -755,10 +755,10 @@ func (s *Scene) Sprite(name string) *yaroze.GsSPRITE {
 	return nil
 }
 
-// ObjectName returns object i's name.
+// ObjectName returns object i's name, which the next Load overwrites.
 func (s *Scene) ObjectName(i int) string { return nameString(&s.objectNames[i]) }
 
-// SpriteName returns sprite i's name.
+// SpriteName returns sprite i's name, which the next Load overwrites.
 func (s *Scene) SpriteName(i int) string { return nameString(&s.spriteNames[i]) }
 
 func copyName(dst *[16]byte, words []uint32) {
@@ -779,12 +779,15 @@ func nameIs(name *[16]byte, s string) bool {
 	return name[len(s)] == 0
 }
 
+// nameString returns a name as a string without copying it, so that a frame
+// loop can show one: the string is the scene's own memory, which the next
+// Load overwrites, and a name kept past that is copied first.
 func nameString(name *[16]byte) string {
 	n := 0
 	for n < len(name) && name[n] != 0 {
 		n++
 	}
-	return string(name[:n])
+	return unsafe.String(&name[0], n)
 }
 
 // pathString is a disc path from its padded words; it allocates, and is

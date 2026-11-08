@@ -61,7 +61,7 @@ A build that stops with "GsSetWorkBase keeps outpacketp, so the variable passed 
 
 ## No sound
 
-- **`SsSetMVol` was never called.** Nothing sounds without it.
+- **The master volume was turned down.** It starts at full, and `SsSetMVol` sets it; `SsGetMVol` reads it.
 - **The bank did not open.** `OpenBank` reports it. A bank too big for the SPU's 512 KB with another one open, or a VH and VB swapped, will not open.
 - **The music plays silence or the wrong instruments.** A sequence plays the bank's programs by the numbers its MIDI file used, so the bank needs programs with those numbers.
 - **A sound is off key.** A tone plays its sample as recorded at its center note. Give the note the sample was recorded at, middle C being 60. A very short sample sounds off key whatever the note ([the FAQ](../manuals/faq.md#my-sample-seems-off-key)).

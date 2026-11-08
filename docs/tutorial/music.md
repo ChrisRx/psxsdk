@@ -13,7 +13,7 @@ On the frame the loader finishes, after the cube, `main` starts the music:
 ```go src=../../examples/square/main.go#startMusic
 ```
 
-`SsSetMVol` is the master volume, which is zero until something sets it, so nothing plays without it. `OpenBank` sends the bank to the SPU: it reads the header, the VH file, to find what instruments the bank holds, and copies the waveforms, the VB file, into the SPU's memory. `Sequence` opens the SEQ file to play on that bank, and `Play` with `SSPLAY_INFINITY` plays it round and round for as long as the program runs. From then on the library plays it by itself, from an interrupt, with nothing more for the frame loop to do.
+`OpenBank` sends the bank to the SPU: it reads the header, the VH file, to find what instruments the bank holds, and copies the waveforms, the VB file, into the SPU's memory. `Sequence` opens the SEQ file to play on that bank, and `Play` with `SSPLAY_INFINITY` plays it round and round for as long as the program runs. From then on the library plays it by itself, from an interrupt, with nothing more for the frame loop to do. The master volume, `SsSetMVol`, starts at full, which the package sets before `main` runs, so the square leaves it alone.
 
 The bank and the sequence are kept in package-level variables, for pausing:
 
