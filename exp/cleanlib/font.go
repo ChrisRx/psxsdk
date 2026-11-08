@@ -148,8 +148,17 @@ func FntLoad(tx, ty int32) {
 	// a time (spec 08); the clean library clears its own, and waits for
 	// the bytes it does not have.
 	clearBytes(unsafe.Pointer(&font.streams), unsafe.Sizeof(font.streams))
-	spinCycles((384 - uint32(unsafe.Sizeof(font.streams))) * 8)
+	spinCycles((384-uint32(unsafe.Sizeof(font.streams)))*8 - fntLoadImageTime)
+	nops(fntLoadImageNops)
 }
+
+// FntLoad's two loadImage calls came to 226 cycles more with spec 39's
+// work, the queue's checks and the calls no longer inlined; they are taken
+// off its wait, in whole turns of spin and the 2-cycle nops after it.
+const (
+	fntLoadImageTime = 228
+	fntLoadImageNops = 1
+)
 
 // FntOpen opens a stream that draws in the window at x, y, w by h, holding
 // at most n characters, and returns its id, or -1 if no more can be

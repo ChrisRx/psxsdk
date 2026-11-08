@@ -19,6 +19,7 @@ import (
 // "w ADDR a0 a1 a2 a3 ra sp tty cyc" goes in the same file, and "r ADDR v0 v1 tty
 // cyc" when it returns to that ra. PROBE_BUS, if set, records what the program does at
 // the devices and the GTE, once the TTY holds its text, into PROBE_OUT.bus (busTrace).
+// PROBE_DRAWTIME, if set, has the GPU take time to draw (emu's SetDrawTime).
 func TestDump(t *testing.T) {
 	disc, out := os.Getenv("PROBE_DISC"), os.Getenv("PROBE_OUT")
 	if disc == "" || out == "" {
@@ -27,6 +28,7 @@ func TestDump(t *testing.T) {
 	frames, _ := strconv.Atoi(os.Getenv("PROBE_FRAMES"))
 	end := os.Getenv("PROBE_END")
 	m := emutest.Boot(t, emutest.BIOS(emutest.BIOSFromEnv(t)), emutest.Disc(disc), emutest.AllowFaults())
+	m.SetDrawTime(os.Getenv("PROBE_DRAWTIME") != "")
 	watch := map[uint32]bool{}
 	for _, a := range strings.Split(os.Getenv("PROBE_WATCH"), ",") {
 		if v, err := strconv.ParseUint(a, 16, 32); err == nil {

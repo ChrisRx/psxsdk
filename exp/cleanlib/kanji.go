@@ -522,7 +522,8 @@ func KanjiFntOpen(x, y, w, h, dx, dy, cx, cy, isbg, n int32) int32 {
 	loadImage(RECT{X: int16(cx), Y: int16(cy), W: 16, H: 1}, unsafe.Pointer(&kanjiClut[0]))
 	id := kanji.open
 	if id == kanjiStreams || kanji.used+int(n) > kanjiPoolOpen {
-		spinCycles(kanjiFntOpenPad)
+		spinCycles(kanjiFntOpenPad - kanjiFntOpenRefusedLess)
+		nops(kanjiFntOpenRefusedNops)
 		return -1
 	}
 	// Sony's takes longer by the characters the stream has room for.
@@ -546,14 +547,22 @@ func KanjiFntOpen(x, y, w, h, dx, dy, cx, cy, isbg, n int32) int32 {
 	kanji.open++
 	kanji.opened = true
 	spinCycles(kanjiFntOpenPad)
+	nops(kanjiFntOpenNops)
 	return int32(id)
 }
 
 // The rest of KanjiFntOpen's 67,200 cycles, refused or not, and of its 48 more for
 // each character the stream has room for: 91,880 at the 512 most programs ask for.
+// The palette's loadImage came to 146 cycles more with spec 39's work, the queue's
+// checks and the call no longer inlined: 156 come off the pad, in whole turns of
+// spin, and the 2-cycle nops give 12 back. A refused open's came to 6 more: a
+// turn less, and 3 nops more.
 const (
-	kanjiFntOpenPad     = 66400
-	kanjiFntOpenCharPad = 48
+	kanjiFntOpenPad         = 66400 - 156
+	kanjiFntOpenNops        = 6
+	kanjiFntOpenRefusedLess = 12
+	kanjiFntOpenRefusedNops = 9
+	kanjiFntOpenCharPad     = 48
 )
 
 // KanjiFntClose has the next KanjiFntOpen start over from the first stream.
