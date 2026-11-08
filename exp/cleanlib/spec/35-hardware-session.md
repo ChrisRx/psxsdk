@@ -249,6 +249,14 @@ What this shows, and what it doesn't yet:
 
 **The pacing delays.** With all of them at zero, the clean monitor took 10 commands at 8 ms each, three 64 KB writes at about the line's speed (5.8 s) with every byte read back right, and a program upload and run. The boot disc's monitor didn't: without `Header` (100 ms after a write's header) or `BlockStart` (1 ms after a block's 02h) it ended the binary write at its first block. With both, and `Reply`, `Load` and `Run` at zero, a full `hwrun` cycle passed: takeover, upload, run, reset from the cable, takeover again. The clean library now goes in in 48 s, not 1 min 8 s, and tunelfin uploads in 55 s, not 1 min 25 s. `Reply` had been 100 ms after every command and every block.
 
+**Why the boot disc's monitor needs them, measured black-box:**
+
+- Sampling the console's RTS (the host's CTS, read every 270 ns from the driver's copy): after a write's header it drops 0.59 ms later and stays low for 169.6 ms, which fits the monitor drawing its `ADRS` and `SIZE` panel. After a block's 02h it drops 0.53 ms later for about 2 ms. Idle in binary mode it stays high.
+- Bytes sent while it's low aren't dropped as such: a single byte sent early, at any offset from 0 to 3 ms after the 02h, was kept (the block then failed its sum by the one extra byte), and a 02h sent straight after the header was kept through the 170 ms.
+- Bursts sent into either stretch, ignoring CTS: 4 or 8 bytes always went through and the block got Y. 9, 10, 12, 16 and 24 bytes always ended the write. So the console's 8-byte receive buffer overruns while the monitor isn't reading, and the monitor ends the session.
+- With no pause, the host sends a byte every 87 µs, and only sees CTS drop a little under a millisecond after the console lowered it, with more already queued in the adapter. That's more than 8 bytes, so the write ends. A pause of 2 ms after the header was enough in a sweep from 0 to 60 ms. The old loader's two notes fit: "fails with WriteByte timeout" is a CTS wait running out during the 170 ms, and "hangs" is the session ending under a host still sending.
+- Left unexplained: once, with the early 02h sent straight after the header and the block 5 ms after CTS rose, the block got Y, and then the console held its RTS low and stopped answering until reset.
+
 **The four programs on Sony's library**, one reset press each, then gasgar and tunelfin on clean again for comparison. Raw output in `.build/hardware/sony` and `.build/hardware/day2-clean`.
 
 | Program | Sony's | Clean |
