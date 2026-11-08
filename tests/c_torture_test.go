@@ -67,7 +67,6 @@ var tortureYarozeExpected = map[string]tortureFailure{
 	"930513-1":       {"abort", "the resident sprintf has no %f"},
 	"memcpy-bi":      {"abort", "the resident memcmp compares a byte when its length is 0"},
 	"conversion/-O0": {"no result", "libps.a's __floatsisf never returns for INT_MIN, as the resident __floatsidf does not; optimized, the conversions are of constants and folded"},
-	"920501-6":       {"no result", "divides 64-bit integers, which yaroze's runtime does a bit at a time, and needs 1500 frames at -O2 and 2000 at -O0 to finish"},
 	"990208-1/-O1":   {"abort", "expects a function whose label's address is taken to be inlined into two others, which is how well GCC optimizes and not whether the code is right"},
 	"990208-1/-O2":   {"abort", "expects a function whose label's address is taken to be inlined into two others, which is how well GCC optimizes and not whether the code is right"},
 }
