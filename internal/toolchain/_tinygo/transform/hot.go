@@ -36,15 +36,72 @@ package transform
 // written since it started its new initial value, as a constant it was
 // set from may have changed, while one the program has written keeps its
 // state.
+//
+// main does not return, so a function literal written in it, such as the
+// frame loop's body, is the one value main made, with what it captured laid
+// out as the running program's code laid it out: a patch whose literal
+// captures other variables would read them wrong, and stop the program
+// with nothing said. HotStubs records how each such body unpacks its
+// context, in the base as a variable F$captures, and HotBind refuses a
+// patch whose body unpacks it otherwise. A literal in any other function is
+// made again by that function's new code, and may change as it likes.
 
 import (
 	"debug/elf"
 	"fmt"
+	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
+
+// typeLayout describes a type as far as its layout goes.
+func typeLayout(t llvm.Type) string {
+	switch t.TypeKind() {
+	case llvm.IntegerTypeKind:
+		return fmt.Sprintf("i%d", t.IntTypeWidth())
+	case llvm.PointerTypeKind:
+		return "ptr"
+	case llvm.ArrayTypeKind:
+		return fmt.Sprintf("[%d x %s]", t.ArrayLength(), typeLayout(t.ElementType()))
+	case llvm.StructTypeKind:
+		var fields []string
+		for _, f := range t.StructElementTypes() {
+			fields = append(fields, typeLayout(f))
+		}
+		return "{" + strings.Join(fields, ", ") + "}"
+	}
+	return fmt.Sprintf("kind%d", t.TypeKind())
+}
+
+// inMain matches the function literals written in main itself.
+var inMain = regexp.MustCompile(`^main\.main\$[0-9]+$`)
+
+// captureLayout describes how fn unpacks the context its last parameter
+// holds, before the optimizer: the types it reads through it, or "" if it
+// uses none. A closure's captured variables are packed there, a single
+// pointer as the context itself.
+func captureLayout(fn llvm.Value) string {
+	if fn.ParamsCount() == 0 {
+		return ""
+	}
+	var parts []string
+	for _, use := range getUses(fn.LastParam()) {
+		switch {
+		case !use.IsAGetElementPtrInst().IsNil():
+			parts = append(parts, "gep "+typeLayout(use.GEPSourceElementType()))
+		case !use.IsALoadInst().IsNil():
+			parts = append(parts, "load "+typeLayout(use.Type()))
+		default:
+			parts = append(parts, "ptr")
+		}
+	}
+	slices.Sort(parts)
+	return strings.Join(slices.Compact(parts), "; ")
+}
 
 // isHotFunction reports whether name is a function of the main package:
 // a function, a method of one of its types, a closure or an instantiation
@@ -74,6 +131,19 @@ func HotStubs(mod llvm.Module, config *compileopts.Config) {
 	for _, body := range bodies {
 		name := body.Name()
 		fnType := body.GlobalValueType()
+
+		if inMain.MatchString(name) {
+			// Never all zero, so that it goes in .data, which the patch reads.
+			layout := "captures: " + captureLayout(body)
+			if config.Options.HotBase != "" {
+				body.AddFunctionAttr(ctx.CreateStringAttribute("tinygo-captures", layout))
+			} else {
+				captures := llvm.AddGlobal(mod, llvm.ArrayType(ctx.Int8Type(), len(layout)+1), name+"$captures")
+				captures.SetInitializer(ctx.ConstString(layout, true))
+				captures.SetLinkage(llvm.InternalLinkage)
+				llvmutil.AppendToGlobal(mod, "llvm.used", captures)
+			}
+		}
 
 		stub := llvm.AddFunction(mod, name+"$stub", fnType)
 		stub.SetLinkage(body.Linkage())
@@ -187,6 +257,20 @@ func HotBind(mod llvm.Module, config *compileopts.Config) error {
 	safe, ok := base["VSync"]
 	if !ok {
 		return fmt.Errorf("hot: the base has no VSync: it is not a Net Yaroze program")
+	}
+	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+		attr := fn.GetStringAttributeAtIndex(-1, "tinygo-captures")
+		if attr.IsNil() {
+			continue
+		}
+		name := strings.TrimSuffix(fn.Name(), "$body")
+		was, ok := base[name+"$captures"]
+		if !ok || was.data == nil {
+			continue // new here, or a base built before the layouts were kept
+		}
+		if strings.TrimRight(string(was.data), "\x00") != attr.GetStringValue() {
+			return fmt.Errorf("hot: %s captures other variables than the running program's, which made it once and goes on calling it: the program has to be started again", funcName(fn))
+		}
 	}
 
 	ctx := mod.Context()
