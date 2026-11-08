@@ -233,3 +233,17 @@ What this shows, and what it doesn't yet:
 3. Try one small `ReadMemory`, which is the only use of RTS from the host and the only thing the loopback test would still answer. If it stalls, nothing else needs it.
 4. The same programs on Sony's library, one reset press each, for the comparison.
 
+### Morning, 2026-11-08: the screen works, gasgar runs, RTS works
+
+**gasgar on clean, with the stack fix.** It printed the pad driver line and one `ResetGraph`, then ran its tunnel with sound for the whole 45 s watch, and the serial reset brought the console back. Before the fix it quit after `ResetGraph`. The user saw a lot of flashing in the picture. Whether Sony's library shows the same is step 4's question: in the emulator the two libraries draw gasgar identically for 1,200 frames.
+
+**The monitor's screen.** Last night's fix didn't help: the TV kept the boot disc's shifted screen. A log of GPUSTAT kept in the monitor and read back with `dw` found the real cause, and it wasn't a stuck GPU or a half-taken command from the boot disc:
+
+- On a console, GPUSTAT bit 26 (ready for a command word) is clear while a command's parameters are still owed. After the fill's first word it read `90822400` and stayed so until the parameters came. The monitor waited for bit 26 before every word, so it waited for the fill's first parameter, gave up, and reset the command buffer, which dropped the fill. Each letter's rectangle went the same way.
+- The emulator keeps bit 26 set while parameters are owed, which is why the screen showed there. That's an emulator inaccuracy worth fixing separately.
+- Ruled out along the way: a GPU DMA from the boot disc's monitor still running (channel 2 was idle at the monitor's start), and polling GPUSTAT too fast (pausing between reads changed nothing).
+- The fix waits for bit 26 only before a command's first word and writes parameters straight after. The purple CLEAN MONITOR screen then showed on the console.
+- Last night's GPUSTAT `10022400`, with bit 10 set and bit 26 clear, fits the same cause: E1h was taken, then the fill's first word, with the monitor waiting for its parameter.
+
+**RTS works.** `ReadMemory` (`brd`, the only use of RTS from the host) read 16 bytes and 1 KB at 80068000h correctly, and the monitor answered after. Both took 8.5 s, so the time is a fixed cost around the transfer, not per byte; not looked into.
+
