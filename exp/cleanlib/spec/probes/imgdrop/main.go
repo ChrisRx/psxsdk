@@ -6,8 +6,8 @@
 // copies showcase-gasgar's loop: a 640 by 480 interlaced display of one
 // buffer, ResetGraph(1) at the top of each frame, a clear and the frame's
 // drawing with GsDrawOt, then eight small LoadImage calls behind it. The
-// drawing is k semitransparent 640 by 480 boxes, for k from 1 to 4, to bring
-// it near a whole frame. Each frame's images carry the frame's number; after
+// drawing is k semitransparent 640 by 480 boxes, for k from 1 to 10, to bring
+// it near and past a whole frame. Each frame's images carry the frame's number; after
 // the next ResetGraph(1) one pixel of each is read back to see which landed.
 //
 // For each k it prints how many of the images landed, how many frames had
@@ -20,14 +20,14 @@ import (
 
 const (
 	images = 8
-	frames = 120
+	frames = 60
 )
 
 var (
 	ot      yaroze.GsOT
 	otTags  [16]yaroze.GsOT_TAG
 	packets [16384]uint32
-	boxes   [4]yaroze.GsBOXF
+	boxes   [10]yaroze.GsBOXF
 	pixels  [images][16 * 16 / 2]uint32
 	back    [images][1]uint32
 )
@@ -74,7 +74,7 @@ func run(k int) {
 		yaroze.GsSetWorkBase(yaroze.Packets(&packets[0]))
 		yaroze.GsSortClear(0, 0, 0, &ot)
 		for i := range k {
-			boxes[i] = yaroze.GsBOXF{Attribute: 1 << 30, X: 0, Y: 0, W: 640, H: 480, R: uint8(20 + 10*i), G: 40, B: 90}
+			boxes[i] = yaroze.GsBOXF{Attribute: 1 << 30, X: 0, Y: 0, W: 640, H: 480, R: uint8(20 + 8*i), G: 40, B: 90}
 			yaroze.GsSortBoxFill(&boxes[i], &ot, 1)
 		}
 		yaroze.GsDrawOt(&ot)
@@ -100,7 +100,7 @@ func main() {
 	yaroze.SetDispMask(1)
 	yaroze.VSync(0)
 	println("setup done")
-	for k := 1; k <= 4; k++ {
+	for _, k := range []int{1, 4, 5, 6, 7, 8, 10} {
 		run(k)
 	}
 	println("END")

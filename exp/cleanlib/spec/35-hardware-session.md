@@ -272,3 +272,20 @@ What this shows, and what it doesn't yet:
 - **The pad driver line.** Clean prints `PS-X Control PAD Driver  Ver 3.0` and `addr=8004d724` whenever a program starts the pads. Sony's printed neither in any of the four. A guess, unconfirmed: Sony's prints it only on the first start after boot, which the boot disc itself uses up.
 - Upload times on Sony's monitor were close to clean's: gasgar 1m37s against 1m31s, tunelfin 1m27s against 1m25s, adven 2m31s against 2m21s, airbob 1m45s against 1m42s.
 
+
+### Evening, 2026-11-08: gasgar's flashing, what it is not
+
+gasgar on the clean library still flashes on a console after specs 39 and 40. Measured since, each the same on both libraries unless said:
+
+- **The GPU words** gasgar sends, in the emulator, for 200 frames: the same words in the same order at nearly the same times. With `Machine.SetDrawTime` and `Machine.SetFieldSkip` on as well, its screens come out byte for byte the same.
+- **`VSync`** (`probes/vsynclate`), on the console: the same blanks and lines, interlaced too.
+- **The cost of gasgar's calls** (`probes/callcost`), on the console: within an eighth of Sony's, `GsSortObject4` included.
+- **gasgar's loop rate on the clean library**, from two peeks 10 s apart (`hwrun -peek`, `.build/hardware/peek1`): 574 buffer swaps in 575 blanks, a full 60 a second, waiting in `VSync` with the GPU idle. At each peek the frame's list, the font's and gasgar's 8 `LoadImage` calls were still queued, the DMA interrupt pending: the frame's DMA had just ended. The emulator with the drawing time on shows Sony's queue backed up the same way at each blank.
+- **Images queued behind the drawing** (`probes/imgdrop`, gasgar's loop with 1 to 10 full-screen boxes), on the console: both land all of them up to 4 boxes, half at 5 and none from 6, identically.
+- **`GsSortObject4`'s packets** (`probes/accmulti`, 1,056 cases), on the console: the same but for the lit Gouraud kinds (`lg3`, `lg4`) on the "on" shape, where 7 hashes differ between the libraries, and Sony's on the console differs from Sony's in the emulator too. Only the hashes' top byte differs, which this hash gives only for words differing in their top byte: most likely the code byte the GTE copies into the second and third vertex colors, which the GPU ignores. A dump of those packets on the console (`accmulti` with dumping on for those cases) would confirm it.
+
+Peeking under Sony's library failed: with Sony's image put in place by the clean takeover, gasgar printed nothing and the stop timed out, and whether it ran at all is not known.
+
+Left to try: a description of the flashing from someone watching (whole frames, stripes, the background, the sprites or the text); the packet dump above; FntPrint and FntFlush, and the sound library's interrupts, which no probe has covered on the console.
+
+A probe that never returns, run on Sony's library, leaves the console for the reset button: Sony's monitor can't be reached while it runs. `accmulti` ends in a `VSync` loop and did that.
