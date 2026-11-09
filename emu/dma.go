@@ -201,6 +201,9 @@ func (d *dma) Write8(off uint32, v uint8) {
 func (d *dma) start(ch int) {
 	chcr := *d.chcr(ch)
 	if chcr&chcrBusy == 0 {
+		if ch == dmaGPU {
+			d.stopGPU()
+		}
 		return
 	}
 	if d.log.on(LevelTrace) {

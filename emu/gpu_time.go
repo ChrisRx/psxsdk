@@ -102,3 +102,18 @@ func (d *dma) endGPU() {
 	*d.bcr(dmaGPU) = 0
 	d.pending[dmaGPU] = d.gpuWords
 }
+
+// stopGPU drops a timed transfer when the program stops the channel by
+// clearing its busy bit: a held list never starts, and a running one ends
+// without its completion. The words already sent stay sent.
+func (d *dma) stopGPU() {
+	d.gpuEnd, d.gpuHeld = 0, false
+}
+
+// stopDrawing ends, under SetDrawTime, what the GPU is drawing, as GP1(00h)
+// and GP1(01h) do on a console: the GPU is ready for a command at once.
+func (g *gpu) stopDrawing() {
+	if g.time.on {
+		g.time.until = min(g.time.until, *g.time.clock)
+	}
+}
