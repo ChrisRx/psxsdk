@@ -106,6 +106,9 @@ type gpu struct {
 
 	// time is the GPU's drawing time, under SetDrawTime (gpu_time.go).
 	time drawTime
+
+	// fieldSkip has the GPU skip the shown field's lines (gpu_field.go).
+	fieldSkip bool
 }
 
 // newGPU returns a GPU with its display off, reporting an error that stops
@@ -250,6 +253,9 @@ func (g *gpu) gp1(v uint32) {
 	switch v >> 24 {
 	case 0x00: // reset
 		g.resetDisplay()
+		g.stopDrawing()
+	case 0x01: // command buffer reset
+		g.stopDrawing()
 	case 0x03: // display enable
 		was := g.gpustat & gpustatDisplayOff
 		g.gpustat = g.gpustat&^gpustatDisplayOff | (v<<23)&gpustatDisplayOff
@@ -276,7 +282,8 @@ func (g *gpu) gp1(v uint32) {
 	}
 	// psxe does not implement the rest, including the command buffer reset
 	// (01h) and the interrupt acknowledge (02h), nor 00h beyond what
-	// resetDisplay does.
+	// resetDisplay does. Under SetDrawTime, 00h and 01h end the drawing in
+	// progress (stopDrawing).
 }
 
 // command acts on the command buffer, as psxe's psx_gpu_update_cmd does
@@ -505,7 +512,7 @@ func (g *gpu) fill() {
 	// What falls outside VRAM is not drawn.
 	x1 := min(x0+w, vramWidth)
 	for y := y0; y < min(y0+h, vramHeight); y++ {
-		if x0 < x1 {
+		if x0 < x1 && !g.skipsRow(y) {
 			fill16(g.vram[y*vramWidth+x0:y*vramWidth+x1], color)
 		}
 	}
