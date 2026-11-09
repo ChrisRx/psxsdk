@@ -52,4 +52,60 @@ Before and after, run the verify chain (copy `.build/verify49/chain.sh` to `.bui
 
 ## Results
 
-(To be filled in.)
+Done 2026-11-08 in the emulator. Not tried on a console.
+
+### What changed
+
+- `enqueue` (`gpu.go`) now reads `if queueFree() || drawWait() { drawNext() }`. `drawWait`, not inlined, runs only when the GPU isn't free: if channel 2 is idle and the new request is the only one not yet started (nothing queued, or only a finished list still counted as running, the GPU drawing its last), it spins on GPUSTAT bit 26 and reports true, and `drawNext` retires the finished list and starts the new one before the call returns. Otherwise the request stays queued as before. It covers everything through `enqueue`: `GsDrawOt`, `DrawOTag`, `PutDrawEnv`, `FntFlush`, the kanji flush, `ClearImage` and `MoveImage`. The image calls are as they were.
+- `probes/drawwait/main.go` had no `//go:build yaroze` line, so `go test ./exp/cleanlib/...` failed to build it. It has one now, like the other probes.
+- `TestDrawWait` (`image/probetest/drawwait_test.go`) runs the probe with the switch on (`-drawwait` names the disc) and checks, for each of the six lines, that the second call waits (5,000 to 20,000 for tail, 30,000 to 45,000 for reset), channel 2 is busy on return, `DrawSync(1)` gives 1, and everything is done between 76,500 and 77,200. It passes on the new image and fails on the one before.
+
+### drawwait, switch on
+
+Eighths of the system clock. Sony's image is unchanged, so its column is the run in the table above.
+
+| | Sony's | clean before | clean now |
+|---|---|---|---|
+| tail: the second call took | 9,617, 9,617, 11,506 | 41 | 9,633, 9,633, 11,518 |
+| tail: channel 2 when it returned | busy | idle, started at 67,798 in 1 of 3 runs | busy |
+| tail: everything done at | 76,852 to 76,863 | 108,095 to 127,330 | 76,865 to 76,866 |
+| reset: the second call took | 40,275, 38,386, 38,386 | 41 | 40,291, 38,406, 38,406 |
+| reset: channel 2 when it returned | busy | idle | busy |
+| reset: everything done at | 76,852 to 76,862 | 98,131 to 98,560 | 76,864 to 76,866 |
+| `DrawSync(1)` after the second call | 1 | 2 (tail), 1 (reset) | 1 |
+
+The clean calls take 12 to 20 eighths longer than Sony's, and finish within 14 of Sony's. The first call starts at the same time as before (28,835 tail, 62 reset, against Sony's 28,844 and 74), so that small gap was there before this change.
+
+### The free path
+
+Unchanged in the emulator. The first form (`else drawWait()`) cost the free path a jump and its delay slot after the call's last I/O, 4 cycles on every call through the queue. A form that returned through `drawWait` did the same. Making the wait part of the condition gives the free path the same instruction count as before: the branch that skipped `drawNext` now jumps to it instead. The `enqueueNops` pad is unchanged at 13.
+
+Checked with the switch off on 16 probes (`drawq`, `clearimage`, `storeimage`, `loadleft`, `imgq`, `kanjistream`, `kanjipast`, `kanji`, `fntchars`, `drawwait`, `gscycle`, `dispswap`, `flush`, `fntlayout`, `linestart`, `resetret`). Every I/O read and write, with its cycle, from "Execute !" to the end (`PROBE_BUS`) is the same on the new image as on the image before (`.build/verify50/libps-head.exe`). The only exception is the DMA address written to D2_MADR, since the image's data moved by 80h. Every TTY is the same, except `fntlayout`, which prints packet addresses inside the image. With those masked it is the same too. `enqueue`'s code differs from the one before only in register numbers and in those two branches.
+
+One register differs: `enqueue` now returns with 1F801074h in v1 where it had the queue's tail count. `FntFlush` returns straight after `enqueue`, so it now leaves 1F801074h in v1. That matches what Sony's image calls leave in v1 (spec 37). What Sony's `FntFlush` leaves wasn't measured. The other callers set v1 themselves or call on afterward. `loadleft` is the same on both images.
+
+The static build has no pads, so a jump on the free path shows there. The first form moved `TestOffscrScreenshot`, whose screen prints a count of horizontal syncs, from 39 to 40. The final form leaves it at 39, and the test passes.
+
+### Verify chain
+
+`.build/verify50/chain.sh` against `summary-verify49.txt`:
+
+| | same | differ | still | shift | wild | tty | stall | noboot |
+|---|---|---|---|---|---|---|---|---|
+| verify49 | 93 | 20 | 14 | 9 | 1 | 1 | 1 | 1 |
+| now | 93 | 20 | 14 | 9 | 1 | 1 | 1 | 1 |
+
+No archive line changed.
+
+- `image/regress.sh`: 36 PASS, 5 TIME, the same programs as verify49.
+- `regress.sh`: 33 PASS, 8 TIME, the same programs.
+- `terra.sh`: 150 of 150 pictures, 1970 and 2115 changes on each side.
+- The chain's `go test` list: no failures, `TestYarozeLoadAndRun/ours` included. `./exp/cleanlib/...` passes.
+- `linestart`, `initkeep`, `timnull`, `loadleft`, `revctrl` and `resetret` give the same TTY on both images.
+- The image ends at 80066598h.
+
+### Not checked
+
+- A console run of `drawwait` and of gasgar, which will tell whether this was the flashing.
+- `ClearImage` and `MoveImage` that wait this way now report that they started at once, so `ClearImage` clips its rectangle as on the free path (spec 21). What Sony's does in that case wasn't measured.
+- A request that finds channel 2 idle with a request queued but not started still waits for the next interrupt, as before. The spec leaves that case to the interrupt.
