@@ -79,7 +79,10 @@ func gpuIdle() bool {
 // The drawing queue. Drawing requests, packet lists for the GPU's DMA
 // channel, do not wait for the GPU: one made while the GPU is busy waits
 // in the queue, and each starts when the one before it has gone out, from
-// the interrupt that channel 2 raises when it finishes. DrawSync waits for
+// the interrupt that channel 2 raises when it finishes. One made with nothing
+// ahead of it and channel 2 finished, the GPU still drawing, waits in the call
+// until the GPU is ready and starts at once, since no interrupt is coming
+// (drawWait, spec 40). DrawSync waits for
 // the queue to empty. Only when words reach the GPU changes, never which
 // words or their order.
 
@@ -403,7 +406,7 @@ func enqueue(list uintptr, env []uint32, restore uint32) bool {
 	queue.tail++
 	// The request running may have finished before its interrupt came
 	// in: then the next starts now, without waiting for it.
-	if queueFree() {
+	if queueFree() || drawWait() {
 		drawNext()
 	}
 	atOnce := queue.head+1 == queue.tail
@@ -415,6 +418,24 @@ func enqueue(list uintptr, env []uint32, restore uint32) bool {
 // enqueueNops brings the calls through the queue, GsDrawOt, PutDrawEnv and FntFlush, back to
 // Sony's: they came out 26 cycles under after spec 32's work, for a reason not found.
 const enqueueNops = 13
+
+// drawWait is enqueue's work when the GPU is not free, kept out of it so
+// that the free path takes the time it did before spec 40. If channel 2 has
+// finished and the new request is the only one waiting, no completion is
+// coming to start it: as Sony's library does, it waits in the call for the
+// GPU to be ready for a command and reports true, for enqueue to start the
+// request (spec 40). Otherwise the request stays queued for the interrupt.
+// Interrupts must be off.
+//
+//go:noinline
+func drawWait() bool {
+	if dmaGPUControl.Get()&dmaBusy != 0 || queue.head+queue.running+1 != queue.tail {
+		return false
+	}
+	for gp1.Get()&gpuStatReady == 0 {
+	}
+	return true
+}
 
 // startHead starts the GPU's DMA channel on the request at the queue's
 // head. Interrupts must be off. The channel is enabled in DPCR from

@@ -1,3 +1,5 @@
+//go:build yaroze
+
 // drawwait measures what GsDrawOt does when it finds the queue empty and
 // channel 2 idle while the GPU is still drawing, on a console, under either
 // library (spec 40). Its frame is four 320 by 240 semitransparent boxes,
