@@ -109,3 +109,25 @@ No archive line changed.
 - A console run of `drawwait` and of gasgar, which will tell whether this was the flashing.
 - `ClearImage` and `MoveImage` that wait this way now report that they started at once, so `ClearImage` clips its rectangle as on the free path (spec 21). What Sony's does in that case wasn't measured.
 - A request that finds channel 2 idle with a request queued but not started still waits for the next interrupt, as before. The spec leaves that case to the interrupt.
+
+### On a console, 2026-11-08
+
+`drawwait` (`.build/hardware/drawwait-{sony,clean}`) gives the same on both libraries, to a few eighths:
+
+| | Sony's | clean |
+|---|---|---|
+| tail: second call at, took | 23,345 to 23,694, 6,999 to 7,802 | 23,344 to 23,701, 6,993 to 7,802 |
+| tail: all done at | 61,703 to 62,187 | 61,699 to 62,160 |
+| reset: GPU ready when the second call came | yes | yes |
+| reset: second call took | 83 to 84 | 84 to 85 |
+| reset: all done at | 30,747 to 31,229 | 30,753 to 31,220 |
+
+On a console `ResetGraph(1)` leaves the GPU ready at once: it stops the drawing, which the emulator's draw-time model does not. So gasgar's `GsDrawOt` after its `ResetGraph(1)` never takes the path this spec changed, and gasgar still flashes on the clean library as before. The change stays, since it matches Sony's in the tail case.
+
+Also measured on the console, ruling out other suspects:
+
+- `vsynclate` on both libraries: every `VSync` case, interlaced too, ends at the same blank and takes the same lines to within one.
+- `probes/callcost`, the calls gasgar spends its frame in (`GsSortObject4` on 200 polygons of seven kinds, `GsSortSprite`, the matrix calls, `GsSortClear`): clean costs what Sony's does to within one eighth on every call. Both are 10 to 25% slower than in the emulator for `GsSortObject4` (for example lg4 7,261 against 5,738).
+- Sony's `ResetGraph(1)` empties its drawing queue too, so a queued image is dropped on both.
+
+What the emulator does not model: with the interlaced display and drawing to the displayed field off (E1h bit 10 clear, which gasgar's words have), a console's GPU draws only the lines of the field not shown. The emulator draws every line, so a difference in which field gasgar draws into would not show there.
