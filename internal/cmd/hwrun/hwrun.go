@@ -132,6 +132,13 @@ type Session struct {
 	// mark, which is how original programs finish here.
 	Watch time.Duration
 
+	// Peeks are times into each program's run, in order, at which it is
+	// stopped (the clean monitor's Control-B, Monitor.Stop), its registers
+	// and the memory in Reads saved, and let go on. Only the clean monitor
+	// can do it.
+	Peeks []time.Duration
+	Reads []Region
+
 	// Reset asks the person at the console to press reset, and returns when
 	// they have.
 	Reset func(why string) error
@@ -227,12 +234,8 @@ func (s *Session) one(ctx context.Context, job Job) error {
 		return s.afterFailure(ctx, fmt.Errorf("starting: %w", err))
 	}
 
-	timeout := s.Port.Timeout
-	s.Port.Timeout = s.Watch
-	_, err = s.Port.ReadUntil(ctx, endMark)
-	s.Port.Timeout = timeout
-	ended := err == nil
-	if err != nil && !errors.Is(err, serial.ErrTimeout) {
+	ended, err := s.watch(ctx, job)
+	if err != nil {
 		return err
 	}
 	if !ended {
@@ -247,6 +250,94 @@ func (s *Session) one(ctx context.Context, job Job) error {
 		return nil
 	}
 	return s.reset(ctx, "the monitor won't come back from "+path)
+}
+
+// Region is memory to save at a peek.
+type Region struct {
+	Addr uint32
+	Size int
+}
+
+// ParseRegion reads a region as "ADDR:SIZE", the address in hexadecimal and
+// the size in bytes, decimal or 0x-prefixed.
+func ParseRegion(s string) (Region, error) {
+	a, n, ok := strings.Cut(s, ":")
+	if !ok {
+		return Region{}, fmt.Errorf("region %q is not ADDR:SIZE", s)
+	}
+	addr, err := strconv.ParseUint(strings.TrimPrefix(a, "0x"), 16, 32)
+	if err != nil {
+		return Region{}, fmt.Errorf("region %q: %w", s, err)
+	}
+	size, err := strconv.ParseUint(n, 0, 31)
+	if err != nil {
+		return Region{}, fmt.Errorf("region %q: %w", s, err)
+	}
+	return Region{Addr: uint32(addr), Size: int(size)}, nil
+}
+
+// watch waits for the running program to print its end mark, for up to
+// Watch, stopping it at each of Peeks on the way. It reports whether the
+// mark came.
+func (s *Session) watch(ctx context.Context, job Job) (bool, error) {
+	timeout := s.Port.Timeout
+	defer func() { s.Port.Timeout = timeout }()
+	start := time.Now()
+	for i, at := range append(s.Peeks, s.Watch) {
+		if at > s.Watch {
+			at = s.Watch
+		}
+		s.Port.Timeout = max(at-time.Since(start), time.Millisecond)
+		_, err := s.Port.ReadUntil(ctx, endMark)
+		if err == nil {
+			return true, nil
+		}
+		if !errors.Is(err, serial.ErrTimeout) {
+			return false, err
+		}
+		if i == len(s.Peeks) || at == s.Watch {
+			return false, nil
+		}
+		s.Port.Timeout = timeout
+		if err := s.peek(ctx, job, i+1, time.Since(start)); err != nil {
+			return false, fmt.Errorf("peek %d: %w", i+1, err)
+		}
+	}
+	return false, nil
+}
+
+// peek stops the program, saves its registers and Reads into the output
+// directory, and lets it go on.
+func (s *Session) peek(ctx context.Context, job Job, n int, at time.Duration) error {
+	stopped := time.Now()
+	d, err := s.mon.Stop(ctx)
+	if err != nil {
+		return err
+	}
+	base := filepath.Join(s.Out, fmt.Sprintf("%s-%s-peek%d", job.Name, s.Library, n))
+	var regs strings.Builder
+	fmt.Fprintf(&regs, "peek %d at %v, signal %d\n", n, at.Round(time.Millisecond), d.Signal)
+	for r := range 38 {
+		v, err := d.ReadRegister(ctx, r)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(&regs, "r%d %08x\n", r, v)
+	}
+	if err := os.WriteFile(base+"-regs.txt", []byte(regs.String()), 0o644); err != nil {
+		return err
+	}
+	for _, r := range s.Reads {
+		b, err := d.ReadMemory(ctx, r.Addr, r.Size)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(fmt.Sprintf("%s-%08x.bin", base, r.Addr), b, 0o644); err != nil {
+			return err
+		}
+	}
+	fmt.Fprintf(s.Log, "%s: peek %d at %v, stopped for %v\n", job.Name, n, at.Round(time.Millisecond), time.Since(stopped).Round(time.Millisecond))
+	return d.Continue(ctx)
 }
 
 // backOnItsOwn reports whether the monitor restarted after a program returned.

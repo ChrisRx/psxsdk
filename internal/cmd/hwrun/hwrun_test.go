@@ -106,3 +106,16 @@ func TestArchiveJobs(t *testing.T) {
 		t.Error("an unknown name should fail")
 	}
 }
+
+func TestParseRegion(t *testing.T) {
+	r, err := ParseRegion("801f0000:64")
+	assert.NoError(t, err)
+	assert.Equal(t, Region{Addr: 0x801f0000, Size: 64}, r)
+	r, err = ParseRegion("0x1f801814:0x4")
+	assert.NoError(t, err)
+	assert.Equal(t, Region{Addr: 0x1f801814, Size: 4}, r)
+	_, err = ParseRegion("801f0000")
+	assert.Equal(t, true, err != nil, "no size")
+	_, err = ParseRegion("zz:4")
+	assert.Equal(t, true, err != nil, "not hexadecimal")
+}

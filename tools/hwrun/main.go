@@ -12,6 +12,10 @@
 //
 // With -library clean it first replaces the boot disc's monitor and library
 // with the clean ones, once per boot. Programs then return to that monitor.
+// That monitor can also stop a running program and let it go on, which -peek
+// does at the times it gives, saving the registers and the -read regions:
+//
+//	go run ./tools/hwrun -d /dev/ttyUSB0 -library clean -peek 20s,30s -read 80010000:256 prog.elf
 package main
 
 import (
@@ -25,6 +29,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"go.chrisrx.dev/psx/format/psx"
@@ -41,16 +46,43 @@ func main() {
 	out := flag.String("o", "results", "directory for the output")
 	archive := flag.String("archive", "", "a programs.tsv whose names the arguments are")
 	watch := flag.Duration("watch", 60*time.Second, "how long a program runs if it prints no end mark")
+	peeks := flag.String("peek", "", "times into each run to stop the program and save its registers and -read regions, as 20s,30s (clean library only)")
+	reads := flag.String("read", "", "memory to save at each peek, as ADDR:SIZE,..., the address in hexadecimal")
 	flag.Parse()
-	if err := run(*device, *baud, *library, *imagePath, *monitorPath, *archive, *out, *watch, flag.Args()); err != nil {
+	if err := run(*device, *baud, *library, *imagePath, *monitorPath, *archive, *out, *watch, *peeks, *reads, flag.Args()); err != nil {
 		fmt.Fprintln(os.Stderr, "hwrun:", err)
 		os.Exit(1)
 	}
 }
 
-func run(device string, baud int, library, imagePath, monitorPath, archive, out string, watch time.Duration, programs []string) error {
+func run(device string, baud int, library, imagePath, monitorPath, archive, out string, watch time.Duration, peeks, reads string, programs []string) error {
 	if device == "" || len(programs) == 0 {
 		return fmt.Errorf("give -d and at least one program")
+	}
+	var peekAt []time.Duration
+	for p := range strings.SplitSeq(peeks, ",") {
+		if p == "" {
+			continue
+		}
+		d, err := time.ParseDuration(p)
+		if err != nil {
+			return fmt.Errorf("-peek: %w", err)
+		}
+		peekAt = append(peekAt, d)
+	}
+	if len(peekAt) > 0 && library != "clean" {
+		return fmt.Errorf("-peek needs -library clean: only the clean monitor stops a program")
+	}
+	var regions []hwrun.Region
+	for r := range strings.SplitSeq(reads, ",") {
+		if r == "" {
+			continue
+		}
+		region, err := hwrun.ParseRegion(r)
+		if err != nil {
+			return fmt.Errorf("-read: %w", err)
+		}
+		regions = append(regions, region)
 	}
 	jobs := make([]hwrun.Job, 0, len(programs))
 	if archive != "" {
@@ -70,6 +102,8 @@ func run(device string, baud int, library, imagePath, monitorPath, archive, out 
 		Library: library,
 		Out:     out,
 		Watch:   watch,
+		Peeks:   peekAt,
+		Reads:   regions,
 		Log:     os.Stdout,
 		Reset: func(why string) error {
 			fmt.Printf("\n%s. Press reset on the console, then press Enter here.\n", why)
