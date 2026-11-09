@@ -311,6 +311,21 @@ func (m *Monitor) RemoteDebugger(ctx context.Context) (*Debugger, error) {
 	return NewDebugger(m.port), nil
 }
 
+// Stop stops the program Run started, which the clean monitor (serial/monitor)
+// does at its next interrupt when it reads a Control-B, and returns the
+// debugger the program is then stopped in, for reading its registers and
+// memory. Its Continue lets the program go on. Sony's monitor has no such stop.
+func (m *Monitor) Stop(ctx context.Context) (*Debugger, error) {
+	if _, err := m.port.Write([]byte{0x02}); err != nil {
+		return nil, err
+	}
+	d := NewDebugger(m.port)
+	if _, err := d.Wait(ctx); err != nil {
+		return nil, fmt.Errorf("serial: waiting for the program to stop: %w", err)
+	}
+	return d, nil
+}
+
 // Run starts the CPU at the registers SetRegister set, with the monitor's go
 // command, and returns once the monitor has echoed it. What the program
 // prints comes after, for the port to read.
