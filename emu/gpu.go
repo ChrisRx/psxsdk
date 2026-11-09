@@ -131,10 +131,26 @@ func newGPU(ic *ic, stop func(error)) *gpu {
 // which only works because its BIOS sets them before any program runs.
 func (g *gpu) resetDisplay() {
 	g.gpustat = gpustatDisplayOff
+	// psxe's mode after a reset, which GPUSTAT doesn't show: a console's
+	// reads 14802000h then, with none of the mode's bits (setDisplayMode).
 	g.displayMode = 1
 	g.dispX, g.dispY = 0, 0
 	g.dispX1, g.dispX2 = 0x200, 0xc00
 	g.dispY1, g.dispY2 = 0x10, 0x100
+}
+
+// gpustatDisplayMode are GPUSTAT's bits that show the display mode: 14,
+// and 16 to 22.
+const gpustatDisplayMode = 1<<14 | 0x7f<<16
+
+// setDisplayMode takes a GP1(08h) display mode, and shows it in GPUSTAT as
+// a console does: bits 0 to 5 of the mode at bits 17 to 22, bit 6 at 16 and
+// bit 7 at 14. A library reads them back: Sony's VSync looks at bit 19, 480
+// lines, to wait for the field (exp/cleanlib/spec/probes/vsyncphase).
+func (g *gpu) setDisplayMode(mode uint32) {
+	g.displayMode = mode
+	bits := (mode&0x3f)<<17 | (mode>>6&1)<<16 | (mode>>7&1)<<14
+	g.gpustat = g.gpustat&^gpustatDisplayMode | bits
 }
 
 func (g *gpu) Read32(off uint32) uint32 {
@@ -276,7 +292,7 @@ func (g *gpu) gp1(v uint32) {
 		if v&0xffffff != g.displayMode && g.log.on(slog.LevelInfo) {
 			g.log.log(slog.LevelInfo, "display mode "+describeDisplayMode(v))
 		}
-		g.displayMode = v & 0xffffff
+		g.setDisplayMode(v & 0xffffff)
 	case 0x10: // information request
 		g.gp1InfoReq = v & 0xf
 	}
@@ -682,7 +698,8 @@ func (g *gpu) inHBlank() bool {
 // hblank moves to the next scanline, raising the vertical blanking
 // interrupt as the visible lines end.
 func (g *gpu) hblank() {
-	if g.scanline < gpuVDrawLines && g.scanline&1 != 0 {
+	interlaced := g.interlaced480()
+	if !interlaced && g.scanline < gpuVDrawLines && g.scanline&1 != 0 {
 		g.gpustat |= gpustatOddLine
 	} else {
 		g.gpustat &^= gpustatOddLine
@@ -696,16 +713,37 @@ func (g *gpu) hblank() {
 		g.ic.raise(irqVBlank)
 	case gpuFrameLines:
 		g.timers.vblankEnd()
-		// The interlace field alternates every field while interlaced
-		// output is selected, and reads as 1 otherwise. psxe does not do
-		// this; nix/psxe-interlace-field.patch adds it, since the OpenBIOS
-		// shell waits on the field rather than the vertical blank.
-		if g.displayMode&0x20 != 0 {
-			g.gpustat ^= gpustatField
-		} else {
-			g.gpustat |= gpustatField
+		if !interlaced {
+			g.nextField()
 		}
 		g.scanline = 0
+	}
+	if interlaced {
+		// The field changes as the picture ends, which on a console is
+		// after the vertical blank interrupt: the display range GP1(07h)
+		// sets runs to line 256 by default, the interrupt comes at 240
+		// (exp/cleanlib/spec/probes/statlines).
+		if g.scanline == int(g.pictureEnd()) {
+			g.nextField()
+		}
+		// Bit 31 doesn't follow the line either: it says which field's
+		// lines the GPU draws into, for the whole picture, and reads 0
+		// outside it (drawnRows).
+		if g.drawnRows() == 1 {
+			g.gpustat |= gpustatOddLine
+		}
+	}
+}
+
+// nextField moves on the interlace field, which alternates every field
+// while interlaced output is selected, and reads as 1 otherwise. psxe does
+// not do this; nix/psxe-interlace-field.patch adds it, since the OpenBIOS
+// shell waits on the field rather than the vertical blank.
+func (g *gpu) nextField() {
+	if g.displayMode&0x20 != 0 {
+		g.gpustat ^= gpustatField
+	} else {
+		g.gpustat |= gpustatField
 	}
 }
 
