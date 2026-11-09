@@ -8,9 +8,11 @@ import (
 
 // TestFieldSkip checks SetFieldSkip: with an interlaced 480-line display and
 // drawing to the displayed area off, a rectangle and a fill reach only the
-// lines of the field not shown, and the lines move with the field and the
-// display area's start. With the switch off, drawing to the displayed area
-// allowed, or a 240-line display, every line is drawn.
+// lines of the field not shown, through the picture, and the lines move
+// with the field and the display area's start. Outside the picture, the
+// vertical blank among it, they reach the even lines whatever the field.
+// With the switch off, drawing to the displayed area allowed, or a 240-line
+// display, every line is drawn.
 func TestFieldSkip(t *testing.T) {
 	const (
 		gp0     = 0x1f801810
@@ -66,6 +68,7 @@ func TestFieldSkip(t *testing.T) {
 	assert.Equal(t, "bbbbRRRR", rows(), "off, every line")
 
 	m.SetFieldSkip(true)
+	m.gpu.scanline = 100 // inside the picture, lines 16 to 256
 	clear()
 	rect()
 	assert.Equal(t, ".b.b.R.R", rows(), "field 0 shown: the odd lines only")
@@ -78,6 +81,15 @@ func TestFieldSkip(t *testing.T) {
 	rect()
 	assert.Equal(t, ".b.b.R.R", rows(), "the parity counts from the display's start")
 	m.Bus.Write32(gp1, 0x05000000)
+
+	m.gpu.scanline = 258 // past the picture, which ends at 256
+	for f := range uint32(2) {
+		clear()
+		field(f)
+		rect()
+		assert.Equal(t, "b.b.R.R.", rows(), "outside the picture: the even lines, in either field")
+	}
+	m.gpu.scanline = 100
 
 	clear()
 	m.Bus.Write32(gp0, e1Shown)
