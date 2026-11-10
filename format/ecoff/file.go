@@ -133,7 +133,7 @@ func NewFile(r io.ReaderAt) (*File, error) {
 	case MIPSEL_MAGIC, MIPSBE_EL_MAGIC:
 		f.byteOrder = binary.LittleEndian
 	default:
-		return nil, errors.New("file magic invalid")
+		return nil, fmt.Errorf("file magic invalid: %X", f.FileHeader.Magic)
 	}
 
 	if err := binary.Read(sr, f.byteOrder, &f.FileHeader); err != nil {

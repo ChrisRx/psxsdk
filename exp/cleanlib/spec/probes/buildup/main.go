@@ -103,14 +103,14 @@ func build() {
 	}
 }
 
-// Each call is marked in a ring in high RAM, which a reset leaves alone,
-// so that after a hang the last calls can be read back through the boot
-// disc's monitor: at ringAddr the magic "BUIL" and the count of marks,
+// Each call is marked in a ring in the scratchpad, which a reset leaves
+// alone (it clears RAM from 800A0000h up), so that after a hang the last
+// calls can be read back through the boot disc's monitor: at ringAddr the magic "BUIL" and the count of marks,
 // then ringLen entries of eight words: the frame and the call (frame<<8 |
 // call), GPUSTAT, D2_CHCR, I_STAT, I_MASK, DICR, and two words spare.
 const (
-	ringAddr = 0x80180000
-	ringLen  = 512
+	ringAddr = 0x1f800000
+	ringLen  = 31
 )
 
 // The calls, as marked.
