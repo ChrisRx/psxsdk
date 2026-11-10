@@ -116,6 +116,7 @@ func build() {
 const (
 	ringAddr = 0x1f800000
 	ringLen  = 31
+	tailAddr = ringAddr + 16 + 32*ringLen
 )
 
 // The calls, as marked.
@@ -152,10 +153,16 @@ func mark(f, call int) {
 func returned(f, call int) { mark(f, call|0x80) }
 
 // tick is the vertical blank callback: it counts the blanks taken and
-// keeps where the drawing list had got to.
+// keeps where the drawing list had got to, and in the scratchpad's last 16
+// bytes (tailAddr) GPUSTAT, D2_CHCR, DICR and I_STAT | I_MASK<<16 as the
+// last blank was taken.
 func tick() {
 	volatile.StoreUint32(word(ringAddr+8), volatile.LoadUint32(word(ringAddr+8))+1)
 	volatile.StoreUint32(word(ringAddr+12), volatile.LoadUint32(word(0x1f8010a0)))
+	volatile.StoreUint32(word(tailAddr), volatile.LoadUint32(word(0x1f801814)))
+	volatile.StoreUint32(word(tailAddr+4), volatile.LoadUint32(word(0x1f8010a8)))
+	volatile.StoreUint32(word(tailAddr+8), volatile.LoadUint32(word(0x1f8010f4)))
+	volatile.StoreUint32(word(tailAddr+12), volatile.LoadUint32(word(0x1f801070))&0xffff|volatile.LoadUint32(word(0x1f801074))<<16)
 }
 
 func main() {
