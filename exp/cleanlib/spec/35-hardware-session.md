@@ -289,3 +289,19 @@ Peeking under Sony's library failed: with Sony's image put in place by the clean
 Left to try: a description of the flashing from someone watching (whole frames, stripes, the background, the sprites or the text); the packet dump above; FntPrint and FntFlush, and the sound library's interrupts, which no probe has covered on the console.
 
 A probe that never returns, run on Sony's library, leaves the console for the reset button: Sony's monitor can't be reached while it runs. `accmulti` ends in a `VSync` loop and did that.
+
+
+### 2026-11-09: gasgar's flashing found
+
+Watching closely, gasgar's flashing covers the whole screen, 2D included, and a few of the torus's far-side triangles show through near its middle. Measured on the console that day, in order:
+
+- **Ruled out:**
+  - **The packet top bytes** (`accdump` on both libraries): every command byte is the same. Only the top bytes of the second and third vertex colors differ, which the GPU ignores.
+  - **gasgar's uninitialized data** left over from the takeover: zeroed before `go` (`hwrun -archive` with a load of zeros over 801E6B40 to 801F5000), it still flashes.
+  - **The monitor and the takeover:** Sony's library runs under the clean monitor once the takeover lays in its image (`hwrun -library clean -image` Sony's), and `teal` is solid there.
+- **Spec 41** (images queued behind the drawing, `probes/fieldtime`): a real difference of 0.4 to 1.1 ms in when the GPU goes idle. Fixed and checked on the console, where it now matches Sony's. It didn't change the flashing.
+- **Cut down to the display** (`probes/buildup`, then `teal`): gasgar's 640 by 480 interlaced single buffer with only a teal clear flashes on the clean library. The clear reaches one field's lines every frame, and the other keeps the monitor's old screens. At 640 by 240 (`tealni`) it's steady. `buildup` on Sony's library is steady through all its stages.
+- **When `VSync` returns** (`fieldphase`, `vsyncphase`, `statlines`): on a 480-line display, Sony's `VSync(0)` returns once GPUSTAT bit 31 changes after the blank is counted. That's 8 lines after it, when the odd picture ends, or 23 lines after it, when the odd picture starts. The clean library's returns at the count. At 240 lines both return at the count. A controller plugged in or not makes no difference. With the program waiting 12 lines after `VSync` (`tealwait`), the clean library's `teal` is solid.
+- **The clean library's count is late** by about 11 lines every other field (intervals 274 and 251 against Sony's 263 and 262). It counts after the kernel's own handlers, the pad driver among them. Not yet looked into.
+
+The emulator didn't show any of it: its GPUSTAT had no display mode bits, and its bit 31 followed the line in 480i. Fixed in b226b89. Spec 42 has the clean library's `VSync` wait as Sony's does, and with it gasgar no longer flashes on the console. Still open: the intermittent freeze with interrupts off seen in `buildup` and `tealbox` on the clean library. A reset clears RAM from at least 800A0000h up, so a probe that must leave a record through a reset keeps it in the scratchpad.

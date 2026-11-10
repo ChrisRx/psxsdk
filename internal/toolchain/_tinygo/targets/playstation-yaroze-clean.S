@@ -4412,19 +4412,35 @@ libps_printf_fill:
 2:	b	1b
 	nop
 
-# VSync's mode 1, in sync.go. Any other mode goes to the Go.
+# VSync's mode 1, in sync.go. Any other mode goes to the Go: libps_vsync_field when
+# GPUSTAT bit 19 shows a display of 480 lines, else libps_vsync_wait (spec 42). Every
+# path takes as many instructions as before that test was added, but the waiting
+# modes on any other display, which take five more: as many as a pass of the Go's
+# wait for the blank, so that the wait ends where it did. Mode 1 reads GPUSTAT too,
+# with its padding cut to keep its time.
 	.section .text.VSync, "ax", @progbits
 	.align 2
 	.globl VSync
 	.type VSync, @function
 VSync:
 	STUBTIME
+	bltz	$a0, 4f
+	lui	$v0, 0x1f80
+	lw	$v0, 0x1814($v0)
 	li	$at, 1
 	beq	$a0, $at, 1f
-	lui	$v0, 0x1f80
+	sll	$v0, $v0, 12
+	bltz	$v0, 2f
+	nop
 	j	libps_vsync_wait
 	nop
-1:	NOPS	13
+2:	j	libps_vsync_field
+	nop
+4:	nop
+	j	libps_vsync_wait
+	nop
+1:	lui	$v0, 0x1f80
+	NOPS	9
 	lw	$v0, 0x1110($v0)
 	lui	$at, %hi(libps_vsync_lines)
 	lw	$at, %lo(libps_vsync_lines)($at)

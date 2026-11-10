@@ -81,12 +81,14 @@ func VSyncCallback(f uintptr) {
 // shows (45 lines, not a frame's 263). Only a mode that waits moves that start,
 // so two VSync(1) in a row read about the same (probe spec/probes/vsyncone). A
 // negative mode returns the vertical blanks since the library started, without
-// waiting.
+// waiting. On a display of 480 lines, the modes that wait then wait for the
+// field to change, as vsyncField says.
 //
 // Never inlined: hot reload applies a patch at the address of this symbol, on
 // the static target as on the resident image.
 //
-// VSync(1) is all in the target's assembly, which goes to vsyncWait for the rest.
+// VSync(1) is all in the target's assembly, which goes to vsyncWait for the rest,
+// or to vsyncField on a display of 480 lines.
 //
 //export VSync
 func VSync(mode int32) int32
@@ -115,6 +117,62 @@ func vsyncWait(mode int32) int32 {
 	vsync.last = volatile.LoadUint32(&vsync.blanks)
 	vsyncLines = lineCount.Get() & 0xffff
 	return int32(lines)
+}
+
+// vsyncField is vsyncWait on a display of 480 lines, where Sony's VSync,
+// after the blank it waits for, waits on for the field to change (probes
+// spec/probes/vsyncphase and vsyncmodes, spec 42). VSync's assembly comes
+// here when GPUSTAT bit 19 shows 480 lines; it does that test before the
+// call, in as many instructions as a pass of the wait takes, so that the
+// wait on any other display ends when it did before.
+//
+//export libps_vsync_field
+//go:noinline
+func vsyncField(mode int32) int32 {
+	libStart()
+	now := volatile.LoadUint32(&vsync.blanks)
+	if mode < 0 {
+		return int32(now)
+	}
+	lines := (lineCount.Get() - vsyncLines) & 0xffff
+	target := now + 1
+	if mode != 0 {
+		target = vsync.last + uint32(mode)
+		if int32(target-now) <= 0 {
+			target = now + 1
+		}
+	}
+	waitField(target, now)
+	vsync.last = volatile.LoadUint32(&vsync.blanks)
+	vsyncLines = lineCount.Get() & 0xffff
+	return int32(lines)
+}
+
+// waitField waits until the count of vertical blanks, seen at the call,
+// reaches n, and then until GPUSTAT bit 31, which on an interlaced display
+// of 480 lines changes with the field, differs from what it read at the
+// call or, when blanks were counted before the last, at the one before the
+// last. With bit 31 the same, the wait ends when the field changes after the
+// blank, 8 or 23 lines into it; with it already different, at the count.
+// That is what Sony's VSync is seen to do with modes 0, 2 and 3 (probe
+// spec/probes/vsyncmodes). It ends anyway at the next blank, should bit 31
+// not change.
+func waitField(n, seen uint32) {
+	field := gp1.Get() >> 31
+	for {
+		now := volatile.LoadUint32(&vsync.blanks)
+		if now == seen {
+			continue
+		}
+		if int32(now-n) >= 0 {
+			break
+		}
+		seen = now
+		field = gp1.Get() >> 31
+	}
+	last := volatile.LoadUint32(&vsync.blanks)
+	for gp1.Get()>>31 == field && volatile.LoadUint32(&vsync.blanks) == last {
+	}
 }
 
 // waitBlanks waits until the count of vertical blanks reaches n.
