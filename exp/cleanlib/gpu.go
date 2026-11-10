@@ -159,10 +159,12 @@ func libps_draw_check() int32 {
 // startQueue sets up channel 2's completion flag and the DMA interrupt.
 // libStart calls it, with interrupts off.
 func startQueue() {
-	// The channel's completion does not interrupt the CPU, as with the
-	// reference, which takes no interrupt for its drawing: the queue
+	// The channel's completion does not interrupt the CPU while nothing
+	// waits behind the request running, as with the reference: the queue
 	// moves on when the library next looks (pollQueue) and at every
-	// interrupt, the vertical blank's included, at the end of each.
+	// interrupt, the vertical blank's included, at the end of each. A
+	// request queued behind one still going out turns it on (drawWait,
+	// queueImage, spec 43).
 	dmaInterrupt.Set(dmaInterrupt.Get()&0x00ffffff&^dicrGPUEnable | dicrMaster | dicrGPUFlag)
 	iStat.Set(^uint32(irqDMA))
 	iMask.Set(iMask.Get() | irqDMA)
@@ -195,20 +197,23 @@ func drawDone() {
 
 // imageTurn is drawDone's work when the GPU is not yet free, kept out of it
 // so that the handler's usual path takes the time it did before spec 39. If
-// the channel has sent all of what is running and an image is next, it
-// waits for the GPU to finish drawing and sends the image, as Sony's handler
-// does (spec 39), and then each image queued right behind it as soon as the
-// one before has gone out, as Sony's does (spec 41). In the handler, it then
+// the channel has sent all of what is running and a request is next, it
+// waits for the GPU to finish drawing and sends it, as Sony's handler does:
+// an image (spec 39), with each image queued right behind it as soon as the
+// one before has gone out (spec 41), and a packet list, after the images or
+// alone, which then goes out on its own (spec 43). In the handler, it then
 // handles what was raised meanwhile, a vertical blank that came during the
 // drawing among it, before the handler returns (lateInterrupts). It reports
 // whether the GPU is free, for drawDone to move the queue on. Waiting for
 // each image's own interrupt, as before spec 41, let the kernel's way out
 // and in again, and its handlers for that vertical blank, come between them.
-// Interrupts must be off.
+// Leaving a packet list for a later interrupt, as before spec 43, left it to
+// the next vertical blank, after the frame, where the program's
+// ResetGraph(1) could stop it partway through. Interrupts must be off.
 //
 //go:noinline
 func imageTurn() bool {
-	if dmaGPUControl.Get()&dmaBusy != 0 || !imageNext() {
+	if dmaGPUControl.Get()&dmaBusy != 0 || !requestNext() {
 		return false
 	}
 	for gp1.Get()&gpuStatReady == 0 {
@@ -217,15 +222,21 @@ func imageTurn() bool {
 }
 
 // sendImages is imageTurn's work once the GPU is ready, apart so that
-// imageTurn's way out when no image is next costs what it did before spec
-// 41: it sends the images and reports whether the GPU is then free. Each
-// goes as startHead sends it, with Sony's pace around it (sendImagesMarkSpace,
-// sendImagesSpace), and its empty packet list, which moves the queue on, is
-// waited for here.
+// imageTurn's way out when nothing is next costs what it did before spec
+// 41: it sends the images next and reports whether the GPU is then free.
+// Each goes as startHead sends it, with Sony's pace around it
+// (sendImagesMarkSpace, sendImagesSpace), and its empty packet list, which
+// moves the queue on, is waited for here. A packet list next, before the
+// images or after them, is started once the GPU is ready, and goes out on
+// its own.
 //
 //go:noinline
 func sendImages() bool {
-	for imageNext() {
+	for requestNext() {
+		if !imageNext() {
+			listTurn()
+			break
+		}
 		drawWatch.mark(drawNoLimit)
 		space(sendImagesMarkSpace)
 		drawNext()
@@ -235,6 +246,23 @@ func sendImages() bool {
 	}
 	lateInterrupts()
 	return gpuIdle()
+}
+
+// listTurn starts the packet list waiting next, for sendImages, once the
+// GPU is ready for it. With nothing waiting behind it, channel 2's
+// completion stops interrupting the CPU first, as before the last image
+// (startImage): Sony's is seen to leave the interrupt off once the list
+// queued behind a drawing has gone, and on when ResetGraph(1) drops it
+// (spec 43).
+//
+//go:noinline
+func listTurn() {
+	if queue.head+queue.running+1 == queue.tail {
+		dmaInterrupt.Set(dmaInterrupt.Get()&0x00ffffff&^dicrGPUEnable | dicrGPUFlag)
+	}
+	for gp1.Get()&gpuStatReady == 0 {
+	}
+	drawNext()
 }
 
 // Sony's handler, sending the images queued behind a drawing one after
@@ -266,6 +294,11 @@ func lateInterrupts() {
 func imageNext() bool {
 	i := queue.head + queue.running
 	return i != queue.tail && queue.reqs[i%queueLen].restore >= imageLoad
+}
+
+// requestNext reports whether a request waits after the one running.
+func requestNext() bool {
+	return queue.head+queue.running != queue.tail
 }
 
 // drawNext, with the GPU free, retires the request that was running and
@@ -471,11 +504,21 @@ const enqueueNops = 13
 // coming to start it: as Sony's library does, it waits in the call for the
 // GPU to be ready for a command and reports true, for enqueue to start the
 // request (spec 40). Otherwise the request stays queued for the interrupt.
+// With channel 2 still sending, its completion is made to interrupt the
+// CPU, as Sony's library has it with a request waiting (spec 43), and
+// drawDone starts the request from there; should the channel have finished
+// meanwhile, no completion is coming, and the request is taken as above.
 // Interrupts must be off.
 //
 //go:noinline
 func drawWait() bool {
-	if dmaGPUControl.Get()&dmaBusy != 0 || queue.head+queue.running+1 != queue.tail {
+	if dmaGPUControl.Get()&dmaBusy != 0 {
+		dmaInterrupt.Set(dmaInterrupt.Get()&0x00ffffff | dicrGPUEnable)
+		if dmaGPUControl.Get()&dmaBusy != 0 {
+			return false
+		}
+	}
+	if queue.head+queue.running+1 != queue.tail {
 		return false
 	}
 	for gp1.Get()&gpuStatReady == 0 {
