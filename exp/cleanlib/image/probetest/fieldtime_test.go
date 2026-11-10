@@ -49,10 +49,11 @@ func TestFieldTime(t *testing.T) {
 		t.Fatalf("no %q in %q", after, strings.Join(f, " "))
 		return 0
 	}
-	// Sony's, in the emulator with the drawing time on: the mean time from
-	// VSync's return to the GPU going idle, in microseconds, behind one box
-	// and the clear, by the images queued behind them.
-	sony := map[int]int{0: 18622, 8: 18916, 32: 19276}
+	// Sony's, in the emulator with the drawing time on and an image's DMA
+	// taking time (since c31746e): the mean time from VSync's return to the
+	// GPU going idle, in microseconds, behind one box and the clear, by the
+	// images queued behind them (spec 45).
+	sony := map[int]int{0: 18621, 8: 18999, 32: 19684}
 	seen := 0
 	for line := range strings.SplitSeq(tty, "\n") {
 		f := strings.Fields(line)

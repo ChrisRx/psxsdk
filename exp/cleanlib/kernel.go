@@ -340,6 +340,10 @@ func libStart() {
 //go:noinline
 func libBegin() {
 	intr.started = true
+	// Sony's sets every DMA channel's priority to 3 and disables them all
+	// first; ResetGraph, the sound and GsClearOt enable their own after
+	// (probe spec/probes/dmaleft, spec 45). The kernel leaves 00009099h.
+	dmaPriority.Set(dmaPriorityStart)
 	EnterCriticalSection()
 	intr.exit = exitBuf{
 		ra: uint32(uintptr(unsafe.Pointer(&libpsIntrEntry))),
@@ -371,6 +375,46 @@ func libBegin() {
 	ExitCriticalSection()
 }
 
+// dmaPriorityStart is DPCR as the library's start leaves it.
+const dmaPriorityStart = 0x33333333
+
+// The 2-cycle stores the vertical blank's path spends before acknowledging
+// the blank and before counting it, to Sony's cycles (spec 45).
+const (
+	vblankAckSpace   = 3
+	vblankCountSpace = 19
+)
+
+// The 2-cycle stores libps_interrupt spends at its start and its end: the
+// time its prologue and epilogue took when the vertical blank's work was
+// compiled into it, before spec 45 put that in vblankInterrupt, for
+// imageBlank to share.
+const (
+	interruptSpaceIn  = 5
+	interruptSpaceOut = 5
+)
+
+// vblankInterrupt handles the vertical blank: it acknowledges it, counts
+// it, calls the program's callback and runs the sound's tick. Sony's
+// handler acknowledges the blank 38 cycles after its read of I_STAT and
+// counts it 52 after that, its callback 28 later (probe
+// spec/probes/vsynccount, spec 45): the spaces put the clean handler's
+// there, and soundTick takes the time back.
+//
+//go:inline
+func vblankInterrupt() {
+	space(vblankAckSpace)
+	iStat.Set(^uint32(irqVBlank))
+	space(vblankCountSpace)
+	volatile.StoreUint32(&vsync.blanks, volatile.LoadUint32(&vsync.blanks)+1)
+	if f := volatile.LoadUint32(&vsync.callback); f != 0 {
+		callC(uintptr(f))
+	}
+	if snd.started {
+		soundTick()
+	}
+}
+
 // libps_interrupt handles an interrupt, after the kernel's own handlers
 // have run. It must not allocate, and returns quickly. Each source is
 // acknowledged before it is handled, so that one raised again meanwhile
@@ -378,16 +422,10 @@ func libBegin() {
 //
 //export libps_interrupt
 func libps_interrupt() {
+	space(interruptSpaceIn)
 	stat := iStat.Get() & iMask.Get()
 	if stat&irqVBlank != 0 {
-		iStat.Set(^uint32(irqVBlank))
-		volatile.StoreUint32(&vsync.blanks, volatile.LoadUint32(&vsync.blanks)+1)
-		if f := volatile.LoadUint32(&vsync.callback); f != 0 {
-			callC(uintptr(f))
-		}
-		if snd.started {
-			soundTick()
-		}
+		vblankInterrupt()
 	}
 	if stat&irqDMA != 0 {
 		iStat.Set(^uint32(irqDMA))
@@ -405,6 +443,7 @@ func libps_interrupt() {
 		cd.interrupt()
 		stat = iStat.Get() & iMask.Get()
 	}
+	space(interruptSpaceOut)
 }
 
 // rand's state is 0 until srand, in the target's assembly with it. The kernel has a

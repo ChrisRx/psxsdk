@@ -18,8 +18,9 @@ var drawwait = flag.String("drawwait", "", "the cue sheet of the drawwait probe'
 // queue empty and channel 2 idle, with the GPU still drawing, behaves as on
 // Sony's library: it waits in the call until the GPU is ready for a command,
 // and returns with channel 2 sending its list, DrawSync(1) giving 1. That
-// holds once the first list's DMA has ended (tail) and after ResetGraph(1)
-// has stopped it (reset), and everything is done when it is on Sony's. Build
+// holds once the first list's DMA has ended (tail); after ResetGraph(1) has
+// stopped the drawing (reset) the GPU is ready and the call goes at once, with
+// channel 2 sending as it returns. Everything is done when it is on Sony's. Build
 // the disc with
 //
 //	SIDES=clean exp/cleanlib/image/probe.sh drawwait exp/cleanlib/spec/probes/drawwait
@@ -58,20 +59,23 @@ func TestDrawWait(t *testing.T) {
 		}
 		name := f[1]
 		runs[name]++
-		// Sony's, in the emulator with the drawing time on: the second call
-		// takes 9,617 to 11,506 (tail) or 38,386 to 40,275 (reset), and
-		// everything is done at 76,852 to 76,863.
-		took := num(f, "took")
+		// Sony's, in the emulator with the drawing time on (spec 45): the
+		// second call takes 9,617 to 11,506 (tail), everything done at
+		// 76,852 to 76,863. After ResetGraph(1) the GPU is ready, since
+		// GP1(00h) and (01h) stop a timed drawing as on a console (spec
+		// 40), so the second call takes 55 (reset), everything done at
+		// 38,520 to 39,631.
+		took, done := num(f, "took"), num(f[len(f)-2:], "at") // the line ends "all done at N"
 		switch name {
 		case "tail":
 			assert.Between(t, 5000, 20000, took, "tail: the second GsDrawOt waits for the GPU")
+			assert.Between(t, 76500, 77200, done, "tail: everything done at Sony's time")
 		case "reset":
-			assert.Between(t, 30000, 45000, took, "reset: the second GsDrawOt waits for the GPU")
+			assert.Between(t, 40, 80, took, "reset: the second GsDrawOt finds the GPU ready")
+			assert.Between(t, 38400, 39800, done, "reset: everything done at Sony's time")
 		}
 		assert.Equal(t, 1, num(f, "busy"), name+": channel 2 is sending when the call returns")
 		assert.Equal(t, 1, num(f, "DrawSync(1)"), name+": DrawSync(1) after the call")
-		// The line ends "all done at N".
-		assert.Between(t, 76500, 77200, num(f[len(f)-2:], "at"), name+": everything done at Sony's time")
 	}
 	assert.Equal(t, 3, runs["tail"], "tail runs")
 	assert.Equal(t, 3, runs["reset"], "reset runs")

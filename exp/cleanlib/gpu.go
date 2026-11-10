@@ -243,6 +243,7 @@ func sendImages() bool {
 		space(sendImagesSpace)
 		for dmaGPUControl.Get()&dmaBusy != 0 {
 		}
+		imageBlank()
 	}
 	lateInterrupts()
 	return gpuIdle()
@@ -268,11 +269,16 @@ func listTurn() {
 // Sony's handler, sending the images queued behind a drawing one after
 // another, starts a watch once the GPU is ready for each, reads GPUSTAT
 // again about 140 cycles later and then sends the image: 508 cycles from
-// one image's blocks to the next's, 16 by 16, in the emulator (spec 41).
-// sendImages spends these 2-cycle stores to match.
+// one image's blocks to the next's, 16 by 16, in the emulator (spec 41),
+// and 966 since the emulator's image DMA takes time (spec 45), of which
+// imageBlocksWait takes 528. sendImages spends these 2-cycle stores to
+// match: after starting the image, and after starting its empty list. The
+// watch comes 112 cycles before the GPUSTAT read, where Sony's comes 140
+// before it: the clean library takes 26 cycles more from that read to the
+// image's blocks.
 const (
-	sendImagesMarkSpace = 19
-	sendImagesSpace     = 48
+	sendImagesMarkSpace = 5
+	sendImagesSpace     = 37
 )
 
 // lateInterrupts, in the interrupt handler, runs the handler again, for the
@@ -283,11 +289,19 @@ const (
 // with the drive's interrupt raised it leaves everything to the handler's
 // own pass, which takes the drive's after drawDone and would take it twice.
 func lateInterrupts() {
-	sp := device.AsmFull("move {}, $$sp", nil)
-	base := uintptr(unsafe.Pointer(&intr.stack))
-	if sp >= base && sp < base+unsafe.Sizeof(intr.stack) && iStat.Get()&iMask.Get()&irqCD == 0 {
+	if inHandler() && iStat.Get()&iMask.Get()&irqCD == 0 {
 		libps_interrupt()
 	}
+}
+
+// inHandler reports whether the code is running in the interrupt handler,
+// on the library's own stack.
+//
+//go:inline
+func inHandler() bool {
+	sp := device.AsmFull("move {}, $$sp", nil)
+	base := uintptr(unsafe.Pointer(&intr.stack))
+	return sp >= base && sp < base+unsafe.Sizeof(intr.stack)
 }
 
 // imageNext reports whether the request after the one running is an image.
@@ -576,7 +590,10 @@ func drain() {
 
 // DrawSync with mode 0 waits until the queue is empty and the GPU idle,
 // and returns 0. Any other mode returns at once the number of requests
-// still queued or running, or 1 if only the GPU is still drawing.
+// waiting behind the one running, or, with none waiting, 1 if the channel
+// or the GPU is still busy: Sony's counts 1 with a drawing running and one
+// image queued behind it, and one more for each image after (probe
+// spec/probes/qlen, spec 45).
 //
 //export DrawSync
 //go:noinline
@@ -589,7 +606,7 @@ func DrawSync(mode int32) int32 {
 		return 0
 	}
 	pollQueue()
-	if n := queued(); n != 0 {
+	if n := queued() - queue.running; n != 0 {
 		return int32(n)
 	}
 	if gpuIdle() {
@@ -759,7 +776,8 @@ func queueImage(r RECT, p unsafe.Pointer, kind uint32) bool {
 //
 //go:inline
 func startImage(r *request) {
-	if queue.head == queue.lastImage {
+	last := queue.head == queue.lastImage
+	if last {
 		dmaInterrupt.Set(dmaInterrupt.Get()&0x00ffffff&^dicrGPUEnable | dicrGPUFlag)
 	}
 	for gp1.Get()&gpuStatReady == 0 {
@@ -776,8 +794,12 @@ func startImage(r *request) {
 	} else {
 		readImage(rect, (*uint32)(p))
 	}
-	for dmaGPUControl.Get()&dmaBusy != 0 {
+	if last {
+		for dmaGPUControl.Get()&dmaBusy != 0 {
+		}
+		return
 	}
+	imageBlocksWait()
 }
 
 // loadImage copies the image at p, of 16-bit pixels, into the rectangle r

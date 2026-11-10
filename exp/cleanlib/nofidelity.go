@@ -20,7 +20,25 @@ func pace(c uint32) {}
 func space(n int) {}
 
 //go:inline
+func spaceRun(n *uint32) {}
+
+//go:inline
 func spaceWith(n int, v uint32) {}
+
+// imageBlocksWait waits for a queued image's blocks to go, without Sony's
+// accesses between (fidelity.go).
+//
+//go:inline
+func imageBlocksWait() {
+	for dmaGPUControl.Get()&dmaBusy != 0 {
+	}
+}
+
+// imageBlank leaves a vertical blank raised while the images went out to the
+// interrupt after them (fidelity.go).
+//
+//go:inline
+func imageBlank() {}
 
 //go:inline
 func spaceApart(n int, v uint32) {}

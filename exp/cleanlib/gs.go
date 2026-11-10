@@ -458,6 +458,20 @@ func GsDrawOt(ot *GsOT) {
 	pace(drawOtPad)
 }
 
+// The 2-cycle stores ResetGraph(1) spends between its
+// accesses, so that they come where Sony's do, from its read of I_MASK: its
+// write at 2 cycles, D2_CHCR's at 40, DPCR's read and write at 48 and 54,
+// GP1's at 62 and 70, I_MASK's read and write at 86 and 88, and the
+// caller's next access at 164 (probe spec/probes/dmaleft, spec 45).
+const (
+	resetSpaceIn   = 7  // before the read of I_MASK
+	resetSpaceMask = 18 // after I_MASK's write
+	resetSpaceDMA  = 2  // after D2_CHCR's
+	resetSpaceGP1  = 3  // between GP1's two
+	resetSpaceBack = 7  // before I_MASK's read
+	resetSpaceOut  = 7  // after its write
+)
+
 // ResetGraph resets the GPU. Mode 0 resets it completely, 1 cancels the
 // drawing in progress and empties the command queue, and 3 resets it but
 // keeps the drawing and display environments. Mode 1 empties the drawing
@@ -477,14 +491,25 @@ func ResetGraph(mode int32) int32 {
 		if mode == 3 {
 			resetNotice()
 		}
-		sr := intOff()
-		dmaGPUControl.Set(0)
+		// As Sony's does (probe spec/probes/dmaleft, spec 45): every
+		// interrupt masked, channel 2 stopped in its linked-list mode and
+		// enabled, as at the reset, then the GPU's interrupt acknowledged
+		// and its command queue emptied, and the interrupts back.
+		// The stores space the accesses as Sony's are (resetSpaceIn on).
+		space(resetSpaceIn)
+		m := iMask.Get()
+		iMask.Set(0)
+		space(resetSpaceMask)
+		dmaGPUControl.Set(0x0401)
+		space(resetSpaceDMA)
+		dmaPriority.Set(dmaPriority.Get() | dmaGPUEnable)
 		queue.head, queue.running = queue.tail, 0
-		intRestore(sr)
-		// As the reference does: acknowledge the GPU's interrupt, then
-		// empty its command queue.
 		gp1.Set(0x02000000)
+		space(resetSpaceGP1)
 		gp1.Set(0x01000000)
+		space(resetSpaceBack)
+		iMask.Set(iMask.Get() | m)
+		space(resetSpaceOut)
 		if mode == 3 {
 			startup()
 		}

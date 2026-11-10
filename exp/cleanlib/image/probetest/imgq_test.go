@@ -18,9 +18,9 @@ var imgq = flag.String("imgq", "", "the cue sheet of the imgq probe's disc, as p
 // they do on a console under Sony's library: LoadImage and StoreImage called
 // just after GsDrawOt return at once, StoreImage's buffer is written only once
 // the drawing is done, and the images' words reach the GPU only once it has
-// finished drawing. DrawSync(1) gives 1 before the call, as on Sony's, and 2
-// after it where Sony's gives 1: the clean library counts the image (spec 39,
-// Results). Build the disc with
+// finished drawing. DrawSync(1) gives 1 before the call and after it, as on
+// Sony's: the image waiting counts, the drawing running ahead of it does not
+// (spec 45; until then the clean library gave 2 after it). Build the disc with
 //
 //	SIDES=clean exp/cleanlib/image/probe.sh imgq exp/cleanlib/spec/probes/imgq
 //
@@ -82,13 +82,13 @@ func TestQueuedImages(t *testing.T) {
 
 	assert.Between(t, 1, 400, num(img, "loadimage"), "LoadImage returns at once")
 	assert.Equal(t, 1, num(img, "DrawSync(1)"), "DrawSync(1) before LoadImage")
-	assert.Equal(t, 2, num(img, "then"), "DrawSync(1) after LoadImage")
+	assert.Equal(t, 1, num(img, "then"), "DrawSync(1) after LoadImage")
 	assert.Equal(t, 128, num(img, "unchanged"), "the image is not drawn over")
 	assert.Between(t, frame, frame+1000, num(img, "total"), "DrawSync(0) waits for the frame and the image")
 
 	assert.Between(t, 1, 400, num(store, "storeimage"), "StoreImage returns at once")
 	assert.Equal(t, 1, num(store, "DrawSync(1)"), "DrawSync(1) before StoreImage")
-	assert.Equal(t, 2, num(store, "then"), "DrawSync(1) after StoreImage")
+	assert.Equal(t, 1, num(store, "then"), "DrawSync(1) after StoreImage")
 	assert.Equal(t, 128, num(store, "return"), "StoreImage's buffer is untouched when it returns")
 	assert.Equal(t, 128, num(store, "picture"), "StoreImage reads the finished picture")
 

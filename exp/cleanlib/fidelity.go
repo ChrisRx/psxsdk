@@ -66,6 +66,19 @@ func space(n int) {
 	}
 }
 
+// spaceRun spends about 8 cycles a turn on a loop of stores to spacer, as many
+// turns as *n holds: for a long pad in code inlined where it would take too much
+// room as space's unrolled stores, and where a call of spin would cost the
+// function a frame of its own. The count is read from memory, so that the loop
+// is not unrolled.
+//
+//go:inline
+func spaceRun(n *uint32) {
+	for i := volatile.LoadUint32(n); i != 0; i-- {
+		volatile.StoreUint32(&spacer, 0)
+	}
+}
+
 // spaceWith is space storing v, a value live on its path: when two paths
 // pad with stores of the same value the compiler merges their tails, and
 // then a change to one path's count moves the other's time.
@@ -405,3 +418,98 @@ func padPow(x float64) {
 func padPowInt() { spinCycles(powIntPad) }
 
 const powIntPad = 4368
+
+// imageBlocksWait waits, for startImage, until the blocks of a queued image
+// have gone, as Sony's handler is seen to wait for them (probe
+// spec/probes/imgpace, spec 45): it reads D2_CHCR 124 cycles after starting
+// them and, with the channel still sending, puts I_MASK back, reads DICR
+// three times, then I_STAT and I_MASK, and with the channel's completion
+// raised there acknowledges it in I_STAT and in DICR, before it reads D2_CHCR
+// again, 528 cycles after the start for a 16 by 16 image. With the channel
+// done at the first read, it returns there. Sony's waits that way for the
+// last image too, whose completion does not interrupt, until 606 cycles
+// after the start, and then returns from its handler; the clean library
+// still has the image's empty packet list to send and the handler's second
+// pass to make after it, some 800 cycles, so startImage waits for the last
+// image's blocks in a tight loop as before, which keeps the chain's end
+// some 400 cycles behind Sony's, as it was. Before spec 45 the clean library read
+// D2_CHCR in a tight loop and went on as soon as it showed the channel
+// done, which with the transfer taking time, as the emulator has it since
+// c31746e and a console always does, sent each image some 270 cycles sooner
+// than Sony's. Sony's handler also takes a vertical blank raised meanwhile
+// here, after its read of I_STAT; imageBlank takes it after the image.
+// Inlined, so that drawNext, which it goes into, stays a function that calls
+// nothing, whose free path costs what it did. Interrupts must be off. A
+// build without the fidelity tag waits in a tight loop (nofidelity.go).
+//
+//go:inline
+func imageBlocksWait() {
+	spaceRun(&blocksRuns[0])
+	space(blocksSpaceFirst)
+	if dmaGPUControl.Get()&dmaBusy == 0 {
+		return
+	}
+	space(blocksSpaceMask)
+	iMask.Set(iMask.Get())
+	spaceRun(&blocksRuns[1])
+	space(blocksSpaceDICR)
+	dmaInterrupt.Get()
+	space(blocksSpaceDICR2)
+	dmaInterrupt.Get()
+	space(blocksSpaceDICR3)
+	dmaInterrupt.Get()
+	spaceRun(&blocksRuns[2])
+	space(blocksSpaceStat)
+	if iStat.Get()&iMask.Get()&irqDMA != 0 {
+		spaceRun(&blocksRuns[3])
+		space(blocksSpaceAck)
+		iStat.Set(^uint32(irqDMA))
+		space(blocksSpaceAckDICR)
+		dmaInterrupt.Get()
+		spaceRun(&blocksRuns[4])
+		space(blocksSpaceAckDICR2)
+		d := dmaInterrupt.Get()
+		dmaInterrupt.Set(d&0x00ffffff | dicrGPUFlag)
+		space(blocksSpaceAckEnd)
+	}
+	for dmaGPUControl.Get()&dmaBusy != 0 {
+	}
+}
+
+// The pads imageBlocksWait spends before each of its accesses, to Sony's
+// cycles: turns of spaceRun's loop, about 8 cycles each, for the long ones,
+// to keep the inlined code small, then 2-cycle stores.
+var blocksRuns = [...]uint32{10, 5, 5, 6, 8}
+
+const (
+	blocksSpaceFirst    = 9
+	blocksSpaceMask     = 5
+	blocksSpaceDICR     = 4
+	blocksSpaceDICR2    = 8
+	blocksSpaceDICR3    = 5
+	blocksSpaceStat     = 5
+	blocksSpaceAck      = 9
+	blocksSpaceAckDICR  = 16
+	blocksSpaceAckDICR2 = 8
+	blocksSpaceAckEnd   = 8
+)
+
+// imageBlank takes, for sendImages, a vertical blank raised while an image
+// went out, between two images, as Sony's handler takes it; the kernel's
+// handlers do not see it. From pollQueue too, on the program's stack with
+// interrupts off: the chain runs there when the program polls DrawSync(1),
+// where Sony's runs in its handler (spec 45). The stores after it keep
+// Sony's time from one image to the next. A build without the fidelity tag
+// leaves the blank to the interrupt after the chain, as before spec 45
+// (nofidelity.go).
+//
+//go:inline
+func imageBlank() {
+	if iStat.Get()&iMask.Get()&irqVBlank != 0 {
+		vblankInterrupt()
+		space(blocksSpaceBlank)
+	}
+}
+
+// blocksSpaceBlank is the 2-cycle stores imageBlank spends after the blank.
+const blocksSpaceBlank = 17

@@ -319,6 +319,10 @@ func (w *cdWatch) check() bool {
 	return (t-volatile.LoadUint32(&w.start))&0xffff > volatile.LoadUint32(&w.limit)
 }
 
+// cdStartDPCRSpace is the 2-cycle stores in place of the read and write of
+// DPCR start made before spec 45.
+const cdStartDPCRSpace = 4
+
 // start takes the drive over from the kernel, the first time it is used:
 // it starts the library if nothing has, enables the drive's interrupts,
 // prints the reference's notice (the address of its own CD state, kept so
@@ -338,7 +342,10 @@ func (c *cdDriver) start() {
 	cdReg3.Set(0x1f) // acknowledge anything pending
 	cdReg2.Set(0x1f) // enable every interrupt
 	cdIndex.Set(0)
-	dmaPriority.Set(dmaPriority.Get() | dmaCDEnable)
+	// The drive's channel is enabled in DPCR at each read (cdTransfer), as
+	// Sony's is seen to, not here (probe spec/probes/dmaleft, spec 45): the
+	// stores take the time the enable took.
+	space(cdStartDPCRSpace)
 	// The kernel reads by DMA with the channel's interrupt on; the
 	// library waits for its transfers itself, and nothing would
 	// acknowledge the interrupt.
