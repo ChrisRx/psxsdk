@@ -260,6 +260,9 @@ func (d *dma) transferGPU() {
 		return
 	case 1:
 		d.transferGPURequest()
+		if d.gpu.time.on && d.timeGPURequest() {
+			return
+		}
 	case 2:
 		if d.gpu.time.on {
 			d.transferGPUTimed()
