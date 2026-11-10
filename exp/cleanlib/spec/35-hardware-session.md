@@ -305,3 +305,50 @@ Watching closely, gasgar's flashing covers the whole screen, 2D included, and a 
 - **The clean library's count is late** by about 11 lines every other field (intervals 274 and 251 against Sony's 263 and 262). It counts after the kernel's own handlers, the pad driver among them. Not yet looked into.
 
 The emulator didn't show any of it: its GPUSTAT had no display mode bits, and its bit 31 followed the line in 480i. Fixed in b226b89. Spec 42 has the clean library's `VSync` wait as Sony's does, and with it gasgar no longer flashes on the console. Still open: the intermittent freeze with interrupts off seen in `buildup` and `tealbox` on the clean library. A reset clears RAM from at least 800A0000h up, so a probe that must leave a record through a reset keeps it in the scratchpad.
+
+
+### 2026-11-10: the known risks, and the hang
+
+The hang in `buildup` and `tealbox` was two bugs, both fixed and checked on the console: a list queued behind a drawing that `ResetGraph(1)` cut off (spec 43), and `FntLoad`'s palette taken from a heap that starts at 0 when nothing runs the image's init routine, which reached the exception vector on the fifth run after a load (spec 44). gasgar runs and looks the same on both libraries.
+
+The known risks above:
+
+- **`lwc2 $1` right before NCCT or NCDT.** Settled by the `accmulti` and `accdump` runs of 2026-11-08: the lit Gouraud kinds' colors on the console are the same on both libraries and the same as the emulator's, but for the top byte of the second and third colors, which the GPU ignores and which Sony's differs in too. A load the command didn't see would change the colors. Not a hazard. That top byte is an emulator difference, still to look at.
+- **A list stopped partway** (`probes/listcut`, 400 cases on each library, the same on both): stopping channel 2 in a linked list of eight-word commands never left the GPU part of the way through a command. A fill sent to GP0 right after the stop always landed, without GP1(01h). D2_MADR never moved after the stop, and GPUSTAT bit 26 was back within a few hundred cycles. In linked list mode D2_MADR moves a node at a time, as the GPU takes the words, where the emulator sends the whole list at once.
+- **The Kanji flush's DMA wait** (`kanji`, `kanjistream`, `kanjipast`, `kanjilimits`, run from copies that return):
+  - **Sony's library stalls on a flush that fills its pool exactly.** On the console, Sony's `DrawSync(0)` after each 301-character flush in `kanjilimits` waits 4 seconds, prints `GPU timeout:que=0,stat=56822000,chcr=01000401,madr=00000003,...` and resets the GPU, eight times. Its list then ends in a link to address 3, whose node at address 0 (00000003h, as the BIOS leaves it) links to itself, so the channel never ends. With an end of list (00FFFFFFh) written at address 0 first, the same flushes finish (`.build/hardware/group2-kanji0`). The emulator gives up on a list after 16,384 nodes, which hides it. The clean library ends its list and doesn't stall. **Not copied, on purpose:** the clean library keeps working where Sony's stalls, a difference left by the user's decision, 2026-11-10.
+  - **Glyph pixels differ** between the libraries on the console, where they agree in the emulator: Sony's gives set pixels for an empty cell (81ADh) and in glyphs' edge columns, and in `kanjistream`'s glyph images read back from video memory, where the clean library gives zeros. The console's BIOS font is the same as `scph1001`'s (26 samples across BFC66000h to BFC7FFFFh, all equal), so it's not the font. The likely cause is what RAM and video memory hold before the program, which the emulator zeroes and a console doesn't: Sony's leaves some of it as it was, the clean library writes zeros. For a later spec, once the emulator can start with memory filled.
+
+### 2026-11-10: what the CPU's accesses cost (`probes/cpucost`)
+
+`cpucost` times machine code it writes into RAM itself, no library code, with root counter 2 on the system clock and interrupts off, six times each: the first with the code out of the instruction cache, the rest with it in. Cycles each, the second counter read taken off (4 on the console, 2 in the emulator), from the warm runs:
+
+| pattern | console | emulator |
+|---|---|---|
+| an instruction, cached | 1.0 | 2 |
+| an instruction, cache missing (cold, or a loop over 4 KB) | 2.3 | 2 |
+| an instruction, uncached (KSEG1) | 6.1 | 2 |
+| `lw` from RAM | 6.1 | 2 |
+| `lw` from RAM, the next instruction using it | 8.1 for the two | 4 |
+| `sw` to RAM, in a run of 8 or more | 2.1 | 2 |
+| `sw` to RAM, then three other instructions | 4.0 for the four, so the store is hidden | 8 |
+| `sw` to RAM then `lw` from RAM | 13.3 for the two | 4 |
+| `lw` or `sw`, scratchpad | 1.0 | 2 |
+| `lw` GPUSTAT or a root counter | 4.9 | 2 |
+| `sw` GP0 | 1.6 | 2 |
+| `lw` BIOS ROM | 33 | 2 |
+| `mult` then `mflo` | 7.8 for the two | 4 |
+| `div` then `mflo` | 37.8 for the two | 4 |
+| `mtc2` | 1.0 | 2 |
+| `mfc2` and a `nop` | 2.0 | 4 |
+| RTPS, RTPT, NCLIP, AVSZ3, NCCT, each with `mfc2` and `nop` | 17.6, 25.6, 10.6, 7.6, 41.6 | 19.2, 27.2, 12.2, 9.2, 43.2 |
+| a branch, taken or not, with its delay slot and a `nop` | 3.0 for the three | 6 |
+
+The emulator charges 2 cycles for every instruction, whatever it does. On a console the time is the instruction cache and the memory: an instruction from the cache takes 1 cycle, one fetched from RAM about 9 cycles a 16-byte line, and a load from RAM 6. Stores go through a write buffer and cost almost nothing when spaced out, but a load right after them waits for it. The GTE commands' own times agree with the emulator's. That explains the readings above it: routines in small loops run up to twice as fast on a console, and routines that load from RAM or run once through cold code run slower. Raw output in `.build/hardware/cpucost`.
+
+`cpucost2`, the same way (raw output in `.build/hardware/cpucost2`):
+
+- **The instruction cache is 4 KB, direct mapped, 16-byte lines.** Two blocks of 128 instructions run in turn take 291 cycles 2 KB or 6 KB apart, and 599 4 KB or 8 KB apart, where each evicts the other every time.
+- **A line is filled from the word entered to the line's end.** Run cold every time, 64 instructions in 16 whole lines take 9 cycles a line. Two instructions in each of 16 lines take 10.7 a line entered at the line's start and 7.7 entered 8 bytes in (2.1 a line warm): about 1.5 cycles a word filled, and about 3 more a line.
+- **Loads from RAM** take 7 cycles each in this layout, the same at one address, 4 bytes apart and 128 bytes apart (6.1 in `cpucost`'s layout). No DRAM page effect shows.
+- **A DMA stops the CPU, even running from the cache.** Channel 6 clearing 1,024 words takes 1,097 cycles, 1.07 a word. 256 cached instructions started with it take 1,088, where alone they take 255: the CPU waited out the transfer. 64 loads from RAM after it take the transfer's time plus their own. In the emulator the clear takes no time, and the CPU goes on.
