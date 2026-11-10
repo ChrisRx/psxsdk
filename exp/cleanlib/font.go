@@ -123,11 +123,7 @@ var font struct {
 //export FntLoad
 func FntLoad(tx, ty int32) {
 	fontBase = uintptr(unsafe.Pointer(&font))
-	// The palette is transparent for index 0 and white for index 1, which
-	// the font draws with; the rest are unused.
-	var clut [8]uint32
-	clut[0] = 0xffff0000
-	loadImage(RECT{X: int16(tx), Y: int16(ty + 128), W: 16, H: 1}, unsafe.Pointer(&clut[0]))
+	loadImage(RECT{X: int16(tx), Y: int16(ty + 128), W: 16, H: 1}, unsafe.Pointer(&fontClut[0]))
 	loadImage(RECT{X: int16(tx), Y: int16(ty), W: 32, H: 32}, unsafe.Pointer(&fontPixels[0]))
 	font.tpage = uint16(tx/64) | uint16(ty/256)<<4
 	font.clut = uint16(tx/16) | uint16(ty+128)<<6
@@ -148,9 +144,29 @@ func FntLoad(tx, ty int32) {
 	// a time (spec 08); the clean library clears its own, and waits for
 	// the bytes it does not have.
 	clearBytes(unsafe.Pointer(&font.streams), unsafe.Sizeof(font.streams))
-	spinCycles((384-uint32(unsafe.Sizeof(font.streams)))*8 - fntLoadImageTime)
-	nops(fntLoadImageNops)
+	spinCycles((384-uint32(unsafe.Sizeof(font.streams)))*8 - fntLoadImageTime + fntLoadClutTime)
+	nops(fntLoadImageNops + fntLoadClutNops)
 }
+
+// fontClut is the font's palette, which FntLoad puts into video memory:
+// transparent for index 0 and white for index 1, which the font draws with,
+// and the rest unused. It is a variable of its own, not FntLoad's, because
+// loadImage can leave the image queued behind a drawing to go out later, so
+// a palette of FntLoad's went to the heap, 32 bytes a call. On a console that
+// has the library put in place through the monitor, as hwrun does, nothing
+// calls the image's init routine, the one place the heap's start is set, so
+// each FntLoad took the next 32 bytes from address 0 up, and the fifth run of
+// a program on one load of the library wrote its palette over the exception
+// vector at 80h (spec 44). The library must not allocate.
+var fontClut = [8]uint32{0xffff0000}
+
+// fntLoadClutTime and fntLoadClutNops are the time the palette's allocation
+// and its stores took, in cycles and in the 2-cycle nops after the spin, kept
+// so that FntLoad takes as long as it did (spec 44).
+const (
+	fntLoadClutTime = 388
+	fntLoadClutNops = 2
+)
 
 // FntLoad's two loadImage calls came to 226 cycles more with spec 39's
 // work, the queue's checks and the calls no longer inlined; they are taken
