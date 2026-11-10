@@ -29,6 +29,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -127,6 +128,9 @@ func run(device string, baud int, library, imagePath, monitorPath, archive, out 
 			return err
 		}
 		s.Marker = binary.LittleEndian.Uint32(monitor.Segments[0].Data)
+		if dir, err := os.UserCacheDir(); err == nil {
+			s.Stamp = filepath.Join(dir, "psx", "hwrun-in-place")
+		}
 	default:
 		return fmt.Errorf("unknown library %q", library)
 	}

@@ -11,6 +11,8 @@ package hwrun
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -122,6 +124,14 @@ type Session struct {
 	TakeOver *serial.Program
 	Marker   uint32
 
+	// Stamp is a file that names what was last uploaded, by a hash of
+	// TakeOver. With the clean monitor already there, Start goes on with it
+	// only if the stamp names this TakeOver, and otherwise resets the console
+	// and uploads it, so that a console left with another image (Sony's,
+	// through -image, or an older build) isn't taken for this one. Empty
+	// skips the check.
+	Stamp string
+
 	// Library names the library in the output files' names.
 	Library string
 
@@ -168,8 +178,11 @@ func (s *Session) Start(ctx context.Context) error {
 		return err
 	}
 	if strings.Contains(strings.ToLower(reply), fmt.Sprintf(":%08x", s.Marker)) {
-		fmt.Fprintln(s.Log, "the clean library is already in place")
-		return nil
+		if s.stamped() {
+			fmt.Fprintln(s.Log, "the clean library is already in place")
+			return nil
+		}
+		return s.reset(ctx, "the clean monitor is up with another library image")
 	}
 	start := time.Now()
 	fmt.Fprintln(s.Log, "uploading the clean library and monitor")
@@ -183,8 +196,36 @@ func (s *Session) Start(ctx context.Context) error {
 		return errors.New("the clean monitor didn't start")
 	}
 	fmt.Fprintf(s.Log, "the clean library is in place, after %v\n", time.Since(start).Round(time.Second))
+	if s.Stamp != "" {
+		if err := os.MkdirAll(filepath.Dir(s.Stamp), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(s.Stamp, []byte(s.takeOverHash()+"\n"), 0o644); err != nil {
+			return err
+		}
+	}
 	s.mon, err = serial.NewMonitor(ctx, s.Port)
 	return err
+}
+
+// takeOverHash is a hash of what TakeOver uploads.
+func (s *Session) takeOverHash() string {
+	h := sha256.New()
+	for _, seg := range s.TakeOver.Segments {
+		fmt.Fprintf(h, "%08x %d\n", seg.Addr, len(seg.Data))
+		h.Write(seg.Data)
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// stamped reports whether the stamp names this TakeOver, or there is no stamp
+// to check.
+func (s *Session) stamped() bool {
+	if s.Stamp == "" {
+		return true
+	}
+	b, err := os.ReadFile(s.Stamp)
+	return err == nil && strings.TrimSpace(string(b)) == s.takeOverHash()
 }
 
 // Probe returns the monitor's reply to reading the word Start's check reads.
