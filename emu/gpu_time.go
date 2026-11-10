@@ -10,6 +10,10 @@ package emu
 // ends when its last command reaches the GPU, which then goes on drawing it.
 // The pixels still land in VRAM as each command arrives.
 //
+// An image sent to the GPU by DMA in request mode (LoadImage's) takes time
+// too: the channel stays busy, and the GPU not ready for a command, for
+// imageCyclesPerWord cycles a word, after whatever the GPU was drawing.
+//
 // The cost is a fixed time per pixel drawn. A console takes about 0.8 cycles
 // a pixel for 320 by 240 semi-transparent boxes (spec 39 of exp/cleanlib), so
 // a cycle a pixel is near enough.
@@ -19,6 +23,12 @@ const gpustatReadyCmd = 1 << 26
 
 // drawCyclesPerPixel is the CPU cycles a drawn pixel costs under SetDrawTime.
 const drawCyclesPerPixel = 1
+
+// imageCyclesTenths is the cycles, in tenths, a word of an image takes to go
+// to the GPU by DMA under SetDrawTime. A console takes about 1.7: 8192 words
+// in 14,700 cycles and 16,384 in 28,800 from the call (probes/readybusy of
+// exp/cleanlib), and is ready for a command 16 cycles after the channel ends.
+const imageCyclesTenths = 17
 
 // drawTime is the GPU's clock for SetDrawTime: whether it is on, the CPU's
 // cycle count, when the GPU will have drawn what it has been given, and what
@@ -78,6 +88,22 @@ func (d *dma) transferGPUTimed() {
 		return
 	}
 	d.endGPU()
+}
+
+// timeGPURequest has an image just sent to the GPU by DMA in request mode
+// take its time under SetDrawTime: the channel stays busy until the GPU has
+// taken its words, after what it was drawing, and the GPU is not ready for a
+// command until then. It reports whether it did; a transfer from the GPU, or
+// of no words, ends at once as before.
+func (d *dma) timeGPURequest() bool {
+	n := d.pending[dmaGPU]
+	if n == 0 || *d.chcr(dmaGPU)&chcrToDevice == 0 {
+		return false
+	}
+	t := &d.gpu.time
+	t.until = max(t.until, *t.clock) + uint64(n)*imageCyclesTenths/10
+	d.gpuEnd, d.gpuWords, d.pending[dmaGPU] = t.until, n, 0
+	return true
 }
 
 // gpuDue moves a timed GPU transfer on once its time has come: a held list
