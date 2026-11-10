@@ -8,7 +8,6 @@
 package cproject
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"os"
@@ -17,6 +16,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"go.chrisrx.dev/psx/format/auto"
 )
 
 // DefaultAddr is where a program is linked when its Makefile does not say,
@@ -293,8 +294,8 @@ func objectsIn(s string) []string {
 }
 
 // readAuto takes the program and the files to load from the project's auto
-// file, if it has one. Its lines are siocons commands, of which local load
-// names the program and local dload its data.
+// file, if it has one. The program is the one the project builds, so it
+// need not be there yet: its name is what counts.
 func (p *Project) readAuto() error {
 	path, ok := find(p.Dir, "auto")
 	if !ok {
@@ -304,65 +305,23 @@ func (p *Project) readAuto() error {
 	if err != nil {
 		return err
 	}
-	scan := bufio.NewScanner(bytes.NewReader(data))
-	for scan.Scan() {
-		f := strings.Fields(scan.Text())
-		if len(f) >= 3 && strings.EqualFold(f[0], "local") && strings.EqualFold(f[1], "load") {
-			p.program = filepath.Base(strings.ReplaceAll(f[2], `\`, "/"))
-			continue
-		}
-		if len(f) < 4 || !strings.EqualFold(f[0], "local") || !strings.EqualFold(f[1], "dload") {
-			continue
-		}
-		addr, err := strconv.ParseUint(strings.TrimPrefix(strings.ToLower(f[3]), "0x"), 16, 32)
-		if err != nil {
-			return fmt.Errorf("%s: %q: %w", path, scan.Text(), err)
-		}
-		file, ok := find(p.Dir, f[2])
-		if !ok {
-			p.Missing = append(p.Missing, f[2])
-			continue
-		}
-		p.Loads = append(p.Loads, Load{File: file, Addr: uint32(addr)})
+	b, err := auto.Parse(bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("%s: %w", path, err)
 	}
-	return scan.Err()
+	if prog := b.Program(); prog != "" {
+		p.program = filepath.Base(strings.ReplaceAll(prog, `\`, "/"))
+	}
+	for _, l := range b.Loads {
+		file, ok := find(p.Dir, l.File)
+		if !ok {
+			p.Missing = append(p.Missing, l.File)
+			continue
+		}
+		p.Loads = append(p.Loads, Load{File: file, Addr: l.Addr})
+	}
+	return nil
 }
 
-// find resolves a path as DOS would, with either slash and in any case,
-// relative to dir unless it is absolute. An exact match wins over one that
-// differs in case.
-func find(dir, path string) (string, bool) {
-	path = strings.ReplaceAll(path, `\`, "/")
-	cur := dir
-	if strings.HasPrefix(path, "/") {
-		cur = "/"
-	}
-	for part := range strings.SplitSeq(path, "/") {
-		switch part {
-		case "", ".":
-			continue
-		case "..":
-			cur = filepath.Dir(cur)
-			continue
-		}
-		entries, err := os.ReadDir(cur)
-		if err != nil {
-			return "", false
-		}
-		var match string
-		for _, e := range entries {
-			if e.Name() == part {
-				match = part
-				break
-			}
-			if match == "" && strings.EqualFold(e.Name(), part) {
-				match = e.Name()
-			}
-		}
-		if match == "" {
-			return "", false
-		}
-		cur = filepath.Join(cur, match)
-	}
-	return cur, true
-}
+// find resolves a path as DOS would: see auto.Find.
+func find(dir, path string) (string, bool) { return auto.Find(dir, path) }
