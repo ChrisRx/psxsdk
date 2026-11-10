@@ -105,9 +105,14 @@ func build() {
 
 // Each call is marked in a ring in the scratchpad, which a reset leaves
 // alone (it clears RAM from 800A0000h up), so that after a hang the last
-// calls can be read back through the boot disc's monitor: at ringAddr the magic "BUIL" and the count of marks,
-// then ringLen entries of eight words: the frame and the call (frame<<8 |
-// call), GPUSTAT, D2_CHCR, I_STAT, I_MASK, DICR, and two words spare.
+// calls can be read back through the boot disc's monitor. At ringAddr: the
+// magic "BUIL", the count of marks, the count of vertical blank callbacks,
+// and D2_MADR at the last callback. Then ringLen entries of eight words:
+// the frame and the call (frame<<8 | call, with 80h set for a mark after
+// the call returned), GPUSTAT, D2_CHCR, I_STAT | I_MASK<<16, DICR, timer 1
+// (the line counter), the callback count, and D2_MADR. The callback count
+// in the header against the last entry's shows whether blanks were still
+// taken after the hang, and D2_MADR whether the drawing list went on.
 const (
 	ringAddr = 0x1f800000
 	ringLen  = 31
@@ -135,10 +140,22 @@ func mark(f, call int) {
 	volatile.StoreUint32(word(e), uint32(f)<<8|uint32(call))
 	volatile.StoreUint32(word(e+4), volatile.LoadUint32(word(0x1f801814)))
 	volatile.StoreUint32(word(e+8), volatile.LoadUint32(word(0x1f8010a8)))
-	volatile.StoreUint32(word(e+12), volatile.LoadUint32(word(0x1f801070)))
-	volatile.StoreUint32(word(e+16), volatile.LoadUint32(word(0x1f801074)))
-	volatile.StoreUint32(word(e+20), volatile.LoadUint32(word(0x1f8010f4)))
+	volatile.StoreUint32(word(e+12), volatile.LoadUint32(word(0x1f801070))&0xffff|volatile.LoadUint32(word(0x1f801074))<<16)
+	volatile.StoreUint32(word(e+16), volatile.LoadUint32(word(0x1f8010f4)))
+	volatile.StoreUint32(word(e+20), volatile.LoadUint32(word(0x1f801110)))
+	volatile.StoreUint32(word(e+24), volatile.LoadUint32(word(ringAddr+8)))
+	volatile.StoreUint32(word(e+28), volatile.LoadUint32(word(0x1f8010a0)))
 	volatile.StoreUint32(word(ringAddr+4), n+1)
+}
+
+// returned marks call as having returned.
+func returned(f, call int) { mark(f, call|0x80) }
+
+// tick is the vertical blank callback: it counts the blanks taken and
+// keeps where the drawing list had got to.
+func tick() {
+	volatile.StoreUint32(word(ringAddr+8), volatile.LoadUint32(word(ringAddr+8))+1)
+	volatile.StoreUint32(word(ringAddr+12), volatile.LoadUint32(word(0x1f8010a0)))
 }
 
 func main() {
@@ -183,6 +200,9 @@ func main() {
 
 	volatile.StoreUint32(word(ringAddr), 0x4c495542)
 	volatile.StoreUint32(word(ringAddr+4), 0)
+	volatile.StoreUint32(word(ringAddr+8), 0)
+	cb := tick
+	yaroze.VSyncCallback((*[2]uintptr)(unsafe.Pointer(&cb))[1])
 	yaroze.SetDispMask(1)
 	println("setup done")
 	for f := 0; f < stages*stageFrames; f++ {
@@ -195,6 +215,7 @@ func main() {
 		}
 		mark(f, callVSync)
 		yaroze.VSync(0)
+		returned(f, callVSync)
 		mark(f, callResetGraph)
 		yaroze.ResetGraph(1)
 		mark(f, callSort)
@@ -237,6 +258,7 @@ func main() {
 		}
 		mark(f, callDrawOt)
 		yaroze.GsDrawOt(&ot)
+		returned(f, callDrawOt)
 
 		if stage >= 2 && f%2 == 0 {
 			// The texture's 16 by 16 corners and middles, in a color
@@ -249,6 +271,7 @@ func main() {
 				r := yaroze.RECT{X: int16(704 + 16*(i%2)), Y: int16(16 * (i / 2 % 2)), W: 16, H: 16}
 				mark(f, callLoadImage)
 				yaroze.LoadImage(&r, &frames[i][0])
+				returned(f, callLoadImage)
 			}
 		}
 
@@ -257,7 +280,9 @@ func main() {
 		text.WriteString("STAGE ").WriteInt(stage).WriteString(": ").WriteString(names[stage]).Print()
 		mark(f, callFntFlush)
 		yaroze.FntFlush(-1)
+		returned(f, callFntFlush)
 		mark(f, callDone)
 	}
+	yaroze.VSyncCallback(0)
 	println("END")
 }
