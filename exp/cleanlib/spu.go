@@ -386,9 +386,9 @@ func parkVoice(v uint32) {
 // or two (space) taking up what a pace's whole turns leave. A sequence
 // playing lengthens the time after the words, where its stage runs.
 const (
-	tickReadsPad = 278  // before the reads
-	tickReadGap  = 32   // from one envelope read to the next; the loop's own work is 12
-	tickExitPad  = 362  // after them
+	tickReadsPad = 194 // before the reads, less libps_interrupt's spaces (spec 45)
+	tickReadGap  = 32  // from one envelope read to the next; the loop's own work is 12
+	tickExitPad  = 362 // after them
 )
 
 // tickReads holds the envelopes a tick reads until it keeps them. It is
@@ -403,7 +403,7 @@ var tickReads [spuVoices]uint16
 // for the next tick (spec 05, "Where the sequences run").
 func soundTick() {
 	pace(tickReadsPad)
-	space(1)
+	space(2)
 	nops(10)
 	reads := &tickReads
 	for v := range snd.voices {
