@@ -87,8 +87,9 @@ func gpuIdle() bool {
 // words or their order.
 
 // queueLen is how many requests the queue holds, the one running among
-// them.
-const queueLen = 32
+// them: behind a drawing, Sony's takes 63 images and the 64th waits (spec
+// 41).
+const queueLen = 64
 
 // request is a packet list to send: from list, or, when list is 0, from
 // env, a drawing environment's packet the queue keeps its own copy of,
@@ -122,6 +123,11 @@ var queue struct {
 	// later is 1 from imageEnter's finding that an image call can go into
 	// the queue until the call asks (imageLater).
 	later uint32
+
+	// lastImage is where the last image call queued went: no image waits
+	// behind the request there. One the queue dropped (ResetGraph) is
+	// behind head, which only grows.
+	lastImage uint32
 }
 
 // DMA channel 2's interrupt enable and flag in DICR, and the master
@@ -190,8 +196,15 @@ func drawDone() {
 // imageTurn is drawDone's work when the GPU is not yet free, kept out of it
 // so that the handler's usual path takes the time it did before spec 39. If
 // the channel has sent all of what is running and an image is next, it
-// waits for the GPU to finish drawing and reports true, for drawDone to
-// send the image, as Sony's handler does (spec 39). Interrupts must be off.
+// waits for the GPU to finish drawing and sends the image, as Sony's handler
+// does (spec 39), and then each image queued right behind it as soon as the
+// one before has gone out, as Sony's does (spec 41). In the handler, it then
+// handles what was raised meanwhile, a vertical blank that came during the
+// drawing among it, before the handler returns (lateInterrupts). It reports
+// whether the GPU is free, for drawDone to move the queue on. Waiting for
+// each image's own interrupt, as before spec 41, let the kernel's way out
+// and in again, and its handlers for that vertical blank, come between them.
+// Interrupts must be off.
 //
 //go:noinline
 func imageTurn() bool {
@@ -200,26 +213,59 @@ func imageTurn() bool {
 	}
 	for gp1.Get()&gpuStatReady == 0 {
 	}
-	return true
+	return sendImages()
+}
+
+// sendImages is imageTurn's work once the GPU is ready, apart so that
+// imageTurn's way out when no image is next costs what it did before spec
+// 41: it sends the images and reports whether the GPU is then free. Each
+// goes as startHead sends it, with Sony's pace around it (sendImagesMarkSpace,
+// sendImagesSpace), and its empty packet list, which moves the queue on, is
+// waited for here.
+//
+//go:noinline
+func sendImages() bool {
+	for imageNext() {
+		drawWatch.mark(drawNoLimit)
+		space(sendImagesMarkSpace)
+		drawNext()
+		space(sendImagesSpace)
+		for dmaGPUControl.Get()&dmaBusy != 0 {
+		}
+	}
+	lateInterrupts()
+	return gpuIdle()
+}
+
+// Sony's handler, sending the images queued behind a drawing one after
+// another, starts a watch once the GPU is ready for each, reads GPUSTAT
+// again about 140 cycles later and then sends the image: 508 cycles from
+// one image's blocks to the next's, 16 by 16, in the emulator (spec 41).
+// sendImages spends these 2-cycle stores to match.
+const (
+	sendImagesMarkSpace = 19
+	sendImagesSpace     = 48
+)
+
+// lateInterrupts, in the interrupt handler, runs the handler again, for the
+// interrupts raised while imageTurn waited for the GPU and sent the images,
+// as Sony's handler takes them before it returns (spec 41): the kernel's
+// handlers do not see them, and the kernel's way out and in again is not
+// taken. Outside the handler, on the program's stack, it does nothing, and
+// with the drive's interrupt raised it leaves everything to the handler's
+// own pass, which takes the drive's after drawDone and would take it twice.
+func lateInterrupts() {
+	sp := device.AsmFull("move {}, $$sp", nil)
+	base := uintptr(unsafe.Pointer(&intr.stack))
+	if sp >= base && sp < base+unsafe.Sizeof(intr.stack) && iStat.Get()&iMask.Get()&irqCD == 0 {
+		libps_interrupt()
+	}
 }
 
 // imageNext reports whether the request after the one running is an image.
 func imageNext() bool {
 	i := queue.head + queue.running
 	return i != queue.tail && queue.reqs[i%queueLen].restore >= imageLoad
-}
-
-// imagesWaiting returns how many image requests wait behind the one running.
-//
-//go:inline
-func imagesWaiting() uint32 {
-	n := uint32(0)
-	for i := queue.head + queue.running; i != queue.tail; i++ {
-		if queue.reqs[i%queueLen].restore >= imageLoad {
-			n++
-		}
-	}
-	return n
 }
 
 // drawNext, with the GPU free, retires the request that was running and
@@ -655,6 +701,7 @@ func queueImage(r RECT, p unsafe.Pointer, kind uint32) bool {
 	q.env[2] = pair(r.W, r.H)
 	q.env[3] = uint32(uintptr(p))
 	q.restore = kind
+	queue.lastImage = queue.tail
 	queue.tail++
 	return true
 }
@@ -669,7 +716,7 @@ func queueImage(r RECT, p unsafe.Pointer, kind uint32) bool {
 //
 //go:inline
 func startImage(r *request) {
-	if imagesWaiting() == 1 {
+	if queue.head == queue.lastImage {
 		dmaInterrupt.Set(dmaInterrupt.Get()&0x00ffffff&^dicrGPUEnable | dicrGPUFlag)
 	}
 	for gp1.Get()&gpuStatReady == 0 {

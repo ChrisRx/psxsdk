@@ -313,8 +313,11 @@ var intr struct {
 	exit exitBuf
 
 	// stack is where the handler runs: a stack of the library's own, so
-	// that an interrupt never runs on whatever the program's was.
-	stack [128]uint64
+	// that an interrupt never runs on whatever the program's was. It holds
+	// the handler twice over, with the vertical blank's callback, since the
+	// handler runs again inside itself after sending images queued behind a
+	// drawing (lateInterrupts, spec 41).
+	stack [192]uint64
 }
 
 // libStart starts the library, once: it takes over the end of every

@@ -179,8 +179,9 @@ func resetGPU() {
 	// The reference clears its 6,400 bytes of state here a byte at a time
 	// (spec 08). The clean library's is the drawing queue's requests,
 	// none of them waiting after drain; the rest of the time is
-	// resetRest.
-	clearBytes(unsafe.Pointer(&queue.reqs), unsafe.Sizeof(queue.reqs))
+	// resetRest. The queue has grown since (spec 41), and the clear is
+	// still its first resetCleared bytes, the time it was measured with.
+	clearBytes(unsafe.Pointer(&queue.reqs), resetCleared)
 	spin(resetRest)
 	imagePad(residentResetPad)
 	// The interrupts as they were, which libStart left with the vertical
@@ -255,6 +256,10 @@ func resetNotice() {
 // state in the clean library to clear, 4,096 bytes at 8 cycles each, in
 // spin's loops.
 const resetRest = 4096 * 8 / 12
+
+// resetCleared is the part of that clear spent clearing the drawing queue:
+// 32 requests' worth, what the queue held before spec 41.
+const resetCleared = 6400 - 4096
 
 // clearBytes sets the n bytes at p to 0 one store at a time, about 8
 // cycles a byte, as the clears the reference and Sony's library make in
