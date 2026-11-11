@@ -163,3 +163,37 @@ func TestCPUCostAfterStores(t *testing.T) {
 }
 
 func lwc2(rt uint32, off int, base uint32) uint32 { return iType(0x32, base, rt, off) }
+
+// TestCPUCostPorts runs loads from and stores to the SPU and I_STAT, which
+// cost more and drain more slowly than the other ports, and a load from RAM
+// after a store to the SPU, which doesn't wait for it.
+func TestCPUCostPorts(t *testing.T) {
+	const (
+		at   = 0x80010000
+		data = 0x80020000
+		spu  = 0x1f801d80 // the main volume
+		irq  = 0x1f801070
+		r5   = uint32(5)
+		r6   = uint32(6)
+	)
+	m := newTestMachine(t)
+	m.SetCPUCost(true)
+	code := []uint32{
+		nop,
+		lw(r1, 0, r4), lw(r2, 0, r6),
+		sw(0, 0, r4), lw(r3, 0, r5),
+		sw(0, 0, r4), sw(0, 0, r4), lw(r1, 0, r4),
+	}
+	write(m, at, code...)
+	m.CPU.R[r4], m.CPU.R[r5], m.CPU.R[r6] = spu, data, irq
+	startAt(m, at)
+	stepCosts(t, m, len(code)) // into the cache
+
+	startAt(m, at)
+	assert.Equal(t, []uint32{
+		1,
+		1 + 20, 1 + 3,
+		1, 1 + 5,
+		1 + 1, 1, 14 + 1 + 20, // the load waits for both stores, 7.5 each
+	}, stepCosts(t, m, len(code)))
+}

@@ -66,11 +66,23 @@ const (
 
 	// costIOLoad is a load from an I/O port beyond its own cycle: 4.9 for
 	// GPUSTAT or a root counter (cpucost, "lw gpustat", "lw timer"). The
-	// other ports are taken to cost the same.
+	// ports not named below are taken to cost the same.
 	costIOLoad = 4
 
+	// costSPULoad is a load from the SPU's registers beyond its own cycle:
+	// 20.9 a halfword in a run (cpucost4, "lh spu").
+	costSPULoad = 20
+
+	// costIRQLoad is a load from the interrupt controller beyond its own
+	// cycle: 4.0 for I_STAT in a run (cpucost4, "lw istat").
+	costIRQLoad = 3
+
 	// costAfterStores is how long RAM stays busy after the write buffer's
-	// last store leaves it, for a load from RAM, which waits until then: a
+	// last store to RAM leaves it, for a load from RAM, which waits until
+	// then. A store to a port doesn't hold it up: a store to the SPU or
+	// I_STAT and a load from RAM cost 8.3 the pair, with the store's 7.5
+	// drain not waited for (cpucost4, "sh spu lw ram", "sw istat lw ram").
+	// A load from a port waits for every store ("sh spu lh spu", 29.1). A
 	// store then a load cost 13.3 for the two (cpucost, "sw then lw ram"),
 	// 3 more than the drain and the load alone come to. Three instructions
 	// between don't hide it: a load and a store cost 12.3 a pair, with three
@@ -87,10 +99,14 @@ const (
 	// leave the write buffer, one after another: 2 for RAM (cpucost, "sw
 	// ram 1" to "sw ram 128": 3, 5, 9, 17, 33 for 1, 2, 4, 8, 16 stores
 	// with the counter read after them, which waits for the last), 1.5 for
-	// a port (cpucost, "sw gp0 nop", 1.6 a store). Only GP0 was measured;
-	// the other ports are taken to drain as fast.
+	// a port (cpucost, "sw gp0 nop", 1.6 a store). The ports not named
+	// below are taken to drain as fast as GP0. A store to the SPU takes
+	// 7.5 (cpucost4, "sh spu", 7.5 a store in a run), and one to the
+	// interrupt controller 2 ("sw istat").
 	wbRAMHalves = 4
 	wbIOHalves  = 3
+	wbSPUHalves = 15
+	wbIRQHalves = 4
 
 	// costMult and costDiv are when HI and LO are ready after a multiply
 	// or divide starts: mult then mflo cost 7.8, div then mflo 37.8
@@ -109,6 +125,8 @@ const (
 	regionScratch
 	regionIO
 	regionROM
+	regionSPU
+	regionIRQ
 )
 
 // regionOf returns the region addr is in.
@@ -123,6 +141,10 @@ func regionOf(addr uint32) region {
 		return regionROM
 	case a >= 0x1f800000 && a < 0x1f800400:
 		return regionScratch
+	case a >= 0x1f801c00 && a < 0x1f802000:
+		return regionSPU
+	case a >= 0x1f801070 && a < 0x1f801080:
+		return regionIRQ
 	}
 	return regionIO
 }
@@ -152,10 +174,12 @@ type cost struct {
 	loadReg  uint32
 
 	// wb is when each write buffer entry leaves it, in half cycles, with
-	// wbAt the oldest, and wbLast when the last does.
-	wb     [wbDepth]uint64
-	wbAt   int
-	wbLast uint64
+	// wbAt the oldest, wbLast when the last does, and wbLastRAM when the
+	// last store to RAM did or does.
+	wb        [wbDepth]uint64
+	wbAt      int
+	wbLast    uint64
+	wbLastRAM uint64
 
 	// hiloReady is when HI and LO hold the last multiply or divide's
 	// result.
@@ -250,8 +274,11 @@ func (m *cost) execute(c *CPU, op, pc uint32, t uint64) uint64 {
 			break
 		}
 		ready := (m.wbLast + 1) / 2
-		if r == regionRAM && m.wbLast != 0 {
-			ready += costAfterStores
+		if r == regionRAM {
+			ready = 0
+			if m.wbLastRAM != 0 {
+				ready = (m.wbLastRAM+1)/2 + costAfterStores
+			}
 		}
 		t = m.wait(t, max(ready, m.busFree))
 		t = m.fetch(pc, t)
@@ -264,6 +291,10 @@ func (m *cost) execute(c *CPU, op, pc uint32, t uint64) uint64 {
 			}
 		case regionROM:
 			t += costROM
+		case regionSPU:
+			t += costSPULoad
+		case regionIRQ:
+			t += costIRQLoad
 		default:
 			t += costIOLoad
 		}
@@ -286,11 +317,19 @@ func (m *cost) execute(c *CPU, op, pc uint32, t uint64) uint64 {
 		t = m.wait(t, (m.wb[m.wbAt]+1)/2)
 		t = m.fetch(pc, t)
 		drain := uint64(wbIOHalves)
-		if r == regionRAM {
+		switch r {
+		case regionRAM:
 			drain = wbRAMHalves
+		case regionSPU:
+			drain = wbSPUHalves
+		case regionIRQ:
+			drain = wbIRQHalves
 		}
 		done := max(2*t, m.wbLast, 2*m.busFree) + drain
 		m.wb[m.wbAt], m.wbLast = done, done
+		if r == regionRAM {
+			m.wbLastRAM = done
+		}
 		m.wbAt = (m.wbAt + 1) % wbDepth
 		return t
 	}
