@@ -201,3 +201,73 @@ Part 1 is not settled on the console:
 - `statlines`: the clean library counts the blank 11 lines late every other field, at 480 lines and at 240 (lines 525 and 263 where Sony's counts at 514 and 252, `statlines-sony3` in spec 35). The old image gives the same lines.
 - `vsynclate` against a real run on Sony's library (`vsynclate-sony2`): the 240 line table matches, and in the interlaced one the clean library's `VSync` returns 12 lines sooner than Sony's in 37 of 96 cases, with the same blank counts. The earlier figure here (36 of 96, a field apart) compared the clean library with itself from before spec 42, see spec 35, 2026-11-10 evening.
 - `vsynccount` does not show it: it installs a `VSyncCallback` and reads `VSync(-1)` in a loop, where `statlines` reads GPUSTAT and timer 1 after a `VSync(0)` and has no callback. `TestVSyncCount` therefore passes without covering what the console shows. A later spec: why the clean library's count comes 11 lines late every other field.
+- `irqgaps` (2026-11-10, `.build/hardware/irqgaps-sony` and `irqgaps-clean`) polls the system clock, the line count and `VSync(-1)` after `VSync(0)` and reports each stretch over 400 cycles where something else had the CPU. On a console, on both libraries, one such stretch of about 23,900 cycles (11 lines) starts at each blank. The count goes up either before it (seen on a poll, "outside a gap") or inside it:
+
+  | | 480 lines | 240 lines |
+  |---|---|---|
+  | Sony's, `irqgaps` | before, 3 of 3 | inside, 3 of 3 |
+  | Sony's, `statlines-sony3` | before, 3 of 3 | before, 2 of 2 |
+  | clean | before 1 of 3 | before 2 of 3 |
+
+  So the late count is the count landing after that 11-line stretch. Sony's lands before it at 480 lines every time seen, and at 240 lines it varies from run to run. In the emulator the stretch is about 15,200 cycles and starts 1 line after the blank. Sony's image counts before it in all 6 fields, and the clean one after it in 3 of 6 (`probes/irqgaps` through `probe.sh`), so the emulator shows the difference, smaller.
+
+### 1, again: the stretch at the blank, and when a program sees the count
+
+Done 2026-11-10 in the emulator, with the console's CPU costs off (the default) and on (`SetCPUCost`, `PROBE_CPUCOST`). Not tried on a console.
+
+**The stretch is the vertical blank interrupt itself**, the kernel's handlers (the controller driver's among them) and the library's, sound tick included. A bus trace of `irqgaps` from outside, timed from I_STAT bit 0, shows the interrupt taken at once and the program's next read of timer 2 some 15,200 cycles later, with nothing else between: about 15,240 with the costs off, 20,800 (Sony's) and 21,100 (clean) with them on, and about 23,900 on a console. Both libraries change the count at the same cycle inside it (10,298, part 1 above), so neither program can see the new count during the stretch.
+
+**"Counted before the stretch" is where the poll was when the interrupt came.** `irqgaps` and `statlines` read the line counter and then call `VSync(-1)`. When the interrupt is taken after the program's read of the line counter and before `VSync(-1)` reads the count, the program sees the new count with the line from before the interrupt: "before the stretch", 11 lines early on a console. When it is taken after the read of the count, the next poll sees it, with the line from after. In `irqgaps` with the costs off, Sony's six interrupts were all taken 2 to 44 cycles after the program's read of timer 2, inside that window. So which poll sees the count depends on two things the library sets:
+
+- **Where in `VSync(-1)` the count is read.** `probes/vsyncpoll` (new) polls `VSync(-1)` across the blank, a few cycles later each field, and `TestVSyncPoll` (new) times each interrupt taken in a call from outside, in cycles from the program's read of timer 2 before the call:
+
+  | | Sony's | clean before | clean now |
+  |---|---|---|---|
+  | GPUSTAT read, timer 1 read, costs off | 22, 24 | none | 22, 24 |
+  | interrupt in the result if taken by, not if from, costs off | 38, 42 | 40, 42 | 38, 42 |
+  | the next read of timer 2, costs off | 58 | 52 | 58 |
+  | GPUSTAT read, timer 1 read, costs on | 29, 34 | none | 29, 34 |
+  | interrupt in the result if taken by, not if from, costs on | 49, 56 | 28, 37 | 50, 56 |
+  | the next read of timer 2, costs on | 77 to 93 | 45 to 48 | 80 to 94 |
+
+- **Where `VSync(0)` leaves the program**, which sets where the poll loop is when the next blank comes. From the end of the interrupt (the CPU's interrupts enabled again) at 240 lines, and from GPUSTAT bit 31's change at 480, to `VSync`'s read of timer 1 on its way out, over 48 fields of `vsyncpoll`'s second half:
+
+  | | Sony's | clean before | clean now |
+  |---|---|---|---|
+  | 240 lines, costs off | 38 to 60 | 22 to 30 | 38 to 60 |
+  | 480 lines, costs off | 24 to 34 | 22 to 26, 38 to 42 | 26 to 36 |
+  | 240 lines, costs on | 80 to 139 | 44 to 54 | 77 to 147 |
+  | 480 lines, costs on | 46 to 51 | 33 to 39 | 46 to 51 |
+
+  Sony's pass of the wait for a blank is about 12 instructions (24 cycles) and some 60 cycles with the costs on, where the clean one's was 5; its wait for bit 31 about 6.
+
+**The 12-line `VSync` return in `vsynclate` is a separate thing**, the bound on the wait for bit 31. On a 480-line display `VSync(0)` waits for the count and then for bit 31 to differ from its value at the call. With the costs on, the interrupt takes about 9.7 lines, past the field's change at 8 lines (on a console 11), so when the count is seen bit 31 can be back to its value at the call. Sony's `VSync` then waits on to the next field change, 23 lines into the blank after. The clean one ended its wait at the next blank's count (spec 42's "bound that Sony's may not have"), 12 to 14 lines sooner. With the costs on the emulator shows it: `vsynclate`'s interlaced table, `n 0 d 262`, took 540 lines on Sony's and 526 on the clean library (537 and 525 on a console), and 77 of its 96 lines differed. With the costs off the interrupt ends before 8 lines and the tables were the same.
+
+What changed:
+
+- `VSync(-1)` is in the target's assembly (`playstation-yaroze-clean.S`): once the library has started it reads GPUSTAT and timer 1 and then the count, at Sony's cycles, with loads from RAM (`VSYNC_RAMLOAD`) where a nop would be too quick under a console's costs. Before the start it goes to the Go, which starts the library. The count and the started flag moved to `libps_vsync_blanks` and `libps_lib_started` in the assembly's data, for it to read (`vsyncBlanks`, `libStarted` in the Go).
+- `waitBlanks` (`VSync` at 240 lines) is in the assembly too, `libps_wait_blanks`: a pass of loads, the count, two loads and the test, and nops on the way out, with Sony's pass and return. `waitField`'s wait for the count paces each pass the same way (`blanksPaced`).
+- `waitField`'s wait for bit 31 has no bound now, a store a pass and one on the way out. On a 480-line display bit 31 changes every field.
+- `libps_interrupt` spends one more store at its end (`interruptSpaceOut` 6), so that the interrupt takes Sony's 15,238 to 15,240 cycles.
+- `loadSpace` (`fidelity.go`) pads with loads, 2 cycles each with the costs off and about 6 with them on.
+
+In the emulator now:
+
+- `irqgaps`, costs off: the count is seen before the stretch in all six fields, as on Sony's; the clean library before saw three of six after it.
+- `irqgaps`, costs on: the three fields at 480 lines match Sony's. At 240 lines they do not: under the cost model the clean interrupt takes about 300 cycles longer than Sony's (21,100 against 20,800), which moves the poll's phase. On the console both took about 23,900, so this was not chased.
+- `vsynclate`, costs off and on: both tables the same as Sony's, the 96 interlaced lines included.
+- `vsyncpoll`: the second half (`WAIT`) prints the same lines as Sony's. The first half's per-field lines are near Sony's, shifted by about one step of its delay, from the few cycles the clean interrupt still differs by.
+
+Tests:
+
+- `TestIRQGaps` (new, `image/probetest/irqgaps_test.go`) runs `irqgaps` (`-irqgaps` names the disc) and checks that each count is seen on a poll before the stretch, in all six fields. It passes on Sony's disc and the new image and fails on the image before (three of six).
+- `TestVSyncPoll` (new, `image/probetest/vsyncpoll_test.go`) runs `vsyncpoll` (`-vsyncpoll`) with the costs off and on and checks the accesses and ranges in the tables above. It passes on Sony's disc and the new image; the image before has no reads in `VSync(-1)` and returns from `VSync(0)` outside the ranges.
+- `TestVSyncCount`, `TestVSyncPhase`, `TestDrawWait` and `TestFieldTime` pass on the new image. `go test ./exp/cleanlib/...` passes. `image/regress.sh`: 38 PASS, 3 TIME (`check`, `offscr`, `terra`), as before.
+- A static build through `cmd/yaroze` needed the embedded sysroot rebuilt for the new assembly symbols: `task compiler:overlay`, then `task yaroze`, which refreshed `cmd/yaroze/wasm/sysroot.tar.gz`.
+
+On the console (spec side, 2026-11-11), the new image (`.build/hardware/images/libps-spec45b.exe.gz`) under the clean monitor and Sony's library under its own, in `.build/hardware/spec45c`:
+
+- `statlines`: at 480 lines the clean library now counts at 251, 514 and 776, Sony's lines in `statlines-sony3`; it was 11 lines late every other field. At 240 lines it counted at 263, 515 and 778 where Sony's counted at 252 and 515, so two of three fields are still seen after the stretch.
+- `irqgaps`: at 240 lines the same as `irqgaps-sony`, the count seen inside the stretch in all three fields. At 480 lines the count was seen before the stretch in one field of three, where Sony's was in all three.
+- `vsynclate`: the same as `vsynclate-sony2` but for one line, `n 0 d 2000`, where that run of Sony's returned 1983 and every other run on either library returns 2000 or 2001. The 37 interlaced lines 12 sooner are gone.
+- `vsyncpoll`: the `WAIT` lines are the same, every `VSync(0)` returning on line 0. The shortest `VSync(-1)` took 79 cycles on Sony's and 76 on the clean library, at both displays. At 240 lines 24 calls held the interrupt on both, 13 of them counting it on Sony's and 14 on the clean one. At 480 lines Sony's had 28 calls hold the interrupt and 23 count it, the clean library 22 and 11. That 480-line difference, where the poll meets the interrupt, is what `irqgaps` still shows at 480 lines; the emulator does not reproduce it.
