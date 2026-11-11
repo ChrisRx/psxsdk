@@ -271,3 +271,239 @@ On the console (spec side, 2026-11-11), the new image (`.build/hardware/images/l
 - `irqgaps`: at 240 lines the same as `irqgaps-sony`, the count seen inside the stretch in all three fields. At 480 lines the count was seen before the stretch in one field of three, where Sony's was in all three.
 - `vsynclate`: the same as `vsynclate-sony2` but for one line, `n 0 d 2000`, where that run of Sony's returned 1983 and every other run on either library returns 2000 or 2001. The 37 interlaced lines 12 sooner are gone.
 - `vsyncpoll`: the `WAIT` lines are the same, every `VSync(0)` returning on line 0. The shortest `VSync(-1)` took 79 cycles on Sony's and 76 on the clean library, at both displays. At 240 lines 24 calls held the interrupt on both, 13 of them counting it on Sony's and 14 on the clean one. At 480 lines Sony's had 28 calls hold the interrupt and 23 count it, the clean library 22 and 11. That 480-line difference, where the poll meets the interrupt, is what `irqgaps` still shows at 480 lines; the emulator does not reproduce it.
+
+### 1, a third time: the 480-line poll, timed from inside the interrupt
+
+Done 2026-11-11 in the emulator (implementation side). Not tried on a console.
+
+**`probes/vsyncstamp`** (new) puts a handler of its own first in the kernel's interrupt chain of priority 0 (`SysEnqIntRP`, C(02h), taken out again with C(03h) before END). At a vertical blank it reads timer 2 into a stamp and adds 1 to a word, marks, in RAM; it runs a fixed time after the CPU takes the interrupt, the kernel's entry (K). Three parts, at 240 lines and then 480:
+
+- `POLL`: vsyncpoll's loop with marks read before and after the call: timer 2 (a), marks (w0), `VSync(-1)`, marks (w1), timer 2 (b), a few cycles later each field. Each field prints the stamp less a and which reads had the interrupt; `PLACE` gives, for w0, the count and w1, the largest stamp seen with the read and the smallest without. The differences between the three are free of K: where `VSync(-1)` reads its count, from the program's side, in cycles.
+- `EXIT`: `VSync(0)` called straight after an interrupt, as vsyncpoll and irqgaps call it, from the stamp to its return; then the next two interrupts polled: the end of each, GPUSTAT bit 31 before and after it, and when bit 31 next changes. The return less the change is `VSync`'s way out, K free.
+- `BODY`: copies of the clean `VSync(-1)` with its read of the count moved by -4 to 6 instructions, for a console to say how far each moves the read.
+
+In the emulator, with the console's costs on (Sony's / the clean image before this part):
+
+| | Sony's | clean before |
+|---|---|---|
+| `PLACE` 480i: w0, count, w1 (largest with, smallest without) | 361/367, 426/441, 455/464 | 317/323, 382/388, 414/421 |
+| count less w0, w1 less count | about 59, 29 | about 59, 32 |
+| `EXIT` 480i: return less bit 31's change | 71 to 88 | 104 to 133 |
+
+So `VSync(-1)` reads its count at the same place on both (with the costs off too: 280/284 against 272/286, w0 232/234 on both). K differs by 44 cycles between the libraries: the kernel's entry runs from different cache lines, by which library's code ran last. What differs is `VSync(0)`'s way out at 480 lines: the clean one left the program some 45 cycles later after bit 31's change, though it read timer 1 at Sony's 46 to 51 (`TestVSyncPoll` stops there). With the costs on, vsyncpoll's 480-line `POLL` lines show it in the emulator too: Sony's `C...ccccCCCCCCCCCCC..............ccccCCCCCCCCCCC` (C counted, c in the call but not counted, . between calls), the clean image's `.CCCCCCCC...........cccccccCCCCCCCCCC...........`, 10 of 48 fields alike in where the interrupt came. Part "1, again" compared these with the costs off only. The console's 480-line `POLL` lines are shifted against each other the same way, by about 12 steps of the delay, some 50 cycles.
+
+Where the time went, step by step from outside (the clean image's own addresses): from the read of GPUSTAT that saw bit 31 change, the Go's way out stored, then loaded the count (waiting for the write buffer), stored, read timer 1, stored, and loaded two registers from its frame (waiting again); and its five cache lines were all misses, 45 of its 58 cycles. They were misses because the kernel's interrupt path runs code at the same cache lines (indices 7Fh to 84h, the kernel's 17F0h to 1840h): every vertical blank interrupt takes them. The kernel's handlers, run at each blank, leave free lines 07h, 09h, 0Ah, 0Ch to 11h, 17h to 1Dh, 20h to 40h, 43h, 44h, 57h, 73h to 78h, 88h, 92h to 94h, AAh to ADh, AFh, B0h, B2h, B3h, BEh to C1h and EBh to F3h (scph1001's kernel; another BIOS's may differ).
+
+What changed:
+
+- `VSync`'s modes 0 and up on a 480-line display go to `libps_vsync_started` in the target's assembly. Once the library has started, it works out the target and the result as `vsyncField` does and goes into `libps_wait_field`, the wait in assembly, so that the way out returns to the program with no Go frame to undo. Before the start it goes to the Go (`libps_vsync_field`), which starts the library and calls `libps_wait_field`.
+- `libps_wait_field` makes the Go's two waits' passes, instruction for instruction. Its way out reads the count in the jump's delay slot, then three loads and a nop, timer 1, and its two stores after its last load. It sits in its own section, `libps_wait_field_out`, at 200h in a 4 KB page, cache lines 20h to 24h, which the kernel's interrupt path leaves alone. With the costs off it takes the Go's instructions to the return, timer 1 the ninth after the loop.
+- `vsync.last` moved to the assembly's data (`libps_vsync_last`, Go `vsyncLast`), with `libps_vsync_pad`, in one 16-byte block with the count.
+
+In the emulator after it:
+
+- `TestVSyncPoll`, costs off: as before. Costs on: timer 1 read at 46 to 51 cycles after bit 31's change, Sony's, in every 480-line wait but the first, 58. The first 240-line wait returns 162 cycles after the interrupt, outside Sony's 75 to 152. Each is the first wait after the probe prints its `POLL` lines, with the cache cold everywhere. The test fails on those two lines.
+- vsyncpoll, costs on, 480 lines: `.CCCCCCCCCCC.............ccccccCCCCCCCCCC.......`, 22 of 48 fields alike with Sony's. Nearer than 10, but not the same, and it moved with the image's layout alone: builds with only the padding of the way out different gave 24, 31 and 22.
+- `EXIT` in vsyncstamp, costs on: the way out itself now takes about 35 cycles where it took 58, but the return less bit 31's change is 150 to 203, further from Sony's than before. After the return the probe's own code missed in the cache: lines of it that the clean image's interrupt code, packed elsewhere by this build, now takes.
+- `TestIRQGaps`, `TestVSyncCount`, `TestVSyncPhase`, `TestDrawWait`, `TestFieldTime` pass. `go test ./exp/cleanlib/...` passes. `image/regress.sh`: 38 PASS, 3 TIME (`check`, `offscr`, `terra`), as before.
+
+So the 480-line difference is not in where `VSync(-1)` reads its count. It is in how long after the interrupt the program is running again, and under a console's costs that is mostly which cache lines the interrupt took: the kernel's, the library's handler's and sound tick's, and `VSync`'s own. The clean image's code sits at other cache lines than Sony's, packed into the gaps between Sony's entry points, so which of a program's lines survive a blank differs between the libraries, program by program. Matching Sony's for any program needs Sony's footprint in the cache at a blank and in `VSync(0)`, measured from outside, and the clean image's interrupt code laid out on the same lines.
+
+On the console, to do (spec side):
+
+1. `vsyncstamp` (`.build/serial/vsyncstamp.elf`, one ELF for both libraries) on Sony's library, on the image of 2026-11-11 morning (`libps-spec45b`) and on this one (`.build/cleanimage/libps.exe`). From `PLACE`: whether count less w0 and w1 less count are the same on all three (the emulator says they are); if Sony's count is later in the call on a console, the `BODY` line whose count bounds match Sony's says how many instructions to move the clean read. From `EXIT 480i`: return less change on each; if this image comes near Sony's where spec45b was some 45 later, the way out was the difference; if not, the cache is. `end` against `change` also says whether the interrupt on a console ends before bit 31's change at 8 lines (it should not, at 11 lines).
+2. vsyncpoll and irqgaps on this image, against `spec45c`.
+3. If `EXIT` still differs: a probe of the cache's footprint, `icachemap`, not written yet: 4 KB of the probe's own code, a line of four instructions per cache line, run once to fill the cache, then a vertical blank taken (or `VSync(0)` at 480 lines called), then each line run again alone and timed with timer 2 (a line still cached about 4 cycles, a missed one about 13), with the timing code itself moved between two runs so that its own lines are measured too. Run on Sony's library and the clean one, it lists the lines each library's blank and wait take, from outside, for the clean image's layout to follow.
+
+On the console (spec side, 2026-11-11), `.build/hardware/spec45d`: `vsyncstamp` on Sony's library, on `libps-spec45b` (`b/`) and on the image above, saved as `libps-spec45c` (`c/`, with vsyncpoll and irqgaps):
+
+| | Sony's | spec45b | spec45c |
+|---|---|---|---|
+| `EXIT` 480i: return less bit 31's change, 16 fields | 79 to 97, mean 89 | 111 to 154, mean 134 | 156 to 211, mean 178 |
+| `PLACE`: count less w0 | 59 to 67 | 59 to 70 | 57 to 69 |
+| `PLACE`: w1 less count | 31 to 34 | 21 to 29 | 24 to 32 |
+| the interrupt, `PLACE` line | 23,782 to 23,984 | 23,891 to 24,122 | 23,834 to 24,109 |
+| vsyncpoll 480i: delay lines alike with Sony's | | 10 of 48 | 26 of 48 |
+| vsyncpoll 480i: in call, counted | 28, 23 | 22, 11 | 22, 16 |
+| vsyncpoll 240p: in call, counted | 24, 13 | 24, 14 | 21, 18 |
+| irqgaps: count seen before the stretch, 480i | 3 of 3 | 1 of 3 | 2 of 3 |
+
+`VSync(-1)` reads its count in the same place on all three, as in the emulator. The way out of `VSync(0)` at 480 lines is later on spec45c than on spec45b, as the emulator's `EXIT` said: the cache, not the way out's instructions, is the difference. The clean interrupt runs some 110 to 140 cycles longer than Sony's on the console. At 240 lines spec45c moved away from Sony's. The library is left as it is until the cache map below is back.
+
+### The cache map: `probes/icachemap`
+
+`probes/icachemap` (new) finds which of the instruction cache's 256 lines a vertical blank interrupt takes, and which a `VSync(0)` takes with the blank it waits for, from outside. It writes a map of 4 KB, aligned to 4 KB, one routine of four instructions (two nops, `jr t8`, a nop) per cache line, and a harness in machine code that, with nothing else between, waits for an interrupt (timer 2 jumping by over 2,000 cycles), calls every map line to fill the cache, takes the event, and then calls every map line again between two reads of timer 2: a line still cached is quick, a taken one about 10 cycles slower. The harness's own lines can't be measured through it, so it is written twice, at 400h and C00h in a 4 KB page, and every run is made with both. Events, at 240 lines and then 480:
+
+- control: no event, which shows the times of a cached line and that nothing else takes lines;
+- blank: a second wait for an interrupt, so the map shows the lines the vertical blank interrupt takes, kernel's and library's;
+- vsync: `VSync(0)` (through a small Go function, `vsync0`, whose address and line the probe prints), so the map shows what the interrupt and the wait take together;
+- warm: no fill, and a second wait, for the interrupt's length when the last interrupt left its code in the cache.
+
+`MAP` lines give the taken lines as 64 hex digits (line 0 the top bit of the first) and how many; `RUN` lines each run's times, and for blank and warm the interrupt's length (`gap`, to the first read of timer 2 after it). The blank `gap` is the interrupt with every line it runs missing; the warm `gap` with few misses. Their difference is what the interrupt's misses cost; warm against warm, between the libraries, is what the interrupt costs without them. So the clean interrupt's extra 110 to 140 cycles on a console fall into one or the other: more lines (the blank map shows more taken lines and the cold gap grows), or more work (the warm gaps differ too).
+
+In the emulator with the console's costs on (scph1001), on Sony's library and the spec45c image: a cached map line takes 11 cycles between the reads, a taken one 24, and the control maps are empty, so the two are told apart in every run. Each harness is 86 words, lines 40h to 55h and C0h to D5h. The maps are the same in every repetition and at both displays:
+
+| | Sony's | spec45c |
+|---|---|---|
+| lines the blank takes | 195 | 194 |
+| lines `VSync(0)` and its blank take, 480i | 203 | 209 |
+| the interrupt's `gap`, cold (map in the cache) | 21,622 to 21,638 | 21,566 to 21,585 |
+| the interrupt's `gap`, warm | 21,063 to 21,087 | 21,007 to 21,051 |
+
+Lines the blank leaves, Sony's: 00, 0E to 11, 17 to 1D, 20 to 3A, 43, 44, 57, 73 to 78, 88, 92 to 94, AA to AD, AF, B0, B2, B3, BE. The clean library's: 00, 07, 09, 0A, 0C to 11, 20 to 31, 34 to 3E, 73, 92 to 94, AC, AD, AF, B0, B2, B3, BE to C1, EB to F3. The clean blank alone takes 17 to 1D, 32, 33, 43, 44, 57, 74 to 78, 88, AA and AB; Sony's alone takes 07, 09, 0A, 0C, 0D, 3B to 3E, BF to C1 and EB to F3. The rest, most of the cache, both take: the kernel's handlers. In the emulator the clean interrupt is some 50 cycles shorter than Sony's, cold and warm alike, and its misses cost the same (about 550 cycles); on the console it is longer, which the console run of this probe should place.
+
+On the console (to do, spec side): `icachemap` (`.build/serial/icachemap.elf`, one ELF) on Sony's library and on spec45c, under each library's monitor as before. The `MAP` lines of the blank and `VSync(0)` give each library's footprint; the cold and warm `gap`s, against each other between the libraries, say whether the clean interrupt's extra 110 to 140 cycles are misses (the cold gap differs, the warm ones don't) or work (both differ). With the console's maps the clean image's interrupt code and `VSync`'s way out can be put on the lines Sony's uses.
+
+On the console (spec side, 2026-11-11, `.build/hardware/spec45e`), `icachemap` on Sony's library and on spec45c: every `MAP` line, control, blank, warm and vsync at both displays on both libraries, showed only line 0 taken; control steady, the others taking 2 to 7 lines a run (unsteady 11 to 27). A cached line took 9 cycles and the slowest 20 to 25. The `gap`s at 480 lines: Sony's cold 24,300 to 24,410 and warm 23,656 to 23,807; the clean library's cold 24,480 to 24,620 and warm 23,820 to 23,970. The 240-line rows are alike (Sony's cold 24,298 to 24,409, warm 23,652 to 23,768; clean cold 24,487 to 24,623, warm 23,817 to 23,966).
+
+**Reading it.** The empty maps are the probe's threshold, not the console's cache. A line counted as taken when it took 5 cycles more than the shortest line of the same run. In the emulator a missed line costs 13 more (11 against 24), so that worked there; on a console it costs some 4 or 5 more, and 5 is not more than 5. The warm runs show it: they don't fill the cache with the map, so after their two interrupts every line the interrupts ran over is a miss, and the first warm run's shortest line on both libraries was 13, not 9 ("line time 13 to 20, taken 1"), where the emulator's was 16. A missed line on a console is then about 13 cycles to a cached one's 9, so nearly every line of the blank runs was at 13 or 14, missed, and counted as cached. The 20 to 25 cycle lines are line 0, the first measured after the harness's own lines came back, and a few lines a run that met something else. That the interrupt's code runs cached on a console is borne out by the gaps: cold less warm is some 650 cycles on both libraries, the misses of a few hundred lines at a few cycles each, as in the emulator (about 550).
+
+`icachemap` now takes a line as taken when it took more than the control runs' shortest time plus 2 (9 + 2 on a console, 11 + 2 in the emulator), and prints every line's time for the first run of each event (`TIMES`: a character a line, cycles less 4, 0 to 9 then a to v). In the emulator the maps are as before, 196 and 195 lines for the blank.
+
+**The clean interrupt's extra time.** Cold and warm alike, the clean interrupt is some 160 to 180 cycles longer than Sony's on the console. Cold less warm is the same on both, so its misses cost the same; the difference is in the interrupt's own work, or in misses both runs share (lines the kernel's and the library's code take from each other inside one interrupt, which no fill outside the interrupt changes). In the emulator with the costs on the clean interrupt is some 50 cycles shorter, cold and warm. Its accesses to the devices, counted from outside over 40 interrupts of `icachemap` at 480 lines, are the same as Sony's but for two reads of a DMA register the clean one makes and four reads of I_STAT it makes fewer: 196 to 200 reads of I_STAT and 5 writes, 13 reads and 14 writes of the controller port, 24 reads and 6 writes of the SPU. So the emulator can't show the 170 cycles, and the accesses don't explain them.
+
+`probes/irqsplit` (new) places them: machine code reads timer 2 first in the kernel's chain of priority 0, first in the chain of priority 3 (after the kernel's own handlers, the controller driver's among them), and as the library's `VSyncCallback`, which both libraries call from their handler after the count; the program's poll gives the end. It prints, for 32 blanks at each display, the kernel's part, the library's to the callback, from the callback to the poll (the library's sound tick and the way out), and the whole, then `SPLIT` lines with the shortest, mean and longest of each. In the emulator with the costs on (shortest, mean, longest, cycles):
+
+| 480i | Sony's | spec45c |
+|---|---|---|
+| kernel | 13,870, 14,081, 14,089 | 13,728, 14,068, 14,080 |
+| library to callback | 1,394, 1,435, 1,437 | 1,472, 1,482, 1,483 |
+| callback to poll | 5,661, 5,825, 5,841 | 5,779, 5,806, 5,819 |
+| whole | 20,925, 21,342, 21,367 | 20,979, 21,357, 21,382 |
+
+**The way out of `VSync(0)`.** The change of part "1, a third time" is taken back: `sync.go` and the target's assembly are bc7e097's again, and the image is byte for byte `libps-spec45b`. It rested on the emulator's finding that the kernel's interrupt path takes the Go way out's cache lines, which the console has not confirmed, and on the console the measure it was for, `EXIT` at 480 lines, came out worse with it (mean 178 against 134 and Sony's 89). vsyncpoll's 480-line delay lines came nearer Sony's with it, but the 240-line ones moved away, and the emulator showed those lines moving with the image's layout alone.
+
+On the console, to do (spec side):
+
+1. `irqsplit` (`.build/serial/irqsplit.elf`) on Sony's library and on spec45b: which part holds the 170 cycles. If it is the kernel's part, the clean library's code evicts more of the kernel's lines between interrupts, or the clean image's start-up left the kernel otherwise set (its chains, its pad driver); if the library's to the callback, the clean handler's work before the count; if after the callback, the sound tick or the way out.
+2. `icachemap` (`.build/serial/icachemap.elf`, rebuilt with the new threshold) on Sony's library and on spec45b: the lines each library's blank and `VSync(0)` take, from the `MAP` lines, with `TIMES` to check the threshold against a console's times.
+
+On the console (spec side, 2026-11-11, `.build/hardware/spec45f`), `irqsplit` and the corrected `icachemap` on Sony's library and on spec45b. `irqsplit`, means over 32 blanks, cycles:
+
+| | kernel | library to callback | callback to poll | whole | gap |
+|---|---|---|---|---|---|
+| Sony's 240p | 15,957 | 1,602 | 6,402 | 23,962 | 24,424 |
+| Sony's 480i | 15,953 | 1,603 | 6,402 | 23,959 | 24,420 |
+| clean 240p | 15,984 | 1,646 | 6,450 | 24,080 | 24,612 |
+| clean 480i | 15,975 | 1,645 | 6,487 | 24,107 | 24,639 |
+
+The console's parts are 10 to 13% longer than the emulator's (14,081, 1,435, 5,825 on Sony's), on both libraries. The clean library is some 25 cycles longer in the kernel's part, 43 in its own up to the callback, 50 to 85 from the callback to the poll; `gap` less `whole` (from the kernel's entry back to the interrupt's start, and the poll's own pass) is some 70 longer too.
+
+`icachemap`, now steady (unsteady 0): a cached line 9 cycles, a missed one 13, as read above (`TIMES`: 5 and 9). Lines taken: the blank 193 on Sony's, 194 on the clean library; `VSync(0)` at 480 lines 201 and 194; warm 247 and 256. Only Sony's blank takes 07, 09, 0A, 0C, 0D, 3B to 3E, EB to F3; only the clean one 17 to 1D, 32, 33, 43, 44, 57, 65, 68, 88, AA to AC, BE. Lines neither takes: 0E to 11, 20 to 31, 34 to 3A, 6C, 73 to 78, 92 to 94, AD, AF, B0, B2, B3. The console's kernel differs from scph1001's: on the console Sony's blank does not take 65, 68 and 6C, which in the emulator its kernel takes.
+
+**Whose lines.** In the emulator (spec45b image, `irqsplit`'s blanks, a direct-mapped cache followed over the PCs run, the clean side's by the image's symbols, Sony's by line only):
+
+- The clean library's interrupt runs `libps_intr_entry` (lines 32, 33), `libps_interrupt` (BE to C7, C9 to D3, D9, DE to E0) and `vblankInterrupt` with the sound tick in it, 7,804 bytes from 800113F0h, of whose lines it runs 16 to 1E, 3F to 57, 65 to 6B, 7C to 83, 88, 8A, 8B, 8E to 91, 96 to A1 and A3 to AC, with `spin` (D5 to D8). Its console-only lines are all of these: `vblankInterrupt`'s 17 to 1D, 43, 44, 57, 65, 68, 88, AA to AC, the entry's 32, 33, and `libps_interrupt`'s BE.
+- Sony's runs lines 3B to 40, DD to DF, E4, E5, EC to EF and F1 to FA before the callback, and 00, 01, 06 to 0D, 41, 42 and BF to EA after it: its console-only lines are those of them no kernel code shares.
+
+Both libraries run about the same number of lines in the interrupt, nearly all missed each time (Sony's 19 before the callback and 90 after; the clean one's 21 and 87), and most of them on lines the kernel's handlers use too. Per interrupt, the two libraries run the same number of instructions in each part (the kernel's 4,818 and 424 and 66; the library's 79 against 78 before the callback, 2,551 against 2,552 after) and make the same accesses to the devices. The kernel misses 2 lines more an interrupt under the clean library (its 44C0h, 4500h and 4530h, which `vblankInterrupt`'s lines 4C, 50 and 53 take, against 17B0h under Sony's), some 10 cycles in the emulator. That is the only difference the emulator shows, and it rests on scph1001's kernel, whose lines are not the console's.
+
+**What the 170 cycles are not, and what they may be.** Not more instructions, not more device accesses, not more misses of the library's own code: those match. What differs is the kind of instructions. The clean library meets Sony's cycles with stores to RAM (`space`), loads (`loadSpace`) and short loops between its device accesses, where Sony's runs its own code; the 24 envelope reads of the sound tick, for one, are spaced by stores. The cost model prices stores, loads after stores and device accesses from a few probes, and takes an SPU or I_STAT access to cost what a root counter's does (a load) and what GP0's does (a store's drain), unmeasured. If a console's SPU, for one, is slower, a load waiting for a store to the SPU to leave the write buffer costs more there, and the clean library's padding stores and loads around its device accesses would pay it where Sony's code does not.
+
+`probes/cpucost4` (new) measures that, as cpucost3 does (machine code timed with timer 2, interrupts off): loads of the SPU's voice 0 envelope and of I_STAT, stores to voice 23's pitch (put back after) and of all ones to I_STAT, each alone and in runs, with nops after, and followed by a load from RAM or from the SPU, and stores to RAM before an SPU load or an I_STAT load. In the emulator, per pattern over the 5-cycle `empty`: a load from the SPU or I_STAT 5, a store to either 1.5 in a run and 9 with its eight nops, an SPU or I_STAT store followed by a RAM load 13, and four RAM stores followed by an SPU load 14.
+
+**The library is not changed.** No change the emulator can check moves the parts toward Sony's: in it the libraries' parts differ by the one cache line pair above, and the console's difference is elsewhere. The image stays `libps-spec45b`.
+
+On the console, to do (spec side):
+
+1. `cpucost4` (`.build/serial/cpucost4.elf`), on either library: what the SPU's and I_STAT's accesses cost, against the emulator's figures above. If they differ, the cost model takes the console's, `irqsplit` is run again in the emulator on both libraries, and if it then shows the clean parts longer, the clean handler's padding around those accesses is rearranged to Sony's measured times under the corrected model.
+2. If `cpucost4` matches the model: the part has to be placed inside the clean handler, with an image built with timer 2 stamps at points in `libps_interrupt`, `vblankInterrupt` and `soundTick` (an instrumented build, not shipped), run with `irqsplit` on the console and in the emulator: the stretch whose console time over the emulator's differs most from the 10 to 13% the rest show is the one the model misprices.
+
+### The cost model corrected for the SPU and I_STAT, and the poll's period
+
+`cpucost4` on the console (spec side, `.build/hardware/spec45g`) found the SPU and I_STAT priced wrong: an SPU halfword load about 20.9 cycles (the model had 5), an I_STAT load 4.0, an SPU store 7.5 a store in a run, an I_STAT store 2; a store to either followed by a RAM load 8.3 the pair, the load not waiting for the port's store; an SPU store followed by an SPU load 29.1, the port's load waiting for every store. The model now has them (e72de12: `regionSPU`, `regionIRQ`, `wbLastRAM`), within about 10% of the console on every row of cpucost4.
+
+In the emulator under the new model (implementation side, 2026-11-11), costs on:
+
+| | Sony's | spec45b | spec45c |
+|---|---|---|---|
+| vsyncstamp `EXIT` 480i, mean (console) | 85 (89) | 124 (134) | 159 (178) |
+| irqgaps 480i, count seen before the stretch (console) | 3 of 3 (3) | 2 of 3 (1) | |
+| vsyncpoll 480i, in call and counted (console) | 36, 25 (28, 23) | 24, 17 (22, 11) | |
+| vsyncstamp `PLACE`, shortest poll (console) | 100 (104) | 99 (100) | |
+| irqsplit 480i: kernel, library to callback, callback to poll | 13,881, 1,448, 6,192 | 13,894, 1,420, 6,179 | |
+
+The emulator now gives `EXIT` in the console's order and near its sizes, and the irqgaps and vsyncpoll differences in the console's direction. It still has the clean interrupt as long as Sony's or shorter in each part, where the console has it 25, 43 and 85 longer.
+
+**`EXIT` is not the way out.** Timed from outside, from the step GPUSTAT bit 31 changes to the program's next read of timer 2, `VSync(0)` at 480 lines returns after 109 to 113 cycles on Sony's library, 117 on spec45b and 96 to 101 on spec45c. The way out differs by a few cycles; `EXIT`'s 40 and 70 are in its reference, the stamp: the kernel's entry runs from different cache lines under each library and in each of the two interrupts `EXIT` compares (the one `VSync(0)` waits through and the one polled after it), so the stamp's offset from the interrupt moves by library. `EXIT` was the wrong measure for the way out, and spec45c's change was right for it but beside the point. This is why it made `EXIT` worse while vsyncpoll moved nearer.
+
+**What sets where the poll meets the interrupt: the poll's period.** vsyncpoll and irqgaps poll `VSync(-1)` some 3,700 times between `VSync(0)`'s return and the next blank, so a cycle more or less a call moves the poll's phase at the blank by thousands of cycles. On the console, Sony's shortest poll in vsyncstamp is 104 cycles and spec45b's 100; in vsyncpoll 79 and 76. `PLACE` puts the difference after the read of the count: w1 less count is 31 to 34 on Sony's and 21 to 29 on spec45b, count less w0 the same. So the clean `VSync(-1)` is some 4 cycles short on a console, after its read of the count. The new model has the two at 100 and 99, so it can't show this, and with a change made for it the emulator moves the other way (irqgaps 480i 1 of 3, the shortest poll 102 to 104).
+
+`.build/vsyncstamp-runs/libps-vsyncload.exe` is spec45b with one instruction changed (`vsyncload.patch` beside it): the first of the three nops after `VSync(-1)`'s read of the count is a load from RAM into `a3`, the same with the costs off and some 5 cycles more on a console. It is not in the library: only the console can say whether it is right.
+
+**The clean interrupt's extra time: the pads.** Under the new model the access timeline from outside shows Sony's 24 envelope reads 53 cycles apart, the clean ones 45; Sony's read of I_STAT 45 cycles before its acknowledgment, the clean 67; and after the tick Sony's handler reading I_STAT and I_MASK twice where the clean one reads DICR twice. The clean handler gets to Sony's cycles with pads: `spin`'s loop of a load and a store (`pace`, `spend`), unrolled stores (`space`), loads (`loadSpace`), `spaceRun`'s loop and `libps_delay`'s nops, all set with the costs off. The sound tick alone spins some 111 turns (`pace` of 194 and 362 cycles, `spend` of 827). `probes/padcost` (new) times copies of the pads, compiled by the same compiler, between two reads of timer 2 with interrupts off. In the emulator with the costs on: a turn of `spin` 17 cycles (12 with them off), 16 `space` stores 42, 16 `loadSpace` loads 116, `spaceRun` 3 cycles a turn past its 22, 128 nops 156 cached and 343 cold. If a console's `spin` turn is 0.8 cycles longer than 17, the tick's 111 turns are the 85 after the callback; the `space` stores before the count are the candidates for the 43 before it.
+
+The library is unchanged (the image is `libps-spec45b`). Under the new model `TestVSyncPoll` and `TestIRQGaps` pass on Sony's discs and on spec45b's.
+
+On the console, to do (spec side):
+
+1. `padcost` (`.build/serial/padcost.elf`), on either library: the pads' costs against the emulator's figures above. A difference there goes into the cost model, and then the clean handler's pads can be set to the console's times.
+2. `vsyncstamp`, `vsyncpoll` and `irqgaps` on `libps-vsyncload.exe`, against `spec45d` and `spec45c`'s Sony runs: whether the shortest poll comes to Sony's 104 and w1 less count to 31 to 34, and whether the 480i delay lines and irqgaps' fields follow.
+
+On the console (spec side, 2026-11-11): `padcost` (`.build/hardware/spec45h`), and `vsyncstamp`, `vsyncpoll` and `irqgaps` on the `libps-vsyncload` image (`.build/hardware/spec45i`).
+
+`padcost`, console (emulator): empty 4 (5); `spin` 0, 1, 10 and 100 turns 6, 20, 173 to 179 and 1,715 (11, 24, 177, 1,707), 17.1 a turn against 17.0; 16 `space` stores 44 to 53 (42), and then a load 48 (48); 16 `loadSpace` loads 116 (116); `spaceRun` 1 and 16 turns 22 and 68 (22, 67); 128 nops 151 (156). The pads are priced right to a few cycles: the sound tick's 111 turns of `spin` make some 14 cycles, not 85. The clean interrupt's extra time on the console is not in the pads.
+
+`libps-vsyncload`: `PLACE` 480i shortest poll 105 (Sony's 104, spec45b 100), w0 478, count 543 to 548, w1 578, so w1 less count 30 to 35 (Sony's 31 to 34); 240p shortest 105. `EXIT` 480i mean 134.6 (spec45b 133.9, Sony's 89.3). vsyncpoll: shortest call 82 (Sony's 79, spec45b 76); 480i 24 in call, 12 counted (Sony's 28 and 23, spec45b 22 and 11), 7 of 48 delay lines alike with Sony's (spec45b 10); 240p 31 and 19 (Sony's 24 and 13). irqgaps: the count seen before the stretch in 1 of 3 fields at 480 lines (Sony's 3, spec45b 1) and 1 of 3 at 240. So the load matched w1 less count and moved nothing else: vsyncload.patch is not applied.
+
+### Where that leaves the 480-line difference
+
+What vsyncpoll and irqgaps show at 480 lines is where a polling program is when the next blank comes. At 480 lines `VSync(0)` returns at GPUSTAT bit 31's change, 23 lines after a blank and after its interrupt has ended, so the interrupt's length does not enter vsyncpoll's fields; two things do: when `VSync(0)` returns after the change, and what a poll costs, multiplied by some 4,000 polls to the next blank. A poll a cycle longer moves the poll's place at the blank by 4,000 cycles, some 40 polls: the delay lines alike with Sony's are then chance. The vsyncload image shows it: 5 cycles a call, and the lines alike went from 10 of 48 to 7. And a poll's cost is not the library's alone. It depends on the caller's code around the call (the load made the shortest call 1 cycle longer than Sony's in vsyncstamp's poll and 3 in vsyncpoll's), and on where the caller's code sits in the instruction cache: in the emulator, retphase's first B loop, written in Go, sat on the cache lines of the clean image's `VSync` (9Bh to A3h) and missed on every poll, 184 cycles a poll against Sony's 114, where the same loop moved to other lines costs 119 against 118. Sony's `VSync` sits at its entry, 8003CA68h, lines CAh and on; the clean one's body is elsewhere, behind a jump there, wherever the image's packing puts it. Which programs' poll loops meet which library's lines differs by program.
+
+So a clean library can match Sony's poll to the cycle only for a given caller, and the delay lines only if it does. irqgaps polls through three fields without `VSync(0)`, so the interrupt's length enters it too, and at 240 lines `VSync(0)` returns at the interrupt's end: there the clean interrupt's extra 110 to 180 cycles on the console (not in the pads, not in the accesses, not shown by the emulator) move the phase as well.
+
+`probes/retphase` (new) separates the two parts at 480 lines with one console run per library, without a reference inside the interrupt. Each field, `VSync(0)` is called straight after an interrupt; then, alternating:
+
+- A: the program polls timer 2 alone until the interrupt: the cycles from `VSync(0)`'s return to the interrupt, which comes a fixed time after bit 31's change, so A against A is the return against the other library's, a few cycles' resolution;
+- B: a loop of timer 2, `VSync(-1)` (called at its entry, 8003CA68h), timer 2 until the count changes, in machine code the probe writes on cache lines 10h to 14h, away from both libraries' `VSync`: the cycles to the last poll and the polls made, so B over the polls is a poll's cost to a hundredth of a cycle.
+
+In the emulator with the costs on (shortest, mean, longest):
+
+| | Sony's | spec45b |
+|---|---|---|
+| 480i A | 516,560, 516,574, 516,579 | 516,560, 516,563, 516,579 |
+| 480i polls a field | 4,376 to 4,377 | 4,339 |
+| 480i a poll, B over the polls | 118.04 | 119.04 |
+| 240p A | 544,715, 544,777, 545,225 | 544,700, 544,748, 544,944 |
+
+So in the emulator the return is within about 10 cycles of Sony's and the poll a cycle longer, which on its own makes the delay lines differ.
+
+On the console, to do (spec side): `retphase` (`.build/serial/retphase.elf`) on Sony's library, on spec45b and on vsyncload. If A matches and B over the polls differs, the 480-line difference is the poll's cost in this caller; the vsyncload run says how many cycles of it a change to `VSync(-1)` moves, and whether that is the same number in every caller (against vsyncstamp's 1 and vsyncpoll's 3). If A differs, the way out of `VSync(0)` is still the cause, and its size is A's difference.
+
+If the console bears out the emulator, there is nothing cheap left. A clean `VSync(-1)` that costs Sony's cycles in every caller would have to sit on Sony's cache lines and pair with its caller's instructions as Sony's does, which this spec cannot know from outside. The 480-line figures that do not depend on the cycle (where `statlines` sees the count, what `vsynclate` returns, `VSync(0)` returning at bit 31's change) already match Sony's. I would accept the delay lines and irqgaps' fields at 480 lines as they are, and leave the clean interrupt's extra 110 to 180 console cycles for a spec of their own, with an instrumented image to place them.
+
+### `retphase` on the console, and the poll's cost
+
+On the console (spec side, 2026-11-11, `.build/hardware/spec45j`), `retphase` on Sony's library, spec45b and vsyncload (shortest, median, longest):
+
+| | Sony's | spec45b | vsyncload |
+|---|---|---|---|
+| 480i A | 516,501, 516,501, 516,505 | 516,486, 516,497, 516,505 | 516,486, 516,499, 516,505 |
+| 480i polls a field | 4,437 to 4,438 | 4,610 | 4,370 |
+| 480i a poll (B over the polls) | 116.4 | 112.0 | 118.2 |
+| 240p A | 542,061, 542,172, 542,256 | 541,872, 541,962, 542,106 | 541,866, 541,955, 542,061 |
+| 240p polls a field | 4,657 to 4,659 | 4,836 to 4,839 | 4,585 to 4,587 |
+
+At 480 lines `VSync(0)` returns at Sony's time, within a few cycles: that cause is gone. In this caller, on cache lines away from both libraries' `VSync`, the clean `VSync(-1)` is 4.4 cycles short of Sony's, and vsyncload's load in place of a nop overshoots by 1.8 (a load costs some 6.2 more than the nop). At 240 lines A is some 210 cycles smaller on the clean library, its longer interrupt (irqsplit's 150 to 190), since there `VSync(0)` returns at the interrupt's end; that stays a separate item.
+
+What changed (spec45k, `.build/hardware/images/libps-spec45k.exe.gz`): after `VSync(-1)`'s read of the count, the three loads into a2 and three nops became four loads, into a2 and a3 by turns, and two nops. With the costs off it is the same time and the count is read at the same place. On a console a load into the register the load before it loaded costs about 0.9 more than one into another (cpucost2, "lw same" 7 against 6.1 a load in a run), so against spec45b the call costs the extra load's 6.2 less the two same-register loads' 1.8 it no longer makes: 4.4, Sony's. The image differs from vsyncload in one byte, and from spec45b in two words.
+
+In the emulator with the costs on, `retphase`'s poll costs 122.03 on spec45k (4,233 polls a field), 119.04 on spec45b and 118.04 on Sony's: the model prices the change at 3.0 (a load 5 more than a nop, a same-register load 1 more), where the console's figures make it 4.4. The model also has spec45b's poll a cycle longer than Sony's where the console has it 4.4 shorter, so the emulator can't say whether spec45k's matches; the console can.
+
+Checks on spec45k: `TestVSyncPoll`, `TestIRQGaps`, `TestVSyncCount`, `TestVSyncPhase`, `TestDrawWait` and `TestFieldTime` pass; `go test ./exp/cleanlib/...` passes; `image/regress.sh` 38 PASS, 3 TIME (`check`, `offscr`, `terra`), as before. `task compiler:overlay` and `task yaroze` rebuilt the embedded sysroot, and a static build links.
+
+On the console (spec side, 2026-11-11, `.build/hardware/spec45k`), spec45k cost exactly what vsyncload did: 4,370 polls a field at 480 lines (118.2 a poll) and 4,585 at 240, so taking turns between a2 and a3 saved nothing in this caller. vsyncpoll's 480i delay lines were alike with Sony's in 7 of 48; irqgaps saw the count before the stretch in 1 of 3 fields at 480 lines; and statlines at 480 lines counted at 251, 525 and 787, two fields 11 lines late, where spec45b had matched Sony's 251, 514 and 776. That too is the probe's poll meeting the blank at another phase, not a late count.
+
+### Accepted: the 480-line poll fields
+
+spec45k is reverted; the library stays at spec45b (bc7e097), byte for byte. The poll fields at 480 lines (vsyncpoll's delay lines, irqgaps' fields, and statlines' lines where they move with them) are accepted as they are:
+
+- They decide only which pass of a loop polling `VSync(-1)` first sees a new count, before the interrupt's stretch or after it: at most 11 lines, in some fields. A program waiting with `VSync(0)` sees no difference.
+- Matching them means matching the poll's cost to a few hundredths of a cycle: a field holds some 4,400 polls, and 0.1 cycle a poll moves the blank by about 4 polls. The instructions at hand change it by about 1, 3, 4 or 6 cycles, and the emulator prices them too coarsely to tune against (3.0 for a change the console makes 6.2).
+- A match would hold for one caller only, since a poll's cost depends on the caller's code and where it sits in the cache.
+- Sony's own library changes from run to run here at 240 lines, so a program depending on it already varies on a console.
+- What doesn't depend on the exact cycle matches Sony's at 480 lines: `VSync(0)` returns at Sony's time within a few cycles (retphase's A), vsynclate's table, and the line the count changes on in statlines at spec45b.
+
+This may be looked at again after the clean library work is merged with the API changes, together with a tighter cost model (retphase gives a poll's cost to a hundredth of a cycle) and image switching in hwrun without a reset.
+
+Left for a spec of its own: the clean interrupt runs some 110 to 180 cycles longer than Sony's on a console (irqsplit: 25 in the kernel's part, 43 before the callback, 85 after it), which retphase's 240p A shows as a return some 210 cycles late. It isn't in the padding (padcost) or the device accesses, and the emulator doesn't show it; timer stamps inside the clean handler, on an image not shipped, would place it.
