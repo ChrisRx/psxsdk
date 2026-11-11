@@ -620,7 +620,7 @@ func (c *cdDriver) pause() (ev uintptr) {
 	// The time the read ended, then the time once more, as Sony's
 	// library reads it before the Pause.
 	volatile.StoreUint32(&c.ended, cdNow())
-	volatile.StoreUint32(&c.endBlank, volatile.LoadUint32(&vsync.blanks))
+	volatile.StoreUint32(&c.endBlank, volatile.LoadUint32(&vsyncBlanks))
 	cdNow()
 	spinCycles(pauseRest)
 	c.send(cdlPause, nil, cdPauseEv, true)
@@ -928,13 +928,13 @@ func ttyString(s string) {
 //go:noinline
 func CdReady(mode int32, result *uint8) int32 {
 	watch.begin(cdNoLimit)
-	start := volatile.LoadUint32(&vsync.blanks)
+	start := volatile.LoadUint32(&vsyncBlanks)
 	for volatile.LoadUint32(&cd.ready) == 0 {
 		watch.check()
 		if mode != 0 {
 			return 0
 		}
-		if volatile.LoadUint32(&vsync.blanks)-start > cdReadyLimit {
+		if volatile.LoadUint32(&vsyncBlanks)-start > cdReadyLimit {
 			ttyString("CD_ready:(")
 			ttyString(cdComNames[cd.com&31])
 			ttyString(") Sync=")
@@ -1076,7 +1076,7 @@ func CdReadSync(mode int32, result *uint8) int32 {
 	// drive's interrupt lands in returns what it was before, as Sony's
 	// do.
 	failed, left := volatile.LoadUint32(&cd.readErr), volatile.LoadUint32(&cd.count)
-	if left == 0 && cd.again && volatile.LoadUint32(&vsync.blanks)-volatile.LoadUint32(&cd.endBlank) > cdReadStale {
+	if left == 0 && cd.again && volatile.LoadUint32(&vsyncBlanks)-volatile.LoadUint32(&cd.endBlank) > cdReadStale {
 		cd.readAgain()
 		failed, left = volatile.LoadUint32(&cd.readErr), volatile.LoadUint32(&cd.count)
 	}

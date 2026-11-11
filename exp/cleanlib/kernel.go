@@ -306,10 +306,12 @@ type exitBuf struct {
 	gp         uint32
 }
 
-var intr struct {
-	// started is set once libStart has run.
-	started bool
+// libStarted is 1 once libStart has run. VSync's assembly reads it.
+//
+//go:extern libps_lib_started
+var libStarted uint32
 
+var intr struct {
 	exit exitBuf
 
 	// stack is where the handler runs: a stack of the library's own, so
@@ -329,7 +331,7 @@ var intr struct {
 // other entry points that need it call it too, for a program that starts
 // without ResetGraph.
 func libStart() {
-	if !intr.started {
+	if libStarted == 0 {
 		libBegin()
 	}
 }
@@ -339,7 +341,7 @@ func libStart() {
 //
 //go:noinline
 func libBegin() {
-	intr.started = true
+	libStarted = 1
 	// Sony's sets every DMA channel's priority to 3 and disables them all
 	// first; ResetGraph, the sound and GsClearOt enable their own after
 	// (probe spec/probes/dmaleft, spec 45). The kernel leaves 00009099h.
@@ -391,7 +393,7 @@ const (
 // imageBlank to share.
 const (
 	interruptSpaceIn  = 5
-	interruptSpaceOut = 5
+	interruptSpaceOut = 6
 )
 
 // vblankInterrupt handles the vertical blank: it acknowledges it, counts
@@ -406,7 +408,7 @@ func vblankInterrupt() {
 	space(vblankAckSpace)
 	iStat.Set(^uint32(irqVBlank))
 	space(vblankCountSpace)
-	volatile.StoreUint32(&vsync.blanks, volatile.LoadUint32(&vsync.blanks)+1)
+	volatile.StoreUint32(&vsyncBlanks, volatile.LoadUint32(&vsyncBlanks)+1)
 	if f := volatile.LoadUint32(&vsync.callback); f != 0 {
 		callC(uintptr(f))
 	}
