@@ -132,3 +132,34 @@ func TestCPUCostSkip(t *testing.T) {
 		assert.Equal(t, true, skipped > 2_000_000, "at %08x, skipped %d of 3000000 steps", at, skipped)
 	}
 }
+
+// TestCPUCostAfterStores runs a load after a store with three instructions
+// between, which don't hide the wait, and then lwc2 from RAM, after which the
+// next instruction costs a cycle more whatever it is.
+func TestCPUCostAfterStores(t *testing.T) {
+	const (
+		at   = 0x80010000
+		data = 0x80020000
+	)
+	m := newTestMachine(t)
+	m.SetCPUCost(true)
+	m.CPU.COP0[12] |= 1 << 30 // the GTE on
+	code := []uint32{
+		nop,
+		lw(r1, 0, r4), sw(0, 4, r4), nop, nop, nop,
+		lw(r2, 8, r4), lwc2(0, 12, r4), lwc2(1, 16, r4), nop,
+	}
+	write(m, at, code...)
+	m.CPU.R[r4] = data
+	startAt(m, at)
+	stepCosts(t, m, len(code)) // into the cache
+
+	startAt(m, at)
+	assert.Equal(t, []uint32{
+		1,
+		6, 1 + 1, 1, 1, 1,
+		2 + 6, 1 + 6, 1 + 6, 1 + 1,
+	}, stepCosts(t, m, len(code)))
+}
+
+func lwc2(rt uint32, off int, base uint32) uint32 { return iType(0x32, base, rt, off) }

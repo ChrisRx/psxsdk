@@ -58,7 +58,9 @@ const (
 	// on top, unless it is a load into a different register: a load and
 	// a nop, or a load and an instruction using it, cost 8.1 (cpucost,
 	// "lw ram nop", "lw ram then use"), and a run of loads into the same
-	// register 7 each (cpucost2, "lw same", "lw stride 4"). On an R3000A
+	// register 7 each (cpucost2, "lw same", "lw stride 4"). After lwc2 the
+	// next costs it whatever it is: a run of lwc2 costs 7.1 each, and lwc2
+	// and a nop 8.1 (cpucost3, "lwc2 ram", "lwc2 ram nop"). On an R3000A
 	// this is the pipeline; the model has only what the data shows.
 	costRAMLoadNext = 1
 
@@ -67,11 +69,14 @@ const (
 	// other ports are taken to cost the same.
 	costIOLoad = 4
 
-	// costAfterStores is what a load from RAM costs on top once it has
-	// waited for the write buffer: a store then a load cost 13.3 for the
-	// two (cpucost, "sw then lw ram"), 3 more than the wait and the load
-	// alone come to. A load from a port shows none ("sw ram 1", whose
-	// counter read waits for the store).
+	// costAfterStores is how long RAM stays busy after the write buffer's
+	// last store leaves it, for a load from RAM, which waits until then: a
+	// store then a load cost 13.3 for the two (cpucost, "sw then lw ram"),
+	// 3 more than the drain and the load alone come to. Three instructions
+	// between don't hide it: a load and a store cost 12.3 a pair, with three
+	// nops after the store or without (cpucost3, "lw ram sw ram", "lw ram sw
+	// ram nop3"). A load from a port shows none ("sw ram 1", whose counter
+	// read waits for the store).
 	costAfterStores = 3
 
 	// wbDepth is the write buffer's entries. A store costs its cycle if
@@ -122,6 +127,9 @@ func regionOf(addr uint32) region {
 	return regionIO
 }
 
+// gteReg is loadReg after lwc2, which no CPU register's number matches.
+const gteReg = 32
+
 // cost is the cost model's state.
 type cost struct {
 	// lines is the instruction cache: for each line, the physical address
@@ -138,7 +146,8 @@ type cost struct {
 	streamNext uint32
 
 	// loadNext is whether the last step loaded from RAM, into loadReg,
-	// which costs the next step costRAMLoadNext.
+	// which costs the next step costRAMLoadNext. loadReg is gteReg for
+	// lwc2.
 	loadNext bool
 	loadReg  uint32
 
@@ -202,7 +211,7 @@ func (m *cost) step(c *CPU) uint32 {
 
 	if m.loadNext {
 		m.loadNext = false
-		if !isLoad(op) || op>>16&31 == m.loadReg {
+		if m.loadReg == gteReg || !isLoad(op) || op>>16&31 == m.loadReg {
 			t += costRAMLoadNext
 		}
 	}
@@ -240,18 +249,18 @@ func (m *cost) execute(c *CPU, op, pc uint32, t uint64) uint64 {
 		if r == regionScratch {
 			break
 		}
-		drained := (m.wbLast + 1) / 2
-		waited := drained > t
-		t = m.wait(t, max(drained, m.busFree))
+		ready := (m.wbLast + 1) / 2
+		if r == regionRAM && m.wbLast != 0 {
+			ready += costAfterStores
+		}
+		t = m.wait(t, max(ready, m.busFree))
 		t = m.fetch(pc, t)
 		switch r {
 		case regionRAM:
 			t += costRAMLoad
-			if waited {
-				t += costAfterStores
-			}
-			if code != 0x32 {
-				m.loadNext, m.loadReg = true, op>>16&31
+			m.loadNext, m.loadReg = true, op>>16&31
+			if code == 0x32 {
+				m.loadReg = gteReg
 			}
 		case regionROM:
 			t += costROM
