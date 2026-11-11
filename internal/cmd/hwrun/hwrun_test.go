@@ -22,6 +22,7 @@ type console struct {
 	out   bytes.Buffer
 	line  []byte
 	stuck bool
+	word  string // what a dw command reads
 }
 
 func (c *console) CTS() (bool, error)   { return !c.stuck, nil }
@@ -38,7 +39,11 @@ func (c *console) Write(p []byte) (int, error) {
 	for _, b := range p {
 		switch b {
 		case '\r':
-			c.out.WriteString(string(c.line) + "\r\n>>")
+			c.out.WriteString(string(c.line) + "\r\n")
+			if strings.HasPrefix(string(c.line), "dw ") {
+				c.out.WriteString(strings.TrimPrefix(string(c.line), "dw ")[:8] + ":" + c.word + "\r\n")
+			}
+			c.out.WriteString(">>")
 			c.line = c.line[:0]
 		case 3:
 			c.out.WriteString("^C\r\n>>")
@@ -69,6 +74,32 @@ func TestResetWaitsForTheMonitor(t *testing.T) {
 	assert.Equal(t, "stuck", asked)
 	assert.Equal(t, 200*time.Millisecond, port.Timeout)
 	assert.Equal(t, true, s.mon != nil)
+}
+
+// A run for Sony's library under the clean monitor asks for a reset first,
+// since its programs would run on the clean library.
+func TestSonyRunUnderCleanMonitor(t *testing.T) {
+	c := &console{word: "240bffff"}
+	port := serial.NewPort(c)
+	port.Timeout = 200 * time.Millisecond
+	asked := ""
+	s := &Session{
+		Port:   port,
+		Marker: 0x240bffff,
+		Log:    io.Discard,
+		Reset: func(why string) error {
+			asked = why
+			c.word = "3c1a8006"
+			c.out.WriteString("Connected CIP ver2.0\r\nCommunication baud rate 115200 bps\r\nOK\r\n>>")
+			return nil
+		},
+	}
+	assert.NoError(t, s.Start(t.Context()))
+	assert.Equal(t, "the clean monitor is up, and Sony's library is wanted", asked)
+
+	asked = ""
+	assert.NoError(t, s.Start(t.Context()))
+	assert.Equal(t, "", asked)
 }
 
 func TestArchiveJobs(t *testing.T) {
