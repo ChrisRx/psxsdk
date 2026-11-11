@@ -55,8 +55,25 @@ func OpenMonitor(path string, baud uint32) (*Program, error) {
 // the old code is there for the kernel to call as it removes a device. Then it
 // copies each piece into place, flushes the cache and jumps to the new monitor.
 func TakeOver(monitor *Program, image Segment) (*Program, error) {
+	return takeOver(monitor, []Segment{image}, false)
+}
+
+// TakeOverMonitor is TakeOver with the boot disc's library kept as the boot
+// left it: only the monitor is replaced, so that Sony's library runs under
+// the same monitor as the clean one, with its start-up done. The loader
+// undoes the same things, which on a freshly booted console are all the boot
+// disc's monitor's (its devices, and its memory card events, 1 to 8), and
+// puts the interrupt mask back as it found it rather than leaving it clear,
+// since nothing will set it up again.
+func TakeOverMonitor(monitor *Program) (*Program, error) {
+	return takeOver(monitor, nil, true)
+}
+
+// takeOver is TakeOver and TakeOverMonitor: it uploads images and the monitor,
+// and keepMask has the loader restore the interrupt mask before it jumps.
+func takeOver(monitor *Program, images []Segment, keepMask bool) (*Program, error) {
 	prog := &Program{PC: monitor.PC, GP: monitor.GP, SP: monitor.SP}
-	down := append([]Segment{image}, monitor.Segments...)
+	down := append(append([]Segment{}, images...), monitor.Segments...)
 	total := uint32(0)
 	for _, seg := range down {
 		total += uint32(len(seg.Data)+3) &^ 3
@@ -74,7 +91,7 @@ func TakeOver(monitor *Program, image Segment) (*Program, error) {
 		segs = append(segs, Segment{Name: seg.Name, Addr: at, Data: data})
 		at += uint32(len(data))
 	}
-	segs = append(segs, Segment{Name: "loader", Addr: loaderAddr, Data: loader(copies, prog.PC)})
+	segs = append(segs, Segment{Name: "loader", Addr: loaderAddr, Data: loader(copies, prog.PC, keepMask)})
 	return &Program{
 		Segments: segs,
 		PC:       loaderAddr,
@@ -96,6 +113,7 @@ const (
 	regT2 = 10
 	regT3 = 11
 	regT4 = 12
+	regS0 = 16
 	regSP = 29
 )
 
@@ -137,8 +155,12 @@ var monitorDevices = []string{"tty", "mem", "cdx"}
 // namesAt is where in the loader's upload the device names go, past its code.
 const namesAt = 0x1000
 
-// loader is the code TakeOver uploads.
-func loader(copies []copyBlock, entry uint32) []byte {
+// iMask is the interrupt controller's mask register.
+const iMask = 0x1f801074
+
+// loader is the code TakeOver uploads. With keepMask it saves the interrupt
+// mask in s0, which the kernel's calls keep, and puts it back last.
+func loader(copies []copyBlock, entry uint32, keepMask bool) []byte {
 	var code []uint32
 	add := func(w ...uint32) { code = append(code, w...) }
 	call := func(table, fn uint32) {
@@ -150,7 +172,10 @@ func loader(copies []copyBlock, entry uint32) []byte {
 	add(li(regT1, 0xfffffffe)...)
 	add(0x01094024)       // and t0, t0, t1
 	add(0x40886000, 0, 0) // mtc0 t0, sr
-	add(li(regT0, 0x1f801074)...)
+	add(li(regT0, iMask)...)
+	if keepMask {
+		add(iType(0x23, regT0, regS0, 0), 0) // lw s0, 0(t0)
+	}
 	add(iType(0x2b, regT0, 0, 0)) // sw zero, 0(t0): mask every interrupt
 	var names []byte
 	for _, name := range monitorDevices {
@@ -181,6 +206,10 @@ func loader(copies []copyBlock, entry uint32) []byte {
 	// would be under a program's stack, and a program that reads its stack
 	// before setting it would find the monitor's leftovers there.
 	add(li(regSP, monitorStack)...)
+	if keepMask {
+		add(li(regT0, iMask)...)
+		add(iType(0x2b, regT0, regS0, 0)) // sw s0, 0(t0)
+	}
 	add(li(regT0, entry)...)
 	add(0x01000008, 0) // jr t0
 	out := make([]byte, 0, len(code)*4)

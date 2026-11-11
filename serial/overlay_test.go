@@ -1,6 +1,8 @@
 package serial
 
 import (
+	"encoding/binary"
+	"slices"
 	"testing"
 
 	"go.chrisrx.dev/x/assert"
@@ -24,4 +26,39 @@ func TestTakeOver(t *testing.T) {
 	assert.Equal(t, uint32(loaderAddr-16), got.Segments[1].Addr)
 	assert.Equal(t, uint32(loaderAddr), got.Segments[2].Addr)
 	assert.Equal(t, namesAt+len("tty mem cdx "), len(got.Segments[2].Data))
+}
+
+// TakeOverMonitor uploads the monitor alone, and its loader saves the
+// interrupt mask in s0 first and puts it back last, where TakeOver's leaves
+// it clear.
+func TestTakeOverMonitor(t *testing.T) {
+	monitor := &Program{
+		Segments: []Segment{{Name: "text", Addr: 0x80068000, Data: make([]byte, 16)}},
+		PC:       0x80068000,
+		GP:       0x80080000,
+		SP:       defaultStack,
+	}
+	got, err := TakeOverMonitor(monitor)
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(loaderAddr), got.PC)
+	assert.Equal(t, 2, len(got.Segments))
+	assert.Equal(t, uint32(loaderAddr-16), got.Segments[0].Addr)
+
+	words := func(p *Program) []uint32 {
+		code := p.Segments[len(p.Segments)-1].Data[:namesAt]
+		w := make([]uint32, len(code)/4)
+		for i := range w {
+			w[i] = binary.LittleEndian.Uint32(code[4*i:])
+		}
+		return w
+	}
+	saveMask := iType(0x23, regT0, regS0, 0)
+	restoreMask := iType(0x2b, regT0, regS0, 0)
+	assert.Equal(t, true, slices.Contains(words(got), saveMask))
+	assert.Equal(t, true, slices.Contains(words(got), restoreMask))
+
+	full, err := TakeOver(monitor, Segment{Name: "image", Addr: 0x80010000, Data: make([]byte, 8)})
+	assert.NoError(t, err)
+	assert.Equal(t, false, slices.Contains(words(full), saveMask))
+	assert.Equal(t, false, slices.Contains(words(full), restoreMask))
 }

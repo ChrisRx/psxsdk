@@ -41,7 +41,7 @@ import (
 func main() {
 	device := flag.String("d", "", "serial device, such as /dev/ttyUSB0")
 	baud := flag.Int("b", 115200, "baud rate")
-	library := flag.String("library", "sony", "the library to run on: sony, as the boot disc left it, or clean")
+	library := flag.String("library", "sony", "the library to run on: sony, as the boot disc left it; clean; or sony-ourmon, Sony's as the boot disc left it under the clean monitor")
 	imagePath := flag.String("image", "link/libps.exe.gz", "the clean image")
 	monitorPath := flag.String("monitor", ".build/serial/monitor.elf", "the clean monitor, from task build:serial")
 	out := flag.String("o", "results", "directory for the output")
@@ -71,8 +71,8 @@ func run(device string, baud int, library, imagePath, monitorPath, archive, out 
 		}
 		peekAt = append(peekAt, d)
 	}
-	if len(peekAt) > 0 && library != "clean" {
-		return fmt.Errorf("-peek needs -library clean: only the clean monitor stops a program")
+	if len(peekAt) > 0 && library == "sony" {
+		return fmt.Errorf("-peek needs the clean monitor (-library clean or sony-ourmon): only it stops a program")
 	}
 	var regions []hwrun.Region
 	for r := range strings.SplitSeq(reads, ",") {
@@ -127,6 +127,16 @@ func run(device string, baud int, library, imagePath, monitorPath, archive, out 
 			return err
 		}
 		s.TakeOver, err = serial.TakeOver(monitor, image.Segments[0])
+		if err != nil {
+			return err
+		}
+		if dir, err := os.UserCacheDir(); err == nil {
+			s.Stamp = filepath.Join(dir, "psx", "hwrun-in-place")
+		}
+	case "sony-ourmon":
+		// Sony's library as the boot disc started it, under the clean
+		// monitor, for comparing the two libraries under one monitor.
+		s.TakeOver, err = serial.TakeOverMonitor(monitor)
 		if err != nil {
 			return err
 		}
