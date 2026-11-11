@@ -352,3 +352,27 @@ The emulator charges 2 cycles for every instruction, whatever it does. On a cons
 - **A line is filled from the word entered to the line's end.** Run cold every time, 64 instructions in 16 whole lines take 9 cycles a line. Two instructions in each of 16 lines take 10.7 a line entered at the line's start and 7.7 entered 8 bytes in (2.1 a line warm): about 1.5 cycles a word filled, and about 3 more a line.
 - **Loads from RAM** take 7 cycles each in this layout, the same at one address, 4 bytes apart and 128 bytes apart (6.1 in `cpucost`'s layout). No DRAM page effect shows.
 - **A DMA stops the CPU, even running from the cache.** Channel 6 clearing 1,024 words takes 1,097 cycles, 1.07 a word. 256 cached instructions started with it take 1,088, where alone they take 255: the CPU waited out the transfer. 64 loads from RAM after it take the transfer's time plus their own. In the emulator the clear takes no time, and the CPU goes on.
+
+### 2026-11-10, evening: four "Sony" runs were the clean library
+
+Until this evening `hwrun -library sony` never looked at which monitor was up. Under the clean monitor its programs ran on the clean image. On 2026-11-08 `drawwait-sony`, `vsynclate-sony`, `callcost-sony` and `accmulti-sony` each ran straight after a clean run with no reset between, so they are the clean library. `drawwait-sony` shows it: its second call comes at 125, as the clean library's does, where Sony's comes at 164. Taken back with them:
+
+- "The cost of gasgar's calls ... within an eighth of Sony's" (above, and spec 40). Rerun on Sony's library (`.build/hardware/callcost-sony2`), the clean library is much cheaper than Sony's in the small calls and within a few percent in `GsSortObject4`, in eighths of the clock:
+
+  | call | Sony's | clean |
+  |---|---|---|
+  | `GsSortObject4`, the seven kinds | 4,159 to 6,955 | 1% less to 6% more |
+  | `GsSortSprite` rotated, plain | 157, 52 | 104, 32 |
+  | `GsGetLws` | 85 | 70 |
+  | `GsSetLightMatrix` | 53 | 43 |
+  | `GsSortClear` | 31 | 24 |
+  | `RotMatrix` | 34 | 35 |
+
+- `accmulti`'s "Sony's on the console differs from Sony's in the emulator". That run was the clean library.
+- Spec 45's interlaced `vsynclate` gap, which compared the clean library with its own build from before spec 42.
+
+The runs of 2026-11-09 hold: `vsyncphase`, `fieldphase` and `vsynccount` run again on Sony's library (`*-sony3`) give the same figures. `hwrun` now asks for the reset button when a Sony run finds the clean monitor up.
+
+`statlines` on Sony's library (`statlines-sony3`, its first real run) counts the blank at lines 251, 514 and 776 at 480 lines, and at 252 and 515 at 240 lines. The clean library counts at 525 and 263 instead: 11 lines late every other field, at both heights. `vsynclate` agrees (`vsynclate-sony2`): its 240 line table matches Sony's, and in the interlaced one the clean library's `VSync` returns 12 lines sooner than Sony's in 37 of 96 cases, the blank counts the same.
+
+`cpucost3` (`.build/hardware/cpucost3`), cycles a pattern from the warm runs, counter read taken off: `lwc2` from RAM 7.1, `lwc2` and a `nop` 8.1, `lw` then `sw` to RAM 12.1 for the pair with or without three `nop`s after, `sw` then `lwc2` 13.2, `swc2` to RAM 2.1, `lwc2` and `swc2` to the scratchpad 1.0.
