@@ -17,13 +17,20 @@ import (
 
 // console is a line to a monitor that has no program to run: it echoes commands
 // and answers with a prompt, and is silent after the reset button is wanted
-// until it's pressed.
+// until it's pressed. With reboots set, go with epc at the BIOS's reset address
+// brings up the boot disc's monitor, whose first word is bootWord.
 type console struct {
-	out   bytes.Buffer
-	line  []byte
-	stuck bool
-	word  string // what a dw command reads
+	out      bytes.Buffer
+	line     []byte
+	stuck    bool
+	word     string // what a dw command reads
+	epc      string
+	reboots  bool
+	bootWord string
 }
+
+// booted is what the boot disc's monitor prints as it starts.
+const booted = "Connected CIP ver2.0\r\nCommunication baud rate 115200 bps\r\nOK\r\n>>"
 
 func (c *console) CTS() (bool, error)   { return !c.stuck, nil }
 func (c *console) SetRTS(on bool) error { return nil }
@@ -40,6 +47,15 @@ func (c *console) Write(p []byte) (int, error) {
 		switch b {
 		case '\r':
 			c.out.WriteString(string(c.line) + "\r\n")
+			if epc, ok := strings.CutPrefix(string(c.line), "sr epc "); ok {
+				c.epc = epc
+			}
+			if string(c.line) == "go" && c.reboots && c.epc == "bfc00000" {
+				c.out.WriteString(booted)
+				c.word = c.bootWord
+				c.line = c.line[:0]
+				continue
+			}
 			if strings.HasPrefix(string(c.line), "dw ") {
 				c.out.WriteString(strings.TrimPrefix(string(c.line), "dw ")[:8] + ":" + c.word + "\r\n")
 			}
@@ -76,10 +92,11 @@ func TestResetWaitsForTheMonitor(t *testing.T) {
 	assert.Equal(t, true, s.mon != nil)
 }
 
-// A run for Sony's library under the clean monitor asks for a reset first,
-// since its programs would run on the clean library.
+// A run for Sony's library under the clean monitor reboots the console from
+// the monitor's prompt first, since its programs would run on the clean
+// library, and needs no button.
 func TestSonyRunUnderCleanMonitor(t *testing.T) {
-	c := &console{word: "240bffff"}
+	c := &console{word: "240bffff", reboots: true, bootWord: "3c1a8006"}
 	port := serial.NewPort(c)
 	port.Timeout = 200 * time.Millisecond
 	asked := ""
@@ -89,8 +106,30 @@ func TestSonyRunUnderCleanMonitor(t *testing.T) {
 		Log:    io.Discard,
 		Reset: func(why string) error {
 			asked = why
+			return nil
+		},
+	}
+	assert.NoError(t, s.Start(t.Context()))
+	assert.Equal(t, "", asked)
+	assert.Equal(t, "3c1a8006", c.word)
+	assert.Equal(t, 200*time.Millisecond, port.Timeout)
+}
+
+// A console that doesn't reboot from the prompt gets the reset button.
+func TestRebootFallsBackToTheButton(t *testing.T) {
+	c := &console{word: "240bffff"}
+	port := serial.NewPort(c)
+	port.Timeout = 200 * time.Millisecond
+	asked := ""
+	s := &Session{
+		Port:   port,
+		Marker: 0x240bffff,
+		Boot:   200 * time.Millisecond,
+		Log:    io.Discard,
+		Reset: func(why string) error {
+			asked = why
 			c.word = "3c1a8006"
-			c.out.WriteString("Connected CIP ver2.0\r\nCommunication baud rate 115200 bps\r\nOK\r\n>>")
+			c.out.WriteString(booted)
 			return nil
 		},
 	}
