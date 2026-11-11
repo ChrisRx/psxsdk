@@ -120,7 +120,10 @@ type Session struct {
 
 	// TakeOver is what replaces the boot disc's monitor and library, from
 	// serial.TakeOver, or nil to stay on them. Marker is the first word of the
-	// monitor it brings, which tells if it's already there.
+	// clean monitor, which tells if it's already there. A session without
+	// TakeOver, for Sony's library, sets it too: under the clean monitor its
+	// programs would run on the clean library, so Start resets the console
+	// first. Zero skips that check.
 	TakeOver *serial.Program
 	Marker   uint32
 
@@ -170,14 +173,21 @@ func (s *Session) Start(ctx context.Context) error {
 	if _, err := mon.Command(ctx, ""); err != nil {
 		return err
 	}
-	if s.TakeOver == nil {
+	if s.TakeOver == nil && s.Marker == 0 {
 		return nil
 	}
 	reply, err := mon.Command(ctx, fmt.Sprintf("dw %08x 4", monitorStart))
 	if err != nil {
 		return err
 	}
-	if strings.Contains(strings.ToLower(reply), fmt.Sprintf(":%08x", s.Marker)) {
+	ours := strings.Contains(strings.ToLower(reply), fmt.Sprintf(":%08x", s.Marker))
+	if s.TakeOver == nil {
+		if ours {
+			return s.reset(ctx, "the clean monitor is up, and Sony's library is wanted")
+		}
+		return nil
+	}
+	if ours {
 		if s.stamped() {
 			fmt.Fprintln(s.Log, "the clean library is already in place")
 			return nil

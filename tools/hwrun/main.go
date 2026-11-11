@@ -112,6 +112,13 @@ func run(device string, baud int, library, imagePath, monitorPath, archive, out 
 			return err
 		},
 	}
+	// Both libraries need the clean monitor's first word: a Sony run checks
+	// that the clean monitor isn't up.
+	monitor, err := serial.OpenMonitor(monitorPath, uint32(baud))
+	if err != nil {
+		return err
+	}
+	s.Marker = binary.LittleEndian.Uint32(monitor.Segments[0].Data)
 	switch library {
 	case "sony":
 	case "clean":
@@ -119,15 +126,10 @@ func run(device string, baud int, library, imagePath, monitorPath, archive, out 
 		if err != nil {
 			return err
 		}
-		monitor, err := serial.OpenMonitor(monitorPath, uint32(baud))
-		if err != nil {
-			return err
-		}
 		s.TakeOver, err = serial.TakeOver(monitor, image.Segments[0])
 		if err != nil {
 			return err
 		}
-		s.Marker = binary.LittleEndian.Uint32(monitor.Segments[0].Data)
 		if dir, err := os.UserCacheDir(); err == nil {
 			s.Stamp = filepath.Join(dir, "psx", "hwrun-in-place")
 		}
