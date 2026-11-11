@@ -46,17 +46,18 @@ type Machine struct {
 	// keeps once it has.
 	shown bool
 
-	ram  *ram
-	ic   *ic
-	exp2 *exp2
-	dma  *dma
-	spu  *spu
-	gpu  *gpu
-	tmr  *timers
-	cd   *cdrom
-	sio  *sio0
-	sio1 *sio1
-	mdec *mdec
+	ram     *ram
+	scratch memory
+	ic      *ic
+	exp2    *exp2
+	dma     *dma
+	spu     *spu
+	gpu     *gpu
+	tmr     *timers
+	cd      *cdrom
+	sio     *sio0
+	sio1    *sio1
+	mdec    *mdec
 
 	// spuCycles counts towards the next SPU sample.
 	spuCycles uint32
@@ -103,6 +104,7 @@ func New(bios []byte) (*Machine, error) {
 
 	mc2 := newMC2()
 	m.ram = &ram{memory: make(memory, RAMSize), mc2: mc2}
+	m.scratch = make(memory, 0x400)
 	m.ic = &ic{setIRQ: m.CPU.SetIRQ}
 	m.exp2 = &exp2{}
 	// The CD-ROM drive and the pad count CPU cycles towards their events,
@@ -133,7 +135,7 @@ func New(bios []byte) (*Machine, error) {
 		{base: 0x1f801060, size: 0x4, dev: mc2},
 		{base: 0xfffe0130, size: 0x4, dev: make(registers, 1)}, // cache control
 		{base: 0x1f801070, size: 0x8, dev: m.ic},
-		{base: 0x1f800000, size: 0x400, dev: make(memory, 0x400)}, // scratchpad
+		{base: 0x1f800000, size: 0x400, dev: m.scratch}, // scratchpad
 		{base: 0x1f801810, size: 0x8, dev: m.gpu},
 		{base: 0x1f801c00, size: 0x400, dev: m.spu},
 		{base: 0x1f801100, size: 0x30, dev: m.tmr},

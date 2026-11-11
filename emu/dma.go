@@ -268,7 +268,9 @@ func (d *dma) transferGPU() {
 			d.transferGPUTimed()
 			return
 		}
-		d.transferGPULinked()
+		if !d.transferGPULinked() {
+			return
+		}
 	}
 	*chcr &^= chcrBusy | chcrTrigger
 	*d.bcr(dmaGPU) = 0
@@ -312,15 +314,25 @@ func (d *dma) transferGPURequest() {
 	d.pending[dmaGPU] = int(n)
 }
 
+// linkedNodesMax is more nodes than a list in RAM can have without visiting
+// one twice: 2 MB of RAM holds 512 Ki words. A list longer than that loops.
+const linkedNodesMax = 1 << 19
+
 // transferGPULinked walks a linked list of GPU packets: each node's header
 // holds its length in words in the top byte and the next node's address in
-// the rest, with 0xffffff ending the list. psxe gives up after 16384 nodes.
-func (d *dma) transferGPULinked() {
+// the rest, with 0xffffff ending the list. It reports whether the list
+// ended. One that loops never ends on a console: the channel stays busy, and
+// a library's DrawSync times out, as Sony's does on a list linked into
+// address 0, whose word the BIOS leaves linking to itself
+// (exp/cleanlib/spec/35-hardware-session.md, the Kanji stall). Here the walk
+// stops after linkedNodesMax nodes and leaves the channel busy for good.
+func (d *dma) transferGPULinked() bool {
 	addr := *d.madr(dmaGPU)
 	hdr := d.bus.Read32(addr)
 	size := hdr >> 24
 	toGPU := false // whether the last access was a word to the GPU
-	for range 16384 {
+	ended := false
+	for range linkedNodesMax {
 		for ; size > 0; size-- {
 			addr = (addr + d.step(dmaGPU)) & 0x1ffffc
 			d.gpu.gp0(d.bus.Read32(addr))
@@ -329,6 +341,7 @@ func (d *dma) transferGPULinked() {
 		}
 		addr = hdr & 0xffffff
 		if addr == 0xffffff {
+			ended = true
 			break
 		}
 		hdr = d.bus.Read32(addr)
@@ -338,6 +351,11 @@ func (d *dma) transferGPULinked() {
 	if toGPU {
 		d.chargeGPU()
 	}
+	if !ended {
+		*d.madr(dmaGPU) = addr
+		d.pending[dmaGPU] = 0
+	}
+	return ended
 }
 
 // chargeGPU leaves the bus charged as a write to GP0 through it would.

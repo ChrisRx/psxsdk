@@ -21,6 +21,9 @@ package emu
 // gpustatReadyCmd is GPUSTAT's bit 26: ready for a command.
 const gpustatReadyCmd = 1 << 26
 
+// gpustatReadyVRAM is GPUSTAT's bit 27: ready to send VRAM to the CPU.
+const gpustatReadyVRAM = 1 << 27
+
 // drawCyclesPerPixel is the CPU cycles a drawn pixel costs under SetDrawTime.
 const drawCyclesPerPixel = 1
 
@@ -81,7 +84,9 @@ func (d *dma) transferGPUTimed() {
 		return
 	}
 	g.time.last = 0
-	d.transferGPULinked()
+	if !d.transferGPULinked() {
+		return
+	}
 	d.gpuWords, d.pending[dmaGPU] = d.pending[dmaGPU], 0
 	if end := g.time.until - g.time.last; g.drawing() && end > *g.time.clock {
 		d.gpuEnd = end

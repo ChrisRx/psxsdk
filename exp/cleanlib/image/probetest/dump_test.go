@@ -20,6 +20,8 @@ import (
 // cyc" when it returns to that ra. PROBE_BUS, if set, records what the program does at
 // the devices and the GTE, once the TTY holds its text, into PROBE_OUT.bus (busTrace).
 // PROBE_DRAWTIME, if set, has the GPU take time to draw (emu's SetDrawTime).
+// PROBE_FILL, a number, fills RAM, the scratchpad and VRAM with bytes made
+// from it before the boot, as a console's are left (emu's FillMemory).
 func TestDump(t *testing.T) {
 	disc, out := os.Getenv("PROBE_DISC"), os.Getenv("PROBE_OUT")
 	if disc == "" || out == "" {
@@ -29,6 +31,9 @@ func TestDump(t *testing.T) {
 	end := os.Getenv("PROBE_END")
 	m := emutest.Boot(t, emutest.BIOS(emutest.BIOSFromEnv(t)), emutest.Disc(disc), emutest.AllowFaults())
 	m.SetDrawTime(os.Getenv("PROBE_DRAWTIME") != "")
+	if v, err := strconv.ParseUint(os.Getenv("PROBE_FILL"), 0, 64); err == nil {
+		m.FillMemory(v)
+	}
 	watch := map[uint32]bool{}
 	for _, a := range strings.Split(os.Getenv("PROBE_WATCH"), ",") {
 		if v, err := strconv.ParseUint(a, 16, 32); err == nil {

@@ -158,6 +158,13 @@ func (g *gpu) Read32(off uint32) uint32 {
 	case 0:
 		return g.gpuread()
 	case 4:
+		// A console shows the GPU not ready for a command, nor for a VRAM
+		// read, while a command's parameters are still owed: after a fill's
+		// first word GPUSTAT reads 90822400h until the rest come
+		// (exp/cleanlib/spec/35-hardware-session.md, the monitor's screen).
+		if g.state == gpuRecvArgs {
+			return (g.gpustat | gpustatReadyBits) &^ (gpustatReadyCmd | gpustatReadyVRAM)
+		}
 		if g.drawing() {
 			return (g.gpustat | gpustatReadyBits) &^ gpustatReadyCmd
 		}
