@@ -364,7 +364,7 @@ const (
 // cdAudioEnd is the drive's data end interrupt, from the interrupt
 // handler: autopause has stopped the drive at the end of the track.
 func cdAudioEnd() {
-	volatile.StoreUint32(&cdAudio.endTime, volatile.LoadUint32(&vsync.blanks))
+	volatile.StoreUint32(&cdAudio.endTime, volatile.LoadUint32(&vsyncBlanks))
 	volatile.StoreUint32(&cdAudio.ended, 1)
 }
 

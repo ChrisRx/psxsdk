@@ -23,6 +23,9 @@ func space(n int) {}
 func spaceRun(n *uint32) {}
 
 //go:inline
+func loadSpace(n int) {}
+
+//go:inline
 func spaceWith(n int, v uint32) {}
 
 // imageBlocksWait waits for a queued image's blocks to go, without Sony's

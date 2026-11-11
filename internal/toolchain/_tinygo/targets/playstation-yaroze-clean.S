@@ -4412,12 +4412,23 @@ libps_printf_fill:
 2:	b	1b
 	nop
 
-# VSync's mode 1, in sync.go. Any other mode goes to the Go: libps_vsync_field when
+# VSync's mode 1, in sync.go, and its negative modes once the library has started: the
+# count of blanks, read where Sony's reads it, after reads of GPUSTAT and timer 1, so that a
+# blank interrupt during the call is in the result just when it is in Sony's (probe
+# spec/probes/vsyncpoll, spec 45). Any other mode goes to the Go: libps_vsync_field when
 # GPUSTAT bit 19 shows a display of 480 lines, else libps_vsync_wait (spec 42). Every
 # path takes as many instructions as before that test was added, but the waiting
 # modes on any other display, which take five more: as many as a pass of the Go's
 # wait for the blank, so that the wait ends where it did. Mode 1 reads GPUSTAT too,
 # with its padding cut to keep its time.
+# A load from RAM that VSync(-1) spends for Sony's time, where a nop would be too quick on
+# a console. $at holds %hi(libps_vsync_blanks).
+	.macro VSYNC_RAMLOAD
+#ifdef LIBPS_FIDELITY
+	lw	$a2, %lo(libps_vsync_blanks)($at)
+#endif
+	.endm
+
 	.section .text.VSync, "ax", @progbits
 	.align 2
 	.globl VSync
@@ -4436,8 +4447,24 @@ VSync:
 	nop
 2:	j	libps_vsync_field
 	nop
-4:	nop
-	j	libps_vsync_wait
+4:	lui	$at, %hi(libps_vsync_blanks)
+	lw	$a1, %lo(libps_lib_started)($at)
+	VSYNC_RAMLOAD
+	VSYNC_RAMLOAD
+	lw	$v1, 0x1814($v0)
+	lw	$v1, 0x1110($v0)
+	beqz	$a1, 5f
+	nop
+	VSYNC_RAMLOAD
+	NOPS	4
+	lw	$v0, %lo(libps_vsync_blanks)($at)
+	VSYNC_RAMLOAD
+	VSYNC_RAMLOAD
+	VSYNC_RAMLOAD
+	NOPS	3
+	jr	$ra
+	nop
+5:	j	libps_vsync_wait
 	nop
 1:	lui	$v0, 0x1f80
 	NOPS	9
@@ -4449,6 +4476,40 @@ VSync:
 	jr	$ra
 	andi	$v0, $v0, 0xffff
 	.size VSync, .-VSync
+
+# libps_wait_blanks(n) waits until the count of vertical blanks reaches n, for VSync on
+# a display of 240 lines, in sync.go. A pass and the way out take Sony's time, which
+# sets where a program is when the next blank comes: the loads before the read of the
+# count take a pass's time on a console, and the nops after it the time to the return
+# (probe spec/probes/vsyncpoll, spec 45).
+	.section .text.libps_wait_blanks, "ax", @progbits
+	.align 2
+	.globl libps_wait_blanks
+	.type libps_wait_blanks, @function
+libps_wait_blanks:
+	lui	$t0, %hi(libps_vsync_blanks)
+1:
+#ifdef LIBPS_FIDELITY
+	.rept 5
+	lw	$t2, %lo(libps_vsync_blanks)($t0)
+	.endr
+#endif
+	NOPS	1
+	lw	$t1, %lo(libps_vsync_blanks)($t0)
+#ifdef LIBPS_FIDELITY
+	lw	$t2, %lo(libps_vsync_blanks)($t0)
+	lw	$t3, %lo(libps_vsync_blanks)($t0)
+#endif
+	subu	$t1, $t1, $a0
+	bltz	$t1, 1b
+	nop
+#ifdef LIBPS_FIDELITY
+	lw	$t2, %lo(libps_vsync_blanks)($t0)
+#endif
+	NOPS	4
+	jr	$ra
+	nop
+	.size libps_wait_blanks, .-libps_wait_blanks
 
 # GsGetActiveBuff and GsSetWorkBase, in gs.go.
 	.section .text.GsGetActiveBuff, "ax", @progbits
@@ -4583,6 +4644,15 @@ libps_pad_buf:
 	.space 72
 	.globl libps_vsync_lines
 libps_vsync_lines:
+	.space 4
+# libps_vsync_blanks and libps_lib_started share an 8-byte block, so that VSync reads
+# both with one %hi.
+	.align 3
+	.globl libps_vsync_blanks
+libps_vsync_blanks:
+	.space 4
+	.globl libps_lib_started
+libps_lib_started:
 	.space 4
 	.globl libps_tty_column
 libps_tty_column:

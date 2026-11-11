@@ -66,6 +66,16 @@ func space(n int) {
 	}
 }
 
+// loadSpace spends n loads of spacer: 2 cycles each in the emulator, as a
+// store, but about 6 under a console's costs (emu's SetCPUCost), where a
+// load from RAM is that much slower than a store. For a pad whose time on a
+// console matters as well as in the emulator. n is a constant at every call.
+func loadSpace(n int) {
+	for range n {
+		_ = volatile.LoadUint32(&spacer)
+	}
+}
+
 // spaceRun spends about 8 cycles a turn on a loop of stores to spacer, as many
 // turns as *n holds: for a long pad in code inlined where it would take too much
 // room as space's unrolled stores, and where a call of spin would cost the

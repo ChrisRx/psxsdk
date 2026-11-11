@@ -45,12 +45,14 @@ var (
 //go:extern libps_vsync_lines
 var vsyncLines uint32
 
-var vsync struct {
-	// blanks counts the vertical blanks since the library started, which
-	// the interrupt handler advances.
-	blanks uint32
+// vsyncBlanks counts the vertical blanks since the library started, which
+// the interrupt handler advances. VSync's assembly reads it for VSync(-1).
+//
+//go:extern libps_vsync_blanks
+var vsyncBlanks uint32
 
-	// last is blanks when VSync last returned.
+var vsync struct {
+	// last is vsyncBlanks when VSync last returned.
 	last uint32
 
 	// callback is the function VSyncCallback installed, called at each
@@ -97,7 +99,7 @@ func VSync(mode int32) int32
 //go:noinline
 func vsyncWait(mode int32) int32 {
 	libStart()
-	now := volatile.LoadUint32(&vsync.blanks)
+	now := volatile.LoadUint32(&vsyncBlanks)
 	if mode < 0 {
 		return int32(now)
 	}
@@ -114,7 +116,7 @@ func vsyncWait(mode int32) int32 {
 		}
 		waitBlanks(target)
 	}
-	vsync.last = volatile.LoadUint32(&vsync.blanks)
+	vsync.last = volatile.LoadUint32(&vsyncBlanks)
 	vsyncLines = lineCount.Get() & 0xffff
 	return int32(lines)
 }
@@ -130,7 +132,7 @@ func vsyncWait(mode int32) int32 {
 //go:noinline
 func vsyncField(mode int32) int32 {
 	libStart()
-	now := volatile.LoadUint32(&vsync.blanks)
+	now := volatile.LoadUint32(&vsyncBlanks)
 	if mode < 0 {
 		return int32(now)
 	}
@@ -143,7 +145,7 @@ func vsyncField(mode int32) int32 {
 		}
 	}
 	waitField(target, now)
-	vsync.last = volatile.LoadUint32(&vsync.blanks)
+	vsync.last = volatile.LoadUint32(&vsyncBlanks)
 	vsyncLines = lineCount.Get() & 0xffff
 	return int32(lines)
 }
@@ -155,12 +157,18 @@ func vsyncField(mode int32) int32 {
 // last. With bit 31 the same, the wait ends when the field changes after the
 // blank, 8 or 23 lines into it; with it already different, at the count.
 // That is what Sony's VSync is seen to do with modes 0, 2 and 3 (probe
-// spec/probes/vsyncmodes). It ends anyway at the next blank, should bit 31
-// not change.
+// spec/probes/vsyncmodes). The wait for bit 31 goes on past the next blank:
+// on a console the interrupt that counts a blank takes some 11 lines, past
+// the field's change at 8 lines, so bit 31 can be back to the value at the
+// call when the count is seen, and Sony's VSync then returns at the next
+// field change, 23 lines into the blank after (probes spec/probes/vsynclate
+// and vsyncpoll, spec 45). That wait has no bound: a pass of Sony's takes
+// some 12 cycles, as a read of GPUSTAT and a test do, and on a display of
+// 480 lines bit 31 changes every field.
 func waitField(n, seen uint32) {
 	field := gp1.Get() >> 31
 	for {
-		now := volatile.LoadUint32(&vsync.blanks)
+		now := blanksPaced()
 		if now == seen {
 			continue
 		}
@@ -170,16 +178,47 @@ func waitField(n, seen uint32) {
 		seen = now
 		field = gp1.Get() >> 31
 	}
-	last := volatile.LoadUint32(&vsync.blanks)
-	for gp1.Get()>>31 == field && volatile.LoadUint32(&vsync.blanks) == last {
+	for {
+		space(fieldPassStores)
+		if gp1.Get()>>31 != field {
+			break
+		}
 	}
+	space(fieldExitStores)
 }
 
-// waitBlanks waits until the count of vertical blanks reaches n.
-func waitBlanks(n uint32) {
-	for int32(volatile.LoadUint32(&vsync.blanks)-n) < 0 {
-	}
+// waitBlanks waits until the count of vertical blanks reaches n. A pass of
+// the wait and its way out take Sony's time: VSync(0) on a 240-line display
+// reads timer 1 on its way out 38 to 60 cycles after the interrupt that
+// counted the blank returns, 80 to 140 under a console's costs (probe
+// spec/probes/vsyncpoll, spec 45). That is where a program's next poll of
+// VSync(-1) is when the next blank comes. It is in the target's assembly,
+// where the pass's instructions stay as written.
+//
+//export libps_wait_blanks
+func waitBlanks(n uint32)
+
+// blanksPaced reads the count of vertical blanks as a pass of Sony's wait
+// for a blank does, with the pass's time before the read and after it.
+//
+//go:inline
+func blanksPaced() uint32 {
+	loadSpace(waitPassBefore)
+	space(1)
+	now := volatile.LoadUint32(&vsyncBlanks)
+	loadSpace(waitPassAfter)
+	return now
 }
+
+// The loads a pass of waitField's wait for a blank spends before its read
+// of the count, with a store, and after it, as libps_wait_blanks does; and
+// the stores a pass of its wait for bit 31 spends, and its way out (spec 45).
+const (
+	waitPassBefore  = 5
+	waitPassAfter   = 2
+	fieldPassStores = 1
+	fieldExitStores = 1
+)
 
 // GetVideoMode returns the mode SetVideoMode last set, NTSC until then.
 //
