@@ -69,9 +69,15 @@ const (
 	// ports not named below are taken to cost the same.
 	costIOLoad = 4
 
-	// costSPULoad is a load from the SPU's registers beyond its own cycle:
-	// 20.9 a halfword in a run (cpucost4, "lh spu").
-	costSPULoad = 20
+	// costSPULoad is a load from the SPU's registers beyond its own cycle,
+	// and costSPUAgain what one straight after another costs on top: 20.9 a
+	// halfword in a run (cpucost4, "lh spu"), but 21.0 for a load and a nop
+	// ("lh spu nop"), so the nop costs nothing there, and the clean sound
+	// tick's 24 reads, each after other work, cost 20 each: its loop with
+	// nops for its stores takes 36.2 a read on a console, 20 and its 16
+	// other instructions (padshape, "readLoopNops"; spec 46).
+	costSPULoad  = 19
+	costSPUAgain = 1
 
 	// costIRQLoad is a load from the interrupt controller beyond its own
 	// cycle: 4.0 for I_STAT in a run (cpucost4, "lw istat").
@@ -103,7 +109,27 @@ const (
 	// below are taken to drain as fast as GP0. A store to the SPU takes
 	// 7.5 (cpucost4, "sh spu", 7.5 a store in a run), and one to the
 	// interrupt controller 2 ("sw istat").
+	//
+	// A store to RAM in another row of the DRAM than the store to RAM
+	// before it starts to leave the buffer no sooner than wbRowHalves after
+	// that one left: a row is ramRowShift's 1 KB (rowcost, "sw alt +512" 2.2
+	// a store and "+1024" 5.6, and 4 bytes apart across a 1 KB boundary
+	// 5.7), a run of stores taking turns between two rows costs 5.7 a store
+	// where a run to one row costs 2 (cpucost5, "sw ram rows"), each change
+	// of row in a run of 16 costs 4 (rowcost, "sw A x8 B x8", "x8 B A x7",
+	// "x4 B x4 A x4 B x4": 4, 8 and 12 to 22 over "sw A x16"), and stores
+	// to two rows a nop or two apart still cost 5 each, four nops apart
+	// nothing ("sw A nop1 sw B nop1" to "nop8"). A store to another row after
+	// RAM has been idle costs nothing more. A load from a port does not wait
+	// for the last store's change of row ("sw A x15 B" 2 under "sw A x16");
+	// the model has it wait for the store as if it had changed none, which
+	// is 2 over that row and 1.4 under cpucost5's "sw x10 same word sh ram lh
+	// spu". Loads show no rows ("lw ram rows", "sw then lw rows"). The clean
+	// sound tick stored each envelope it read to one row and its ten pad
+	// stores to another, 24 times a blank, until spec 46.
 	wbRAMHalves = 4
+	wbRowHalves = 7
+	ramRowShift = 10
 	wbIOHalves  = 3
 	wbSPUHalves = 15
 	wbIRQHalves = 4
@@ -115,6 +141,25 @@ const (
 	// probe's are small, and the model has the one time.
 	costMult = 7
 	costDiv  = 37
+
+	// costMissAfterStore and costMissAfterLoad are how long RAM stays busy
+	// for an instruction fetch, a cache miss's fill, after the write
+	// buffer's last store to RAM leaves it, and after a load from RAM. A
+	// line missed with stores draining costs 5 to 7 cycles more than a line
+	// of nops on a console (cpucost, cold less warm a line: "sw ram nop3"
+	// 10.2 against "nop 256" 5.1, "sw ram nop" 11.8, "sw ram 128" 11.9;
+	// spec 46), and one missed after loads some 3 more ("lw ram" 8.1, "lw
+	// ram nop" 8.1, "sw then lw ram" 8.1). The same 3 after a store's drain
+	// as after a load gives the store rows within half a cycle a line (4
+	// gave a cycle over, 6 three). The clean library's handler pads with
+	// stores and runs cold at every blank, so without these it costs less
+	// here than on a console.
+	costMissAfterStore = 3
+	costMissAfterLoad  = 3
+
+	// costDMALoad is a load from the DMA controller's registers beyond its
+	// own cycle: 4.0 for DICR and DPCR (cpucost5, "lw dicr", "lw dpcr").
+	costDMALoad = 3
 )
 
 // region is what an address reaches, as the model costs it.
@@ -127,6 +172,7 @@ const (
 	regionROM
 	regionSPU
 	regionIRQ
+	regionDMA
 )
 
 // regionOf returns the region addr is in.
@@ -145,6 +191,8 @@ func regionOf(addr uint32) region {
 		return regionSPU
 	case a >= 0x1f801070 && a < 0x1f801080:
 		return regionIRQ
+	case a >= 0x1f801080 && a < 0x1f801100:
+		return regionDMA
 	}
 	return regionIO
 }
@@ -180,6 +228,20 @@ type cost struct {
 	wbAt      int
 	wbLast    uint64
 	wbLastRAM uint64
+
+	// wbRow is the DRAM row of the last store to RAM, and wbPort when a
+	// load from a port may go ahead: wbLast, less what the last store waited
+	// to change rows.
+	wbRow  uint32
+	wbPort uint64
+
+	// spuFree is when a load from the SPU straight after another may
+	// start.
+	spuFree uint64
+
+	// ramFree is when RAM is free for a cache miss's fill, after the last
+	// store to RAM has drained or the last load from RAM has read.
+	ramFree uint64
 
 	// hiloReady is when HI and LO hold the last multiply or divide's
 	// result.
@@ -273,18 +335,22 @@ func (m *cost) execute(c *CPU, op, pc uint32, t uint64) uint64 {
 		if r == regionScratch {
 			break
 		}
-		ready := (m.wbLast + 1) / 2
+		ready := (m.wbPort + 1) / 2
 		if r == regionRAM {
 			ready = 0
 			if m.wbLastRAM != 0 {
 				ready = (m.wbLastRAM+1)/2 + costAfterStores
 			}
 		}
+		if r == regionSPU {
+			ready = max(ready, m.spuFree)
+		}
 		t = m.wait(t, max(ready, m.busFree))
 		t = m.fetch(pc, t)
 		switch r {
 		case regionRAM:
 			t += costRAMLoad
+			m.ramFree = t + costMissAfterLoad
 			m.loadNext, m.loadReg = true, op>>16&31
 			if code == 0x32 {
 				m.loadReg = gteReg
@@ -293,8 +359,11 @@ func (m *cost) execute(c *CPU, op, pc uint32, t uint64) uint64 {
 			t += costROM
 		case regionSPU:
 			t += costSPULoad
+			m.spuFree = t + costSPUAgain
 		case regionIRQ:
 			t += costIRQLoad
+		case regionDMA:
+			t += costDMALoad
 		default:
 			t += costIOLoad
 		}
@@ -316,19 +385,27 @@ func (m *cost) execute(c *CPU, op, pc uint32, t uint64) uint64 {
 		}
 		t = m.wait(t, (m.wb[m.wbAt]+1)/2)
 		t = m.fetch(pc, t)
-		drain := uint64(wbIOHalves)
+		drain, held := uint64(wbIOHalves), uint64(0)
+		start := max(2*t, m.wbLast, 2*m.busFree)
 		switch r {
 		case regionRAM:
 			drain = wbRAMHalves
+			row := addr & 0x1fffffff >> ramRowShift
+			if row != m.wbRow && m.wbLastRAM != 0 && m.wbLastRAM+wbRowHalves > start {
+				held = m.wbLastRAM + wbRowHalves - start
+				start += held
+			}
+			m.wbRow = row
 		case regionSPU:
 			drain = wbSPUHalves
 		case regionIRQ:
 			drain = wbIRQHalves
 		}
-		done := max(2*t, m.wbLast, 2*m.busFree) + drain
-		m.wb[m.wbAt], m.wbLast = done, done
+		done := start + drain
+		m.wb[m.wbAt], m.wbLast, m.wbPort = done, done, done-held
 		if r == regionRAM {
 			m.wbLastRAM = done
+			m.ramFree = (done+1)/2 + costMissAfterStore
 		}
 		m.wbAt = (m.wbAt + 1) % wbDepth
 		return t
@@ -375,7 +452,9 @@ func (m *cost) fetch(pc uint32, t uint64) uint64 {
 		return t + 1
 	}
 
-	t = m.wait(t, m.busFree)
+	// The fill reads RAM, so it waits for a DMA holding the bus and for
+	// RAM to be free of the last store or load.
+	t = m.wait(t, max(m.busFree, m.ramFree))
 	m.events++
 	words := 4 - word
 	t += costMissLine + (costMissWordHalves*uint64(words)+1)/2
