@@ -132,9 +132,18 @@ var pollSony = map[bool]pollExpect{
 	true: {
 		call:    "r814@29 r110@34 timer2@",
 		counted: 49, missed: 56,
-		ret240: [2]int64{75, 152}, ret480: [2]int64{46, 51},
+		ret240: [2]int64{80, 155}, ret480: [2]int64{48, 56},
 	},
 }
+
+// The cost-true windows are from the model of spec 46 (a miss's fill waiting
+// for RAM after stores and loads), under which Sony's return at 480 lines is
+// 48 to 53 cycles after bit 31's change and the clean library's 52 to 56 (46
+// to 51 under the model before), and at 240 lines Sony's 88 to 137 after the
+// interrupt's end and the clean library's 81 to 154 (75 to 152 before): the
+// windows hold both, since on a console the clean return at 480 lines is
+// within 4 cycles of Sony's (retphase, spec 45) and the 240-line return is
+// the interrupt's length, which spec 46 measures there.
 
 // TestVSyncPoll runs spec 45's probe, spec/probes/vsyncpoll, which polls
 // VSync(-1) across the vertical blank at a different point each field and

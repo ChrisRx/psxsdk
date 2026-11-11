@@ -380,20 +380,30 @@ func libBegin() {
 // dmaPriorityStart is DPCR as the library's start leaves it.
 const dmaPriorityStart = 0x33333333
 
-// The 2-cycle stores the vertical blank's path spends before acknowledging
-// the blank and before counting it, to Sony's cycles (spec 45).
+// The 2-cycle instructions the vertical blank's path spends before
+// acknowledging the blank and before counting it, to Sony's cycles (spec
+// 45). They were all stores; on a console a store costs the handler more
+// than that, since its code runs cold at every blank and a line missed
+// while stores drain waits for them (spec 46), so now the ones before the
+// acknowledgment and some before the count are nops, which cost the same
+// with the emulator's costs off and a console's cold cycles less.
 const (
-	vblankAckSpace   = 3
-	vblankCountSpace = 19
+	vblankAckNops    = 4
+	vblankCountSpace = 10
+	vblankCountNops  = 8
 )
 
-// The 2-cycle stores libps_interrupt spends at its start and its end: the
-// time its prologue and epilogue took when the vertical blank's work was
-// compiled into it, before spec 45 put that in vblankInterrupt, for
-// imageBlank to share.
+// The 2-cycle instructions libps_interrupt spends at its start and its
+// end: the time its prologue and epilogue took when the vertical blank's
+// work was compiled into it, before spec 45 put that in vblankInterrupt,
+// for imageBlank to share. Both are nops now (spec 46, as above): the
+// end's were stores, which the kernel's way out then missed its lines
+// behind; the end has two more for the stores' address loads that are gone
+// (TestVSyncCount and vsyncpoll's waits hold the handler's cycles with the
+// costs off).
 const (
-	interruptSpaceIn  = 5
-	interruptSpaceOut = 6
+	interruptNopsIn  = 5
+	interruptNopsOut = 8
 )
 
 // vblankInterrupt handles the vertical blank: it acknowledges it, counts
@@ -405,13 +415,17 @@ const (
 //
 //go:inline
 func vblankInterrupt() {
-	space(vblankAckSpace)
+	nops(vblankAckNops)
 	iStat.Set(^uint32(irqVBlank))
+	irqStamp(2)
 	space(vblankCountSpace)
+	nops(vblankCountNops)
 	volatile.StoreUint32(&vsyncBlanks, volatile.LoadUint32(&vsyncBlanks)+1)
+	irqStamp(3)
 	if f := volatile.LoadUint32(&vsync.callback); f != 0 {
 		callC(uintptr(f))
 	}
+	irqStamp(4)
 	if snd.started {
 		soundTick()
 	}
@@ -424,8 +438,10 @@ func vblankInterrupt() {
 //
 //export libps_interrupt
 func libps_interrupt() {
-	space(interruptSpaceIn)
+	irqStamp(0)
+	nops(interruptNopsIn)
 	stat := iStat.Get() & iMask.Get()
+	irqStamp(1)
 	if stat&irqVBlank != 0 {
 		vblankInterrupt()
 	}
@@ -445,7 +461,8 @@ func libps_interrupt() {
 		cd.interrupt()
 		stat = iStat.Get() & iMask.Get()
 	}
-	space(interruptSpaceOut)
+	nops(interruptNopsOut)
+	irqStamp(11)
 }
 
 // rand's state is 0 until srand, in the target's assembly with it. The kernel has a
