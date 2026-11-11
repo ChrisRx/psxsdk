@@ -23,6 +23,12 @@ func space(n int) {}
 func spaceRun(n *uint32) {}
 
 //go:inline
+func nopRun(n *uint32) {}
+
+//go:inline
+func tickExitPace() {}
+
+//go:inline
 func loadSpace(n int) {}
 
 //go:inline

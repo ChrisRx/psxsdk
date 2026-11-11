@@ -89,6 +89,40 @@ func spaceRun(n *uint32) {
 	}
 }
 
+// nopRun spends 12 cycles a turn in the emulator on a loop of three nops, as
+// many turns as *n holds, and about 6 a turn under a console's costs, where
+// a turn of spin, the same 12 in the emulator, costs 17: for a long pad that
+// spin's turns make too long on a console (spec 46). It makes no stores and
+// no loads after the count's, so a console prices it as the emulator's model
+// does. The count is read from memory, so that the loop is not unrolled.
+//
+//go:inline
+func nopRun(n *uint32) {
+	for i := volatile.LoadUint32(n); i != 0; i-- {
+		nops(3)
+	}
+}
+
+// tickExitPace is the sound tick's last pad, tickExitPad cycles in the
+// emulator: turns of spin and then as many of nopRun, which costs a console
+// a third of what spin does. All spin, as it was, the tick ran longer than
+// Sony's under a console's costs once its envelope reads were as far apart
+// as Sony's (spec 46). It is a function of its own so that the handler stays
+// the size it was: the image's packing moves other functions when one grows.
+//
+//go:noinline
+func tickExitPace() {
+	spin(tickExitSpins)
+	nopRun(&tickExitTurns)
+	nops(5)
+}
+
+// tickExitSpins and tickExitTurns are tickExitPace's turns of spin and of
+// nopRun: 29 of spin's 12 cycles in all, less the call's own instructions.
+const tickExitSpins = 13
+
+var tickExitTurns uint32 = 13
+
 // spaceWith is space storing v, a value live on its path: when two paths
 // pad with stores of the same value the compiler merges their tails, and
 // then a change to one path's count moves the other's time.

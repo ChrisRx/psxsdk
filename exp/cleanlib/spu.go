@@ -388,7 +388,18 @@ func parkVoice(v uint32) {
 const (
 	tickReadsPad = 194 // before the reads, less libps_interrupt's spaces (spec 45)
 	tickReadGap  = 32  // from one envelope read to the next; the loop's own work is 12
-	tickExitPad  = 362 // after them
+	tickExitPad  = 362 // after them: tickExitPace's turns come to it
+)
+
+// What fills the rest of tickReadGap: nops and then loads of spacer, 2
+// cycles each in the emulator. They were ten stores to spacer, which on a
+// console cost more than the emulator's model had them, each read's store
+// being to another DRAM row than the pad's (spec 46). Nops and loads cost a
+// console what the model says, and seven and three put the reads as far
+// apart under a console's costs as Sony's, 52 or 53 cycles.
+const (
+	tickReadNops  = 7
+	tickReadLoads = (tickReadGap-12)/2 - tickReadNops
 )
 
 // tickReads holds the envelopes a tick reads until it keeps them. It is
@@ -405,11 +416,14 @@ func soundTick() {
 	pace(tickReadsPad)
 	space(2)
 	nops(10)
+	irqStamp(5)
 	reads := &tickReads
 	for v := range snd.voices {
 		reads[v] = spuGet(uint32(v*16 + spuEnv))
-		space((tickReadGap - 12) / 2)
+		nops(tickReadNops)
+		loadSpace(tickReadLoads)
 	}
+	irqStamp(6)
 	if snd.stopAsked {
 		stopSequences()
 	}
@@ -427,6 +441,7 @@ func soundTick() {
 		}
 		sv.dirty = 0
 	}
+	irqStamp(7)
 	settled, live := uint32(0), uint32(0)
 	for v := range snd.voices {
 		sv := &snd.voices[v]
@@ -447,6 +462,7 @@ func soundTick() {
 		}
 	}
 	tickWordsTime(settled, written, live)
+	irqStamp(8)
 	spuSetMask(spuKeyOff, snd.keyOff)
 	spuSetMask(spuKeyOn, snd.keyOn)
 	spuSetMask(spuReverb, snd.reverb)
@@ -456,7 +472,9 @@ func soundTick() {
 			seqs[i].tick()
 		}
 	}
-	pace(tickExitPad)
+	irqStamp(9)
+	tickExitPace()
+	irqStamp(10)
 }
 
 // silentReads is how many ticks in a row must read a keyed on voice's
