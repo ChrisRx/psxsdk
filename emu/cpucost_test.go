@@ -183,6 +183,7 @@ func TestCPUCostPorts(t *testing.T) {
 		lw(r1, 0, r4), lw(r2, 0, r6),
 		sw(0, 0, r4), lw(r3, 0, r5),
 		sw(0, 0, r4), sw(0, 0, r4), lw(r1, 0, r4),
+		lw(r2, 0, r4), nop, lw(r1, 0, r4),
 	}
 	write(m, at, code...)
 	m.CPU.R[r4], m.CPU.R[r5], m.CPU.R[r6] = spu, data, irq
@@ -192,8 +193,43 @@ func TestCPUCostPorts(t *testing.T) {
 	startAt(m, at)
 	assert.Equal(t, []uint32{
 		1,
-		1 + 20, 1 + 3,
+		1 + 19, 1 + 3,
 		1, 1 + 5,
-		1 + 1, 1, 14 + 1 + 20, // the load waits for both stores, 7.5 each
+		1 + 1, 1, 14 + 1 + 19, // the load waits for both stores, 7.5 each
+		1 + 1 + 19, 1, 1 + 19, // a load straight after another costs 1 more
+	}, stepCosts(t, m, len(code)))
+}
+
+// TestCPUCostRows runs stores to RAM that change DRAM rows: each starts to
+// leave the write buffer no sooner than 3.5 cycles after the store before it
+// left, which the next store waits for, and a load from a port after them
+// waits for all but the last store's change. Stores to one row don't wait.
+func TestCPUCostRows(t *testing.T) {
+	const (
+		at   = 0x80010000
+		data = 0x80020000
+		irq  = 0x1f801070
+		r5   = uint32(5)
+		r6   = uint32(6)
+	)
+	m := newTestMachine(t)
+	m.SetCPUCost(true)
+	code := []uint32{
+		nop,
+		sw(0, 0, r4), sw(0, 4, r4), sw(0, 0, r4), lw(r1, 0, r6), // one row
+		sw(0, 0, r4), sw(0, 0, r5), sw(0, 0, r4), lw(r1, 0, r6), // two changes
+		sw(0, 0, r5), lw(r1, 0, r6), // another row, the buffer empty
+	}
+	write(m, at, code...)
+	m.CPU.R[r4], m.CPU.R[r5], m.CPU.R[r6] = data, data+0x1000, irq
+	startAt(m, at)
+	stepCosts(t, m, len(code)) // into the cache
+
+	startAt(m, at)
+	assert.Equal(t, []uint32{
+		1,
+		1, 1, 1, 4 + 1 + 3, // the load waits for the three stores, 2 each
+		1, 1, 1, 8 + 1 + 3, // and for the first change of row, 3.5
+		1, 2 + 1 + 3, // another row again, but the load does not wait for the change
 	}, stepCosts(t, m, len(code)))
 }
