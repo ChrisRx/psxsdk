@@ -16,8 +16,11 @@ func (c *CPU) simm() uint32  { return uint32(int32(int16(c.Opcode))) }
 //
 // Step runs the frequent instructions, shifts, ALU operations, branches,
 // immediates, lui, loads and stores, in its own switch, so that they cost
-// no calls; this is everything else. Every instruction costs 2 cycles
-// beyond the fetch, except the GTE commands, which cost what Command says.
+// no calls; this is everything else. Every instruction costs base cycles
+// beyond the fetch, 2 unless the cost model is on, and a GTE instruction
+// its wait for the command in flight on top, except the GTE commands, which
+// cost only that wait: Command's time is charged to the next GTE
+// instruction.
 func (c *CPU) execute() (cycles uint32, ok bool) {
 	switch c.Opcode >> 26 {
 	case 0x00:
@@ -119,7 +122,7 @@ func (c *CPU) execute() (cycles uint32, ok bool) {
 			c.gteDone = c.TotalCycles + uint64(c.LastCycles) + uint64(wait) + uint64(n)
 			return wait, true
 		}
-		return 2 + wait, true
+		return c.base + wait, true
 	case 0x22:
 		c.opLWL()
 	case 0x26:
@@ -138,18 +141,18 @@ func (c *CPU) execute() (cycles uint32, ok bool) {
 		}
 		wait := c.gteWait()
 		c.opLWC2()
-		return 2 + wait, true
+		return c.base + wait, true
 	case 0x3a:
 		if c.GTEHook != nil {
 			c.GTEHook(gteSide(c.Opcode), c.TotalCycles+uint64(c.LastCycles))
 		}
 		wait := c.gteWait()
 		c.opSWC2()
-		return 2 + wait, true
+		return c.base + wait, true
 	default:
 		return 0, false
 	}
-	return 2, true
+	return c.base, true
 }
 
 // gteSide keeps what of a GTE instruction is the GTE's: all of a command, the
