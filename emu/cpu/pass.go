@@ -16,6 +16,7 @@ type Pass struct {
 
 	cpu    CPU
 	charge uint32
+	cost   cost
 }
 
 // TryPass reports whether the CPU is in a quiet loop: whether the steps from
@@ -32,6 +33,11 @@ type Pass struct {
 //
 // A step Run would stop before, for k's hook or a breakpoint, ends the trial,
 // so that skipping passes can't pass over one.
+//
+// Under the cost model the copy has its own copy of the model, and the pass
+// is a loop only if it costs the same every time: it missed nothing in the
+// instruction cache and waited for nothing, so that the model is left as it
+// was and every pass after it costs what the trial did.
 func (c *CPU) TryPass(p *Pass, k *Clock) bool {
 	if c.irqPending() {
 		return false
@@ -40,6 +46,10 @@ func (c *CPU) TryPass(p *Pass, k *Clock) bool {
 	*t = *c
 	t.bus = nil
 	t.window.Charge = &p.charge
+	if c.cost != nil {
+		p.cost = *c.cost
+		t.cost = &p.cost
+	}
 	for i := range p.Cycles {
 		if !t.quietNext(k) {
 			return false
@@ -48,7 +58,8 @@ func (c *CPU) TryPass(p *Pass, k *Clock) bool {
 		p.Cycles[i] = t.LastCycles
 		if t.PC == c.PC && t.NextPC == c.NextPC && t.branch == c.branch {
 			p.Steps = i + 1
-			return t.R == c.R && t.loadD == c.loadD && t.loadV == c.loadV
+			return t.R == c.R && t.loadD == c.loadD && t.loadV == c.loadV &&
+				(c.cost == nil || p.cost.steady(c.cost))
 		}
 	}
 	return false

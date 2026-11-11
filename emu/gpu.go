@@ -668,19 +668,24 @@ func b2i(b bool) int {
 // the line, and the line ends when the clock passes it. The float
 // arithmetic is reproduced exactly, conversion by conversion, since the
 // point an interrupt is raised depends on it.
+//
+// A step under SetCPUCost can take longer than horizontal blanking, as one
+// waiting out a DMA does, and cross several edges, which are fired in turn.
+// A step at psxe's costs crosses one at most.
 func (g *gpu) update(cpuCycles uint32) {
 	g.cycles = float32(g.cycles + float32(float32(cpuCycles)*gpuCyclesPerCPU))
-	if g.cycles >= g.edge {
+	for g.cycles >= g.edge {
 		g.crossEdge()
 	}
 }
 
 // crossEdge fires the blanking event the clock has crossed, if any. Short of
-// the line's end, the clock only moves into blanking, at gpuHDrawCycles;
-// once in it, only out of it, past gpuScanlineCycles.
+// the line's end, the clock only moves into blanking, at gpuHDrawCycles,
+// even when it has gone past the line's end as well; once in it, only out
+// of it, past gpuScanlineCycles.
 func (g *gpu) crossEdge() {
 	prev := g.hblanking
-	curr := g.inHBlank()
+	curr := g.inHBlank() || !prev && g.cycles >= gpuHDrawCycles
 
 	switch {
 	case curr && !prev:
@@ -689,9 +694,10 @@ func (g *gpu) crossEdge() {
 	case prev && !curr:
 		g.timers.hblankEnd()
 		g.cycles = float32(g.cycles - gpuScanlineCycles)
+		curr = g.inHBlank()
 	}
 
-	g.hblanking = g.inHBlank()
+	g.hblanking = curr
 	g.edge = gpuHDrawCycles
 	if g.hblanking {
 		g.edge = math.Nextafter32(gpuScanlineCycles, math.MaxFloat32)

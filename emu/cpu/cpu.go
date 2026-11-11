@@ -6,6 +6,8 @@
 // they disagree. That includes psxe's cycle accounting and the places where
 // psxe departs from the hardware; those are marked where they occur, so they
 // can be revisited once something better than psxe is the reference.
+// SetCost swaps psxe's cycle accounting for a model of what a console's
+// instructions cost (cost.go).
 package cpu
 
 import "encoding/binary"
@@ -44,6 +46,7 @@ const (
 	srIEc = 1 << 0  // interrupts enabled
 	srIM2 = 1 << 10 // the interrupt controller's line, in SR and Cause
 	srIsc = 1 << 16 // cache isolated: stores do not reach memory
+	srSwC = 1 << 17 // caches swapped: the instruction cache takes the stores
 	srBEV = 1 << 22 // exception vectors in ROM
 )
 
@@ -118,6 +121,12 @@ type CPU struct {
 
 	bus    Bus
 	window Window
+
+	// cost is the cost model's state while SetCost has it on, or nil, and
+	// base what an instruction costs beyond its fetch: 2, or 0 with the
+	// model, which charges the whole step itself (see cost.go).
+	cost *cost
+	base uint32
 }
 
 // Window is memory the CPU fetches instructions from directly, rather than
@@ -158,7 +167,9 @@ func New(bus Bus) *CPU {
 
 // Reset puts the CPU in its reset state.
 func (c *CPU) Reset() {
+	model := c.cost != nil
 	*c = CPU{bus: c.bus, window: c.window}
+	c.SetCost(model)
 	c.PC = 0xbfc00000
 	c.NextPC = c.PC + 4
 	c.COP0[SR] = 0x10900000
@@ -310,6 +321,15 @@ func (c *CPU) Run(n uint64, k *Clock) uint64 {
 			c.Opcode, c.LastCycles = c.bus.Fetch(c.PC)
 		}
 
+		// The cost model charges the step before it runs, so that what it
+		// reads from a device is read after any wait (see cost.go).
+		var early uint32
+		if c.cost != nil {
+			early = c.cost.step(c)
+			c.TotalCycles += uint64(early)
+			c.LastCycles = 0
+		}
+
 		c.PC = c.NextPC
 		c.NextPC += 4
 
@@ -332,7 +352,7 @@ func (c *CPU) Run(n uint64, k *Clock) uint64 {
 			// then lets a pending load land, then writes its result, so
 			// an instruction in a load's delay slot sees the old value
 			// and its own result wins over the load's.
-			cycles, ok := uint32(2), true
+			cycles, ok := c.base, true
 			switch op := c.Opcode >> 26; op {
 			case 0x00:
 				switch funct := c.Opcode & 0x3f; funct {
@@ -462,6 +482,7 @@ func (c *CPU) Run(n uint64, k *Clock) uint64 {
 			c.TotalCycles += uint64(c.LastCycles)
 			c.R[0] = 0
 		}
+		c.LastCycles += early
 
 		if i >= n {
 			break

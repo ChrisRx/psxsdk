@@ -74,12 +74,23 @@ type dma struct {
 	ic   *ic
 	gpu  *gpu // where the GPU channel's words go, without the bus
 	stop func(error)
+
+	// holdBus has the CPU wait out a transfer under SetCPUCost
+	// (cpucost.go), and does nothing otherwise.
+	holdBus func(cycles uint64)
 }
 
 // newDMA returns a DMA controller with every channel idle, setting wake
 // when it becomes active and reporting an error that stops the run to stop.
 func newDMA(bus *Bus, ic *ic, wake *bool, stop func(error)) *dma {
-	return &dma{bus: bus, ic: ic, wake: wake, stop: stop, dpcr: 0x07654321}
+	return &dma{
+		bus:     bus,
+		ic:      ic,
+		wake:    wake,
+		stop:    stop,
+		dpcr:    0x07654321,
+		holdBus: func(uint64) {},
+	}
 }
 
 func (d *dma) madr(ch int) *uint32 { return &d.regs[ch*3] }
@@ -432,6 +443,7 @@ func (d *dma) transferOTC() {
 	}
 	d.pending[dmaOTC] = int(n)
 	*d.chcr(dmaOTC), *d.bcr(dmaOTC) = 0, 0
+	d.holdBus(uint64(n) * otcHoldPerMille / 1000)
 }
 
 // update raises the completion flags that are due, and the DMA interrupt on
