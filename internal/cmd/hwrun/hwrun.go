@@ -6,7 +6,9 @@
 // program can't be told to stop, so hwrun asks for the reset button when the
 // monitor doesn't come back. For the clean library it first replaces the boot
 // disc's monitor and library with ours, once per boot, and programs return to
-// that.
+// that. To change the library image, or go back to Sony's, it reboots the
+// console from the clean monitor's prompt, and asks for the button only if
+// that doesn't bring the boot disc's monitor back.
 package hwrun
 
 import (
@@ -44,6 +46,11 @@ const (
 	softResetGap   = 500 * time.Millisecond
 	softResetTries = 10
 	softResetBoot  = 90 * time.Second
+
+	// biosReset is the BIOS's reset address. The clean monitor's go to it
+	// reboots the console from the disc, as the reset button does (spec 35,
+	// "Rebooting from the monitor").
+	biosReset = 0xbfc00000
 )
 
 // Job is a program to run, with any files its batch loads into RAM first.
@@ -159,6 +166,10 @@ type Session struct {
 	// Log is for progress.
 	Log io.Writer
 
+	// Boot is how long the boot disc's monitor gets to come back after a
+	// reboot from the clean monitor's prompt, softResetBoot if zero.
+	Boot time.Duration
+
 	mon *serial.Monitor
 }
 
@@ -183,7 +194,7 @@ func (s *Session) Start(ctx context.Context) error {
 	ours := strings.Contains(strings.ToLower(reply), fmt.Sprintf(":%08x", s.Marker))
 	if s.TakeOver == nil {
 		if ours {
-			return s.reset(ctx, "the clean monitor is up, and Sony's library is wanted")
+			return s.switchAway(ctx, "the clean monitor is up, and Sony's library is wanted")
 		}
 		return nil
 	}
@@ -192,7 +203,7 @@ func (s *Session) Start(ctx context.Context) error {
 			fmt.Fprintln(s.Log, "the clean library is already in place")
 			return nil
 		}
-		return s.reset(ctx, "the clean monitor is up with another library image")
+		return s.switchAway(ctx, "the clean monitor is up with another library image")
 	}
 	start := time.Now()
 	fmt.Fprintln(s.Log, "uploading the clean library and monitor")
@@ -216,6 +227,40 @@ func (s *Session) Start(ctx context.Context) error {
 	}
 	s.mon, err = serial.NewMonitor(ctx, s.Port)
 	return err
+}
+
+// switchAway leaves the clean monitor, which is at its prompt, for the boot
+// disc's: by rebooting from the prompt, and if that fails by reset, which asks
+// for the button with why. Then it starts again.
+func (s *Session) switchAway(ctx context.Context, why string) error {
+	if s.rebootFromPrompt(ctx) {
+		return s.Start(ctx)
+	}
+	return s.reset(ctx, why)
+}
+
+// rebootFromPrompt has the clean monitor, at its prompt, start the BIOS at its
+// reset address, and reports whether the boot disc's monitor came back.
+func (s *Session) rebootFromPrompt(ctx context.Context) bool {
+	fmt.Fprintln(s.Log, "rebooting the console from the clean monitor's prompt")
+	if err := s.mon.SetRegister(ctx, "epc", biosReset); err != nil {
+		return false
+	}
+	if err := s.mon.Run(ctx); err != nil {
+		return false
+	}
+	timeout := s.Port.Timeout
+	defer func() { s.Port.Timeout = timeout }()
+	s.Port.Timeout = s.Boot
+	if s.Port.Timeout == 0 {
+		s.Port.Timeout = softResetBoot
+	}
+	if _, err := s.Port.ReadUntil(ctx, greeting); err != nil {
+		fmt.Fprintf(s.Log, "the console didn't reboot: %v\n", err)
+		return false
+	}
+	_, err := s.Port.ReadUntil(ctx, ">>")
+	return err == nil
 }
 
 // takeOverHash is a hash of what TakeOver uploads.
