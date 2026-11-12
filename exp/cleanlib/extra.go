@@ -68,7 +68,7 @@ func PushMatrix()
 //export PopMatrix
 func PopMatrix()
 
-// StoreImage copies the rectangle rect of video memory to p. As loadImage
+// StoreImage copies the rectangle rect of video memory to p. As LoadImage
 // does, the CPU reads the words that do not make a whole block of 16, from
 // the start of the image, and DMA the blocks (GP1 04000003h, as Sony's
 // library sends for an image of whole blocks and not for one of 8 words,
@@ -77,76 +77,135 @@ func PopMatrix()
 // A size that comes to nothing moves nothing: the GPU would have no pixels to
 // wait for. With the queue idle, the size kept within video memory is left in
 // rect too (spec 21). With the GPU busy, the call goes into the queue and p
-// is written when its turn comes (imageEnter).
+// is written when its turn comes (imageEnter). It spends its time where
+// Sony's does, as LoadImage (spec 49).
 //
 //export StoreImage
 //go:noinline
 func StoreImage(rect *RECT, p *uint32) int32 {
-	w, h := imageSize(*rect)
-	m, idle := imageEnter()
-	if idle {
-		rect.W, rect.H = w, h
-	} else if imageLater() {
-		if queueStore(rect, p) {
-			queueLeave(m)
-			pace(storeImagePad)
-			imageCallLeaves()
+	// The transfer is worked out first, as LoadImage's.
+	r := *rect
+	r.W, r.H = imageSize(r)
+	t := imageTransfer(r, unsafe.Pointer(p))
+	spaceWith(storeImageEnterSpace, t.count)
+	m, state := imageEnter()
+	if state == enterLater {
+		if queueStore(r, unsafe.Pointer(p)) {
+			spins(storeImageQueuedTurns)
+			space(storeImageQueuedSpace)
+			imageLeave(m)
+			imageQueued()
+			space(storeImageQueuedLeaveSpace)
+			imageCallLeaves(m)
 			return 0
 		}
-		m = imageWait(m)
+		m = imageRefused(m)
 	}
-	if w == 0 || h == 0 {
+	if state == enterIdle {
+		rect.W, rect.H = r.W, r.H
+	}
+	switch {
+	case t.none():
+		spins(storeImageNoSizeTurns)
 		space(storeImageNoSizeSpace)
-		queueLeave(m)
-		pace(storeImagePad - storeImageTurns*spinTurn)
-		imageCallLeaves()
-		return 0
+	default:
+		spins(storeImageReadyTurns)
+		t.leave()
+		space(storeImageReadySpace)
+		for gp1.Get()&gpuStatReady == 0 {
+		}
+		readImage(t, p)
+		// Each kind pads with a value of its own: with the same one the
+		// compiler merges the pads' ends, and a change to one moves
+		// another's time.
+		switch {
+		case !t.blocks():
+			spaceWith(storeImageNoBlockSpace, 1)
+			nops(storeImageNoBlockNops)
+		case t.head != 0:
+			spaceWith(storeImageMixedSpace, 2)
+			nops(storeImageMixedNops)
+		default:
+			space(storeImageBlockSpace)
+			nops(storeImageBlockNops)
+		}
 	}
-	readImage(RECT{X: rect.X, Y: rect.Y, W: w, H: h}, p)
-	queueLeave(m)
-	pace(storeImagePad - storeImageTurns*spinTurn)
-	imageCallLeaves()
+	imageLeave(m)
+	nops(storeImageLeaveNops)
+	imageCallLeaves(m)
 	return 0
 }
 
-// readImage reads the rectangle r of video memory into p, for StoreImage,
-// with the GPU ready for it: the CPU's words, then the blocks by DMA, which
-// it does not wait for.
+// readImage reads video memory into p, for StoreImage, with the GPU ready
+// for it: the CPU's words, then the blocks by DMA, which it does not wait
+// for. The stores between its accesses bring each to Sony's cycle (spec
+// 49): from GP1 04000000h, the four GP0 words at 8, 16, 26 and 36 cycles,
+// GPUSTAT read at 44, the CPU's words from 70, 16 apart, and GP1 04000003h
+// 20 after the last of them, or 72 with none; D2_MADR, D2_BCR and D2_CHCR
+// 8, 18 and 26 after that.
 //
 //go:inline
-func readImage(r RECT, p *uint32) {
+func readImage(t transfer, p *uint32) {
 	// The DMA direction off first, as the reference does.
 	gp1.Set(gp1DMAOff)
+	nops(readImageClearNops)
 	gp0.Set(0x01000000)
+	space(readImageCommandSpace)
 	gp0.Set(0xc0000000)
-	gp0.Set(pair(r.X, r.Y))
-	gp0.Set(pair(r.W, r.H))
+	space(readImagePlaceSpace)
+	gp0.Set(t.place)
+	space(readImageSizeSpace)
+	gp0.Set(t.size)
+	space(readImageSendSpace)
 	// GPUSTAT read until the GPU has the pixels to send.
 	for gp1.Get()&gpuStatSend == 0 {
 	}
-	words := (int(r.W)*int(r.H) + 1) / 2
-	const block = 16
-	head := words % block
-	dst := unsafe.Slice(at(p), head)
-	for i := range dst {
-		dst[i] = gp0.Get() // GPUREAD shares GP0's address
-		space(storeImageWordSpace)
-	}
-	if n := words / block; n > 0 {
-		gp1.Set(gp1DMAFromGPU)
-		// The pointer as given, as Sony's sends it: the channel uses its
-		// low 24 bits.
-		dmaGPUAddr.Set(uint32(uintptr(unsafe.Add(unsafe.Pointer(p), 4*head))))
-		dmaGPUBlock.Set(uint32(n)<<16 | block)
-		dmaGPUControl.Set(dmaFromGPU)
-		space(storeImageBlockSpace)
-		if head == 0 {
-			space(storeImageWholeSpace)
+	if t.head != 0 {
+		space(readImageWordsSpace)
+		// The pad comes between two words, not after the last.
+		q := unsafe.Pointer(at(p))
+		for n := t.head; ; {
+			*(*uint32)(q) = gp0.Get() // GPUREAD shares GP0's address
+			q = unsafe.Add(q, 4)
+			if n--; n == 0 {
+				break
+			}
+			space(storeImageWordSpace)
+			nops(storeImageWordNops)
 		}
-	} else {
-		space(storeImageNoBlockSpace)
+	}
+	if t.blocks() {
+		if t.head == 0 {
+			nops(readImageWholeNops)
+		} else {
+			space(readImageMixedSpace)
+		}
+		gp1.Set(gp1DMAFromGPU)
+		space(readImageAddrSpace)
+		dmaGPUAddr.Set(t.addr)
+		space(readImageCountSpace)
+		nops(readImageCountNops)
+		dmaGPUBlock.Set(t.count)
+		nops(readImageStartNops)
+		dmaGPUControl.Set(dmaFromGPU)
 	}
 }
+
+// readImage's pads, in 2-cycle stores.
+const (
+	readImageClearNops    = 1
+	readImageCommandSpace = 1
+	readImagePlaceSpace   = 4
+	readImageSizeSpace    = 4
+	readImageSendSpace    = 2
+	readImageWordsSpace   = 1
+	readImageWholeNops    = 1
+	readImageMixedSpace   = 0
+	readImageAddrSpace    = 1
+	readImageCountSpace   = 1
+	readImageCountNops    = 1
+	readImageStartNops    = 0
+)
 
 // ClearImage fills the rectangle rect of video memory with r, g, b, queued
 // with the drawing, its size kept to 0 to 1023 by 0 to 511. As the reference
@@ -157,44 +216,138 @@ func readImage(r RECT, p *uint32) {
 // the request starts at once, the kept size is left in rect too; one that has
 // to wait works from a copy (spec 21).
 //
+// With the GPU free its accesses come at Sony's cycles (spec 49, probe
+// spec/probes/imgsync): packetEnter's, and then Sony's builds its packet,
+// which takes it 156 cycles from the read of GPUSTAT to the channel's start
+// for a fill, 176 to the first GP1 10h for a rectangle off a multiple of
+// 64 and 186 for one on it whose width is not, 6 more with a width over
+// 1,023, 4 more with a height over 511 and 18 less with a negative width.
+// The rectangle's three questions of the GPU come 34 and 36 cycles apart,
+// each answer read 8 cycles after it is asked, and the channel starts 42
+// after the last. I_MASK is put back 48 cycles after the channel starts.
+//
 //export ClearImage
 //go:noinline
 func ClearImage(rect *RECT, r, g, b uint8) int32 {
 	color := uint32(b)<<16 | uint32(g)<<8 | uint32(r)
 	w, h := int16(clamp(int(rect.W), 1023)), int16(clamp(int(rect.H), 511))
-	if rect.X%64 == 0 && w%64 == 0 {
+	place, size := pair(rect.X, rect.Y), pair(w, h)
+	// How Sony's draws it: the GPU's fill, or a rectangle, whose time
+	// goes by which of the two tests it fails.
+	kind := clearFill
+	if rect.X&63 != 0 {
+		kind = clearOff
+	} else if w&63 != 0 {
+		kind = clearOdd
+	}
+	packetRoom()
+	spaceWith(clearImageEnterSpace, size)
+	m, state, q := packetEnter()
+	q.list = 0
+	// Sony's builds its packet here. What it takes by the size:
+	if rect.W > 1023 {
+		space(clearImageWideSpace)
+	}
+	if rect.H > 511 {
+		space(clearImageTallSpace)
+	}
+	if rect.W >= 0 {
+		space(clearImageWidthSpace)
+	}
+	switch kind {
+	case clearOff:
+		space(clearImageOffSpace)
+	case clearOdd:
+		space(clearImageOddSpace)
+	}
+	fill := kind == clearFill
+	if fill {
 		// The mask bits off (E6h), then the fill.
-		p := [5]uint32{
-			4<<24 | endOfList,
-			0xe6000000,
-			0x02000000 | color,
-			pair(rect.X, rect.Y),
-			pair(w, h),
+		q.restore = 0
+		q.env[0] = 4<<24 | endOfList
+		q.env[1] = 0xe6000000
+		q.env[2] = 0x02000000 | color
+		q.env[3] = place
+		q.env[4] = size
+	} else {
+		// Words 8 to 10 are E3h, E4h and E5h, filled in as it goes out.
+		q.restore = 8
+		q.env[0] = 10<<24 | endOfList
+		q.env[1] = 0xe3000000
+		q.env[2] = 0xe4ffffff
+		q.env[3] = 0xe5000000
+		q.env[4] = 0xe6000000
+		q.env[5] = 0x60000000 | color
+		q.env[6] = place
+		q.env[7] = size
+	}
+	if state == enterLater {
+		spins(clearImageQueuedTurns)
+		space(clearImageQueuedSpace)
+		if fill {
+			space(clearImageQueuedFillSpace)
 		}
-		if enqueue(0, p[:], 0) {
-			rect.W, rect.H = w, h
-		}
-		pace(clearFillPad)
-		imageCallLeaves()
+		imageLeave(m)
+		imageQueued()
+		space(clearImageQueuedLeaveSpace)
+		imageCallLeaves(m)
 		return 0
 	}
-	p := [8]uint32{
-		10<<24 | endOfList,
-		0xe3000000,
-		0xe4ffffff,
-		0xe5000000,
-		0xe6000000,
-		0x60000000 | color,
-		pair(rect.X, rect.Y),
-		pair(w, h),
+	if fill {
+		space(clearImageFillSpace)
+	} else {
+		space(clearImageRectSpace)
+		gp1.Set(gp1InfoDrawArea1)
+		nops(clearImageAnswerNops)
+		q.env[8] = 0xe3<<24 | gp0.Get()&0xffffff // GPUREAD
+		space(clearImageAskSpace)
+		gp1.Set(gp1InfoDrawArea1 + 1)
+		nops(clearImageAnswer2Nops)
+		q.env[9] = 0xe4<<24 | gp0.Get()&0xffffff
+		space(clearImageAsk2Space)
+		gp1.Set(gp1InfoDrawArea1 + 2)
+		nops(clearImageAnswer2Nops)
+		q.env[10] = 0xe5<<24 | gp0.Get()&0xffffff
+		space(clearImageLastSpace)
 	}
-	// Words 8 to 10 are E3h, E4h and E5h, filled in as it goes out.
-	if enqueue(0, p[:], 8) {
-		rect.W, rect.H = w, h
-	}
-	imageCallLeaves()
+	packetStart(q, 2, 0, 0)
+	rect.W, rect.H = w, h
+	space(clearImageLeaveSpace)
+	imageLeave(m)
+	nops(clearImageLeaveNops)
+	imageCallLeaves(m)
 	return 0
 }
+
+// How ClearImage draws a rectangle (spec 49).
+const (
+	clearFill = iota // x and the width on multiples of 64: the GPU's fill
+	clearOff         // x off a multiple of 64: a rectangle
+	clearOdd         // x on one and the width not: a rectangle
+)
+
+// ClearImage's pads, in 2-cycle stores, turns of spin and nops.
+const (
+	clearImageEnterSpace       = 6
+	clearImageWideSpace        = 2
+	clearImageTallSpace        = 1
+	clearImageWidthSpace       = 5
+	clearImageOffSpace         = 3
+	clearImageOddSpace         = 5
+	clearImageFillSpace        = 0
+	clearImageRectSpace        = 0
+	clearImageAnswerNops       = 0
+	clearImageAskSpace         = 4
+	clearImageAnswer2Nops      = 3
+	clearImageAsk2Space        = 9
+	clearImageLastSpace        = 7
+	clearImageLeaveSpace       = 21
+	clearImageLeaveNops        = 3
+	clearImageQueuedTurns      = 8
+	clearImageQueuedSpace      = 0
+	clearImageQueuedFillSpace  = 9
+	clearImageQueuedLeaveSpace = 9
+)
 
 // The drive's commands and Setmode bits for CD audio (Play is in cd.go).
 const (

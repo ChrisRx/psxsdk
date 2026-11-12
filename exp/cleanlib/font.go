@@ -558,6 +558,7 @@ func (st *stream) flush() {
 	st.text[0] = 0
 	font.mode[0] = 2<<24 | next
 	sendList(unsafe.Pointer(&font.mode[0]))
+	nops(fntFlushLeaveNops)
 	font.sent = volatile.LoadUint32(&queue.tail)
 	st.n = 0
 }

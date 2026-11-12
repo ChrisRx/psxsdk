@@ -438,6 +438,7 @@ func GsSortClear(r, g, b uint8, ot *GsOT)
 //go:noinline
 func GsDrawOt(ot *GsOT) {
 	// Through at, since a request of 0 is an environment's (request).
+	nops(drawOtEnterNops)
 	sendList(unsafe.Pointer(at(at(ot).Tag)))
 	pace(drawOtPad)
 }

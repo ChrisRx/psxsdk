@@ -38,6 +38,15 @@ func spin(n uint32) {
 	}
 }
 
+// spins is spin for a pad whose count may be 0, which then costs nothing.
+//
+//go:inline
+func spins(n uint32) {
+	if n != 0 {
+		spin(n)
+	}
+}
+
 // spinCall is what a call of spin costs beyond its turns, measured on
 // spec/probes/drawq: a spin(1) at a call's end lengthens it by 26 cycles
 // and a spin(2) by 38.

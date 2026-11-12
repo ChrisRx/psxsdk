@@ -808,6 +808,7 @@ func (st *kanjiStream) flush(f *kanjiFrame) *uint32 {
 	}
 	kanji.ot = next
 	sendList(unsafe.Pointer(&kanji.ot))
+	nops(fntFlushLeaveNops)
 	kanji.sent = volatile.LoadUint32(&queue.tail)
 	st.count = 0
 	st.end = st.off
