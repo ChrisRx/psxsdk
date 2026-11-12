@@ -501,3 +501,137 @@ Spec 45 began this at 22, 42 and 85 over in the three parts, with 72 at the entr
 One run, to confirm the close; nothing else is needed for this spec.
 
 1. `rethook` (`.build/serial/rethook.elf`, this worktree) on Sony's library under the boot disc's monitor, and on `.build/console/libps-s46b.exe.gz` under the clean monitor. Read the mean A from field 8 on. Sony's `240p hooked` against s46b's `240p plain` is the 240-line return like for like, one layer of the hooks on each: the model has them within 8, and anything within some 50 closes it. Sony's hooked less plain is what the hooks cost a return (the model: 130), and s46b's what a second layer costs it (196). If s46b's plain A is more than some 50 under Sony's hooked A, the clean return is late by more than a layout moves, and the exit pad gives turns from `spin` to `nopRun`, 11 cycles a turn, in a round of its own. The 480-line rows should be 516,501 and 516,497 hooked or not. The probe puts the vector and the stub back after each hooked run and before END, and every loop of it is bounded.
+
+### Reopened: the open events, and the baseline (implementation side, 2026-11-11)
+
+Done in the emulator and from the console's files (`.build/hardware/sony-ourmon`, `spec46/r3`, `r5`, `r6`). The library and the model are not changed: the candidate stays `libps-s46b` (`libps-spec46`), and there is no s46r1.
+
+**Why it was reopened.** hwrun's `-library sony-ourmon` keeps Sony's library as the boot started it and replaces only the monitor. Under it Sony's kernel part is 15,879 (15,953 under the boot disc's monitor) and its library to the callback 1,522 (1,603), so against it s46b is 98 and 75 longer where the sixth round had 22 longer and 4 shorter. The spec side's reading: the kernel no longer serves the boot monitor's eight card events, so the earlier comparisons hid some 170 cycles of clean excess.
+
+**The first half of the reading holds: open events cost that much.** `probes/evcost` (new, `.build/serial/evcost.elf`) is irqsplit at 480 lines with the kernel's event table in five states, which it writes itself with interrupts off and puts back: as found, every event but number 0 closed, numbers 1 to 8 open as a freshly booted console has them (no handlers), number 9 open as well, and found again. It prints the table as found and as left. In the emulator with the costs on, means over 32 blanks:
+
+| state | Sony's kernel | to callback | callback to poll | clean kernel | to callback | callback to poll |
+|---|---|---|---|---|---|---|
+| found (0 and 1 to 8) | 13,907 | 1,522 | 6,385 | 14,036 | 1,476 | 6,380 |
+| closed (0 only) | 13,826 | 1,442 | 6,382 | 13,956 | 1,396 | 6,384 |
+| eight | 13,906 | 1,521 | 6,385 | 14,036 | 1,475 | 6,379 |
+| nine | 13,907 | 1,529 | 6,388 | 14,041 | 1,483 | 6,381 |
+
+Eight open events cost the kernel's part 80 and the part before the callback 80, on both libraries, and nothing after the callback: the kernel looks through the table once in each part, some 10 cycles an open event. The console has 74 and 81 between Sony's two runs (15,953 to 15,879, 1,603 to 1,522). So the model has the events right and needs nothing.
+
+**The second half does not: it is `sony-ourmon` that is the unlike baseline.** The eight events are Sony's library's own, not the boot monitor's alone. On a disc in the emulator, with no monitor at all, Sony's library has the table the fresh console has, from its own start-up: number 0 of class F0000009h (the sound system's), 1 to 4 of class F4000001h and 5 to 8 of F0000011h, all status 2000h, in a table of 16 at A000E028h, with the mask 000Dh. (There they have no handlers; the console's have the boot monitor's. The cost of looking through them is the same.) The clean library's start-up opens the same nine (spec 07; `evcost` shows the same table on the clean image). So every program on a Net Yaroze runs with those events open, on either library.
+
+What each console run had open:
+
+- Sony's under the boot disc's monitor: 0 and 1 to 8, nine.
+- Sony's under our monitor (`sony-ourmon`): the take-over loader closes 1 to 15 and nothing opens them again, since Sony's start-up has already run. One event, number 0. No program finds Sony's library like that.
+- The clean library under our monitor: the loader closes 1 to 15, then the clean start-up runs at the program's first `ResetGraph(0)` and opens its nine. Number 0 is the library's sound event (overlay.go calls it the kernel's own). The guess here was that Sony's stays and the clean nine go in 1 to 9, ten in all; the console has nine, 0 to 8 (below).
+
+So the earlier rounds compared nine events with nine, and the new baseline compares one with nine. Taking the events' cost from Sony's own two runs on the console (74 and 81 for eight), s46b against Sony's under one monitor with the same events open, at 480 lines:
+
+| part | Sony's, our monitor, one event | Sony's with its eight back | s46b, our monitor | difference |
+|---|---|---|---|---|
+| entry | 534 | 534 | 534 | 0 |
+| kernel | 15,879 | 15,953 | 15,977 | +24 |
+| library to callback | 1,522 | 1,603 | 1,597 | -6 |
+| callback to poll | 6,448 | 6,448 | 6,444 | -4 |
+
+The entry and the part after the callback are now measured like for like, with the monitor's hooks on both and no pricing: 0 and -4, where the sixth round had -2 and +6 with the hooks priced out. The kernel's part and the part before the callback are the sixth round's +22 and -4 again.
+
+**The 240-line return.** `probes/evphase` (new, `.build/serial/evphase.elf`) is retphase with the table as found, closed and with the eight. In the emulator with the costs on, mean A:
+
+| | Sony's | s46b |
+|---|---|---|
+| 240 lines, found | 544,297 | 544,305 |
+| 240 lines, closed | 544,451 | 544,460 |
+| 240 lines, eight | 544,299 | 544,304 |
+| 480 lines, found, closed, eight | 516,561, 516,560, 516,561 | 516,561, 516,558, 516,560 |
+
+Closing the eight events brings the 240-line return 155 cycles earlier and does not move the 480-line one. On the console Sony's A went from 542,172 under the boot disc's monitor to 542,218 under ours: the events' 155 earlier and the hooks' 115 later (rethook's `r6/sony`, 542,115 plain to 542,000 hooked), 40 for the 46 seen. So of s46b's 216 after `sony-ourmon`, 155 is the eight events, and the 40 to 60 left is what the sixth round's rethook measured as 16 the other way with one layer of hooks and nine events on each (Sony's hooked 542,000, s46b plain 542,016): the scatter of the measuring program's layout. Under the model the two libraries return within 8 of each other in every state.
+
+**So nothing is placed in the library, and nothing is changed.** The +98 and +75 are 74 and 81 of events that `sony-ourmon` closes and the clean library opens, and +24 and -6 of what the sixth round accepted (three of the kernel's lines under `vblankInterrupt`). The 480-line `VSync(0)` wait is untouched. `emu/cpu/cost.go` is untouched: the one new thing the console rows price, the events, the model already has.
+
+One thing the model shows again: in evcost's layout the clean kernel's part is 130 over Sony's and the part before the callback 46 under (irqsplit's layout: 26 over and 9 under), with the same events open. Sony's kernel part runs from 13,907 to 14,065 across the probes of this spec and the clean one from 14,036 to 14,085. A part's difference between the libraries is good to some 100 cycles across measuring programs in the model, more than the sixth round's 50, and the sum to some 80.
+
+**What the spec side's tools need**: see "The console on the events" below, which replaces what was first written here.
+
+### Checks, reopened
+
+The library, the image and `emu/` are as the sixth round left them: `.build/cleanimage/libps.exe` in this worktree is `libps-spec46` byte for byte (also saved as `.build/console/libps-s46b.exe.gz`). `go test ./emu/...` and `go test ./exp/cleanlib/...` pass. `image/regress.sh` and the six timing tests were not run again, with nothing they test changed; the fifth round's results stand. `evcost` and `evphase` run to END on both libraries in the emulator and leave the table as they found it (their `EVENT left` lines are the `found` ones).
+
+### On the console (to do, spec side)
+
+Sony's side under our monitor from here on. The image for `-library clean` is `.build/console/libps-s46b.exe.gz` (this worktree; it is `.build/hardware/images/libps-spec46.exe.gz`). The ELFs are this worktree's.
+
+1. `.build/serial/evcost.elf` on `-library sony-ourmon`, on `-library clean`, and on `-library sony`.
+   - The `EVENT found` lines say what each has open. Expected: `sony` 0 and 1 to 8 with handlers; `sony-ourmon` 0 only; `clean` 0 to 9. If `clean` has 0 only, the clean start-up's card events are not being opened under hwrun and the account above is wrong.
+   - `closed` to `eight` on each is what eight events cost the console: expected 74 in the kernel's part and 81 before the callback, nothing after. `eight` to `nine` is one more, some 10 in each.
+   - `eight` on `sony-ourmon` against `eight` on `clean` is the two libraries under one monitor with one table, one ELF. From irqsplit's console figures the kernel's part should be some 24 longer on the clean library and the part before the callback some 6 shorter; the model, for this ELF's layout, has 130 longer and 46 shorter. Whichever it is, the sum of the two should be within some 80 of level, and the part after the callback and the entry (`gap` less `whole`) level.
+   - `found` on `sony` against `eight` on `sony-ourmon`, less the hooks' 76 at the entry and 37 after the callback, should be level: the same library and events, two monitors.
+2. `.build/serial/evphase.elf` on `-library sony-ourmon` and on `-library clean`.
+   - `240p closed` less `240p eight`, mean A, on each: what the eight events cost a return, the model's 155.
+   - `240p eight` on `sony-ourmon` against `240p eight` on `clean`: the 240-line return like for like. The model has them within 8; within some 60 closes this spec again, as rethook's 16 did. If the clean A is more than some 60 under Sony's, the clean return is late by more than a layout moves, and the exit pad gives turns from `spin` to `nopRun`, 11 cycles a turn, in a round of its own.
+   - The `480i` rows should be 516,500 and 516,497 in every state.
+
+Both probes write the kernel's table only with interrupts off and put it back before END, and every loop is bounded. A run stopped between its `found` and `left` lines leaves the table changed: reboot before the next run. Under `-library sony` the boot monitor's eight events are closed or without their handlers for some 100 blanks at a time; nothing delivers them while no card is being read.
+
+### The console on the events (spec side's runs, 2026-11-11, `.build/hardware/spec46/reopen`)
+
+`evcost` on `sony-ourmon`, on s46b under our monitor (`clean`) and on Sony's under the boot disc's monitor (`sony`); `evphase` on the first two. Every run reached END and left the table as it found it.
+
+**The tables.** The console's table has 22 events, not the emulator's 16. As found: `sony` 0 and 1 to 8, the emulator's table (no handlers in this run); `sony-ourmon` number 0 only; `clean` 0 and 1 to 8, nine and not the ten guessed. So the clean library under our monitor has what Sony's has under the boot disc's, and `sony-ourmon` is eight short, as read above.
+
+**evcost, means over blanks 1 to 31, 480 lines:**
+
+| state | part | `sony` (boot monitor) | `sony-ourmon` | `clean` (s46b) |
+|---|---|---|---|---|
+| found | entry | 462 | 535 | 530 |
+| | kernel | 15,898 | 15,809 | 15,959 |
+| | library to callback | 1,642 | 1,495 | 1,559 |
+| | callback to poll | 6,415 | 6,454 | 6,443 |
+| closed | entry | 462 | 534 | 531 |
+| | kernel | 15,813 | 15,812 | 15,870 |
+| | library to callback | 1,560 | 1,494 | 1,480 |
+| | callback to poll | 6,407 | 6,451 | 6,443 |
+| eight | entry | 461 | 535 | 533 |
+| | kernel | 15,896 | 15,889 | 15,949 |
+| | library to callback | 1,643 | 1,577 | 1,559 |
+| | callback to poll | 6,414 | 6,456 | 6,442 |
+| nine | kernel | 15,908 | 15,909 | 15,962 |
+| | library to callback | 1,655 | 1,584 | 1,571 |
+
+- Eight events cost the kernel's part 83, 77 and 79 and the part before the callback 83, 83 and 79, in the three runs, and the part after it 7, 5 and 0. The model has 80, 80 and 0. A ninth costs 12 to 20 and 7 to 12 (the model 5 to 10): a little more than the model's, on a table of 22.
+- `again` repeats `found` within 6 in every part.
+
+**Like for like: `eight` on `clean` less `eight` on `sony-ourmon`**, one ELF, one monitor, one table:
+
+| part | eight | closed |
+|---|---|---|
+| entry | -2 | -3 |
+| kernel | +60 | +58 |
+| library to callback | -18 | -14 |
+| callback to poll | -14 | -8 |
+| whole | +28 | +36 |
+
+The kernel's part is 60 longer under the clean library in this program, where irqsplit's layout had 24 and the model said 130 for this one; the other two parts are shorter, and the whole is 28 over in 23,900. Every part is inside the 100 set above, and the whole inside its 80.
+
+One more measure of the scatter, from Sony's library alone: with the same nine events, its part before the callback is 1,642 under the boot disc's monitor and 1,577 under ours in this probe, 65 apart, where irqsplit had the two level (1,603 and 1,522 with 81 for the events) and monhook says the hooks cost that part nothing. The same library moves by 65 in a part with the monitor and the measuring program.
+
+**evphase, mean A:**
+
+| | `sony-ourmon` | `clean` (s46b) | clean after Sony's |
+|---|---|---|---|
+| 240 lines, found | 542,198 | 542,014 | 184 |
+| 240 lines, closed | 542,195 | 542,179 | 16 |
+| 240 lines, eight | 542,032 | 542,001 | 31 |
+| 480 lines, found, closed, eight | 516,507, 516,507, 516,506 | 516,503 in each | 4 |
+
+Eight events cost a 240-line return 163 on Sony's and 178 on the clean library (the model 155), and a 480-line return nothing. With the same events open the clean 240-line return is 31 cycles after Sony's, and 16 with them closed: inside the 60. The 216 that reopened this spec is 184 here, and 163 of it is the events.
+
+**Spec 46 closes again**, on s46b, with nothing changed in the library or the model. Under one monitor and one event table the clean interrupt is 28 cycles longer than Sony's in 23,900 and its 240-line return 31 late; the 480-line return is 4 from Sony's, as spec 45 left it. What is accepted is what the sixth round's closing lists, with the kernel's part now seen at +24 and +60 in two programs.
+
+**The take-over.**
+
+- `TakeOver` (the clean library) needs no change: the clean table on the console is the disc's nine, in numbers 0 to 8.
+- `TakeOverMonitor` (`sony-ourmon`) should give Sony's library its eight events back, or every other probe on it measures Sony's 80 short in the kernel's part and before the callback, and 160 early at a 240-line return. After the loader's closes, open numbers 1 to 8 in the library's order: four of class F4000001h then four of F0000011h, specs 0004h, 8000h, 0100h, 2000h, mode 2000h, no handler, each enabled. `evcost`'s `eight` state is that table written by hand, and on `sony-ourmon` it gives the boot monitor's kernel part (15,889 for 15,898). Not closing 1 to 8 at all would do too if they never have handlers, as in this run; the fresh console's table was reported with handlers at 8007940Ch on, so reopening without them is the safe one.
+- Until that is in, irqsplit, retphase and the rest on `sony-ourmon` are read with 80, 80 and 160 added, or the comparison is made with `evcost` and `evphase`'s `eight` rows.
