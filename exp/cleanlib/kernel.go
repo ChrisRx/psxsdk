@@ -451,7 +451,7 @@ func libps_interrupt() {
 	// The DMA channels are checked whatever I_STAT says, in case the
 	// kernel acknowledged the interrupt first.
 	spuDMADone()
-	drawDone()
+	handlerDrawDone()
 	// The drive's interrupt is taken again while it is raised: the
 	// handler waits for the drive's first answer to the Pause after a
 	// read, which raises it while the handler runs, as Sony's library

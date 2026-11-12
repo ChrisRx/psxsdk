@@ -351,7 +351,7 @@ func GsSwapDispBuff() {
 	// Sony's copies the display environment a byte at a time before
 	// GP1 03h (spec 08); the two PutDrawEnv of draw carry their own pace.
 	pace(swapDispBuffPad - spinTurn)
-	nops(2)
+	nops(swapDispBuffNops)
 }
 
 // GsSetWorkBase sets where the sorts build their packets, each advancing
