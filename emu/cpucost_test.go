@@ -233,3 +233,60 @@ func TestCPUCostRows(t *testing.T) {
 		1, 2 + 1 + 3, // another row again, but the load does not wait for the change
 	}, stepCosts(t, m, len(code)))
 }
+
+// TestCPUCostMult times mult and multu with mflo straight after, by the
+// width of rs (padcost48, spec 48): rt does not count.
+func TestCPUCostMult(t *testing.T) {
+	const at = 0x80010000
+	multu := uint32(0x00430019) // multu $2, $3
+	for _, c := range []struct {
+		op     uint32
+		rs, rt uint32
+		want   uint32
+	}{
+		{mult, 7, 7, 7},
+		{mult, 0x7ff, 7, 7},
+		{mult, 0x800, 7, 7 + 3},
+		{mult, 0xfffff, 7, 7 + 3},
+		{mult, 0x100000, 7, 7 + 7},
+		{mult, 0x7fffffff, 7, 7 + 7},
+		{mult, 0xfffff800, 7, 7},
+		{mult, 0xfffff7ff, 7, 7 + 3},
+		{mult, 0xfff00000, 7, 7 + 3},
+		{mult, 0xffefffff, 7, 7 + 7},
+		{mult, 7, 0x7fffffff, 7},
+		{multu, 0x7ff, 7, 7},
+		{multu, 0x800, 7, 7 + 3},
+		{multu, 0x100000, 7, 7 + 7},
+		{multu, 0xffffffff, 7, 7 + 7},
+	} {
+		m := newTestMachine(t)
+		m.SetCPUCost(true)
+		code := []uint32{c.op, mflo(r1)}
+		write(m, at, code...)
+		startAt(m, at)
+		stepCosts(t, m, len(code)) // into the cache
+		m.CPU.R[r2], m.CPU.R[r3] = c.rs, c.rt
+		startAt(m, at)
+		assert.Equal(t, []uint32{1, c.want}, stepCosts(t, m, len(code)), "%08x rs %x rt %x", c.op, c.rs, c.rt)
+	}
+}
+
+// TestCPUCostLoadsZero runs loads into $zero back to back, which cost a
+// console what loads into registers in turn do, and loads into one other
+// register, which cost a cycle more each (padcost48, "lw zero" and "lw run").
+func TestCPUCostLoadsZero(t *testing.T) {
+	const (
+		at   = 0x80010000
+		data = 0x80020000
+	)
+	m := newTestMachine(t)
+	m.SetCPUCost(true)
+	code := []uint32{lw(0, 0, r4), lw(0, 0, r4), lw(0, 0, r4), lw(r1, 0, r4), lw(r1, 0, r4), nop}
+	write(m, at, code...)
+	m.CPU.R[r4] = data
+	startAt(m, at)
+	stepCosts(t, m, len(code))
+	startAt(m, at)
+	assert.Equal(t, []uint32{6, 6, 6, 6, 6 + 1, 1 + 1}, stepCosts(t, m, len(code)))
+}
