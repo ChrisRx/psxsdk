@@ -137,10 +137,18 @@ const (
 	// costMult and costDiv are when HI and LO are ready after a multiply
 	// or divide starts: mult then mflo cost 7.8, div then mflo 37.8
 	// (cpucost, "mult mflo", "div mflo"). The wait is charged to mfhi or
-	// mflo. A console's multiply takes longer for larger operands; the
-	// probe's are small, and the model has the one time.
+	// mflo.
 	costMult = 7
 	costDiv  = 37
+
+	// costMultMid and costMultWide are what a multiply takes beyond
+	// costMult when its first operand, rs, is wider than 11 bits, and wider
+	// than 20: 8 of mult and mflo take 7.6, 10.6 and 14.6 cycles a pair by
+	// rs alone, whatever rt is (padcost48, spec 48). A signed rs counts by
+	// its magnitude less one, so that -800h is narrow and -801h not; multu
+	// counts rs unsigned.
+	costMultMid  = 3
+	costMultWide = 7
 
 	// costMissAfterStore and costMissAfterLoad are how long RAM stays busy
 	// for an instruction fetch, a cache miss's fill, after the write
@@ -297,7 +305,10 @@ func (m *cost) step(c *CPU) uint32 {
 
 	if m.loadNext {
 		m.loadNext = false
-		if m.loadReg == gteReg || !isLoad(op) || op>>16&31 == m.loadReg {
+		// A load into $zero after one into $zero costs what one into
+		// another register does: 16 in a run take 6 each, as a run into
+		// registers in turn (padcost48, "lw zero", spec 48).
+		if m.loadReg == gteReg || !isLoad(op) || op>>16&31 == m.loadReg && m.loadReg != 0 {
 			t += costRAMLoadNext
 		}
 	}
@@ -325,7 +336,7 @@ func (m *cost) execute(c *CPU, op, pc uint32, t uint64) uint64 {
 		case 0x10, 0x12: // mfhi, mflo
 			t = m.wait(t, m.hiloReady)
 		case 0x18, 0x19: // mult, multu
-			m.hiloReady = t + costMult
+			m.hiloReady = t + costMult + multWidth(c.R[op>>21&31], op&1 != 0)
 		case 0x1a, 0x1b: // div, divu
 			m.hiloReady = t + costDiv
 		}
@@ -476,4 +487,20 @@ func (m *cost) steady(before *cost) bool {
 	return m.events == before.events && before.holdNext == 0 &&
 		m.streamNext == before.streamNext &&
 		m.loadNext == before.loadNext && (!m.loadNext || m.loadReg == before.loadReg)
+}
+
+// multWidth is what a multiply by rs takes beyond costMult: nothing for rs
+// within 11 bits, costMultMid within 20, costMultWide wider. Signed, a
+// negative rs counts as its complement.
+func multWidth(rs uint32, unsigned bool) uint64 {
+	if !unsigned && int32(rs) < 0 {
+		rs = ^rs
+	}
+	switch {
+	case rs < 1<<11:
+		return 0
+	case rs < 1<<20:
+		return costMultMid
+	}
+	return costMultWide
 }
