@@ -415,37 +415,21 @@ const (
 	dmaOTCStart  = 0x11000002 // start, at once, backwards
 )
 
-// clearPackets are GsSortClear's packets, one for each buffer, which the
-// library keeps itself rather than taking them from the packet area: a
-// second GsSortClear in the same buffer relinks the same packet (probe
-// spec/probes/gsclip).
-var clearPackets [2][4]uint32
-
 // GsSortClear sorts a fill of the buffer drawn into with the color r, g, b
 // into the entry Tag points to, the one drawn first, before whatever that
 // entry held: that buffer's own packet, the 02h fill alone. Its size is the
-// screen's as GsInitGraph was given it, half as wide again in 24-bit color,
-// whatever the clip says (spec 20). Tag is left as it is, and a primitive
-// sorted into that entry after is drawn before the fill. A null ot is the GsOT
-// at address 0, and a null Tag the word there.
+// screen's as GsInitGraph was given it, half as wide again in 24-bit color
+// (the width as unsigned 16 bits, times 3 over 2, kept to 16 bits; probe
+// spec/probes/sortclear24), whatever the clip says (spec 20). Tag
+// is left as it is, and a primitive sorted into that entry after is drawn
+// before the fill. A null ot is the GsOT at address 0, and a null Tag the word
+// there. The library keeps the two packets itself, one for each buffer, rather
+// than taking them from the packet area: a second GsSortClear in the same buffer
+// relinks the same packet (probe spec/probes/gsclip). In the target's assembly,
+// with the screen's size from cutLimits.
 //
 //export GsSortClear
-//go:noinline
-func GsSortClear(r, g, b uint8, ot *GsOT) {
-	ot = at(ot)
-	x, y := bufCorner(activeBuf())
-	w := gs.width
-	if gsDISPENV.Isrgb24 != 0 {
-		w = w * 3 / 2
-	}
-	p := clearPackets[activeBuf()][:]
-	p[1] = 0x02000000 | uint32(b)<<16 | uint32(g)<<8 | uint32(r)
-	p[2] = pair(x, y)
-	p[3] = pair(w, gs.height)
-	link(at(ot.Tag), p)
-	pace(sortClearPad)
-	nops(3)
-}
+func GsSortClear(r, g, b uint8, ot *GsOT)
 
 // GsDrawOt starts the GPU drawing ot, from Tag, and returns without
 // waiting for it.

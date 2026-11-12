@@ -164,6 +164,21 @@ libps_start_ra:
 	.set FAST_PAD, 14
 	.set SPRITE_ENTRY, 0
 	.set SPRITE_PAD, 49
+# The loads in the pads above, each LOADS in place of two of their nops and each
+# LOADRUN load in place of one, so that the calls take Sony's time on a console too (spec 48).
+	.set LWS_PRE_L, 3
+	.set LWS_MID_L, 5
+	.set LWS_POST_L, 8
+	.set LM_LEAD_L, 11
+	.set LM_LEAD_R, 1
+	.set LM_END_L, 2
+	.set SPRITE_PAD_L, 24
+	.set QUAD_LEAD_R, 32
+	.set QUAD_TURN_L, 8
+	.set QUAD_H_L, 8
+	.set QUAD_C_L, 2
+	.set QUAD_V_L, 8
+	.set QUAD_END_L, 34
 	.set BOX_PAD, 27
 	.set LINK_ENTRY, 10
 	.set LINK_PRIM, 2
@@ -176,6 +191,95 @@ libps_start_ra:
 	.rept \n
 	nop
 	.endr
+#endif
+	.endm
+
+# LOADS spends n loads from the stack, each with a nop after it: 4 cycles a pair in the
+# emulator, as two nops, and 8 on a console, where a load from RAM costs 6 and the
+# instruction after it 1 more (spec 35, cpucost's "lw ram nop" 8.1). The small Gs calls
+# pad with them where Sony's takes longer on a console than its time in the emulator
+# says, so that they take its time on both (spec 48). The load is into $zero and needs no
+# register, and a load waits for the stores before it to leave the write buffer, as
+# any load from RAM does.
+	.macro LOADS n
+#ifdef LIBPS_FIDELITY
+	.rept \n
+	lw	$zero, 0($sp)
+	nop
+	.endr
+#endif
+	.endm
+
+# LOADRUN spends n loads from the stack in a run, into t1 to t8 in turn, so that no two in a
+# row load the same register: 2 cycles each in the emulator, as a nop, and 6 on a console
+# (cpucost's "lw ram" 6.1), twice what LOADS gains a word. Only where t1 to t8 are free.
+	.macro LOADRUN n
+#ifdef LIBPS_FIDELITY
+	.rept (\n) / 8
+	lw	$t1, 0($sp)
+	lw	$t2, 0($sp)
+	lw	$t3, 0($sp)
+	lw	$t4, 0($sp)
+	lw	$t5, 0($sp)
+	lw	$t6, 0($sp)
+	lw	$t7, 0($sp)
+	lw	$t8, 0($sp)
+	.endr
+	.if (\n) % 8 > 0
+	lw	$t1, 0($sp)
+	.endif
+	.if (\n) % 8 > 1
+	lw	$t2, 0($sp)
+	.endif
+	.if (\n) % 8 > 2
+	lw	$t3, 0($sp)
+	.endif
+	.if (\n) % 8 > 3
+	lw	$t4, 0($sp)
+	.endif
+	.if (\n) % 8 > 4
+	lw	$t5, 0($sp)
+	.endif
+	.if (\n) % 8 > 5
+	lw	$t6, 0($sp)
+	.endif
+	.if (\n) % 8 > 6
+	lw	$t7, 0($sp)
+	.endif
+#endif
+	.endm
+
+# LOADCYC is LOADRUN into the four registers named, in turn, for where t1 to t8 are not
+# all free.
+	.macro LOADCYC n, r1, r2, r3, r4
+#ifdef LIBPS_FIDELITY
+	.rept (\n) / 4
+	lw	\r1, 0($sp)
+	lw	\r2, 0($sp)
+	lw	\r3, 0($sp)
+	lw	\r4, 0($sp)
+	.endr
+	.if (\n) % 4 > 0
+	lw	\r1, 0($sp)
+	.endif
+	.if (\n) % 4 > 1
+	lw	\r2, 0($sp)
+	.endif
+	.if (\n) % 4 > 2
+	lw	\r3, 0($sp)
+	.endif
+#endif
+	.endm
+
+# LOADNOP is the nop a load needs before a GTE command, a load from the stack in its place
+# where Sony's time matters: one of its own seems to be there on Sony's, which takes some
+# 12 cycles from its last lwc2 to RTPT or RTPS on a console's costs, as a load in the
+# delay does, where a nop takes 1 (spec 48).
+	.macro LOADNOP
+#ifdef LIBPS_FIDELITY
+	lw	$zero, 0($sp)
+#else
+	nop
 #endif
 	.endm
 
@@ -5197,7 +5301,8 @@ GsGetLws:
 	sw	$ra, 16($sp)
 	sw	$a2, 20($sp)
 	sw	$a1, 12($sp)
-	NOPS	LTW_PRE + 1
+	LOADS	LWS_PRE_L
+	NOPS	LTW_PRE + 1 - 2 * LWS_PRE_L
 	jal	libps_ltw
 	nop
 	COPYMATRIX $a1, $v0
@@ -5205,12 +5310,14 @@ GsGetLws:
 	addiu	$a0, $a0, %lo(GsWSMATRIX)
 	move	$a1, $v0
 	lw	$a2, 20($sp)
-	NOPS	LS_MID
+	LOADS	LWS_MID_L
+	NOPS	LS_MID - 2 * LWS_MID_L
 	jal	libps_compose
 	nop
 	lw	$ra, 16($sp)
+	LOADS	LWS_POST_L
 	addiu	$sp, $sp, 24
-	NOPS	LS_POST + 1
+	NOPS	LS_POST + 1 - 2 * LWS_POST_L
 	jr	$ra
 	nop
 	.size GsGetLws, .-GsGetLws
@@ -5955,7 +6062,9 @@ GsSetLightMatrix:
 	addiu	$a2, $a2, %lo(light_scratch)
 	lui	$a3, %hi(light_held)
 	addiu	$a3, $a3, %lo(light_held)
-	NOPS	LM_LEAD
+	LOADS	LM_LEAD_L
+	LOADCYC	LM_LEAD_R, $t4, $t5, $t6, $t7
+	NOPS	LM_LEAD - 2 * LM_LEAD_L - LM_LEAD_R
 	HOLD8	$a3
 	G
 	LOADROT	$a0
@@ -5978,7 +6087,8 @@ GsSetLightMatrix:
 	CTC	10, 10
 	CTC	11, 11
 	CTC	12, 12
-	NOPS	LM_END
+	LOADS	LM_END_L
+	NOPS	LM_END - 2 * LM_END_L
 	jr	$ra
 	nop
 	.size GsSetLightMatrix, .-GsSetLightMatrix
@@ -6620,7 +6730,14 @@ GsSortSprite:
 	nop
 	b	4f
 	nop
-2:	NOPS	8
+	# GsROTOFF: four loads in a run, into registers not yet in use.
+2:
+#ifdef LIBPS_FIDELITY
+	lw	$t4, 0($sp)
+	lw	$t5, 0($sp)
+	lw	$t6, 0($sp)
+	lw	$t7, 0($sp)
+#endif
 4:	bltz	$t0, 1f
 	andi	$t2, $t1, 0xffff
 	beqz	$t2, 1f
@@ -6636,7 +6753,8 @@ GsSortSprite:
 	subu	$t3, $t3, $t4
 	sll	$t3, $t3, 16
 	or	$t3, $t3, $t5
-	NOPS	SPRITE_PAD
+	LOADS	SPRITE_PAD_L
+	NOPS	SPRITE_PAD - 2 * SPRITE_PAD_L
 	SPRITEBODY
 1:	jr	$ra
 	nop
@@ -6650,7 +6768,9 @@ GsSortSprite:
 # Rotate/360 taken in 16 bits, scaled, a corner's z is 0 and its depth the projection
 # distance, and each way takes what it does on Sony's, however the angle's sign falls.
 sprite_quad:
-	NOPS	33
+	# t4 and t7 to t9 are free here, t0 to t3 not.
+	LOADCYC	QUAD_LEAD_R, $t4, $t7, $t8, $t9
+	NOPS	33 - QUAD_LEAD_R
 	G
 	move	$t5, $zero
 	li	$t6, 4096
@@ -6670,6 +6790,7 @@ sprite_quad:
 	SINBODY	$t9, $t5, $t6
 	xor	$t5, $t5, $a3
 	subu	$t5, $t5, $a3
+	LOADS	QUAD_TURN_L
 	GAP	QUAD_TURN
 2:	G
 	# t7 and t8: the top row's elements. t9: the second's first. v1: its second. a3: R33.
@@ -6707,6 +6828,7 @@ sprite_quad:
 	sll	$t8, $t9, 16
 	andi	$t9, $v1, 0xffff
 	CFC	12, 26
+	LOADS	QUAD_H_L
 	GAP	28
 	CTC	15, 0
 	CTC	24, 1
@@ -6716,6 +6838,7 @@ sprite_quad:
 	G
 	lh	$t5, 4($a0)
 	lh	$t6, 6($a0)
+	LOADS	QUAD_C_L
 	GAP	7
 	CTC	13, 5
 	CTC	14, 6
@@ -6745,6 +6868,7 @@ sprite_quad:
 	sw	$t9, 24($t4)
 	lui	$t9, %hi(GsOUT_PACKET_P)
 	lw	$a3, %lo(GsOUT_PACKET_P)($t9)
+	LOADS	QUAD_V_L
 	GAP	43
 	lwc2	$0, 0($t4)
 	lwc2	$1, 4($t4)
@@ -6752,7 +6876,7 @@ sprite_quad:
 	lwc2	$3, 12($t4)
 	lwc2	$4, 16($t4)
 	lwc2	$5, 20($t4)
-	nop
+	LOADNOP
 	RTPT
 	NOPS	3
 	swc2	$12, 8($a3)
@@ -6761,7 +6885,7 @@ sprite_quad:
 	CFLAG
 	lwc2	$0, 24($t4)
 	lwc2	$1, 28($t4)
-	nop
+	LOADNOP
 	RTPS
 	NOPS	3
 	swc2	$14, 32($a3)
@@ -6856,6 +6980,7 @@ sprite_quad:
 	sw	$t8, 0($t6)
 	addiu	$a3, $a3, 40
 	sw	$a3, %lo(GsOUT_PACKET_P)($t9)
+	LOADRUN	QUAD_END_L
 	GAP	QUAD_END
 	jr	$ra
 	nop
@@ -6865,6 +6990,112 @@ quad_corners:
 	.space 36
 	.section .text.Sprites, "ax", @progbits
 	.size GsSortSprite, .-GsSortSprite
+
+# GsSortClear(r, g, b, ot): gs.go says what it does. The screen's size is the word at
+# libps_cut_limits + 8, width and height, which updatePlace keeps with GsInitGraph's.
+# In assembly so that the call can take Sony's time on a console as well as in the
+# emulator (spec 48): Sony's takes some 234 cycles under a console's costs for its 162
+# in the emulator, more than the Go's instructions could be paced to without taking
+# longer in the emulator. Its pad is a loop of loads from the stack, ten a turn, 26 cycles
+# a turn in the emulator and some 64 on a console.
+	.set CLEAR_TURNS, 2
+	.section .text.GsClearOt, "ax", @progbits
+	.align 2
+	.globl GsSortClear
+	.type GsSortClear, @function
+GsSortClear:
+	STUBTIME
+	lui	$t0, %hi(PSDIDX)
+	lw	$t0, %lo(PSDIDX)($t0)
+	lui	$t9, %hi(libps_cut_limits + 8)
+	lw	$t5, %lo(libps_cut_limits + 8)($t9)
+	andi	$t0, $t0, 1
+	sll	$t1, $t0, 1
+	lui	$t2, %hi(PSDOFSX)
+	addu	$t2, $t2, $t1
+	lhu	$t3, %lo(PSDOFSX)($t2)
+	lui	$t2, %hi(PSDOFSY)
+	addu	$t2, $t2, $t1
+	lhu	$t4, %lo(PSDOFSY)($t2)
+	lui	$t2, %hi(GsDISPENV + 17)
+	lbu	$t2, %lo(GsDISPENV + 17)($t2)
+	sll	$t4, $t4, 16
+	beqz	$t2, 1f
+	or	$t3, $t3, $t4
+	# 24-bit color: the width, unsigned, times 3 in 32 bits, halved, and its low 16 bits
+	# (probe spec/probes/sortclear24), in as long as this way took before.
+	andi	$t2, $t5, 0xffff
+	sll	$t4, $t2, 1
+	addu	$t2, $t2, $t4
+	srl	$t2, $t2, 1
+	andi	$t2, $t2, 0xffff
+	NOPS	4
+	srl	$t5, $t5, 16
+	sll	$t5, $t5, 16
+	or	$t5, $t5, $t2
+	# t3 the corner, t5 the size. The fill's code and color.
+1:	andi	$a0, $a0, 0xff
+	andi	$a1, $a1, 0xff
+	sll	$a1, $a1, 8
+	andi	$a2, $a2, 0xff
+	sll	$a2, $a2, 16
+	or	$a0, $a0, $a1
+	or	$a0, $a0, $a2
+	lui	$at, 0x0200
+	or	$a0, $a0, $at
+	# The buffer's packet, in front of what the entry Tag points to held.
+	sll	$t0, $t0, 4
+	lui	$t1, %hi(libps_clear_packets)
+	addiu	$t1, $t1, %lo(libps_clear_packets)
+	addu	$t1, $t1, $t0
+	sw	$t3, 8($t1)
+	sw	$t5, 12($t1)
+	sw	$a0, 4($t1)
+	lui	$at, 0x8000
+	or	$a3, $a3, $at
+	lw	$t2, 16($a3)
+	nop
+	or	$t2, $t2, $at
+	lw	$t3, 0($t2)
+	lui	$t4, 0x00ff
+	ori	$t4, $t4, 0xffff
+	and	$t6, $t3, $t4
+	lui	$at, 0x0300
+	or	$t6, $t6, $at
+	sw	$t6, 0($t1)
+	and	$t1, $t1, $t4
+	lui	$at, 0xff00
+	and	$t3, $t3, $at
+	or	$t3, $t3, $t1
+	sw	$t3, 0($t2)
+#ifdef LIBPS_FIDELITY
+	li	$t0, CLEAR_TURNS
+2:	lw	$t1, 0($sp)
+	lw	$t2, 0($sp)
+	lw	$t3, 0($sp)
+	lw	$t4, 0($sp)
+	lw	$t5, 0($sp)
+	lw	$t6, 0($sp)
+	lw	$t7, 0($sp)
+	lw	$t8, 0($sp)
+	lw	$t9, 0($sp)
+	lw	$v0, 0($sp)
+	addiu	$t0, $t0, -1
+	bnez	$t0, 2b
+	nop
+#endif
+	jr	$ra
+	nop
+	.size GsSortClear, .-GsSortClear
+
+# GsSortClear's packets, one for each buffer (clearPackets in gs.go).
+	.section .bss.libps_clear_packets, "aw", @nobits
+	.align 2
+	.globl libps_clear_packets
+	.type libps_clear_packets, @object
+libps_clear_packets:
+	.space 32
+	.size libps_clear_packets, .-libps_clear_packets
 
 	.section .text.GsSortBoxFill, "ax", @progbits
 	.align 2
