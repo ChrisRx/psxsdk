@@ -30,7 +30,7 @@ func TestTakeOver(t *testing.T) {
 
 // TakeOverMonitor uploads the monitor alone, and its loader saves the
 // interrupt mask in s0 first and puts it back last, where TakeOver's leaves
-// it clear.
+// it clear, and opens the library's events again.
 func TestTakeOverMonitor(t *testing.T) {
 	monitor := &Program{
 		Segments: []Segment{{Name: "text", Addr: 0x80068000, Data: make([]byte, 16)}},
@@ -57,8 +57,23 @@ func TestTakeOverMonitor(t *testing.T) {
 	assert.Equal(t, true, slices.Contains(words(got), saveMask))
 	assert.Equal(t, true, slices.Contains(words(got), restoreMask))
 
+	// It opens the library's eight events again, each with OpenEvent and
+	// EnableEvent, B(08h) and B(0Ch).
+	calls := func(p *Program, fn uint32) (n int) {
+		for _, w := range words(p) {
+			if w == iType(0x0d, regT1, regT1, fn) {
+				n++
+			}
+		}
+		return n
+	}
+	assert.Equal(t, len(libraryEvents), calls(got, callOpen))
+	assert.Equal(t, len(libraryEvents), calls(got, callEnable))
+	assert.Equal(t, 8, len(libraryEvents))
+
 	full, err := TakeOver(monitor, Segment{Name: "image", Addr: 0x80010000, Data: make([]byte, 8)})
 	assert.NoError(t, err)
 	assert.Equal(t, false, slices.Contains(words(full), saveMask))
 	assert.Equal(t, false, slices.Contains(words(full), restoreMask))
+	assert.Equal(t, 0, calls(full, callOpen))
 }
