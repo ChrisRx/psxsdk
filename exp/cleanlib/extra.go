@@ -98,13 +98,13 @@ func StoreImage(rect *RECT, p *uint32) int32 {
 	if w == 0 || h == 0 {
 		space(storeImageNoSizeSpace)
 		queueLeave(m)
-		pace(storeImagePad)
+		pace(storeImagePad - storeImageTurns*spinTurn)
 		imageCallLeaves()
 		return 0
 	}
 	readImage(RECT{X: rect.X, Y: rect.Y, W: w, H: h}, p)
 	queueLeave(m)
-	pace(storeImagePad)
+	pace(storeImagePad - storeImageTurns*spinTurn)
 	imageCallLeaves()
 	return 0
 }
@@ -192,8 +192,6 @@ func ClearImage(rect *RECT, r, g, b uint8) int32 {
 	if enqueue(0, p[:], 8) {
 		rect.W, rect.H = w, h
 	}
-	space(clearImageSpace)
-	pace(clearImagePad)
 	imageCallLeaves()
 	return 0
 }

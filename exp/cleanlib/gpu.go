@@ -195,6 +195,35 @@ func drawDone() {
 	nops(24)
 }
 
+// handlerDrawDone is drawDone for the interrupt handler's own pass. A
+// request that has gone out with nothing waiting behind it is left as it
+// is, for the next call that looks at the queue to retire (enqueue, drain,
+// pollQueue): Sony's vertical blank interrupt takes the same time with the
+// last request finished and not yet looked at as with the queue empty, and
+// its next drawing call takes the same time after a blank as before one
+// (scee-topten-cardem, spec 47). Retiring it here made the interrupt 10
+// cycles longer in that state, where most of a program's blanks find the
+// queue, and the next GsDrawOt 6 shorter. With a request waiting it does
+// what drawDone does.
+//
+//go:inline
+func handlerDrawDone() {
+	if d := dmaInterrupt.Get(); d&dicrGPUFlag != 0 {
+		dmaInterrupt.Set(d&0x00ffffff | dicrGPUFlag)
+	}
+	if requestNext() {
+		if gpuIdle() || imageTurn() {
+			drawNext()
+		}
+		return
+	}
+	nops(handlerDrawDoneNops)
+}
+
+// handlerDrawDoneNops is drawDone's 24 less what requestNext takes over
+// its test of the queue for empty.
+const handlerDrawDoneNops = 21
+
 // imageTurn is drawDone's work when the GPU is not yet free, kept out of it
 // so that the handler's usual path takes the time it did before spec 39. If
 // the channel has sent all of what is running and a request is next, it
@@ -317,11 +346,25 @@ func requestNext() bool {
 
 // drawNext, with the GPU free, retires the request that was running and
 // starts the next, if there is one. Interrupts must be off.
+//
+// Sony's calls through the queue take the same time whether the request
+// before them has been looked at since it went out or not (probe
+// spec/probes/qstate, spec 47), where GsDrawOt, DrawSync(0), FntFlush,
+// PutDrawEnv, LoadImage, StoreImage, MoveImage and ClearImage each took the
+// clean library 6 cycles more after a PutDrawEnv than after a DrawSync(0):
+// drawNext retired the request that was running behind a branch. It retires
+// without one, and stores to queue.running bring it to the time the
+// retiring took, which the calls' pads were set with: three, the compiler
+// taking the plain one before them as dead.
 func drawNext() {
-	if queue.running != 0 {
-		queue.running = 0
-		queue.head++
-	}
+	// No branch on whether a request was running: both ways take the same
+	// time, as Sony's calls do.
+	running := queue.running
+	queue.running = 0
+	spaceAt(&queue.running)
+	spaceAt(&queue.running)
+	spaceAt(&queue.running)
+	queue.head += running
 	if queue.head != queue.tail {
 		startHead()
 	}
@@ -341,8 +384,7 @@ func drawNext() {
 const (
 	loadImagePad       = 134  // LoadImage, with the sizes' pads below
 	storeImagePad      = 230  // StoreImage, with the sizes' pads below
-	clearImagePad      = 26   // ClearImage, a rectangle (60h): 730, with clearImageSpace
-	clearFillPad       = 98   // ClearImage, a fill (02h): 586, measured the same way
+	clearFillPad       = 98   // ClearImage, a fill (02h): 586 on spec/probes/drawq
 	clearOtPad         = 158  // GsClearOt: 272 on average in the web archive (spec 22)
 	sortClearPad       = 14   // GsSortClear: 162 in the same
 	drawOtPad          = 26   // GsDrawOt: 390
@@ -351,6 +393,23 @@ const (
 	fntPrintRefusedPad = 26   // FntPrint on a stream a print has cut
 	putDrawEnvPad      = 1250 // PutDrawEnv: 1,946
 	swapDispBuffPad    = 290  // GsSwapDispBuff, over its two PutDrawEnv: 4,611 in the same
+
+	// What the calls take off their pads since drawNext spends the time of
+	// retiring a request when none was running (spec 47): on probe
+	// spec/probes/qstate, after a DrawSync(0) and after a PutDrawEnv alike,
+	// PutDrawEnv then took 4 cycles more than Sony's, LoadImage 8,
+	// StoreImage 36 and ClearImage's rectangle 36. A pace less a turn of
+	// spin and these nops takes 4 and 8 off; StoreImage's pad is three turns
+	// shorter where the image goes at once (storeImageTurns); and
+	// ClearImage's rectangle, which had a pace of 26 and four stores after
+	// it, has none, and takes Sony's 744 on the probe. GsSwapDispBuff, whose
+	// two PutDrawEnv are 8 shorter and its first 6 longer, has a nop more
+	// (swapDispBuffNops). The image calls' size pads below were set again
+	// on the same probe's sizes.
+	putDrawEnvNops   = 4
+	loadImageNops    = 2
+	storeImageTurns  = 3
+	swapDispBuffNops = 3
 
 	// MoveImage (460) takes 466 in the clean library by itself, so it has
 	// no pad. FntFlush is paced by the character, below.
@@ -371,20 +430,18 @@ const (
 	// call's total is what it was, every size. A store costs 2 or 4 by
 	// where it falls, so the counts are what the probes gave, not the sums.
 	loadImageWordSpace     = 3
-	loadImageBlockSpace    = 6
-	loadImageWholeSpace    = 2
-	loadImageNoBlockSpace  = 7
+	loadImageBlockSpace    = 7
+	loadImageWholeSpace    = 1
+	loadImageNoBlockSpace  = 9
 	storeImageWordSpace    = 3
 	storeImageBlockSpace   = 5
 	storeImageWholeSpace   = 2
-	storeImageNoBlockSpace = 8
+	storeImageNoBlockSpace = 6
 
-	// clearImageSpace is the rest of ClearImage's rectangle's time past
-	// clearImagePad, and the NoSize spaces the image calls of no size's,
-	// past theirs.
-	clearImageSpace       = 4
-	loadImageNoSizeSpace  = 3
-	storeImageNoSizeSpace = 2
+	// The NoSize spaces are the image calls of no size's time past their
+	// pads.
+	loadImageNoSizeSpace  = 11
+	storeImageNoSizeSpace = 0
 
 	// The font's costs, in 2-cycle stores (spec 08, "FntPrint and FntFlush
 	// by the character"). FntPrint spends fntPrintChar stores on each
@@ -422,7 +479,7 @@ const (
 	fntNulExitSpace           = 1 // the walk that ends at the NUL
 	fntLimitExitSpace         = 1 // the walk that ends at the limit: 4 more than at the NUL
 	fntGlyphsSpace            = 0
-	fntNoGlyphSpace           = 6 // more than fntGlyphsSpace by what setting the first sprite's link costs
+	fntNoGlyphSpace           = 4 // more than fntGlyphsSpace by what setting the first sprite's link costs
 	fntGlyphSpace             = 35
 	fntSpaceSpace             = 4
 	fntTabSpace               = 5
@@ -595,6 +652,12 @@ func drain() {
 // image queued behind it, and one more for each image after (probe
 // spec/probes/qlen, spec 45).
 //
+// The other modes' count is written so that mode 0's way out falls into
+// the function's end: with the count returned from a branch of its own,
+// as spec 45 first had it, the compiler put that return before the end and
+// mode 0 jumped over it, 2 cycles more than Sony's 198 in a frame loop's
+// DrawSync(0) (scee-topten-cardem, spec 47).
+//
 //export DrawSync
 //go:noinline
 func DrawSync(mode int32) int32 {
@@ -606,13 +669,11 @@ func DrawSync(mode int32) int32 {
 		return 0
 	}
 	pollQueue()
-	if n := queued() - queue.running; n != 0 {
-		return int32(n)
+	n := queued() - queue.running
+	if n == 0 && !gpuIdle() {
+		return 1
 	}
-	if gpuIdle() {
-		return 0
-	}
-	return 1
+	return int32(n)
 }
 
 // sendList queues the packet list at p for the GPU, and returns without
@@ -823,12 +884,14 @@ func loadImage(r RECT, p unsafe.Pointer) bool {
 	if r.W == 0 || r.H == 0 {
 		space(loadImageNoSizeSpace)
 		queueLeave(m)
-		pace(loadImagePad)
+		pace(loadImagePad - spinTurn)
+		nops(loadImageNops)
 		return idle
 	}
 	sendImage(r, p)
 	queueLeave(m)
-	pace(loadImagePad)
+	pace(loadImagePad - spinTurn)
+	nops(loadImageNops)
 	return idle
 }
 
@@ -949,7 +1012,8 @@ func (e *DRAWENV) put() {
 	submit(0, (*[16]uint32)(unsafe.Pointer(&e.Dr_env))[:n+1])
 	// Sony's copies the environment into its own state after queueing
 	// it, a byte at a time (spec 08).
-	pace(putDrawEnvPad)
+	pace(putDrawEnvPad - spinTurn)
+	nops(putDrawEnvNops)
 }
 
 // textureWindow is the E2h command's bits for the texture window w: its
