@@ -14,6 +14,9 @@ func spinCycles(c uint32) {}
 func spin(n uint32) {}
 
 //go:inline
+func spins(n uint32) {}
+
+//go:inline
 func pace(c uint32) {}
 
 //go:inline

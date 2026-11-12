@@ -23,19 +23,74 @@ func GetTPage(tp, abr, x, y int32) uint16 {
 // for what its turns leave.
 const getTPagePad = 26
 
-// LoadImage copies the pixels at p into the rectangle rect of video
-// memory. It returns once the copy has started, or for an image that is
-// not whole blocks of 16 words, once the CPU has written the last of it;
-// DrawSync waits for it either way. With the queue idle, the size it kept
-// within video memory is left in rect too (spec 21).
+// LoadImage copies the pixels at p, 16 bits each, into the rectangle rect
+// of video memory. As Sony's library does, the CPU writes the words that
+// do not make a whole block of 16, from the start of the image, and DMA
+// the rest, which goes on after it returns: the next call that uses the
+// GPU waits for it, and DrawSync does. A size that comes to nothing sends
+// nothing. With the queue idle, the size it kept within video memory is
+// left in rect too (spec 21). With the GPU busy, the image goes into the
+// queue instead (imageEnter).
+//
+// The call spends its time where Sony's does (spec 49): after the
+// transfer's watch (imageEnter) it waits 140 cycles before it reads
+// GPUSTAT for the GPU to be ready and sends the image 16 after that, puts
+// I_MASK back 52 cycles after the blocks start, or 60 after the last word
+// with no blocks, and returns 54 after that. The blocks are then still
+// going when it returns, and a DrawSync(1) straight after gives 1.
 //
 //export LoadImage
 //go:noinline
 func LoadImage(rect *RECT, p *uint32) int32 {
-	if loadImage(*rect, unsafe.Pointer(p)) {
-		rect.W, rect.H = imageSize(*rect)
+	// The transfer is worked out first, while there is time to spare:
+	// Sony's has 140 cycles between the transfer's watch and its read of
+	// GPUSTAT, less than working it out there would leave.
+	r := *rect
+	r.W, r.H = imageSize(r)
+	t := imageTransfer(r, unsafe.Pointer(p))
+	spaceWith(loadImageEnterSpace, t.count)
+	m, state := imageEnter()
+	if state == enterLater {
+		if queueLoad(r, unsafe.Pointer(p)) {
+			spins(loadImageQueuedTurns)
+			space(loadImageQueuedSpace)
+			imageLeave(m)
+			imageQueued()
+			space(loadImageQueuedLeaveSpace)
+			imageCallLeaves(m)
+			return 0
+		}
+		m = imageRefused(m)
 	}
-	imageCallLeaves()
+	if state == enterIdle {
+		rect.W, rect.H = r.W, r.H
+	}
+	switch {
+	case t.none():
+		spins(loadImageNoSizeTurns)
+		space(loadImageNoSizeSpace)
+	default:
+		spins(loadImageReadyTurns)
+		t.leave()
+		space(loadImageReadySpace)
+		for gp1.Get()&gpuStatReady == 0 {
+		}
+		sendImage(t, unsafe.Pointer(p))
+		// Each kind pads with a value of its own: with the same one the
+		// compiler merges the pads' ends, and a change to one moves
+		// another's time.
+		switch {
+		case !t.blocks():
+			spaceWith(loadImageNoBlockSpace, 1)
+		case t.head != 0:
+			spaceWith(loadImageMixedSpace, 2)
+		default:
+			space(loadImageBlockSpace)
+		}
+	}
+	imageLeave(m)
+	nops(loadImageLeaveNops)
+	imageCallLeaves(m)
 	return 0
 }
 

@@ -120,10 +120,6 @@ var queue struct {
 	// running is 1 while the request at head is going out.
 	running uint32
 
-	// later is 1 from imageEnter's finding that an image call can go into
-	// the queue until the call asks (imageLater).
-	later uint32
-
 	// lastImage is where the last image call queued went: no image waits
 	// behind the request there. One the queue dropped (ResetGraph) is
 	// behind head, which only grows.
@@ -307,7 +303,7 @@ func listTurn() {
 // image's blocks.
 const (
 	sendImagesMarkSpace = 5
-	sendImagesSpace     = 37
+	sendImagesSpace     = 38
 )
 
 // lateInterrupts, in the interrupt handler, runs the handler again, for the
@@ -382,66 +378,74 @@ func drawNext() {
 // measured on the same probe. The paced calls are not inlined, so that
 // each costs the same from every caller, as a call of Sony's does.
 const (
-	loadImagePad       = 134  // LoadImage, with the sizes' pads below
-	storeImagePad      = 230  // StoreImage, with the sizes' pads below
-	clearFillPad       = 98   // ClearImage, a fill (02h): 586 on spec/probes/drawq
-	clearOtPad         = 158  // GsClearOt: 272 on average in the web archive (spec 22)
-	sortClearPad       = 14   // GsSortClear: 162 in the same
-	drawOtPad          = 26   // GsDrawOt: 390
-	fntPrintPad        = 14   // FntPrint, with fntPrintSpace: 182 plus 50 a character
-	fntPrintEmptyPad   = 38   // FntPrint of "", with fntPrintEmptySpace: 168
-	fntPrintRefusedPad = 26   // FntPrint on a stream a print has cut
-	putDrawEnvPad      = 1250 // PutDrawEnv: 1,946
-	swapDispBuffPad    = 290  // GsSwapDispBuff, over its two PutDrawEnv: 4,611 in the same
+	clearOtPad         = 158 // GsClearOt: 272 on average in the web archive (spec 22)
+	sortClearPad       = 14  // GsSortClear: 162 in the same
+	drawOtPad          = 26  // GsDrawOt: 390
+	drawOtEnterNops    = 6   // before its watch, Sony's 98 cycles into the call
+	fntPrintPad        = 14  // FntPrint, with fntPrintSpace: 182 plus 50 a character
+	fntPrintEmptyPad   = 38  // FntPrint of "", with fntPrintEmptySpace: 168
+	fntPrintRefusedPad = 26  // FntPrint on a stream a print has cut
+	swapDispBuffPad    = 290 // GsSwapDispBuff, over its two PutDrawEnv: 4,611 in the same
 
-	// What the calls take off their pads since drawNext spends the time of
-	// retiring a request when none was running (spec 47): on probe
-	// spec/probes/qstate, after a DrawSync(0) and after a PutDrawEnv alike,
-	// PutDrawEnv then took 4 cycles more than Sony's, LoadImage 8,
-	// StoreImage 36 and ClearImage's rectangle 36. A pace less a turn of
-	// spin and these nops takes 4 and 8 off; StoreImage's pad is three turns
-	// shorter where the image goes at once (storeImageTurns); and
-	// ClearImage's rectangle, which had a pace of 26 and four stores after
-	// it, has none, and takes Sony's 744 on the probe. GsSwapDispBuff, whose
-	// two PutDrawEnv are 8 shorter and its first 6 longer, has a nop more
-	// (swapDispBuffNops). The image calls' size pads below were set again
-	// on the same probe's sizes.
-	putDrawEnvNops   = 4
-	loadImageNops    = 2
-	storeImageTurns  = 3
-	swapDispBuffNops = 3
+	// PutDrawEnv (1,952 on spec/probes/qstate): turns of spin and stores
+	// before its request is queued, so that the channel starts 732 cycles
+	// into the call, as Sony's does (spec 49), and turns and nops after,
+	// where Sony's copies the environment. GsSwapDispBuff, over its two
+	// PutDrawEnv, has its pace and nops (spec 47).
+	putDrawEnvEnterTurns = 7
+	putDrawEnvEnterSpace = 7
+	putDrawEnvTurns      = 92
+	putDrawEnvNops       = 8
+	swapDispBuffNops     = 3
 
-	// MoveImage (460) takes 466 in the clean library by itself, so it has
-	// no pad. FntFlush is paced by the character, below.
+	// FntFlush is paced by the character, below.
 
-	// Image calls by size (spec 08, "StoreImage and LoadImage by size"), in
-	// 2-cycle stores. Sony's spends 16 cycles on each word the CPU moves,
-	// and from the pad at the call's end 684 in LoadImage and 694 in
-	// StoreImage for whole blocks, 2 more with the words before them, and
-	// 652 and 662 plus the words with no block at all. WordSpace is the
-	// word's pad, BlockSpace an image with blocks', WholeSpace one of whole
-	// blocks' on top of it and NoBlockSpace one of words alone's.
-	//
-	// Spec 39's queue checks cost LoadImage 14 cycles and StoreImage 4 on
-	// the way to the transfer, and ClearImage's rectangle 14 in startHead.
-	// They come off the pads in whole turns of spin (24, 12 and 24), and
-	// the stores after them give the rest back, measured on
-	// spec/probes/storeimage and drawq to Sony's times as before: each
-	// call's total is what it was, every size. A store costs 2 or 4 by
-	// where it falls, so the counts are what the probes gave, not the sums.
-	loadImageWordSpace     = 3
-	loadImageBlockSpace    = 7
-	loadImageWholeSpace    = 1
-	loadImageNoBlockSpace  = 9
-	storeImageWordSpace    = 3
-	storeImageBlockSpace   = 5
-	storeImageWholeSpace   = 2
-	storeImageNoBlockSpace = 6
+	// LoadImage and StoreImage spend their time between their accesses,
+	// where Sony's does, and have no pad at the end (spec 49): the pads
+	// are in imageEnter, sendImage and readImage, and these, in turns of
+	// spin, 2-cycle stores and nops. Enter comes before the call's first
+	// watch, Ready is the wait before the read of GPUSTAT that the
+	// transfer starts on and NoSize an image of no size's in its place.
+	// From the transfer's last access to I_MASK, Block is an image of
+	// whole blocks', NoBlock one of the CPU's words alone's and Mixed one
+	// of both's. Leave is from I_MASK to the return. Word is what comes
+	// between two of the CPU's words, Sony's 16 cycles apart. Queued and
+	// QueuedLeave are an image's that goes into the queue, before I_MASK
+	// is put back and after the read of D2_CHCR that follows it. Each
+	// count is what put probe spec/probes/imgsync on Sony's cycle: the
+	// first store of a run costs 4, forming the address, and a change to
+	// one path can move another's code.
+	loadImageEnterSpace       = 1
+	loadImageReadyTurns       = 0
+	loadImageReadySpace       = 19
+	loadImageNoSizeTurns      = 7
+	loadImageNoSizeSpace      = 6
+	loadImageBlockSpace       = 21
+	loadImageNoBlockSpace     = 16
+	loadImageMixedSpace       = 18
+	loadImageLeaveNops        = 1
+	loadImageWordSpace        = 2
+	loadImageQueuedTurns      = 0
+	loadImageQueuedSpace      = 6
+	loadImageQueuedLeaveSpace = 7
 
-	// The NoSize spaces are the image calls of no size's time past their
-	// pads.
-	loadImageNoSizeSpace  = 11
-	storeImageNoSizeSpace = 0
+	storeImageEnterSpace       = 1
+	storeImageReadyTurns       = 0
+	storeImageReadySpace       = 18
+	storeImageNoSizeTurns      = 7
+	storeImageNoSizeSpace      = 4
+	storeImageBlockSpace       = 20
+	storeImageNoBlockSpace     = 16
+	storeImageMixedSpace       = 18
+	storeImageLeaveNops        = 1
+	storeImageBlockNops        = 0
+	storeImageNoBlockNops      = 0
+	storeImageMixedNops        = 0
+	storeImageWordNops         = 0
+	storeImageWordSpace        = 2
+	storeImageQueuedTurns      = 0
+	storeImageQueuedSpace      = 6
+	storeImageQueuedLeaveSpace = 7
 
 	// The font's costs, in 2-cycle stores (spec 08, "FntPrint and FntFlush
 	// by the character"). FntPrint spends fntPrintChar stores on each
@@ -469,6 +473,9 @@ const (
 	// (and the moves that feed it); the space's and the tab's store x to
 	// the other word (spaceApart) while the newline's and the glyph's
 	// store y, which leaves each pad in its own path with its own count.
+	// fntFlushLeaveNops is what a flush, the kanji's too, spends after its
+	// list is queued: 12 cycles that enqueue took before spec 49.
+	fntFlushLeaveNops         = 6
 	fntPrintChar              = 2
 	fntPrintSpace             = 7
 	fntPrintEmptySpace        = 12
@@ -498,12 +505,33 @@ var drawWatch cdWatch
 // drawNoLimit is the limit of a wait on the GPU: no spec gives one.
 const drawNoLimit = 0xffff
 
+// drawNow is cdNow for the drawing calls' watches, with the two reads in
+// consecutive instructions, 2 cycles apart, as Sony's are in every watch
+// (spec 08, spec 49): as Go they come 4 apart, with the second register's
+// address formed between them. The nops keep the read of GPUSTAT and the
+// end where the Go has them. The drive's watches keep cdNow: in their
+// loops the Go's instructions differ, and their passes would change length.
+//
+//go:inline
+func drawNow() uint32 {
+	t := device.AsmFull(`.set push
+	.set noat
+	nop
+	lui {}, 0x1f80
+	lw $$0, 0x1814({})
+	lw {}, 0x1110({})
+	nop
+	nop
+	.set pop`, nil)
+	return uint32(t) & 0xffff
+}
+
 // mark starts timing a wait as the drawing calls do: it reads the time
 // and stores when the wait began and its limit.
 //
 //go:noinline
 func (w *cdWatch) mark(limit uint32) {
-	t := cdNow()
+	t := drawNow()
 	volatile.StoreUint32(&w.start, t)
 	volatile.StoreUint32(&w.limit, limit)
 }
@@ -526,30 +554,56 @@ func queueFree() bool {
 }
 
 // queueLeave ends a drawing call, putting I_MASK back as queueEnter found
-// it.
-func queueLeave(m uint32) {
-	iMask.Set(iMask.Get() | m)
+// it, and returns what it wrote.
+func queueLeave(m uint32) uint32 {
+	m |= iMask.Get()
+	iMask.Set(m)
+	return m
+}
+
+// imageLeave is queueLeave for LoadImage and StoreImage: I_MASK read, and
+// written with the mask imageEnter found in the next instruction, as
+// Sony's is seen to (spec 08, "The exit, every queued call"). Nothing
+// changes I_MASK while it is 0.
+//
+//go:inline
+func imageLeave(m uint32) {
+	iMask.Get()
+	iMask.Set(m)
 }
 
 // submit adds the packet list at list, or the environment packet env when
 // list is 0, to the queue, starting it if nothing is running and the GPU
 // is free. It waits while the queue is full.
+//
+//go:inline
 func submit(list uintptr, env []uint32) {
-	enqueue(list, env, 0)
+	enqueue(list, env)
 }
 
-// enqueue is submit with the index of env's words to restore, or 0 (see
-// request). It reports whether the request started at once, nothing being
-// ahead of it, for the image calls that then clip the caller's rectangle.
-func enqueue(list uintptr, env []uint32, restore uint32) bool {
+// enqueue is submit's work, a call of its own so that each caller pays the
+// same for it. It starts its watch, masks the interrupts and looks at the
+// queue as queueEnter and queueFree do, with Sony's time from the watch to
+// the channel's start, 206 cycles with the GPU free (spec 49): until then
+// it started the channel 32 cycles sooner before its return than Sony's
+// does, and a DrawSync(1) straight after could find a short list already
+// gone. Its accesses between the two are not at Sony's cycles: I_MASK is
+// written 60 cycles after the watch where Sony's is 86 after, and D2_CHCR
+// and GPUSTAT are read 32 and 36 after that where Sony's are 46 and 72.
+//
+//go:noinline
+func enqueue(list uintptr, env []uint32) {
 	libStart()
 	for queued() >= queueLen {
 		pollQueue()
 	}
-	m := queueEnter()
+	drawWatch.mark(drawNoLimit)
+	space(enqueueMaskSpace)
+	m := iMask.Get()
+	iMask.Set(0)
 	r := &queue.reqs[queue.tail%queueLen]
 	r.list = list
-	r.restore = restore
+	r.restore = 0
 	for i := range env {
 		r.env[i] = env[i]
 	}
@@ -559,15 +613,17 @@ func enqueue(list uintptr, env []uint32, restore uint32) bool {
 	if queueFree() || drawWait() {
 		drawNext()
 	}
-	atOnce := queue.head+1 == queue.tail
+	nops(enqueueLeaveNops)
 	queueLeave(m)
-	nops(enqueueNops)
-	return atOnce
 }
 
-// enqueueNops brings the calls through the queue, GsDrawOt, PutDrawEnv and FntFlush, back to
-// Sony's: they came out 26 cycles under after spec 32's work, for a reason not found.
-const enqueueNops = 13
+// enqueue's pads: 2-cycle stores between the watch and I_MASK, and nops
+// before I_MASK is put back. Its callers pad before and after the call, to
+// Sony's time for each (spec 08, spec 49).
+const (
+	enqueueMaskSpace = 15
+	enqueueLeaveNops = 5
+)
 
 // drawWait is enqueue's work when the GPU is not free, kept out of it so
 // that the free path takes the time it did before spec 40. If channel 2 has
@@ -618,7 +674,9 @@ func startHead() {
 	}
 	queue.running = 1
 	gp1.Set(gp1DMAToGPU)
-	dmaGPUAddr.Set(uint32(p) & 0xffffff)
+	// The address as it is, as Sony's sends it: the channel uses its low
+	// 24 bits.
+	dmaGPUAddr.Set(uint32(p))
 	dmaGPUBlock.Set(0)
 	dmaGPUControl.Set(dmaLinkedList)
 }
@@ -645,29 +703,111 @@ func drain() {
 	}
 }
 
+// drainOnce is drain's first look at the queue: it reports whether every
+// request has gone out and the GPU is idle.
+//
+//go:inline
+func drainOnce() bool {
+	sr := intOff()
+	free := queueFree()
+	if free {
+		drawNext()
+	}
+	intRestore(sr)
+	return free && queued() == 0
+}
+
+// drainRest is drain, for DrawSync(0) when its first look found the GPU
+// busy.
+//
+//go:noinline
+func drainRest() { drain() }
+
 // DrawSync with mode 0 waits until the queue is empty and the GPU idle,
 // and returns 0. Any other mode returns at once the number of requests
 // waiting behind the one running, or, with none waiting, 1 if the channel
-// or the GPU is still busy: Sony's counts 1 with a drawing running and one
-// image queued behind it, and one more for each image after (probe
-// spec/probes/qlen, spec 45).
-//
-// The other modes' count is written so that mode 0's way out falls into
-// the function's end: with the count returned from a branch of its own,
-// as spec 45 first had it, the compiler put that return before the end and
-// mode 0 jumped over it, 2 cycles more than Sony's 198 in a frame loop's
-// DrawSync(0) (scee-topten-cardem, spec 47).
+// or the GPU is still busy (drawPoll).
 //
 //export DrawSync
 //go:noinline
 func DrawSync(mode int32) int32 {
 	if mode == 0 {
 		// Sony's starts a watch for the wait, then reads D2_CHCR and
-		// GPUSTAT.
+		// GPUSTAT. The first look at the queue is made here and the
+		// wait, if there is one, in drainRest: with the loop here the
+		// function saved eight registers for it, and DrawSync(1), which
+		// then restored them on its way out, took longer than Sony's
+		// (spec 49).
+		space(drawSyncEnterSpace)
 		drawWatch.mark(drawNoLimit)
-		drain()
+		space(drawSyncLookSpace)
+		if !drainOnce() {
+			drainRest()
+		}
+		space(drawSyncSpace)
 		return 0
 	}
+	if n := drawPoll(); n >= 0 {
+		return n
+	}
+	return drawPollMove()
+}
+
+// drawPoll is DrawSync for a mode other than 0. It returns the number of
+// requests waiting behind the one running: Sony's counts 1 with a drawing
+// running and one image queued behind it, and one more for each image after
+// (probe spec/probes/qlen, spec 45). With none waiting it returns 1 if the
+// channel or the GPU is still busy, and 0 if not.
+//
+// It reads what Sony's reads, at Sony's cycles (spec 49, probe
+// spec/probes/imgsync). With none waiting: D2_CHCR, and with the channel
+// busy nothing more; GPUSTAT 16 cycles later, and the return 6 cycles
+// later with the GPU busy than with it ready. With requests waiting:
+// D2_CHCR twice, 26 cycles apart. The queue moves on from the channel's
+// interrupt, which a waiting request turns on; should the channel be seen
+// idle with requests waiting, it returns -1, for DrawSync to move the
+// queue on from here (drawPollMove), as every DrawSync(1) did before spec
+// 49. A request that has gone out with none behind it is left for the next
+// call that looks at the queue to retire, as the handler leaves it
+// (handlerDrawDone).
+//
+// It is a function of its own, one that calls nothing, so that mode 0's
+// instructions stay what they were whatever changes here (spec 47) and
+// its way out is short enough for Sony's time.
+//
+//go:noinline
+func drawPoll() int32 {
+	n := queued() - queue.running
+	if n != 0 {
+		space(drawPollWaitingSpace)
+		if dmaGPUControl.Get()&dmaBusy == 0 {
+			return -1
+		}
+		space(drawPollAgainSpace)
+		nops(1)
+		dmaGPUControl.Get()
+		space(drawPollCountSpace)
+		return int32(n)
+	}
+	space(drawPollChannelSpace)
+	if dmaGPUControl.Get()&dmaBusy != 0 {
+		space(drawPollBusySpace)
+		return 1
+	}
+	nops(drawPollStatNops)
+	if gp1.Get()&gpuStatReady == 0 {
+		space(drawPollDrawingSpace)
+		return 1
+	}
+	space(drawPollIdleSpace)
+	return 0
+}
+
+// drawPollMove is DrawSync(1) when the channel has finished with requests
+// waiting: it moves the queue on and counts again.
+//
+//go:noinline
+func drawPollMove() int32 {
 	pollQueue()
 	n := queued() - queue.running
 	if n == 0 && !gpuIdle() {
@@ -676,98 +816,294 @@ func DrawSync(mode int32) int32 {
 	return int32(n)
 }
 
+// drawPoll's pads, in 2-cycle stores, and DrawSync(0)'s: before its watch,
+// before its look at the queue and after it.
+const (
+	drawSyncEnterSpace = 15
+	drawSyncLookSpace  = 0
+	drawSyncSpace      = 0
+
+	drawPollWaitingSpace = 16
+	drawPollAgainSpace   = 6
+	drawPollCountSpace   = 7
+	drawPollChannelSpace = 12
+	drawPollBusySpace    = 4
+	drawPollStatNops     = 2
+	drawPollDrawingSpace = 4
+	drawPollIdleSpace    = 1
+)
+
 // sendList queues the packet list at p for the GPU, and returns without
 // waiting for it.
 func sendList(p unsafe.Pointer) {
 	submit(uintptr(p), nil)
 }
 
-// imageEnter begins LoadImage or StoreImage as enqueue begins a request:
-// with the watch started and interrupts masked, once the queue is empty
-// and the GPU free. It returns I_MASK for queueLeave. idle reports that it
-// had no need to wait, which is when Sony's call clips the caller's
-// rectangle (spec 21). When the GPU is busy with what is queued and the
-// drawing's end will start an image behind it (imageMayQueue), it returns
-// at once instead, with idle false and queue.later set, for the caller to
-// queue the image (imageLater, queueLoad, queueStore). Otherwise it waits for the
-// queue, with interrupts on, as it did before spec 39.
-func imageEnter() (m uint32, idle bool) {
+// imageEnter begins LoadImage or StoreImage: it starts the watch, masks
+// every interrupt, and looks at the queue. It returns I_MASK for imageLeave
+// and how it found the GPU. Free (enterIdle), the call had no need to wait,
+// which is when Sony's call clips the caller's rectangle (spec 21). Busy
+// with what is queued, when the drawing's end will start an image behind
+// it, it returns at once with enterLater, for the caller to queue the
+// image (queueLoad, queueStore). With the channel done and the GPU still
+// drawing, or the queue full, it waits in the call (enterWaited).
+//
+// Its accesses come at Sony's cycles (spec 49, probe spec/probes/imgsync):
+// from the watch's read of GPUSTAT, I_MASK is read at 84 cycles and
+// written at 86, D2_CHCR read at 132 and GPUSTAT at 158, and with the GPU
+// free the transfer's own watch starts at 220. With requests waiting
+// behind the one running, Sony's reads neither D2_CHCR nor GPUSTAT, and the
+// image goes behind them; with none waiting and the channel busy, it reads
+// D2_CHCR alone.
+//
+//go:noinline
+func imageEnter() (m uint32, state enterState) {
 	libStart()
-	m = queueEnter()
-	idle = true
-	for !queueFree() || queued() > queue.running {
-		idle = false
-		if imageMayQueue() {
-			return m, false
-		}
-		iMask.Set(m)
-		drain()
-		m = queueEnter()
-	}
-	// What was running has gone out.
-	drawNext()
-	// The transfer's own wait: a second watch, then GPUSTAT read until
-	// the GPU takes a command.
 	drawWatch.mark(drawNoLimit)
+	spins(imageEnterMaskTurns)
+	space(imageEnterMaskSpace)
+	m = iMask.Get()
+	iMask.Set(0)
+	if queued() > queue.running {
+		// Requests wait behind the one running, and the end of each
+		// starts the next: the image goes behind them, unless the
+		// queue is full.
+		if queued() >= queueLen {
+			return imageWait(m), enterWaited
+		}
+		space(imageEnterWaitingSpace)
+		return m, enterLater
+	}
+	space(imageEnterChannelSpace)
+	if dmaGPUControl.Get()&dmaBusy != 0 {
+		// The channel's completion will start the image: it is made to
+		// interrupt the CPU, as Sony's has it with a request waiting
+		// (spec 43), DICR read 64 cycles after D2_CHCR and written 16
+		// after that.
+		space(imageEnterInterruptSpace)
+		d := dmaInterrupt.Get() & 0x00ffffff
+		space(imageEnterEnableSpace)
+		dmaInterrupt.Set(d | dicrGPUEnable)
+		return m, enterLater
+	}
+	space(imageEnterStatSpace)
+	state = enterIdle
+	if gp1.Get()&gpuStatReady == 0 {
+		// The channel has finished and the GPU is drawing the last of
+		// it: nothing would start a queued image. Sony's reads GPUSTAT
+		// until the GPU is ready, with I_MASK 0.
+		gpuWait()
+		state = enterWaited
+	}
+	// What was running has gone out, and nothing waits behind it.
+	queue.head += queue.running
+	queue.running = 0
+	space(imageEnterWatchSpace)
+	// The transfer's own watch.
+	drawWatch.mark(drawNoLimit)
+	return m, state
+}
+
+// enterState is how imageEnter and packetEnter found the GPU: free
+// (enterIdle), free after a wait in the call (enterWaited), or busy with a
+// request that will start the call's own when it ends (enterLater), for
+// the caller to queue it.
+type enterState uint32
+
+const (
+	enterIdle enterState = iota
+	enterWaited
+	enterLater
+)
+
+// packetEnter is imageEnter for ClearImage, whose request is a packet for
+// the channel: the same accesses at the same cycles, to the read of
+// GPUSTAT, and no second watch. It returns the request at the queue's
+// tail, taken into the queue, for the caller to fill in before it puts
+// I_MASK back: when the state is enterIdle or enterWaited it is the one
+// running, for the caller to start (packetStart), and when enterLater it
+// waits. MoveImage has the same written out, with its packet made first,
+// since Sony's starts its channel 24 cycles after the read of GPUSTAT,
+// less than a return takes.
+//
+//go:noinline
+func packetEnter() (uint32, enterState, *request) {
+	drawWatch.mark(drawNoLimit)
+	spins(imageEnterMaskTurns)
+	space(packetEnterMaskSpace)
+	m := iMask.Get()
+	iMask.Set(0)
+	tail := queue.tail
+	q := &queue.reqs[tail%queueLen]
+	queue.tail = tail + 1
+	if tail-queue.head > queue.running {
+		return m, enterLater, q
+	}
+	space(packetEnterChannelSpace)
+	if dmaGPUControl.Get()&dmaBusy != 0 {
+		space(packetEnterInterruptSpace)
+		d := dmaInterrupt.Get() & 0x00ffffff
+		space(packetEnterEnableSpace)
+		dmaInterrupt.Set(d | dicrGPUEnable)
+		return m, enterLater, q
+	}
+	space(packetEnterStatSpace)
+	state := enterIdle
+	if gp1.Get()&gpuStatReady == 0 {
+		gpuWait()
+		state = enterWaited
+	}
+	// What was running has gone out, and nothing waited behind it: the
+	// request is at the queue's head.
+	queue.head = tail
+	queue.running = 1
+	return m, state, q
+}
+
+// packetRoom begins MoveImage or ClearImage before packetEnter: it starts
+// the library and waits while the queue is full.
+//
+//go:inline
+func packetRoom() {
+	libStart()
+	if queued() >= queueLen {
+		packetRoomWait()
+	}
+}
+
+//go:noinline
+func packetRoomWait() {
+	for queued() >= queueLen {
+		pollQueue()
+	}
+}
+
+// packetMoved copies the request q, filled in at what was the queue's tail
+// before interrupts were masked, to the tail as it is now, and returns it
+// there: a callback that queued a request of its own in between took the
+// place.
+//
+//go:noinline
+func packetMoved(q *request) *request {
+	n := &queue.reqs[queue.tail%queueLen]
+	*n = *q
+	return n
+}
+
+// packetStart starts the channel on the packet in the request q, which is
+// at the queue's head with the GPU free: GP1 04000002h, then D2_MADR,
+// D2_BCR and D2_CHCR, with as many nops before each of the three, for
+// Sony's 8 cycles from one to the next. The address goes to the channel as
+// it is, as Sony's sends it: the channel uses its low 24 bits.
+//
+//go:inline
+func packetStart(q *request, addrNops, countNops, startNops int) {
+	gp1.Set(gp1DMAToGPU)
+	nops(addrNops)
+	dmaGPUAddr.Set(uint32(uintptr(unsafe.Pointer(&q.env))))
+	nops(countNops)
+	dmaGPUBlock.Set(0)
+	nops(startNops)
+	dmaGPUControl.Set(dmaLinkedList)
+}
+
+// packetEnter's pads.
+const (
+	packetEnterMaskSpace      = 6
+	packetEnterChannelSpace   = 8
+	packetEnterInterruptSpace = 19
+	packetEnterEnableSpace    = 5
+	packetEnterStatSpace      = 8
+)
+
+// gpuWait reads GPUSTAT until the GPU is ready for a command. It is a
+// function of its own so that the wait's loop adds nothing to its callers'
+// usual paths.
+//
+//go:noinline
+func gpuWait() {
 	for gp1.Get()&gpuStatReady == 0 {
 	}
-	return m, idle
 }
 
-// imageMayQueue reports whether an image call that found the GPU busy may go
-// into the queue, as Sony's library does (spec 39), and if so sets
-// queue.later for imageLater. Interrupts must be off. A queued image starts
-// from drawDone once what is ahead of it has gone out and the GPU has
-// finished drawing (imageTurn), so a call is not queued when nothing would
-// start it: when the channel has finished and nothing waits, the GPU drawing
-// the last of it, since channel 2's completion has come and gone. Nor is one
-// that finds the queue full. Those wait.
+// imageRefused is imageWait for an image call that imageEnter left for the
+// queue and the queue would not take (queueLoad, queueStore): if imageEnter
+// made the channel's completion interrupt the CPU for it, nothing waiting,
+// that is undone first.
 //
 //go:noinline
-func imageMayQueue() bool {
-	if queued() >= queueLen || dmaGPUControl.Get()&dmaBusy == 0 && queued() <= queue.running {
-		return false
+func imageRefused(m uint32) uint32 {
+	if queued() <= queue.running {
+		dmaInterrupt.Set(dmaInterrupt.Get() & 0x00ffffff &^ dicrGPUEnable)
 	}
-	queue.later = 1
-	return true
+	return imageWait(m)
 }
 
-// imageLater reports whether imageEnter left the call for the queue, and
-// clears the mark. The caller then queues it (queueImage).
+// imageQueued ends an image call whose request went into the queue, after
+// I_MASK is back: Sony's reads D2_CHCR 20 cycles later. Should the channel
+// have finished by then, its completion may have come before it was made
+// to interrupt, and nothing would start the request: the queue is moved on
+// from here.
 //
-//go:noinline
-func imageLater() bool {
-	later := queue.later != 0
-	queue.later = 0
-	return later
+//go:inline
+func imageQueued() {
+	space(imageQueuedSpace)
+	if dmaGPUControl.Get()&dmaBusy == 0 {
+		pollQueue()
+	}
 }
+
+// imageEnter's pads, in turns of spin and 2-cycle stores (spec 49).
+const (
+	imageEnterMaskTurns      = 2
+	imageEnterMaskSpace      = 7
+	imageEnterChannelSpace   = 11
+	imageEnterStatSpace      = 7
+	imageEnterInterruptSpace = 22
+	imageEnterWaitingSpace   = 19
+	imageEnterEnableSpace    = 5
+	imageQueuedSpace         = 7
+	imageEnterWatchSpace     = 16
+)
 
 // queueLoad and queueStore put a LoadImage or StoreImage of the rectangle
-// r and the pixels at p into the queue, after imageEnter found that it
-// could go there (imageLater), and report whether they did. Interrupts must
-// be off. Pixels on the stack are not queued, since they would be gone by
-// the time the image goes: the library's own, the font's palette and the
-// kanji's glyphs, are there. Then the caller waits (imageWait). These are
-// calls of their own, so that the image calls' code changes as little as
-// it can when the GPU is free.
+// r, its size kept within video memory, and the pixels at p into the
+// queue, after imageEnter found that it could go there (enterLater), and
+// report whether they did. Interrupts must be off. Pixels on the stack are
+// not queued, since they would be gone by the time the image goes: the
+// library's own, the font's palette and the kanji's glyphs, are there.
+// Then the caller waits (imageRefused). These are calls of their own, so
+// that the image calls' code changes as little as it can when the GPU is
+// free.
 //
 //go:noinline
 func queueLoad(r RECT, p unsafe.Pointer) bool {
+	nops(queueImageNops)
 	if onStack(p) {
 		return false
 	}
-	r.W, r.H = imageSize(r)
-	return queueImage(r, p, imageLoad)
+	queueImage(r, p, imageLoad)
+	return true
 }
 
 //go:noinline
-func queueStore(r *RECT, p *uint32) bool {
-	if onStack(unsafe.Pointer(p)) {
+func queueStore(r RECT, p unsafe.Pointer) bool {
+	nops(queueImageNops)
+	if onStack(p) {
 		return false
 	}
-	w, h := imageSize(*r)
-	return queueImage(RECT{X: r.X, Y: r.Y, W: w, H: h}, unsafe.Pointer(p), imageStore)
+	queueImage(r, p, imageStore)
+	return true
 }
+
+// queueImageNops are nops at the start of queueLoad and queueStore, 8
+// cycles of the queued call's time, for their size. Without them each is
+// 216 bytes, and the image's packing gave one of them the place
+// libps_vsync_wait had, 8003C070h, and put that elsewhere, on other cache
+// lines. Under a console's costs VSync(0) at 240 lines then returned 158 to
+// 165 cycles after the interrupt in many fields, where it had returned
+// within 155 (TestVSyncPoll, spec 49).
+const queueImageNops = 4
 
 // onStack reports whether p is on the stack, at or above the stack
 // pointer, or in the scratchpad, which channel 2 cannot reach and where a
@@ -780,9 +1116,10 @@ func onStack(p unsafe.Pointer) bool {
 	return a >= 0x1f800000 || sp < 0x800000 && a >= sp
 }
 
-// imageWait is imageEnter's wait, for an image call imageEnter left for the
-// queue that cannot go there after all: it waits for the queue, with
-// interrupts on, and returns I_MASK as imageEnter does.
+// imageWait is imageEnter's wait, for an image call that found the GPU busy
+// and cannot go into the queue: it waits for the queue, with interrupts
+// on, starts the transfer's watch and returns I_MASK as imageEnter does.
+// m is I_MASK as the call found it, with interrupts masked.
 //
 //go:noinline
 func imageWait(m uint32) uint32 {
@@ -791,30 +1128,20 @@ func imageWait(m uint32) uint32 {
 		drain()
 		m = queueEnter()
 	}
-	drawNext()
+	queue.head += queue.running
+	queue.running = 0
 	drawWatch.mark(drawNoLimit)
-	for gp1.Get()&gpuStatReady == 0 {
-	}
 	return m
 }
 
 // queueImage puts the image call kind, imageLoad or imageStore, of the
-// rectangle r, its size kept within video memory, and the pixels at p into
-// the queue, and reports whether it did. One of no size is left out, having
-// nothing to send. Channel 2's completion is made to interrupt the CPU
-// while an image waits, for drawDone to start it; if the channel finished
-// before that, with nothing waiting, no interrupt will come, and the image
-// is not queued after all.
-func queueImage(r RECT, p unsafe.Pointer, kind uint32) bool {
-	if r.W == 0 || r.H == 0 {
-		return true
-	}
-	d := dmaInterrupt.Get() & 0x00ffffff
-	dmaInterrupt.Set(d | dicrGPUEnable)
-	if dmaGPUControl.Get()&dmaBusy == 0 && queued() <= queue.running {
-		dmaInterrupt.Set(d)
-		return false
-	}
+// rectangle r and the pixels at p into the queue. imageEnter has seen to it
+// that the request ahead will start it: either one waits already, whose own
+// start made the channel's completion interrupt the CPU, or imageEnter did
+// (spec 49). An image of no size is queued as any other, and counted by
+// DrawSync(1), as Sony's is (probe spec/probes/imgzero); its turn sends
+// nothing (startImage).
+func queueImage(r RECT, p unsafe.Pointer, kind uint32) {
 	q := &queue.reqs[queue.tail%queueLen]
 	q.list = 0
 	q.env[0] = endOfList
@@ -824,7 +1151,6 @@ func queueImage(r RECT, p unsafe.Pointer, kind uint32) bool {
 	q.restore = kind
 	queue.lastImage = queue.tail
 	queue.tail++
-	return true
 }
 
 // startImage sends the image request r, which has come to the head of the
@@ -850,10 +1176,13 @@ func startImage(r *request) {
 		H: int16(r.env[2] >> 16),
 	}
 	p := unsafe.Pointer(uintptr(r.env[3]))
-	if r.restore == imageLoad {
-		sendImage(rect, p)
+	// An image of no size waits its turn as any other and then sends
+	// nothing (spec 49).
+	if t := imageTransfer(rect, p); t.none() {
+	} else if r.restore == imageLoad {
+		sendImage(t, p)
 	} else {
-		readImage(rect, (*uint32)(p))
+		readImage(t, (*uint32)(p))
 	}
 	if last {
 		for dmaGPUControl.Get()&dmaBusy != 0 {
@@ -863,72 +1192,128 @@ func startImage(r *request) {
 	imageBlocksWait()
 }
 
-// loadImage copies the image at p, of 16-bit pixels, into the rectangle r
-// of video memory. As the reference library does, the CPU writes the
-// words that do not make a whole block of 16, from the start of the
-// image, and DMA the rest, which goes on after it returns: the next call
-// that uses the GPU waits for it. A size that comes to nothing sends nothing.
-// With the GPU busy, the image goes into the queue instead (imageEnter).
-// It reports whether the queue was idle when it came.
-func loadImage(r RECT, p unsafe.Pointer) bool {
-	m, idle := imageEnter()
-	if !idle && imageLater() {
-		if queueLoad(r, p) {
-			queueLeave(m)
-			pace(loadImagePad)
-			return false
-		}
-		m = imageWait(m)
-	}
-	r.W, r.H = imageSize(r)
-	if r.W == 0 || r.H == 0 {
-		space(loadImageNoSizeSpace)
-		queueLeave(m)
-		pace(loadImagePad - spinTurn)
-		nops(loadImageNops)
-		return idle
-	}
-	sendImage(r, p)
-	queueLeave(m)
-	pace(loadImagePad - spinTurn)
-	nops(loadImageNops)
-	return idle
+// loadImage is LoadImage for the library's own images, the font's and the
+// kanji's.
+func loadImage(r RECT, p unsafe.Pointer) {
+	LoadImage(&r, (*uint32)(p))
 }
 
-// sendImage sends the image at p to the rectangle r of video memory, for
-// loadImage, with the GPU ready for it: the CPU's words, then the blocks
-// by DMA, which it does not wait for.
+// transfer is an image transfer worked out before the GPU is asked whether
+// it is ready, so that its words follow that at once: the place and size
+// as the GPU takes them, how many words the CPU moves, the word for
+// D2_BCR, blocks of 16 words and how many, and where the blocks start.
+type transfer struct {
+	place, size uint32
+	head        uint32
+	count       uint32
+	addr        uint32
+}
+
+// blocks reports whether the transfer has blocks for the DMA.
 //
 //go:inline
-func sendImage(r RECT, p unsafe.Pointer) {
-	gp1.Set(gp1DMAOff)
-	gp0.Set(0x01000000) // clear the texture cache
-	gp0.Set(0xa0000000)
-	gp0.Set(pair(r.X, r.Y))
-	gp0.Set(pair(r.W, r.H))
-	words := (int(r.W)*int(r.H) + 1) / 2
+func (t *transfer) blocks() bool { return t.count >= 1<<16 }
+
+// none reports whether the transfer moves nothing, an image of no size.
+//
+//go:inline
+func (t *transfer) none() bool { return t.head == 0 && !t.blocks() }
+
+// imageTransfer works out the transfer of the rectangle r, of a size kept
+// within video memory, and the pixels at p: the CPU moves the words that
+// do not make a whole block of 16, from the start of the image, and DMA the
+// rest. The pointer goes to the channel as given, as Sony's sends it: the
+// channel uses its low 24 bits.
+//
+//go:inline
+func imageTransfer(r RECT, p unsafe.Pointer) transfer {
 	const block = 16
+	words := (uint32(uint16(r.W))*uint32(uint16(r.H)) + 1) / 2
 	head := words % block
-	data := unsafe.Slice(at((*uint32)(p)), head)
-	for i := range data {
-		gp0.Set(data[i])
-		space(loadImageWordSpace)
-	}
-	if n := words / block; n > 0 {
-		gp1.Set(gp1DMAToGPU)
-		// The pointer as given, as Sony's sends it: the channel uses its
-		// low 24 bits.
-		dmaGPUAddr.Set(uint32(uintptr(unsafe.Add(p, 4*head))))
-		dmaGPUBlock.Set(uint32(n)<<16 | block)
-		dmaGPUControl.Set(dmaToGPU)
-		space(loadImageBlockSpace)
-		if head == 0 {
-			space(loadImageWholeSpace)
-		}
-	} else {
-		space(loadImageNoBlockSpace)
+	return transfer{
+		place: pair(r.X, r.Y),
+		size:  pair(r.W, r.H),
+		head:  head,
+		count: words/block<<16 | block,
+		addr:  uint32(uintptr(p)) + 4*head,
 	}
 }
+
+// leave stores the transfer's words, for its values to be at hand when the
+// GPU is ready: a pad of four stores.
+//
+//go:inline
+func (t *transfer) leave() {
+	spaceWith(1, t.place)
+	spaceWith(1, t.size)
+	spaceWith(1, t.count)
+	spaceWith(1, t.addr)
+}
+
+// sendImage sends the image at p to video memory, for LoadImage, with the
+// GPU ready for it: the CPU's words, then the blocks by DMA, which it does
+// not wait for. The stores between its accesses bring each to Sony's cycle
+// (spec 49): from GP1 04000000h, the four GP0 words at 8, 18, 28 and 38
+// cycles, the CPU's words from 58, 16 apart, and GP1 04000002h 16 after
+// the last of them, or 56 with none; D2_MADR, D2_BCR and D2_CHCR 8, 18 and
+// 26 after that.
+//
+//go:inline
+func sendImage(t transfer, p unsafe.Pointer) {
+	gp1.Set(gp1DMAOff)
+	nops(sendImageClearNops)
+	gp0.Set(0x01000000) // clear the texture cache
+	space(sendImageCommandSpace)
+	gp0.Set(0xa0000000)
+	space(sendImagePlaceSpace)
+	gp0.Set(t.place)
+	space(sendImageSizeSpace)
+	gp0.Set(t.size)
+	if t.head != 0 {
+		space(sendImageWordsSpace)
+		// The pad comes between two words, not after the last.
+		q := unsafe.Pointer(at((*uint32)(p)))
+		for n := t.head; ; {
+			gp0.Set(*(*uint32)(q))
+			q = unsafe.Add(q, 4)
+			if n--; n == 0 {
+				break
+			}
+			space(loadImageWordSpace)
+		}
+	}
+	if t.blocks() {
+		if t.head == 0 {
+			space(sendImageWholeSpace)
+		} else {
+			space(sendImageMixedSpace)
+		}
+		gp1.Set(gp1DMAToGPU)
+		space(sendImageAddrSpace)
+		dmaGPUAddr.Set(t.addr)
+		space(sendImageCountSpace)
+		nops(sendImageCountNops)
+		dmaGPUBlock.Set(t.count)
+		nops(sendImageStartNops)
+		dmaGPUControl.Set(dmaToGPU)
+	}
+}
+
+// sendImage's pads, in 2-cycle stores, and in nops where the first store
+// of a run, which forms the address, would make it 4.
+const (
+	sendImageClearNops    = 1
+	sendImageCommandSpace = 2
+	sendImagePlaceSpace   = 4
+	sendImageSizeSpace    = 3
+	sendImageWordsSpace   = 3
+	sendImageWholeSpace   = 1
+	sendImageMixedSpace   = 0
+	sendImageAddrSpace    = 1
+	sendImageCountSpace   = 1
+	sendImageCountNops    = 1
+	sendImageStartNops    = 0
+)
 
 // imageSize returns the size of an image kept within video memory: a negative
 // width or height counts as 0 (spec 20, "LoadImage and StoreImage sizes").
@@ -941,18 +1326,19 @@ func imageSize(r RECT) (w, h int16) {
 func pair(x, y int16) uint32 { return uint32(uint16(x)) | uint32(uint16(y))<<16 }
 
 // imageCallLeaves puts in a0 and v1 what the four image calls leave there on Sony's:
-// the interrupt mask and its register's address (probe spec/probes/loadleft). A program
+// the interrupt mask, m, and its register's address (probe spec/probes/loadleft). A program
 // can get a0 as an argument by passing none, as a call to srand() with no seed does.
-// It comes last in each, with nothing else live in those registers.
+// It comes last in each, with nothing else live in those registers. The mask is
+// the one the call put back (queueLeave): Sony's does not read I_MASK again.
 //
 //go:inline
-func imageCallLeaves() {
+func imageCallLeaves(m uint32) {
 	device.AsmFull(`.set push
 	.set noat
+	move $$4, {m}
 	lui $$3, 0x1f80
-	lw $$4, 0x1074($$3)
 	ori $$3, $$3, 0x1074
-	.set pop`, nil)
+	.set pop`, map[string]interface{}{"m": m})
 }
 
 // RECT is a rectangle in video memory: its top left corner and its size.
@@ -1009,10 +1395,14 @@ func (e *DRAWENV) put() {
 		n = 9
 	}
 	e.Dr_env.Tag = n<<24 | endOfList
+	// Sony's builds its packet for longer, and starts its watch 526
+	// cycles into the call (spec 08, spec 49).
+	spin(putDrawEnvEnterTurns)
+	space(putDrawEnvEnterSpace)
 	submit(0, (*[16]uint32)(unsafe.Pointer(&e.Dr_env))[:n+1])
 	// Sony's copies the environment into its own state after queueing
 	// it, a byte at a time (spec 08).
-	pace(putDrawEnvPad - spinTurn)
+	spin(putDrawEnvTurns)
 	nops(putDrawEnvNops)
 }
 
@@ -1195,19 +1585,98 @@ func PutDrawEnv(env *DRAWENV) *DRAWENV {
 }
 
 // MoveImage queues a copy of the rectangle r of video memory to x, y,
-// GP0 80h, and returns 0. DrawSync waits for it.
+// GP0 80h, and returns 0. DrawSync waits for it. A rectangle of no width or
+// no height is not sent: Sony's returns -1 for it at once, without a look
+// at the GPU, and sends one of a negative size as it is (spec 49, probe
+// spec/probes/imgsync).
+//
+// With the GPU free its accesses come at Sony's cycles: packetEnter's, then
+// the channel started 24 cycles after the read of GPUSTAT (packetStart),
+// I_MASK put back 34 after that, and the return.
 //
 //export MoveImage
 //go:noinline
 func MoveImage(r *RECT, x, y int32) int32 {
-	p := [5]uint32{
-		4<<24 | endOfList,
-		0x80000000,
-		pair(r.X, r.Y),
-		pair(int16(x), int16(y)),
-		pair(r.W, r.H),
+	if r.W == 0 {
+		space(moveImageNoWidthSpace)
+		return -1
 	}
-	submit(0, p[:])
-	imageCallLeaves()
+	if r.H == 0 {
+		space(moveImageNoHeightSpace)
+		return -1
+	}
+	// The packet is made in the queue before interrupts are masked: Sony's
+	// starts the channel 24 cycles after its read of GPUSTAT, too soon to
+	// make it there.
+	packetRoom()
+	tail := queue.tail
+	q := &queue.reqs[tail%queueLen]
+	q.list = 0
+	q.restore = 0
+	q.env[0] = 4<<24 | endOfList
+	q.env[1] = 0x80000000
+	q.env[2] = pair(r.X, r.Y)
+	q.env[3] = pair(int16(x), int16(y))
+	q.env[4] = pair(r.W, r.H)
+	space(moveImageEnterSpace)
+	// packetEnter, written out.
+	drawWatch.mark(drawNoLimit)
+	spins(imageEnterMaskTurns)
+	space(moveImageMaskSpace)
+	m := iMask.Get()
+	iMask.Set(0)
+	if queue.tail != tail {
+		q = packetMoved(q)
+		tail = queue.tail
+	}
+	queue.tail = tail + 1
+	later := tail-queue.head > queue.running
+	if !later {
+		space(moveImageChannelSpace)
+		if dmaGPUControl.Get()&dmaBusy != 0 {
+			space(packetEnterInterruptSpace)
+			d := dmaInterrupt.Get() & 0x00ffffff
+			space(packetEnterEnableSpace)
+			dmaInterrupt.Set(d | dicrGPUEnable)
+			later = true
+		}
+	}
+	if later {
+		spins(moveImageQueuedTurns)
+		space(moveImageQueuedSpace)
+		imageLeave(m)
+		imageQueued()
+		space(moveImageQueuedLeaveSpace)
+		imageCallLeaves(m)
+		return 0
+	}
+	space(moveImageStatSpace)
+	if gp1.Get()&gpuStatReady == 0 {
+		gpuWait()
+	}
+	queue.head = tail
+	queue.running = 1
+	space(moveImageStartSpace)
+	packetStart(q, 0, 0, 1)
+	space(moveImageLeaveSpace)
+	imageLeave(m)
+	nops(moveImageLeaveNops)
+	imageCallLeaves(m)
 	return 0
 }
+
+// MoveImage's pads, in 2-cycle stores, turns of spin and nops.
+const (
+	moveImageNoWidthSpace     = 17
+	moveImageNoHeightSpace    = 19
+	moveImageEnterSpace       = 22
+	moveImageMaskSpace        = 10
+	moveImageChannelSpace     = 3
+	moveImageStatSpace        = 8
+	moveImageStartSpace       = 0
+	moveImageLeaveSpace       = 14
+	moveImageLeaveNops        = 6
+	moveImageQueuedTurns      = 29
+	moveImageQueuedSpace      = 2
+	moveImageQueuedLeaveSpace = 15
+)
