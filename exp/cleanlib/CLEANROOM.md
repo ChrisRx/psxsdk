@@ -91,9 +91,11 @@ summarize them:
 - In `.build/carchive/`, the discs, `.bin` and `ZBOOT.EXE` files of the
   `NAME-sony` and `NAME-clean` directories: Sony's image is in them, and on the
   clean side they hold the original programs, whose code is not to be read either.
-  The same goes for `prog.elf` in any `.build/*-sony*` or `.build/*-cimg*` directory: don't run `nm` or
-  a disassembler over them, even into a count.
-  `summary.txt`, `first.txt`, `first/`, `calls/`, `text.txt`, `test.log`, `costs.txt` and `show.png` are fine.
+  The same goes for `prog.elf` in any `.build/*-sony*` or `.build/*-cimg*` directory, `-cimg-clean` included:
+  don't run `nm` or a disassembler over them, even into a count. A hook refuses such commands.
+  For a probe's own addresses (where its loops sit in the cache), run `image/probe.sh` with
+  `PROBE_SYMS=1`: it writes `syms.txt` beside each `out`, the probe's `main.` functions and nothing else.
+  `summary.txt`, `first.txt`, `first/`, `calls/`, `text.txt`, `test.log`, `costs.txt`, `syms.txt` and `show.png` are fine.
 - `~/src/ChrisRx/libps-go-backup/`, `~/.claude/`, and any scratch files of
   other sessions.
 
