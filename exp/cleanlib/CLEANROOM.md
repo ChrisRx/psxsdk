@@ -88,6 +88,10 @@ summarize them:
   `image/main.go` and `image/clib.S` where a spec says to. `.build/cleanimage/missing.txt` and the
   symbols of `.build/cleanimage/image.elf`, which are the clean library's, are
   fine, but a PC in Sony's image on the `-cimg` side stays an address.
+  `image/pins.txt` is fine too: it fixes where the sections on the interrupt,
+  VSync and image call paths go, so that a change of size elsewhere doesn't move
+  them (spec 52). If `make.sh` stops because a pinned section no longer fits, don't
+  edit the file: report it, and the spec side gives the section a new place.
 - In `.build/carchive/`, the discs, `.bin` and `ZBOOT.EXE` files of the
   `NAME-sony` and `NAME-clean` directories: Sony's image is in them, and on the
   clean side they hold the original programs, whose code is not to be read either.

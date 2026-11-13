@@ -129,7 +129,47 @@ else:
             grouped[name] = (name, at + size, max(g[2], align))
         else:
             grouped[name] = (name, size, align)
-    insec = list(grouped.values())
+    def glob(n):
+        return "".join("?" if c in "()*[]? \"" else c for c in n)
+    # The pinned sections (pins.txt) go at their addresses before anything is
+    # packed, cut out of the gaps they lie in. The packing below puts the
+    # largest sections first wherever they fit, so a change of size anywhere
+    # moves most of what follows, and with it which lines of the 4 KB
+    # instruction cache the interrupt and the sync calls share (spec 52).
+    # A gap's place never changes, so a pinned section stays where its
+    # address puts it, whatever the rest of the image does.
+    insec = grouped
+    room = []
+    for i, line in enumerate(open(os.environ.get("GEN_PINS") or os.path.join(repo, "exp/cleanlib/image/pins.txt"))):
+        f = line.split("#")[0].split()
+        if not f:
+            continue
+        at, name = int(f[0], 16), f[1]
+        if name not in insec:
+            sys.exit(f"gen.py: pinned section {name} is not in the link")
+        _, size, align = insec.pop(name)
+        if at % align:
+            sys.exit(f"gen.py: pinned section {name} at {at:08X} is not {align}-byte aligned")
+        for k, (a, n) in enumerate(gaps):
+            if a <= at and at + size <= a + n:
+                break
+        else:
+            sys.exit(f"gen.py: pinned section {name} at {at:08X}, {size} bytes, does not fit in its gap: it grew, and pins.txt needs a new place for it (the spec side's, spec 52)")
+        gaps[k:k + 1] = [(a, at - a), (at + size, a + n - at - size)]
+        mem.append(f"  p{i} (rwx) : ORIGIN = 0x{at:08X}, LENGTH = {size}")
+        secs.append(f"  .pin{i} : {{ *({glob(name)}) }} > p{i}")
+        room.append((a + n - at - size, name))
+    if room:
+        print(f"pinned {len(room)} sections, least room after one {min(room)[0]} bytes ({min(room)[1]})")
+    insec = list(insec.values())
+    # GEN_PINS names another pin file (/dev/null for none), for testing.
+    # GEN_SHIFT, a number of bytes, reserves that much at the start of each
+    # gap of 1 KB or more, to move what the packing puts in them, as a change
+    # of size would: for testing that the pinned sections keep what depends
+    # on their placement.
+    shift = int(os.environ.get("GEN_SHIFT", "0"))
+    if shift:
+        gaps = [(a + shift, n - shift) if n >= 1024 else (a, n) for a, n in gaps]
     # Code first in each gap and data after it, in output sections of their
     # own, so that only code is in an executable section: mips1fix rewrites
     # anything there that reads as a trap, data included.
@@ -164,8 +204,6 @@ else:
     unplaced = place(code, 2) + place(data, 3)
     if unplaced:
         print("UNPLACED", sum(s for _, s in unplaced), unplaced[:5])
-    def glob(n):
-        return "".join("?" if c in "()*[]? \"" else c for c in n)
     used = sum(g[0] - a for g, (a, n) in zip(free, gaps))
     print(f"packed {len(insec)} sections, {used} bytes with padding, into {sum(1 for g in free if g[2] or g[3])} gaps")
     last = len(gaps) - 1
