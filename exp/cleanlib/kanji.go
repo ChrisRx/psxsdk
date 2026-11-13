@@ -110,7 +110,14 @@ func glyphFor(c uint16, user bool) (uintptr, glyphKind) {
 			}
 			i += int(r[1]-r[0]) + 1
 		}
-		return 0, glyphBlank
+		// A cell with no glyph, or a trail byte Shift JIS does not use.
+		// Krom2Tim draws the 30 bytes just before the table, whatever the
+		// ROM holds there (spec 51): the end of a copyright line and four
+		// addresses on most of Sony's, zeros on some and on OpenBIOS.
+		if user {
+			return 0, glyphBlank
+		}
+		return romNonKanji - romGlyph, glyphROM
 	case c >= 0x889f && c <= 0x9872:
 		row, cell, ok := jisCell(c)
 		if !ok {
@@ -280,12 +287,14 @@ type kromShape struct {
 // The rest of Krom2Tim's time. Sony's is 610,500 cycles, 2,050 for each cell of the
 // image, 2,225 for each it reached, and 875 for each glyph (probe: 1 to 33 characters,
 // with and without newlines), against the work here of 1,035 a cell and 3,180 a
-// glyph, and the time of what it leaves on the stack: the clear's 589,632 and the calls' 48, and 384 a cell
-// and 288 a row for the image, and for a glyph its ROM bytes. The figure for a glyph comes off
-// two-byte and one-byte characters alike. The first frame's vertical blank goes on top
-// of the pad.
+// glyph, and the time of what it leaves on the stack: the clear's 589,568 and the
+// calls' 48, and 384 a cell and 288 a row for the image, and for a glyph its ROM
+// bytes. The figure for a glyph comes off two-byte and one-byte characters alike.
+// The first frame's vertical blank goes on top of the pad. The clear was 589,632
+// with a frame of 80 bytes: the frame is 88 since kromCharTime walks its table of
+// gaps (spec 51), and that check takes 16 cycles of its own, which come off here.
 const (
-	krom2TimPad       = 595000 - 589632 - 48 - 190
+	krom2TimPad       = 595000 - 589568 - 48 - 206
 	krom2TimCellPad   = 1015 - 384
 	krom2TimBlankPad  = 2225
 	krom2TimGlyphBack = 100 + 396
@@ -293,7 +302,7 @@ const (
 
 	// krom2TimFrame and krom2Tim2Frame are how far Krom2Tim's and Krom2Tim2's sp
 	// are below their callers', which what they leave on the stack is placed by.
-	krom2TimFrame  = 80
+	krom2TimFrame  = 88
 	krom2Tim2Frame = 72
 )
 
