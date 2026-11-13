@@ -4,7 +4,9 @@
 # .build/NAME-cimg/out and .build/NAME-cimg-clean/out, each with .tty and
 # .kernel files (probetest's TestDump). A probe ends its run by printing the
 # line "END". It prints the first lines that differ. SIDES=sony runs Sony's side
-# only, PROBE_FRAMES caps the run (6000). Run from the repository root.
+# only, PROBE_FRAMES caps the run (6000). PROBE_SYMS=1 writes syms.txt beside
+# each out: the probe's own functions (package main) with their addresses and
+# sizes, and nothing else of the link. Run from the repository root.
 set -euo pipefail
 NAME=$1 DIR=$2
 IMAGE=$PWD/.build/cleanimage/libps.exe
@@ -18,6 +20,12 @@ BIN=$PWD/.build/$NAME-tools
 mkdir -p "$BIN"
 go build -o "$BIN/yaroze" ./cmd/yaroze
 go test -c -o "$BIN/probetest.test" ./exp/cleanlib/image/probetest
+# syms writes the probe's own symbols, filtered here so that no other name in
+# the link reaches the reader (CLEANROOM.md).
+syms() {
+  [ "${PROBE_SYMS:-}" = 1 ] || return 0
+  llvm-nm -n -S --defined-only ".build/$1/prog.elf" | awk '$4 ~ /^main\./ && ($3 == "t" || $3 == "T")' >".build/$1/syms.txt"
+}
 run() {
   local dir=$PWD/.build/$1
   (cd exp/cleanlib/image/probetest && PROBE_DISC=$dir/$1.cue PROBE_OUT=$dir/out PROBE_FRAMES=${PROBE_FRAMES:-6000} PROBE_END=$'END\n' \
@@ -28,12 +36,14 @@ for side in $SIDES; do
     sony)
       mkdir -p ".build/$NAME-cimg"
       PSX_LIBPS_IMAGE=$SONY "$BIN/yaroze" disc --libps resident --elf ".build/$NAME-cimg/prog.elf" -o ".build/$NAME-cimg/$NAME-cimg.bin" "$DIR"
+      syms "$NAME-cimg"
       run "$NAME-cimg"
       ;;
     clean)
       [ -f "$IMAGE" ] || { echo "no $IMAGE: run exp/cleanlib/image/make.sh" >&2; exit 1; }
       mkdir -p ".build/$NAME-cimg-clean"
       PSX_LIBPS_IMAGE=$IMAGE "$BIN/yaroze" disc --libps resident --elf ".build/$NAME-cimg-clean/prog.elf" -o ".build/$NAME-cimg-clean/$NAME-cimg-clean.bin" "$DIR"
+      syms "$NAME-cimg-clean"
       run "$NAME-cimg-clean"
       ;;
   esac
