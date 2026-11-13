@@ -24,7 +24,8 @@ type imgsyncCase struct {
 	gave, polls       int
 }
 
-// Sony's, in the emulator with the drawing time on (spec 49).
+// Sony's, in the emulator with the drawing time on (spec 49; StoreImage's
+// transfer takes its time since spec 54).
 var imgsyncCases = []imgsyncCase{
 	{"LOAD", "16x16", 700, 108, 118, 1, 0},
 	{"LOAD", "16x1", 796, 0, 128, 0, 0},
@@ -32,12 +33,12 @@ var imgsyncCases = []imgsyncCase{
 	{"LOAD", "0x4", 590, 0, 128, 0, 0},
 	{"LOAD", "64x64", 700, 108, 118, 1, 30},
 	{"LOAD", "256x256", 700, 108, 118, 1, 513},
-	{"STORE", "16x16", 712, 106, 128, 0, 0},
+	{"STORE", "16x16", 712, 106, 118, 1, 0},
 	{"STORE", "16x1", 808, 0, 128, 0, 0},
 	{"STORE", "20x2", 778, 106, 128, 0, 0},
 	{"STORE", "0x4", 586, 0, 128, 0, 0},
-	{"STORE", "64x64", 712, 106, 128, 0, 0},
-	{"STORE", "256x256", 712, 106, 128, 0, 0},
+	{"STORE", "64x64", 712, 106, 118, 1, 39},
+	{"STORE", "256x256", 712, 106, 118, 1, 653},
 	{"MOVE", "16x16", 472, 92, 134, 1, 0},
 	{"MOVE", "16x1", 472, 92, 128, 0, 0},
 	{"MOVE", "20x2", 472, 92, 128, 0, 0},

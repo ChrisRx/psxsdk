@@ -35,3 +35,15 @@ func (m *Machine) SetCPUCost(on bool) { m.CPU.SetCost(on) }
 // never does, and a second read of a port always does, whatever part of a
 // cycle the block's start falls on.
 const imageOpenTenths = 60
+
+// An image coming from the GPU holds the bus in imageFromSplit parts of each
+// block, each open to the CPU for its last imageFromOpenTenths. That fits
+// probes/dmahold's runs of one kind of access (spec 54): loads and stores
+// in a run within 1%, reads of a port 8 to 32% long, and accesses with
+// nops between them 15 to 19% short. A console's bus is not that regular
+// (probes/dmaphase): what the model gets wrong is which mix of accesses
+// waits longer.
+const (
+	imageFromSplit      = 2
+	imageFromOpenTenths = 42
+)
