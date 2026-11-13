@@ -513,12 +513,53 @@ func kromCharTime(c uint16) {
 		n = 162
 	case c >= 0x8340 && c <= 0x837e:
 		n = 64
-	case c >= 0x8380 && c <= 0x83ff:
+	case c >= 0x8380 && c <= 0x84be:
+		// The Greek, Cyrillic and box drawing characters and the cells between
+		// them: the walk is at its longest, and past Sony's time by up to 520
+		// cycles on the last of them (probes/kanjinoglyph).
 		n = 0
 	default:
 		n = 810
+		if c >= kromGaps[0].from && c <= kromGaps[len(kromGaps)-1].to {
+			for i := range kromGaps {
+				if g := &kromGaps[i]; c <= g.to {
+					n = uint32(g.n)
+					break
+				}
+			}
+		}
 	}
 	spend(14 + n)
+}
+
+// kromGaps is kromCharTime's figure for the codes from 817Fh to 837Fh that the ranges
+// above leave out: the symbols past the first range, whose walk is longer the
+// further on they are, and the cells between the ranges, which have no glyph and
+// walk to the range after them (spec 51). Each entry is for the codes from the one
+// before it, or from its own from, up to its to. Each figure is what brings its
+// codes to Sony's time on probes/kanjinoglyph, this loop's own time counted.
+var kromGaps = [...]struct {
+	from, to uint16
+	n        uint16
+}{
+	{0x817f, 0x817f, 822},
+	{0x8180, 0x81ac, 722},
+	{0x81ad, 0x81b7, 726},
+	{0x81b8, 0x81bf, 638},
+	{0x81c0, 0x81c7, 632},
+	{0x81c8, 0x81ce, 564},
+	{0x81cf, 0x81d9, 548},
+	{0x81da, 0x81e8, 486},
+	{0x81e9, 0x81ef, 456},
+	{0x81f0, 0x81f7, 404},
+	{0x81f8, 0x81fb, 362},
+	{0x81fc, 0x81fc, 328},
+	{0x81fd, 0x824e, 262},
+	{0x8259, 0x825f, 180},
+	{0x827a, 0x8280, 102},
+	{0x829b, 0x829e, 22},
+	{0x82f2, 0x833f, 0},
+	{0x837f, 0x837f, 0},
 }
 
 // padPow spends what a pow by a power that isn't whole takes beyond exp and log here. This
