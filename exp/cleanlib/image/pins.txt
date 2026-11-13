@@ -1,0 +1,31 @@
+# The clean image's pinned sections: address, then input section name.
+# gen.py puts each at its address before it packs the rest (spec 52), so
+# that a change of size elsewhere doesn't move them, and with them which
+# lines of the instruction cache the interrupt, VSync and the image and sync
+# calls share. The addresses are the packing's own from the image that
+# passed specs 50 and 51 (9dc3438b). A section that grows past the room
+# after it stops the build; move it then, and rerun TestVSyncPoll.
+
+# The interrupt and VSync.
+800113f0 .text.go.chrisrx.dev/psx/exp/cleanlib.vblankInterrupt
+80046784 .text.libps_interrupt
+800394e8 .text.libps_vsync_field
+8003c070 .text.libps_vsync_wait
+8003e9b0 .text.VSync
+8002d530 .text.VSyncCallback
+80016328 .text.libps_intr_entry
+80042868 .text.go.chrisrx.dev/psx/exp/cleanlib.tickExitPace
+80043368 .text.go.chrisrx.dev/psx/exp/cleanlib.spin
+80022654 .text.libps_wait_blanks
+
+# The TTY, which a program prints through between the waits it times.
+8001326c .text.putchar
+80016368 .text.go.chrisrx.dev/psx/exp/cleanlib.ttyPut
+8002e4a8 .text.libps_biosB
+
+# DrawSync, LoadImage and StoreImage, and MoveImage and ClearImage (spec 50).
+80017aa4 .text.DrawSync
+800139dc .text.MoveImage
+8004114c .text.go.chrisrx.dev/psx/exp/cleanlib.drawPollMove
+80041014 .text.(*go.chrisrx.dev/psx/exp/cleanlib.cdWatch).check
+800151c4 .text.(*go.chrisrx.dev/psx/exp/cleanlib.cdWatch).begin
