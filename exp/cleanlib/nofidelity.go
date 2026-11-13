@@ -62,6 +62,27 @@ func spaceAt(p *uint32) {}
 func nops(n int) {}
 
 //go:inline
+func loads(n int) {}
+
+//go:inline
+func loadsApart(n int) {}
+
+//go:inline
+func loadTurns5() {}
+
+//go:inline
+func loadTurns6() {}
+
+//go:inline
+func loadTurns7() {}
+
+//go:inline
+func mults(n int) {}
+
+//go:inline
+func multsWide(n int) {}
+
+//go:inline
 func delay(n uint32) {}
 
 //go:inline

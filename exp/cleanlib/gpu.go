@@ -403,7 +403,9 @@ const (
 	// LoadImage and StoreImage spend their time between their accesses,
 	// where Sony's does, and have no pad at the end (spec 49): the pads
 	// are in imageEnter, sendImage and readImage, and these, in turns of
-	// spin, 2-cycle stores and nops. Enter comes before the call's first
+	// spin, 2-cycle stores, nops, and since spec 50 loads and multiplies,
+	// which take the emulator the same time and a console more (see
+	// imageEnter's pads). Enter comes before the call's first
 	// watch, Ready is the wait before the read of GPUSTAT that the
 	// transfer starts on and NoSize an image of no size's in its place.
 	// From the transfer's last access to I_MASK, Block is an image of
@@ -417,12 +419,11 @@ const (
 	// one path can move another's code.
 	loadImageEnterSpace       = 1
 	loadImageReadyTurns       = 0
-	loadImageReadySpace       = 19
 	loadImageNoSizeTurns      = 7
-	loadImageNoSizeSpace      = 6
-	loadImageBlockSpace       = 21
-	loadImageNoBlockSpace     = 16
-	loadImageMixedSpace       = 18
+	loadImageNoSizeSpace      = 7
+	loadImageBlockNops        = 2
+	loadImageNoBlockNops      = 2
+	loadImageMixedNops        = 1
 	loadImageLeaveNops        = 1
 	loadImageWordSpace        = 2
 	loadImageQueuedTurns      = 0
@@ -431,16 +432,18 @@ const (
 
 	storeImageEnterSpace       = 1
 	storeImageReadyTurns       = 0
-	storeImageReadySpace       = 18
+	storeImageReadyLoads       = 18
+	storeImageReadySpace       = 0
 	storeImageNoSizeTurns      = 7
-	storeImageNoSizeSpace      = 4
-	storeImageBlockSpace       = 20
-	storeImageNoBlockSpace     = 16
-	storeImageMixedSpace       = 18
+	storeImageNoSizeLoads      = 0
+	storeImageNoSizeSpace      = 5
+	storeImageNoBlockLoads     = 18
+	storeImageNoBlockSpace     = 0
+	storeImageMixedSpace       = 8
 	storeImageLeaveNops        = 1
 	storeImageBlockNops        = 0
 	storeImageNoBlockNops      = 0
-	storeImageMixedNops        = 0
+	storeImageMixedNops        = 9
 	storeImageWordNops         = 0
 	storeImageWordSpace        = 2
 	storeImageQueuedTurns      = 0
@@ -529,6 +532,9 @@ func drawNow() uint32 {
 // mark starts timing a wait as the drawing calls do: it reads the time
 // and stores when the wait began and its limit.
 //
+// It lies in DrawSync's section with the calls that use it (see drawPoll).
+//
+//go:section .text.DrawSync
 //go:noinline
 func (w *cdWatch) mark(limit uint32) {
 	t := drawNow()
@@ -775,31 +781,62 @@ func DrawSync(mode int32) int32 {
 // instructions stay what they were whatever changes here (spec 47) and
 // its way out is short enough for Sony's time.
 //
+// Its pads are loads as well as stores and nops (spec 50): each takes 2
+// cycles in the emulator, and under a console's costs a load takes about 6
+// where a store takes 2 and a nop 1. With stores alone a poll took Sony's
+// time in the emulator and four fifths of it on a console, so a program
+// polling behind a MoveImage or a ClearImage counted a fifth more polls
+// than on Sony's. The counts below bring a warm poll to Sony's time under
+// the costs too (probe spec/probes/pollsync). Behind a LoadImage the
+// image's blocks hold the bus, and each load or store waits a block's time
+// for it: so the path with no request waiting has no stores, and a
+// multiply where two more loads would be, for a poll to wait out as many
+// blocks as Sony's does (probe spec/probes/imgparts, the POLL lines). It lies in DrawSync's section,
+// so that the image's packing puts it straight after DrawSync and the two
+// never share cache lines: placed by size, it can land on DrawSync's own,
+// some 10 to 20 cycles a poll. Whether either shares lines with a program's
+// polling loop still depends on where the program lies.
+//
+//go:section .text.DrawSync
 //go:noinline
 func drawPoll() int32 {
 	n := queued() - queue.running
 	if n != 0 {
-		space(drawPollWaitingSpace)
+		// Loads and stores of its own (loadsApart, spaceApart), so that
+		// the compiler does not merge this path's pad with the other's.
+		loadsApart(drawPollWaitingLoads)
+		spaceApart(drawPollWaitingSpace, n)
 		if dmaGPUControl.Get()&dmaBusy == 0 {
 			return -1
 		}
-		space(drawPollAgainSpace)
+		loadsApart(drawPollAgainLoads)
+		spaceApart(drawPollAgainSpace, n)
 		nops(1)
 		dmaGPUControl.Get()
+		loadsApart(drawPollCountLoads)
 		space(drawPollCountSpace)
 		return int32(n)
 	}
+	loads(drawPollChannelLoads)
+	multsWide(drawPollChannelMults)
+	nops(drawPollChannelNops)
 	space(drawPollChannelSpace)
 	if dmaGPUControl.Get()&dmaBusy != 0 {
-		space(drawPollBusySpace)
+		// An image's blocks may be going: no stores here, each of
+		// which would wait a block's time for the bus (spec 50).
+		loads(drawPollBusyLoads)
+		mults(drawPollBusyMults)
+		nops(drawPollBusyNops)
 		return 1
 	}
+	loads(drawPollStatLoads)
 	nops(drawPollStatNops)
-	if gp1.Get()&gpuStatReady == 0 {
-		space(drawPollDrawingSpace)
+	ready := gp1.Get()&gpuStatReady != 0
+	loads(drawPollReadyLoads)
+	if !ready {
+		nops(drawPollDrawingNops)
 		return 1
 	}
-	space(drawPollIdleSpace)
 	return 0
 }
 
@@ -816,21 +853,30 @@ func drawPollMove() int32 {
 	return int32(n)
 }
 
-// drawPoll's pads, in 2-cycle stores, and DrawSync(0)'s: before its watch,
-// before its look at the queue and after it.
+// drawPoll's pads, in 2-cycle stores, loads and nops, and DrawSync(0)'s:
+// before its watch, before its look at the queue and after it.
 const (
 	drawSyncEnterSpace = 15
 	drawSyncLookSpace  = 0
 	drawSyncSpace      = 0
 
-	drawPollWaitingSpace = 16
-	drawPollAgainSpace   = 6
-	drawPollCountSpace   = 7
-	drawPollChannelSpace = 12
-	drawPollBusySpace    = 4
-	drawPollStatNops     = 2
-	drawPollDrawingSpace = 4
-	drawPollIdleSpace    = 1
+	drawPollWaitingLoads = 5
+	drawPollWaitingSpace = 6
+	drawPollAgainLoads   = 3
+	drawPollAgainSpace   = 3
+	drawPollCountLoads   = 1
+	drawPollCountSpace   = 4
+	drawPollChannelLoads = 4
+	drawPollChannelMults = 1
+	drawPollChannelNops  = 3
+	drawPollChannelSpace = 0
+	drawPollBusyLoads    = 1
+	drawPollBusyMults    = 1
+	drawPollBusyNops     = 2
+	drawPollStatLoads    = 1
+	drawPollStatNops     = 1
+	drawPollReadyLoads   = 2
+	drawPollDrawingNops  = 3
 )
 
 // sendList queues the packet list at p for the GPU, and returns without
@@ -856,11 +902,19 @@ func sendList(p unsafe.Pointer) {
 // image goes behind them; with none waiting and the channel busy, it reads
 // D2_CHCR alone.
 //
+// It lies in DrawSync's section, as LoadImage and StoreImage do: placed by
+// size it landed on LoadImage's own cache lines in one build, and each call
+// then ran as if cold, some 350 cycles more under a console's costs (spec
+// 50). The section is under 4 KB, so nothing in it shares a line.
+//
+//go:section .text.DrawSync
 //go:noinline
 func imageEnter() (m uint32, state enterState) {
 	libStart()
 	drawWatch.mark(drawNoLimit)
 	spins(imageEnterMaskTurns)
+	loads(imageEnterMaskLoads)
+	nops(imageEnterMaskNops)
 	space(imageEnterMaskSpace)
 	m = iMask.Get()
 	iMask.Set(0)
@@ -874,6 +928,7 @@ func imageEnter() (m uint32, state enterState) {
 		space(imageEnterWaitingSpace)
 		return m, enterLater
 	}
+	loads(imageEnterChannelLoads)
 	space(imageEnterChannelSpace)
 	if dmaGPUControl.Get()&dmaBusy != 0 {
 		// The channel's completion will start the image: it is made to
@@ -886,6 +941,7 @@ func imageEnter() (m uint32, state enterState) {
 		dmaInterrupt.Set(d | dicrGPUEnable)
 		return m, enterLater
 	}
+	loads(imageEnterStatLoads)
 	space(imageEnterStatSpace)
 	state = enterIdle
 	if gp1.Get()&gpuStatReady == 0 {
@@ -926,10 +982,15 @@ const (
 // since Sony's starts its channel 24 cycles after the read of GPUSTAT,
 // less than a return takes.
 //
+// It lies in MoveImage's section, as ClearImage does, so that neither call
+// shares a cache line with it (see imageEnter).
+//
+//go:section .text.MoveImage
 //go:noinline
 func packetEnter() (uint32, enterState, *request) {
 	drawWatch.mark(drawNoLimit)
 	spins(imageEnterMaskTurns)
+	loads(packetEnterMaskLoads)
 	space(packetEnterMaskSpace)
 	m := iMask.Get()
 	iMask.Set(0)
@@ -939,6 +1000,7 @@ func packetEnter() (uint32, enterState, *request) {
 	if tail-queue.head > queue.running {
 		return m, enterLater, q
 	}
+	loads(packetEnterChannelLoads)
 	space(packetEnterChannelSpace)
 	if dmaGPUControl.Get()&dmaBusy != 0 {
 		space(packetEnterInterruptSpace)
@@ -976,7 +1038,42 @@ func packetRoomWait() {
 	for queued() >= queueLen {
 		pollQueue()
 	}
+	packetPlace()
+	drawPlace()
 }
+
+// drawPlace is packetPlace for DrawSync's section: its size moves what the
+// image's packing puts around that section. Under a console's costs
+// VSync(0) returns up to 155 cycles after a blank's interrupt on Sony's,
+// and in five of nine sizes tried here it returned 158 to 167 after it in
+// one field or more (TestVSyncPoll): which code the handler leaves in the
+// cache goes by where everything lies, and nothing simpler was found to
+// tell a good layout from a bad one than that test. The section has to
+// stay under 4 KB. A change to the size of anything in the image wants the
+// test run again, and this size tried again if it fails.
+//
+//go:section .text.DrawSync
+//go:noinline
+func drawPlace() { nops(drawPlaceNops) }
+
+// drawPlaceNops is drawPlace's size, in instructions past its return.
+const drawPlaceNops = 16
+
+// packetPlace does nothing. It lies in MoveImage's section and its size
+// sets where the image's packing puts that section: MoveImage, ClearImage
+// and packetEnter are to share no cache line with DrawSync, drawPoll and
+// the watch's mark, which a program calls around them, and the section
+// with those is near 4 KB, so the packing alone puts them on the same
+// lines more often than not (spec 50; .build/s50/lines.py checks an image).
+// It is called where the queue was full, which costs that path a few
+// cycles and keeps the linker from dropping it.
+//
+//go:section .text.MoveImage
+//go:noinline
+func packetPlace() { nops(packetPlaceNops) }
+
+// packetPlaceNops is packetPlace's size, in instructions past its return.
+const packetPlaceNops = 56
 
 // packetMoved copies the request q, filled in at what was the queue's tail
 // before interrupts were masked, to the tail as it is now, and returns it
@@ -1009,7 +1106,9 @@ func packetStart(q *request, addrNops, countNops, startNops int) {
 
 // packetEnter's pads.
 const (
+	packetEnterMaskLoads      = 0
 	packetEnterMaskSpace      = 6
+	packetEnterChannelLoads   = 0
 	packetEnterChannelSpace   = 8
 	packetEnterInterruptSpace = 19
 	packetEnterEnableSpace    = 5
@@ -1053,11 +1152,18 @@ func imageQueued() {
 	}
 }
 
-// imageEnter's pads, in turns of spin and 2-cycle stores (spec 49).
+// imageEnter's pads, in turns of spin and 2-cycle stores (spec 49), and
+// loads, which take the emulator the same 2 cycles and a console 6 where a
+// store takes 2 (spec 50): with stores alone the image calls took Sony's
+// time in the emulator and some 100 to 200 cycles less on a console.
 const (
 	imageEnterMaskTurns      = 2
-	imageEnterMaskSpace      = 7
-	imageEnterChannelSpace   = 11
+	imageEnterMaskLoads      = 7
+	imageEnterMaskNops       = 1
+	imageEnterMaskSpace      = 0
+	imageEnterChannelLoads   = 0
+	imageEnterChannelSpace   = 10
+	imageEnterStatLoads      = 0
 	imageEnterStatSpace      = 7
 	imageEnterInterruptSpace = 22
 	imageEnterWaitingSpace   = 19
@@ -1263,10 +1369,13 @@ func sendImage(t transfer, p unsafe.Pointer) {
 	gp1.Set(gp1DMAOff)
 	nops(sendImageClearNops)
 	gp0.Set(0x01000000) // clear the texture cache
+	loads(sendImageCommandLoads)
 	space(sendImageCommandSpace)
 	gp0.Set(0xa0000000)
+	loads(sendImagePlaceLoads)
 	space(sendImagePlaceSpace)
 	gp0.Set(t.place)
+	loads(sendImageSizeLoads)
 	space(sendImageSizeSpace)
 	gp0.Set(t.size)
 	if t.head != 0 {
@@ -1284,14 +1393,14 @@ func sendImage(t transfer, p unsafe.Pointer) {
 	}
 	if t.blocks() {
 		if t.head == 0 {
-			space(sendImageWholeSpace)
+			loads(sendImageWholeSpace)
 		} else {
-			space(sendImageMixedSpace)
+			loads(sendImageMixedSpace)
 		}
 		gp1.Set(gp1DMAToGPU)
-		space(sendImageAddrSpace)
+		loads(sendImageAddrSpace)
 		dmaGPUAddr.Set(t.addr)
-		space(sendImageCountSpace)
+		loads(sendImageCountSpace)
 		nops(sendImageCountNops)
 		dmaGPUBlock.Set(t.count)
 		nops(sendImageStartNops)
@@ -1303,16 +1412,19 @@ func sendImage(t transfer, p unsafe.Pointer) {
 // of a run, which forms the address, would make it 4.
 const (
 	sendImageClearNops    = 1
-	sendImageCommandSpace = 2
-	sendImagePlaceSpace   = 4
-	sendImageSizeSpace    = 3
+	sendImageCommandLoads = 3
+	sendImageCommandSpace = 0
+	sendImagePlaceLoads   = 4
+	sendImagePlaceSpace   = 0
+	sendImageSizeLoads    = 3
+	sendImageSizeSpace    = 0
 	sendImageWordsSpace   = 3
-	sendImageWholeSpace   = 1
+	sendImageWholeSpace   = 2
 	sendImageMixedSpace   = 0
-	sendImageAddrSpace    = 1
+	sendImageAddrSpace    = 2
 	sendImageCountSpace   = 1
 	sendImageCountNops    = 1
-	sendImageStartNops    = 0
+	sendImageStartNops    = 1
 )
 
 // imageSize returns the size of an image kept within video memory: a negative
@@ -1618,6 +1730,7 @@ func MoveImage(r *RECT, x, y int32) int32 {
 	q.env[2] = pair(r.X, r.Y)
 	q.env[3] = pair(int16(x), int16(y))
 	q.env[4] = pair(r.W, r.H)
+	loads(moveImageEnterLoads)
 	space(moveImageEnterSpace)
 	// packetEnter, written out.
 	drawWatch.mark(drawNoLimit)
@@ -1658,6 +1771,7 @@ func MoveImage(r *RECT, x, y int32) int32 {
 	queue.running = 1
 	space(moveImageStartSpace)
 	packetStart(q, 0, 0, 1)
+	nops(moveImageLeavePad)
 	space(moveImageLeaveSpace)
 	imageLeave(m)
 	nops(moveImageLeaveNops)
@@ -1669,12 +1783,14 @@ func MoveImage(r *RECT, x, y int32) int32 {
 const (
 	moveImageNoWidthSpace     = 17
 	moveImageNoHeightSpace    = 19
+	moveImageEnterLoads       = 0
 	moveImageEnterSpace       = 22
 	moveImageMaskSpace        = 10
 	moveImageChannelSpace     = 3
 	moveImageStatSpace        = 8
 	moveImageStartSpace       = 0
-	moveImageLeaveSpace       = 14
+	moveImageLeavePad         = 10
+	moveImageLeaveSpace       = 4
 	moveImageLeaveNops        = 6
 	moveImageQueuedTurns      = 29
 	moveImageQueuedSpace      = 2
