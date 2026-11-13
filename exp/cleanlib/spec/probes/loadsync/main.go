@@ -116,7 +116,4 @@ func main() {
 	}
 	volatile.StoreUint32((*uint32)(yaroze.Pointer(timerMode)), saved)
 	println("END")
-	for {
-		yaroze.VSync(0)
-	}
 }

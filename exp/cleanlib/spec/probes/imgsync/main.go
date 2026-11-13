@@ -257,7 +257,4 @@ func main() {
 		println("CLEARIMAGE", clears[k].X, clears[k].W, clears[k].H, "returns", clearRet[k], "leaves", clearOut[k].W, clearOut[k].H)
 	}
 	println("END")
-	for {
-		yaroze.VSync(0)
-	}
 }
