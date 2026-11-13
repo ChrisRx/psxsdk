@@ -83,5 +83,13 @@ link
 heads
 cmp "$WORK/stubs.S" "$OUT/playstation-yaroze-cleanimage.S"
 cp "$WORK/prog.elf" "$OUT/image.elf"
+# The image's Go heap is 8 bytes (gen.py): the library must allocate nothing,
+# and an allocation would stop it at run time with no message. The runtime's
+# alloc is never inlined, so it is linked in exactly when something allocates.
+if llvm-nm "$OUT/image.elf" | grep -q ' runtime\.alloc$'; then
+  echo "make.sh: the library allocates (runtime.alloc is linked in), and the image has no heap for it" >&2
+  rm -f "$OUT/libps.exe"
+  exit 1
+fi
 go run ./tools/mips1fix "$OUT/image.elf" | tail -1
 go run ./"$HERE"/imgtool "$OUT/image.elf" "$OUT/libps.exe"
