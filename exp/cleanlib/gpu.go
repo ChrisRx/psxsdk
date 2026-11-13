@@ -1038,42 +1038,7 @@ func packetRoomWait() {
 	for queued() >= queueLen {
 		pollQueue()
 	}
-	packetPlace()
-	drawPlace()
 }
-
-// drawPlace is packetPlace for DrawSync's section: its size moves what the
-// image's packing puts around that section. Under a console's costs
-// VSync(0) returns up to 155 cycles after a blank's interrupt on Sony's,
-// and in five of nine sizes tried here it returned 158 to 167 after it in
-// one field or more (TestVSyncPoll): which code the handler leaves in the
-// cache goes by where everything lies, and nothing simpler was found to
-// tell a good layout from a bad one than that test. The section has to
-// stay under 4 KB. A change to the size of anything in the image wants the
-// test run again, and this size tried again if it fails.
-//
-//go:section .text.DrawSync
-//go:noinline
-func drawPlace() { nops(drawPlaceNops) }
-
-// drawPlaceNops is drawPlace's size, in instructions past its return.
-const drawPlaceNops = 16
-
-// packetPlace does nothing. It lies in MoveImage's section and its size
-// sets where the image's packing puts that section: MoveImage, ClearImage
-// and packetEnter are to share no cache line with DrawSync, drawPoll and
-// the watch's mark, which a program calls around them, and the section
-// with those is near 4 KB, so the packing alone puts them on the same
-// lines more often than not (spec 50; .build/s50/lines.py checks an image).
-// It is called where the queue was full, which costs that path a few
-// cycles and keeps the linker from dropping it.
-//
-//go:section .text.MoveImage
-//go:noinline
-func packetPlace() { nops(packetPlaceNops) }
-
-// packetPlaceNops is packetPlace's size, in instructions past its return.
-const packetPlaceNops = 56
 
 // packetMoved copies the request q, filled in at what was the queue's tail
 // before interrupts were masked, to the tail as it is now, and returns it
