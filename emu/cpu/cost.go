@@ -165,6 +165,11 @@ const (
 	costMissAfterStore = 3
 	costMissAfterLoad  = 3
 
+	// costBlockStoreTenths is how long before the end of a block's open
+	// part, in tenths of a cycle, a store has to start leaving the write
+	// buffer while a DMA runs in blocks (HoldBlocks).
+	costBlockStoreTenths = 14
+
 	// costDMALoad is a load from the DMA controller's registers beyond its
 	// own cycle: 4.0 for DICR and DPCR (cpucost5, "lw dicr", "lw dpcr").
 	costDMALoad = 3
@@ -259,6 +264,17 @@ type cost struct {
 	// will hold it from the end of the next step.
 	busFree, holdNext uint64
 
+	// A transfer in blocks (HoldBlocks) holds the bus for the start of
+	// each block and leaves it open for the rest: from blkStart to blkEnd,
+	// in cycles, a block every blkPeriod tenths of a cycle, the last
+	// blkOpen tenths of each open. blkNext is the blocks of one that
+	// starts at the end of the next step.
+	blkStart, blkEnd            uint64
+	blkPeriod, blkOpen, blkNext uint64
+
+	// now is when the last step ended, for steady.
+	now uint64
+
 	// events counts the steps that waited or missed, which change what
 	// the same steps cost the next time, for TryPass.
 	events uint64
@@ -295,6 +311,63 @@ func (c *CPU) HoldBus(cycles uint64) {
 	}
 }
 
+// HoldBlocks has a DMA that runs in blocks, as an image's does on its way to
+// the GPU, hold the bus under the cost model for the first part of each of
+// its blocks, from the end of the next step: a block every period tenths of
+// a cycle, with the bus open to the CPU for the last open tenths of each.
+// Code in the instruction cache runs on throughout. An access to the bus
+// (a load, a store leaving the write buffer, a cache miss's fill) may start
+// only while the bus is open, and waits for that otherwise.
+//
+// On a console (probes/dmahold, exp/cleanlib/spec/50-image-console-time.md)
+// an image of 64 blocks of 16 words takes 1,800 cycles to go to the GPU,
+// 28.1 a block. While it goes, 256 cached nops take 259 cycles as they do
+// alone, and a counter read after them some 20 more. Loads from RAM go one
+// to a block, in a run (64 in 1,770 cycles) or with a nop or seven between
+// (16 in 470). Reads of a port go two to a block in a run (32 in 480) and
+// one to a block seven nops apart (16 in 475). Stores leave the write buffer
+// about three to a block (64 in 690). So the bus is open for more than a
+// port read's 5 cycles and no more than a load's 6. Three stores' drains
+// of 2 cycles would start in that, every block, and the console has fewer,
+// about 2.6: the model has a store start to leave the buffer no later than
+// costBlockStoreTenths before the open part ends, which makes it two in
+// the blocks whose open part starts late in a cycle and three in the rest.
+//
+// How far a store's word lies from the image's makes no difference: 32
+// stores take 331 to 334 cycles with the blocks going whether they go 4
+// bytes from the image's first word, 256 KB from it or to the stack
+// (dmahold, round 2). Stores in twos and fours with nops between cost some
+// 4 cycles a store over what they cost alone, and a load and a store in
+// turn 535 cycles for 16 of each, a load a block and some.
+func (c *CPU) HoldBlocks(blocks, period, open uint64) {
+	if m := c.cost; m != nil && blocks != 0 && open < period {
+		m.blkNext, m.blkPeriod, m.blkOpen = blocks, period, open
+	}
+}
+
+// bus returns when an access to the bus wanted at t may start: after a DMA
+// that holds it, and in the open part of a block of one that runs in
+// blocks.
+func (m *cost) bus(t uint64) uint64 { return m.busFor(t, 0) }
+
+// busFor is bus for an access that has to start short tenths of a cycle
+// before a block's open part ends.
+func (m *cost) busFor(t, short uint64) uint64 {
+	t = max(t, m.busFree)
+	if t < m.blkStart || t >= m.blkEnd {
+		return t
+	}
+	held := m.blkPeriod - m.blkOpen
+	switch phase := (t - m.blkStart) * 10 % m.blkPeriod; {
+	case phase < held:
+		t += (held - phase + 9) / 10
+	case phase+short >= m.blkPeriod:
+		// Too late in this block: the next one's open part.
+		t += (m.blkPeriod - phase + held + 9) / 10
+	}
+	return t
+}
+
 // step returns what the step about to run costs: the instruction is fetched,
 // as Run left it in Opcode from PC, and not yet executed, so the registers
 // are what it reads. Waits come before the fetch.
@@ -325,6 +398,11 @@ func (m *cost) step(c *CPU) uint32 {
 		m.busFree = t + m.holdNext
 		m.holdNext = 0
 	}
+	if m.blkNext != 0 {
+		m.blkStart, m.blkEnd = t, t+(m.blkNext*m.blkPeriod+9)/10
+		m.blkNext = 0
+	}
+	m.now = t
 	return uint32(t - start)
 }
 
@@ -356,7 +434,7 @@ func (m *cost) execute(c *CPU, op, pc uint32, t uint64) uint64 {
 		if r == regionSPU {
 			ready = max(ready, m.spuFree)
 		}
-		t = m.wait(t, max(ready, m.busFree))
+		t = m.wait(t, m.bus(max(t, ready)))
 		t = m.fetch(pc, t)
 		switch r {
 		case regionRAM:
@@ -397,7 +475,8 @@ func (m *cost) execute(c *CPU, op, pc uint32, t uint64) uint64 {
 		t = m.wait(t, (m.wb[m.wbAt]+1)/2)
 		t = m.fetch(pc, t)
 		drain, held := uint64(wbIOHalves), uint64(0)
-		start := max(2*t, m.wbLast, 2*m.busFree)
+		start := max(2*t, m.wbLast)
+		start = max(start, 2*m.busFor(start/2, costBlockStoreTenths))
 		switch r {
 		case regionRAM:
 			drain = wbRAMHalves
@@ -445,7 +524,7 @@ func (m *cost) fetch(pc uint32, t uint64) uint64 {
 
 	// Only RAM through KUSEG and KSEG0 is cached.
 	if r := regionOf(pc); r != regionRAM || pc>>29 == 5 {
-		t = m.wait(t, m.busFree)
+		t = m.wait(t, m.bus(t))
 		if r == regionROM {
 			return t + 1 + costROM
 		}
@@ -465,7 +544,7 @@ func (m *cost) fetch(pc uint32, t uint64) uint64 {
 
 	// The fill reads RAM, so it waits for a DMA holding the bus and for
 	// RAM to be free of the last store or load.
-	t = m.wait(t, max(m.busFree, m.ramFree))
+	t = m.wait(t, m.bus(max(t, m.ramFree)))
 	m.events++
 	words := 4 - word
 	t += costMissLine + (costMissWordHalves*uint64(words)+1)/2
@@ -485,6 +564,7 @@ func (m *cost) fetch(pc uint32, t uint64) uint64 {
 // nothing and waited for nothing, and leaves the model where it found it.
 func (m *cost) steady(before *cost) bool {
 	return m.events == before.events && before.holdNext == 0 &&
+		before.blkNext == 0 && m.now >= m.blkEnd &&
 		m.streamNext == before.streamNext &&
 		m.loadNext == before.loadNext && (!m.loadNext || m.loadReg == before.loadReg)
 }
