@@ -170,6 +170,81 @@ func nops(n int) {
 	}
 }
 
+// loads spends 2 cycles a load in the emulator, in line, on n loads of the
+// stack's top word into $zero: about 6 each under a console's costs (emu's
+// SetCPUCost; padcost48's "lw zero", spec 48), where a nop costs 1 and a
+// store about 2. It takes no register and no address, so it stands where a
+// nop would. For a pad that has to take Sony's time on a console as well as
+// in the emulator (spec 50).
+//
+//go:inline
+func loads(n int) {
+	for range n {
+		device.Asm("lw $$0, 0($$sp)")
+	}
+}
+
+// mults spends 4 cycles a turn in the emulator on n multiplies of zero and
+// reads of the result into a register of the compiler's choosing (into
+// $zero the read may not wait for the result: a console's poll was some 8
+// cycles shorter than the model had it with one, spec 50): about 8 a turn
+// under a console's costs
+// (padcost48's "mult rs 7"), with no access to the bus. For a pad that runs
+// while an image's blocks go by DMA, where each load or store waits for the
+// bus, a block's time each (spec 50, probes/dmahold), and nops are too
+// cheap. It changes HI and LO, which no caller keeps across a call.
+//
+//go:inline
+func mults(n int) {
+	for range n {
+		device.AsmFull("mult $$0, $$0\nmflo {}", nil)
+	}
+}
+
+// multsWide is mults with the stack pointer for the first operand, a wide
+// one: about 15 a turn under a console's costs ("mult rs 7fffffff").
+//
+//go:inline
+func multsWide(n int) {
+	for range n {
+		device.AsmFull("mult $$sp, $$0\nmflo {}", nil)
+	}
+}
+
+// loadTurns5, loadTurns6 and loadTurns7 spend 5, 6 and 7 turns of a loop
+// of a load of the stack's top word, a branch and a count: 3 instructions a
+// turn and one before, so 32, 38 and 44 cycles in the emulator and about 9
+// a turn under a console's costs. For a long pad: the same instructions run
+// from one or two cache lines where as many loads one after another lie in
+// four or five, and a call that runs cold, as the first after a blank does,
+// takes some 9 cycles for each line (spec 50). A turn's load waits for the
+// bus a block's time while an image's blocks go.
+//
+//go:inline
+func loadTurns5() {
+	device.AsmFull(".set push\n.set noreorder\naddiu {}, $$0, 4\n1:\nlw $$0, 0($$sp)\nbnez {}, 1b\naddiu {}, {}, -1\n.set pop", nil)
+}
+
+//go:inline
+func loadTurns6() {
+	device.AsmFull(".set push\n.set noreorder\naddiu {}, $$0, 5\n1:\nlw $$0, 0($$sp)\nbnez {}, 1b\naddiu {}, {}, -1\n.set pop", nil)
+}
+
+//go:inline
+func loadTurns7() {
+	device.AsmFull(".set push\n.set noreorder\naddiu {}, $$0, 6\n1:\nlw $$0, 0($$sp)\nbnez {}, 1b\naddiu {}, {}, -1\n.set pop", nil)
+}
+
+// loadsApart is loads on the word above the stack's top: a pad of loads on
+// one path that the compiler is not to merge with another path's loads.
+//
+//go:inline
+func loadsApart(n int) {
+	for range n {
+		device.Asm("lw $$0, 4($$sp)")
+	}
+}
+
 // delay spends n instructions and the call. In assembly, for what a Go call needs to
 // spend exactly.
 //

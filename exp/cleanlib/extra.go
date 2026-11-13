@@ -81,6 +81,7 @@ func PopMatrix()
 // Sony's does, as LoadImage (spec 49).
 //
 //export StoreImage
+//go:section .text.DrawSync
 //go:noinline
 func StoreImage(rect *RECT, p *uint32) int32 {
 	// The transfer is worked out first, as LoadImage's.
@@ -107,10 +108,12 @@ func StoreImage(rect *RECT, p *uint32) int32 {
 	switch {
 	case t.none():
 		spins(storeImageNoSizeTurns)
+		loads(storeImageNoSizeLoads)
 		space(storeImageNoSizeSpace)
 	default:
 		spins(storeImageReadyTurns)
 		t.leave()
+		loads(storeImageReadyLoads)
 		space(storeImageReadySpace)
 		for gp1.Get()&gpuStatReady == 0 {
 		}
@@ -120,13 +123,14 @@ func StoreImage(rect *RECT, p *uint32) int32 {
 		// another's time.
 		switch {
 		case !t.blocks():
+			loads(storeImageNoBlockLoads)
 			spaceWith(storeImageNoBlockSpace, 1)
 			nops(storeImageNoBlockNops)
 		case t.head != 0:
 			spaceWith(storeImageMixedSpace, 2)
 			nops(storeImageMixedNops)
 		default:
-			space(storeImageBlockSpace)
+			loadTurns7()
 			nops(storeImageBlockNops)
 		}
 	}
@@ -150,13 +154,13 @@ func readImage(t transfer, p *uint32) {
 	gp1.Set(gp1DMAOff)
 	nops(readImageClearNops)
 	gp0.Set(0x01000000)
-	space(readImageCommandSpace)
+	loads(readImageCommandSpace)
 	gp0.Set(0xc0000000)
-	space(readImagePlaceSpace)
+	loads(readImagePlaceSpace)
 	gp0.Set(t.place)
-	space(readImageSizeSpace)
+	loads(readImageSizeSpace)
 	gp0.Set(t.size)
-	space(readImageSendSpace)
+	loads(readImageSendSpace)
 	// GPUSTAT read until the GPU has the pixels to send.
 	for gp1.Get()&gpuStatSend == 0 {
 	}
@@ -181,9 +185,9 @@ func readImage(t transfer, p *uint32) {
 			space(readImageMixedSpace)
 		}
 		gp1.Set(gp1DMAFromGPU)
-		space(readImageAddrSpace)
+		loads(readImageAddrSpace)
 		dmaGPUAddr.Set(t.addr)
-		space(readImageCountSpace)
+		loads(readImageCountSpace)
 		nops(readImageCountNops)
 		dmaGPUBlock.Set(t.count)
 		nops(readImageStartNops)
@@ -194,14 +198,14 @@ func readImage(t transfer, p *uint32) {
 // readImage's pads, in 2-cycle stores.
 const (
 	readImageClearNops    = 1
-	readImageCommandSpace = 1
+	readImageCommandSpace = 2
 	readImagePlaceSpace   = 4
 	readImageSizeSpace    = 4
 	readImageSendSpace    = 2
 	readImageWordsSpace   = 1
 	readImageWholeNops    = 1
 	readImageMixedSpace   = 0
-	readImageAddrSpace    = 1
+	readImageAddrSpace    = 2
 	readImageCountSpace   = 1
 	readImageCountNops    = 1
 	readImageStartNops    = 0
@@ -227,6 +231,7 @@ const (
 // after the last. I_MASK is put back 48 cycles after the channel starts.
 //
 //export ClearImage
+//go:section .text.MoveImage
 //go:noinline
 func ClearImage(rect *RECT, r, g, b uint8) int32 {
 	color := uint32(b)<<16 | uint32(g)<<8 | uint32(r)
@@ -310,9 +315,20 @@ func ClearImage(rect *RECT, r, g, b uint8) int32 {
 		q.env[10] = 0xe5<<24 | gp0.Get()&0xffffff
 		space(clearImageLastSpace)
 	}
-	packetStart(q, 2, 0, 0)
+	packetStart(q, 2, 0, 2)
 	rect.W, rect.H = w, h
-	space(clearImageLeaveSpace)
+	// Loads for part of the pad, more of them for a fill: Sony's takes
+	// some 100 cycles longer than stores alone on a console, a rectangle,
+	// and 150 a fill (spec 50).
+	if fill {
+		loads(clearImageLeaveFillLoads)
+		nops(clearImageLeaveFillNops)
+		spaceWith(clearImageLeaveFillSpace, 1)
+	} else {
+		loads(clearImageLeaveRectLoads)
+		nops(clearImageLeaveRectNops)
+		spaceWith(clearImageLeaveRectSpace, 2)
+	}
 	imageLeave(m)
 	nops(clearImageLeaveNops)
 	imageCallLeaves(m)
@@ -341,7 +357,12 @@ const (
 	clearImageAnswer2Nops      = 3
 	clearImageAsk2Space        = 9
 	clearImageLastSpace        = 7
-	clearImageLeaveSpace       = 21
+	clearImageLeaveFillLoads   = 15
+	clearImageLeaveFillNops    = 1
+	clearImageLeaveFillSpace   = 0
+	clearImageLeaveRectLoads   = 0
+	clearImageLeaveRectNops    = 12
+	clearImageLeaveRectSpace   = 4
 	clearImageLeaveNops        = 3
 	clearImageQueuedTurns      = 8
 	clearImageQueuedSpace      = 0

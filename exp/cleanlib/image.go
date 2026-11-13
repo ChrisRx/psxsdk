@@ -39,7 +39,17 @@ const getTPagePad = 26
 // with no blocks, and returns 54 after that. The blocks are then still
 // going when it returns, and a DrawSync(1) straight after gives 1.
 //
+// On a console the blocks hold the bus while they go, and every load and
+// store the call makes after starting them waits a block's time for it
+// (spec 50). Sony's call takes some 20 cycles more for each block of the
+// image up to 24. So the pad after the blocks start is six loads in a
+// loop, which with the call's own loads on its way out come to Sony's 24,
+// and the pads before it are loads in part, the longest of them a loop too,
+// for the call's time with no blocks and for the lines of code a cold call
+// has to fetch.
+//
 //export LoadImage
+//go:section .text.DrawSync
 //go:noinline
 func LoadImage(rect *RECT, p *uint32) int32 {
 	// The transfer is worked out first, while there is time to spare:
@@ -72,7 +82,7 @@ func LoadImage(rect *RECT, p *uint32) int32 {
 	default:
 		spins(loadImageReadyTurns)
 		t.leave()
-		space(loadImageReadySpace)
+		loadTurns6()
 		for gp1.Get()&gpuStatReady == 0 {
 		}
 		sendImage(t, unsafe.Pointer(p))
@@ -81,11 +91,19 @@ func LoadImage(rect *RECT, p *uint32) int32 {
 		// another's time.
 		switch {
 		case !t.blocks():
-			spaceWith(loadImageNoBlockSpace, 1)
+			nops(loadImageNoBlockNops)
+			loadTurns5()
 		case t.head != 0:
-			spaceWith(loadImageMixedSpace, 2)
+			nops(loadImageMixedNops)
+			loadTurns5()
 		default:
-			space(loadImageBlockSpace)
+			// The blocks are going, and each load waits for the
+			// bus for a block's time on a console (spec 50).
+			// Sony's call takes 20 cycles more for each block of
+			// the image up to 24: six loads here and those of
+			// the call's way out come to that.
+			nops(loadImageBlockNops)
+			loadTurns6()
 		}
 	}
 	imageLeave(m)
