@@ -24,8 +24,21 @@
 8002e4a8 .text.libps_biosB
 
 # DrawSync, LoadImage and StoreImage, and MoveImage and ClearImage (spec 50).
-80017aa4 .text.DrawSync
-800139dc .text.MoveImage
+# The two sections start 72 and 232 bytes later than the image that passed
+# specs 50 and 51 had them, the sizes of drawPlace and packetPlace, which
+# came out of them (spec 55): what followed those functions lies where it did.
+80017aec .text.DrawSync
+80013ac4 .text.MoveImage
 8004114c .text.go.chrisrx.dev/psx/exp/cleanlib.drawPollMove
 80041014 .text.(*go.chrisrx.dev/psx/exp/cleanlib.cdWatch).check
 800151c4 .text.(*go.chrisrx.dev/psx/exp/cleanlib.cdWatch).begin
+
+# The image calls' queue and refusal paths, each on lines clear of the calls
+# it runs alongside (spec 55): placed by the cache lines they take, not by
+# where the packing had them.
+80010b20 .text.go.chrisrx.dev/psx/exp/cleanlib.queueLoad
+800102d0 .text.go.chrisrx.dev/psx/exp/cleanlib.queueStore
+800149d0 .text.go.chrisrx.dev/psx/exp/cleanlib.packetMoved
+80010040 .text.go.chrisrx.dev/psx/exp/cleanlib.packetRoomWait
+80010a00 .text.go.chrisrx.dev/psx/exp/cleanlib.imageTurn
+80010a90 .text.go.chrisrx.dev/psx/exp/cleanlib.imageRefused
