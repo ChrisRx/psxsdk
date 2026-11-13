@@ -33,6 +33,12 @@ const drawCyclesPerPixel = 1
 // exp/cleanlib), and is ready for a command 16 cycles after the channel ends.
 const imageCyclesTenths = 17
 
+// imageFromCyclesHundredths is the cycles, in hundredths, a word of an image
+// takes to come from the GPU by DMA under SetDrawTime. A console takes 2,215
+// cycles for 64 blocks of 16 words and 8,930 for 256 (probes/dmahold of
+// exp/cleanlib, "store alone"): 34.6 a block.
+const imageFromCyclesHundredths = 216
+
 // drawTime is the GPU's clock for SetDrawTime: whether it is on, the CPU's
 // cycle count, when the GPU will have drawn what it has been given, and what
 // the last drawing command cost.
@@ -95,25 +101,35 @@ func (d *dma) transferGPUTimed() {
 	d.endGPU()
 }
 
-// timeGPURequest has an image just sent to the GPU by DMA in request mode
-// take its time under SetDrawTime: the channel stays busy until the GPU has
-// taken its words, after what it was drawing, and the GPU is not ready for a
-// command until then. It reports whether it did; a transfer from the GPU, or
-// of no words, ends at once as before.
+// timeGPURequest has an image just sent to the GPU by DMA in request mode,
+// or read from it, take its time under SetDrawTime: the channel stays busy
+// until the words have gone, after what the GPU was drawing, and the GPU is
+// not ready for a command until then. It reports whether it did; a transfer
+// of no words ends at once as before.
 func (d *dma) timeGPURequest() bool {
 	n := d.pending[dmaGPU]
-	if n == 0 || *d.chcr(dmaGPU)&chcrToDevice == 0 {
+	if n == 0 {
 		return false
+	}
+	// A word's time, in hundredths of a cycle, and how long each block
+	// leaves the bus open, by the transfer's direction.
+	word, open := uint64(imageCyclesTenths*10), uint64(imageOpenTenths)
+	if *d.chcr(dmaGPU)&chcrToDevice == 0 {
+		word, open = imageFromCyclesHundredths, imageFromOpenTenths
 	}
 	t := &d.gpu.time
 	waiting := t.until > *t.clock
-	t.until = max(t.until, *t.clock) + uint64(n)*imageCyclesTenths/10
+	t.until = max(t.until, *t.clock) + uint64(n)*word/100
 	d.gpuEnd, d.gpuWords, d.pending[dmaGPU] = t.until, n, 0
 	if size := uint64(d.size(dmaGPU)); !waiting && size != 0 {
 		// The blocks start now, and each holds the bus for all but the
 		// end of its time. Behind a drawing they start later, and the
 		// model leaves the bus alone.
-		d.holdBlocks(uint64(n)/size, size*imageCyclesTenths, imageOpenTenths)
+		k := uint64(1)
+		if *d.chcr(dmaGPU)&chcrToDevice == 0 {
+			k = imageFromSplit
+		}
+		d.holdBlocks(uint64(n)/size*k, size*word/10/k, open)
 	}
 	return true
 }
