@@ -15,7 +15,7 @@
 8002d530 .text.VSyncCallback
 80016328 .text.libps_intr_entry
 80042868 .text.go.chrisrx.dev/psx/exp/cleanlib.tickExitPace
-80043368 .text.go.chrisrx.dev/psx/exp/cleanlib.spin
+8001ad5c .text.go.chrisrx.dev/psx/exp/cleanlib.spin
 80022654 .text.libps_wait_blanks
 
 # The TTY, which a program prints through between the waits it times.
@@ -42,3 +42,7 @@
 80010040 .text.go.chrisrx.dev/psx/exp/cleanlib.packetRoomWait
 80010a00 .text.go.chrisrx.dev/psx/exp/cleanlib.imageTurn
 80010a90 .text.go.chrisrx.dev/psx/exp/cleanlib.imageRefused
+
+# drawNext runs between two image calls: on lines clear of MoveImage and
+# DrawSync (spec 56).
+80016990 .text.go.chrisrx.dev/psx/exp/cleanlib.drawNext
