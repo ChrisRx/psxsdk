@@ -184,8 +184,12 @@ it says):
   and a newline (the byte in lower-case hexadecimal, no leading zeros)
   and fails; Krom2Tim2 draws a blank cell and returns -1 at the end.
 - A two-byte code from 8140h to 84BEh draws its glyph if its cell is
-  assigned, and a blank cell if not (an unassigned cell, or a trail byte
-  below 40h, 7Fh or above FCh). This is so for both calls.
+  assigned. If it is not (an unassigned cell, or a trail byte below 40h,
+  7Fh or above FCh), Krom2Tim2 draws a blank cell, and Krom2Tim draws the
+  30 bytes just before the non-kanji table, at BFC65FE2h, as a glyph
+  (spec 51). Those bytes depend on the BIOS: on scph1001 and the console
+  they are the end of the copyright string and four addresses, and on
+  OpenBIOS and the later Sony BIOSes they are zeros, a blank cell.
 - A two-byte code from 889Fh to 9872h draws its kanji. With a trail byte
   below 40h, 7Fh or above FCh, Krom2Tim draws the glyph just before the
   first kanji, at BFC69D4Ah (the last box drawing character's), and
