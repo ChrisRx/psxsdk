@@ -76,20 +76,23 @@ type dma struct {
 	stop func(error)
 
 	// holdBus has the CPU wait out a transfer under SetCPUCost
-	// (cpucost.go), and does nothing otherwise.
-	holdBus func(cycles uint64)
+	// (cpucost.go), and does nothing otherwise. holdBlocks is the same
+	// for a transfer in blocks, which holds the bus for part of each.
+	holdBus    func(cycles uint64)
+	holdBlocks func(blocks, period, open uint64)
 }
 
 // newDMA returns a DMA controller with every channel idle, setting wake
 // when it becomes active and reporting an error that stops the run to stop.
 func newDMA(bus *Bus, ic *ic, wake *bool, stop func(error)) *dma {
 	return &dma{
-		bus:     bus,
-		ic:      ic,
-		wake:    wake,
-		stop:    stop,
-		dpcr:    0x07654321,
-		holdBus: func(uint64) {},
+		bus:        bus,
+		ic:         ic,
+		wake:       wake,
+		stop:       stop,
+		dpcr:       0x07654321,
+		holdBus:    func(uint64) {},
+		holdBlocks: func(uint64, uint64, uint64) {},
 	}
 }
 

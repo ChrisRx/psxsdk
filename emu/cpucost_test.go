@@ -290,3 +290,68 @@ func TestCPUCostLoadsZero(t *testing.T) {
 	startAt(m, at)
 	assert.Equal(t, []uint32{6, 6, 6, 6, 6 + 1, 1 + 1}, stepCosts(t, m, len(code)))
 }
+
+// TestCPUCostBlocks sends an image to the GPU in blocks of 16 words, with
+// the drawing time on: cached code runs on, loads from RAM go one to a
+// block, reads of a port two to a block, and stores leave the write buffer
+// two or three to a block, wherever in RAM they go (probes/dmahold, spec 50
+// of exp/cleanlib).
+func TestCPUCostBlocks(t *testing.T) {
+	const (
+		at     = 0x80010000
+		r5     = uint32(5)
+		r6     = uint32(6)
+		blocks = 32
+		block  = 16 * imageCyclesTenths // tenths of a cycle
+	)
+	run := func(body ...uint32) []uint32 {
+		m := newTestMachine(t)
+		m.SetCPUCost(true)
+		m.SetDrawTime(true)
+		m.Bus.Write32(0x1f8010f0, 0x00000800) // enable channel 2
+		code := append([]uint32{
+			nop,
+			sw(r2, 0x10a0, r5), sw(r3, 0x10a4, r5), // MADR and BCR
+			sw(r1, 0x10a8, r5), // CHCR: start
+			nop,                // the blocks start after this one
+		}, body...)
+		write(m, at, code...)
+		m.CPU.R[r4], m.CPU.R[r5], m.CPU.R[r6] = 0x80020000, 0x1f800000, 0x80100000
+		var costs []uint32
+		for _, timed := range []bool{false, true} { // the first into the cache
+			m.SetDrawTime(timed)
+			m.Bus.Write32(0x1f801814, 0x04000000)
+			m.Bus.Write32(0x1f801810, 0xa0000000)
+			m.Bus.Write32(0x1f801810, 0<<16|640)
+			m.Bus.Write32(0x1f801810, blocks<<16|32)
+			m.Bus.Write32(0x1f801814, 0x04000002)
+			m.CPU.R[r1], m.CPU.R[r2], m.CPU.R[r3] = 0x01000201, 0x00020400, blocks<<16|16
+			startAt(m, at)
+			costs = stepCosts(t, m, len(code))[5:]
+		}
+		return costs
+	}
+	sum := func(costs []uint32) (n uint32) {
+		for _, c := range costs {
+			n += c
+		}
+		return n
+	}
+	repeat := func(n int, ops ...uint32) (code []uint32) {
+		for range n {
+			code = append(code, ops...)
+		}
+		return code
+	}
+	// blocksOf is how many blocks' time the steps took, to the nearest.
+	blocksOf := func(costs []uint32) uint32 { return (sum(costs)*10 + block/2) / block }
+
+	assert.Equal(t, uint32(64), sum(run(repeat(64, nop)...)), "cached code runs on")
+	assert.Equal(t, 16, blocksOf(run(repeat(16, lw(r2, 0, r4))...)), "a load from RAM a block")
+	assert.Equal(t, 16, blocksOf(run(repeat(16, lw(r2, 0, r4), nop, nop, nop, nop, nop, nop, nop)...)), "a load from RAM a block, seven nops apart")
+	assert.Equal(t, 8, blocksOf(run(repeat(16, lw(r2, 0x1814, r5))...)), "two reads of a port a block")
+	assert.Equal(t, 10, blocksOf(run(repeat(30, sw(0, 4, r4))...)), "two or three stores a block, after the four the write buffer holds")
+	assert.Equal(t, 10, blocksOf(run(repeat(30, sw(0, 4, r6))...)), "wherever in RAM they go")
+	after := run(append(repeat(blocks+2, lw(r2, 0, r4)), lw(r1, 0, r4), lw(r2, 0, r4))...)
+	assert.Equal(t, []uint32{6, 6}, after[blocks+2:], "and the bus is free once the blocks are done")
+}

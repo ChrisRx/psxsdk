@@ -116,6 +116,7 @@ func New(bios []byte) (*Machine, error) {
 	m.gpu.time.clock = cycles
 	m.dma.gpu = m.gpu
 	m.dma.holdBus = m.CPU.HoldBus
+	m.dma.holdBlocks = m.CPU.HoldBlocks
 	m.tmr = &timers{gpu: m.gpu, ic: m.ic, clock: &m.CPU.TotalCycles, wake: &m.wake}
 	m.gpu.timers = m.tmr
 	m.cd = newCDROM(m.ic, cycles, &m.wake, m.fail.report)

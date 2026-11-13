@@ -106,8 +106,15 @@ func (d *dma) timeGPURequest() bool {
 		return false
 	}
 	t := &d.gpu.time
+	waiting := t.until > *t.clock
 	t.until = max(t.until, *t.clock) + uint64(n)*imageCyclesTenths/10
 	d.gpuEnd, d.gpuWords, d.pending[dmaGPU] = t.until, n, 0
+	if size := uint64(d.size(dmaGPU)); !waiting && size != 0 {
+		// The blocks start now, and each holds the bus for all but the
+		// end of its time. Behind a drawing they start later, and the
+		// model leaves the bus alone.
+		d.holdBlocks(uint64(n)/size, size*imageCyclesTenths, imageOpenTenths)
+	}
 	return true
 }
 
