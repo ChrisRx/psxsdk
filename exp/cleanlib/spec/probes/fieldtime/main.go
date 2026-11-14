@@ -83,7 +83,7 @@ func us(t uint32) uint32 { return t * 8 * 1000 / 33869 }
 func hex(v uint32) {
 	const d = "0123456789abcdef"
 	for i := 28; i >= 0; i -= 4 {
-		print(string(rune(d[v>>uint(i)&15])))
+		print(d[v>>uint(i)&15:][:1])
 	}
 }
 
