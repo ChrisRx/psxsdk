@@ -137,7 +137,12 @@ func decimal(word []byte) uint32 {
 	return v
 }
 
-// command carries out a line the host typed.
+// command carries out a line the host typed. Some commands allocate, a
+// little each time one runs, and play waits a frame at a time, which makes
+// the monitor's loop look like a frame loop to the build's check: the
+// pragma says the allocations are a command's, not a frame's.
+//
+//go:allocates
 func command(l []byte) {
 	args := split(l)
 	if len(args) == 0 {
