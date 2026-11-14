@@ -190,10 +190,10 @@ func waitField(n, seen uint32) {
 // waitBlanks waits until the count of vertical blanks reaches n. A pass of
 // the wait and its way out take Sony's time: VSync(0) on a 240-line display
 // reads timer 1 on its way out 38 to 60 cycles after the interrupt that
-// counted the blank returns, 80 to 140 under a console's costs (probe
-// spec/probes/vsyncpoll, spec 45). That is where a program's next poll of
-// VSync(-1) is when the next blank comes. It is in the target's assembly,
-// where the pass's instructions stay as written.
+// counted the blank returns, 86 to 137 under a console's costs (probes
+// spec/probes/vsyncpoll and waitpass, specs 45 and 57). That is where a
+// program's next poll of VSync(-1) is when the next blank comes. It is in
+// the target's assembly, where the pass's instructions stay as written.
 //
 //export libps_wait_blanks
 func waitBlanks(n uint32)
