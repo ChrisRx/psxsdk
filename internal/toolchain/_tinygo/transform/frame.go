@@ -63,6 +63,9 @@ func CheckFrameAllocs(mod llvm.Module) []error {
 			continue
 		}
 		for _, use := range getUses(fn) {
+			if isHotSlot(use) {
+				continue // a call through the slot is a call of fn, below
+			}
 			if use.IsACallInst().IsNil() || use.CalledValue() != fn {
 				values[fn.GlobalValueType()] = append(values[fn.GlobalValueType()], fn)
 				break
@@ -91,6 +94,8 @@ func CheckFrameAllocs(mod llvm.Module) []error {
 		var callees []llvm.Value
 		if callee := call.CalledValue(); !callee.IsAFunction().IsNil() {
 			callees = []llvm.Value{callee}
+		} else if body := hotSlotBody(callee); !body.IsNil() {
+			callees = []llvm.Value{body}
 		} else {
 			callees = values[call.CalledFunctionType()]
 		}
@@ -179,6 +184,30 @@ func CheckFrameAllocs(mod llvm.Module) []error {
 	}
 	sortErrors(errs)
 	return errs
+}
+
+// isHotSlot reports whether v is a hot build's slot for a function of
+// package main, the global its stub calls the function's body through (see
+// HotStubs). The body's address in a slot is not a function value the
+// program made: only the stub calls it.
+func isHotSlot(v llvm.Value) bool {
+	return !v.IsAGlobalVariable().IsNil() && strings.HasSuffix(v.Name(), "$slot")
+}
+
+// hotSlotBody returns the function a hot build's stub calls when callee is
+// the stub's load of its slot, and a nil value otherwise.
+func hotSlotBody(callee llvm.Value) llvm.Value {
+	if callee.IsALoadInst().IsNil() {
+		return llvm.Value{}
+	}
+	slot := callee.Operand(0)
+	if !isHotSlot(slot) {
+		return llvm.Value{}
+	}
+	if body := slot.Initializer(); !body.IsNil() && !body.IsAFunction().IsNil() {
+		return body
+	}
+	return llvm.Value{}
 }
 
 // sortErrors sorts errors, each a scanner.Error, by file and line.

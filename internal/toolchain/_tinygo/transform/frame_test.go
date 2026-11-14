@@ -42,3 +42,24 @@ func TestCheckFrameAllocs(t *testing.T) {
 		t.Errorf("got:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 }
+
+// TestCheckFrameAllocsHot checks that a hot build's slots, through which
+// each function of package main is called, do not make main's own body a
+// function value that a callback in the library's VSync might call.
+func TestCheckFrameAllocsHot(t *testing.T) {
+	t.Parallel()
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	buf, err := llvm.NewMemoryBufferFromFile("testdata/framehot.ll")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mod, err := ctx.ParseIR(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mod.Dispose()
+	for _, err := range transform.CheckFrameAllocs(mod) {
+		t.Error(err)
+	}
+}
