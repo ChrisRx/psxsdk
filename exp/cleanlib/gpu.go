@@ -1149,7 +1149,6 @@ const (
 //
 //go:noinline
 func queueLoad(r RECT, p unsafe.Pointer) bool {
-	nops(queueImageNops)
 	if onStack(p) {
 		return false
 	}
@@ -1159,22 +1158,12 @@ func queueLoad(r RECT, p unsafe.Pointer) bool {
 
 //go:noinline
 func queueStore(r RECT, p unsafe.Pointer) bool {
-	nops(queueImageNops)
 	if onStack(p) {
 		return false
 	}
 	queueImage(r, p, imageStore)
 	return true
 }
-
-// queueImageNops are nops at the start of queueLoad and queueStore, 8
-// cycles of the queued call's time, for their size. Without them each is
-// 216 bytes, and the image's packing gave one of them the place
-// libps_vsync_wait had, 8003C070h, and put that elsewhere, on other cache
-// lines. Under a console's costs VSync(0) at 240 lines then returned 158 to
-// 165 cycles after the interrupt in many fields, where it had returned
-// within 155 (TestVSyncPoll, spec 49).
-const queueImageNops = 4
 
 // onStack reports whether p is on the stack, at or above the stack
 // pointer, or in the scratchpad, which channel 2 cannot reach and where a
