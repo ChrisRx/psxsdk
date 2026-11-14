@@ -271,7 +271,10 @@ var registered []*File
 // Registered returns every file the program registered that a read can
 // deliver, in the order it registered them: all but the tracks of CD audio
 // and the streams, .XA and .STR, which are played rather than read. The
-// slice is made the first time and shared after.
+// slice is made the first time and shared after, which the build's check
+// for allocations in a frame loop does not recognize behind its loops.
+//
+//go:allocates
 func Registered() []*File {
 	if registered == nil {
 		files := make([]File, 0, len(registry))
