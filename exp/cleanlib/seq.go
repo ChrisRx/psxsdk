@@ -171,7 +171,7 @@ func (s *sequence) rewind() {
 func SsSeqOpen(addr *uint32, vabid int16) int32 {
 	soundStart()
 	id := -1
-	for i := range seqs {
+	for i := range &seqs {
 		if !seqs[i].open {
 			id = i
 			break
@@ -530,7 +530,7 @@ func SsSeqSetRitardando(id int16, tempo, time int32) {
 // this tick keys them off again.
 func stopSequences() {
 	snd.stopAsked = false
-	for i := range seqs {
+	for i := range &seqs {
 		s := &seqs[i]
 		if s.open && s.stopReq {
 			s.stopReq = false
@@ -879,15 +879,17 @@ func (s *sequence) noteVolume(b *vab, p *vabProg, t *vabTone, ch, vel uint8) (ui
 // noiseVolume is the volumes of a noise tone's note on: no velocity, no
 // channel volume, no bank volume and no squaring (spec 05, "Noise voices").
 func (s *sequence) noiseVolume(p *vabProg, t *vabTone, ch uint8) (uint16, uint16) {
-	side := func(pf func(int32) int32, seq int32) uint16 {
-		x := int32(0x3fff) * (int32(t.vol) * int32(p.vol)) / (127 * 127)
-		x = x * seq / 127
-		x = x * pf(int32(t.pan)) / 63
-		x = x * pf(int32(p.pan)) / 63
-		x = x * pf(int32(s.chPan[ch])) / 63
-		return uint16(x)
-	}
-	return side(panLeft, seqVolume(s.volL)), side(panRight, seqVolume(s.volR))
+	return s.noiseSide(p, t, ch, seqVolume(s.volL), panLeft), s.noiseSide(p, t, ch, seqVolume(s.volR), panRight)
+}
+
+// noiseSide is one side of noiseVolume, as voiceSide is of voiceVolume.
+func (s *sequence) noiseSide(p *vabProg, t *vabTone, ch uint8, seq int32, pf func(int32) int32) uint16 {
+	x := int32(0x3fff) * (int32(t.vol) * int32(p.vol)) / (127 * 127)
+	x = x * seq / 127
+	x = x * pf(int32(t.pan)) / 63
+	x = x * pf(int32(p.pan)) / 63
+	x = x * pf(int32(s.chPan[ch])) / 63
+	return uint16(x)
 }
 
 // seqVolume is a sequence's volume as the volumes take it: outside 0 to 127

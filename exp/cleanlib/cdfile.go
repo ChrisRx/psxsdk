@@ -89,8 +89,7 @@ func CdSearchFile(fp *CdlFILE, name *byte) *CdlFILE {
 		f.loaded = true
 	}
 	p := unsafe.Pointer(name)
-	at := func(i int) byte { return *(*byte)(unsafe.Add(p, i)) }
-	if at(0) != '\\' {
+	if pathByte(p, 0) != '\\' {
 		return nil
 	}
 	i, dir := 1, 1
@@ -98,11 +97,11 @@ func CdSearchFile(fp *CdlFILE, name *byte) *CdlFILE {
 		// The next part runs to a separator or the end; a part a
 		// separator ends is a directory.
 		n := 0
-		for at(i+n) != 0 && at(i+n) != '\\' {
+		for pathByte(p, i+n) != 0 && pathByte(p, i+n) != '\\' {
 			n++
 		}
 		part := unsafe.Slice((*byte)(unsafe.Add(p, i)), n)
-		if at(i+n) == 0 {
+		if pathByte(p, i+n) == 0 {
 			return f.find(dir, part, fp)
 		}
 		if dir = f.child(dir, part, true); dir == 0 {
@@ -111,6 +110,9 @@ func CdSearchFile(fp *CdlFILE, name *byte) *CdlFILE {
 		i += n + 1
 	}
 }
+
+// pathByte is the i-th byte of the path at p.
+func pathByte(p unsafe.Pointer, i int) byte { return *(*byte)(unsafe.Add(p, i)) }
 
 // search finds the file at path, an absolute path such as "\\DIR\\FILE;1",
 // through the tables, as Sony's CdReadFile and CdReadExec do (spec 14):

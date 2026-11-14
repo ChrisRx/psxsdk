@@ -214,15 +214,17 @@ func setColorMatrix(m *MATRIX) {
 // matrixWords packs a matrix's rotation the way the GTE's registers hold
 // it: two elements to a word, row by row, the ninth alone.
 func matrixWords(m *MATRIX) [5]uint32 {
-	e := func(i, j int) uint32 { return uint32(uint16(m.M[i][j])) }
 	return [5]uint32{
-		e(0, 0) | e(0, 1)<<16,
-		e(0, 2) | e(1, 0)<<16,
-		e(1, 1) | e(1, 2)<<16,
-		e(2, 0) | e(2, 1)<<16,
+		matrixHalf(m, 0, 0) | matrixHalf(m, 0, 1)<<16,
+		matrixHalf(m, 0, 2) | matrixHalf(m, 1, 0)<<16,
+		matrixHalf(m, 1, 1) | matrixHalf(m, 1, 2)<<16,
+		matrixHalf(m, 2, 0) | matrixHalf(m, 2, 1)<<16,
 		uint32(int32(m.M[2][2])),
 	}
 }
+
+// matrixHalf is the element of m at row i, column j, as half a word.
+func matrixHalf(m *MATRIX, i, j int) uint32 { return uint32(uint16(m.M[i][j])) }
 
 // setBK loads the background color, control registers 13 to 15.
 func setBK(r, g, b int32) {

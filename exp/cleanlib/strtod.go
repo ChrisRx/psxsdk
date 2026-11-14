@@ -17,28 +17,28 @@ import "unsafe"
 // for a zero value, and one below -255 zero; the written exponent
 // accumulates in a 32-bit integer and wraps.
 //
-// at(i) is the string's i-th byte.
-func parseFloat(at func(int) byte) (float64, int) {
+// base is the string's address.
+func parseFloat(base uintptr) (float64, int) {
 	i := 0
 	v := 0.0
 	isDigit := func(c byte) bool { return c >= '0' && c <= '9' }
-	for isDigit(at(i)) {
-		v = v*10 + toFloat(int32(at(i)-'0'))
+	for isDigit(strByte(base, i)) {
+		v = v*10 + toFloat(int32(strByte(base, i)-'0'))
 		i++
 	}
 	var scale int32
-	if at(i) == '.' {
+	if strByte(base, i) == '.' {
 		i++
-		for isDigit(at(i)) {
-			v = v*10 + toFloat(int32(at(i)-'0'))
+		for isDigit(strByte(base, i)) {
+			v = v*10 + toFloat(int32(strByte(base, i)-'0'))
 			scale--
 			i++
 		}
 	}
-	if c := at(i); c == 'e' || c == 'E' {
+	if c := strByte(base, i); c == 'e' || c == 'E' {
 		i++
 		negExp := false
-		switch at(i) {
+		switch strByte(base, i) {
 		case '-':
 			negExp = true
 			i++
@@ -46,8 +46,8 @@ func parseFloat(at func(int) byte) (float64, int) {
 			i++
 		}
 		var e int32
-		for isDigit(at(i)) {
-			e = e*10 + int32(at(i)-'0')
+		for isDigit(strByte(base, i)) {
+			e = e*10 + int32(strByte(base, i)-'0')
 			i++
 		}
 		if negExp {
@@ -83,10 +83,13 @@ func parseFloat(at func(int) byte) (float64, int) {
 	return v, i
 }
 
+// strByte is the i-th byte of the string at base.
+func strByte(base uintptr, i int) byte { return *(*byte)(unsafe.Pointer(base + uintptr(i))) }
+
 //export strtod
 func libStrtod(s *byte, end **byte) float64 {
 	base := uintptr(unsafe.Pointer(s))
-	v, n := parseFloat(func(i int) byte { return *(*byte)(unsafe.Pointer(base + uintptr(i))) })
+	v, n := parseFloat(base)
 	if end != nil {
 		*end = (*byte)(unsafe.Pointer(base + uintptr(n)))
 	}
