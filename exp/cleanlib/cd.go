@@ -214,8 +214,12 @@ type cdDriver struct {
 	notify  int
 	notify2 bool
 
-	// mode is the drive mode the last Setmode set.
-	mode uint8
+	// mode is the drive mode the last Setmode set. readMode is the one
+	// CdRead asks for, kept here for its Setmode to take by address: a
+	// local whose address is passed on goes on the heap where the compiler
+	// cannot follow it (spec 59).
+	mode     uint8
+	readMode uint8
 
 	// A read: the sectors still to come, where the next goes, its length
 	// in words, and whether the drive reported an error.
@@ -1040,8 +1044,11 @@ func CdRead(sectors int32, buf *uint32, mode int32) int32 {
 	cdIndex.Set(0)
 	cdReg3.Set(0)
 	comDelay.Set(comDelayIdle)
-	if m != cd.mode && !cd.control(cdlSetmode, &m, nil) {
-		return 0
+	if m != cd.mode {
+		cd.readMode = m
+		if !cd.control(cdlSetmode, &cd.readMode, nil) {
+			return 0
+		}
 	}
 	spinCycles(readSend)
 	volatile.StoreUint32(&cd.readErr, 0)

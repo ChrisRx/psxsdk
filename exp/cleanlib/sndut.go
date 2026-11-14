@@ -9,17 +9,22 @@ package cleanlib
 // pan, and seqL and seqR the sequence's volume, all 0 to 127. The bank,
 // program and tone add their volumes and pans; the sum is squared.
 func voiceVolume(b *vab, p *vabProg, t *vabTone, vol, pan, seqL, seqR int32) (uint16, uint16) {
-	side := func(pf func(int32) int32, seq int32) uint16 {
-		x := int32(0x3fff)
-		x = x * (vol * int32(b.mvol)) / (127 * 127)
-		x = x * (int32(t.vol) * int32(p.vol)) / (127 * 127)
-		x = x * pf(int32(t.pan)) / 63
-		x = x * pf(int32(p.pan)) / 63
-		x = x * pf(pan) / 63
-		x = x * seq / 127
-		return volumeReg(x)
-	}
-	return side(panLeft, seqL), side(panRight, seqR)
+	return voiceSide(b, p, t, vol, pan, seqL, panLeft), voiceSide(b, p, t, vol, pan, seqR, panRight)
+}
+
+// voiceSide is one side of voiceVolume: seq is the sequence's volume on that
+// side, and pf what the side takes of a pan. It is a function with every
+// value passed to it, not a closure inside voiceVolume: a closure's captured
+// variables go on the heap where the compiler does not inline it (spec 59).
+func voiceSide(b *vab, p *vabProg, t *vabTone, vol, pan, seq int32, pf func(int32) int32) uint16 {
+	x := int32(0x3fff)
+	x = x * (vol * int32(b.mvol)) / (127 * 127)
+	x = x * (int32(t.vol) * int32(p.vol)) / (127 * 127)
+	x = x * pf(int32(t.pan)) / 63
+	x = x * pf(int32(p.pan)) / 63
+	x = x * pf(pan) / 63
+	x = x * seq / 127
+	return volumeReg(x)
 }
 
 // startVoice sets voice v up to play tone t of bank b at note and fine,
