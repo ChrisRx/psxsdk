@@ -13,7 +13,7 @@ func divdf3(a, b uint64) uint64
 func hex(v uint64) {
 	const d = "0123456789abcdef"
 	for i := 60; i >= 0; i -= 4 {
-		print(string(rune(d[v>>uint(i)&15])))
+		print(d[v>>uint(i)&15:][:1])
 	}
 }
 
