@@ -4,9 +4,19 @@
 # resident entry points. Point PSX_LIBPS_IMAGE at the result to build a program
 # against it. Run from the repository root, never alongside build.sh's builds
 # of the same sysroot.
+#
+# OPT sets the compiler's optimization level (0, 1, 2, s or z), 2 unless set. A
+# level other than 2 is for TestNoHeapAnyOpt alone (spec 59): a program that
+# links the library statically picks its own level, so the library must not
+# allocate at any of them. Such a build stops after the first link and leaves
+# .build/cleanimage-optN/image.elf, the whole library unpacked, and no libps.exe:
+# the pins hold level 2's sizes, and the packed link script cannot name some of
+# level 0's sections.
 set -euo pipefail
 HERE=exp/cleanlib/image
+OPT=${OPT:-2}
 OUT=.build/cleanimage
+if [ "$OPT" != 2 ]; then OUT=.build/cleanimage-opt$OPT; fi
 SYS=.build/cleanimage-sysroot
 FULL=.build/compiler/tinygo-full.wasm
 T=internal/toolchain/_tinygo/targets
@@ -53,16 +63,30 @@ link() {
     --env GOROOT="$GOROOT" --env GOVERSION="$GOVERSION" --env GOTOOLTAGS="$GOTOOLTAGS" \
     --env TINYGOROOT="$TINYGOROOT" --env GOMODCACHE="$GOMODCACHE" --env TINYGO_BUILD_ID="dev" \
     --env HOME=/tmp --env XDG_CACHE_HOME=/tmp/cache --env TMPDIR=/tmp --env PWD=/work \
-    -- "$CWASM" -o /work/prog.elf -target=playstation-yaroze-cleanimage -opt=2 ${TGOFLAGS:-} /work/prog 2>&1 | grep -v 'MIPS-I support' || true
+    -- "$CWASM" -o /work/prog.elf -target=playstation-yaroze-cleanimage -opt="$OPT" ${TGOFLAGS:-} /work/prog 2>&1 | grep -v 'MIPS-I support' || true
   [ -f "$WORK/prog.elf" ] || { echo "link failed" >&2; exit 1; }
 }
 
 cp "$HERE/clib.S" "$OUT/playstation-yaroze-cleanimage-clib.S"
+if [ "$OPT" = 0 ]; then
+  # Level 0 keeps the runtime's float32 printing and its unwinding, which
+  # nothing in the library calls, and the image has no single-precision
+  # routines or longjmp for them. This image is only ever checked for
+  # allocations, never run, so each of those names is a break instruction.
+  for f in tinygo_longjmp __nesf2 __gtsf2 __ltsf2 __gesf2 __lesf2 __fixsfsi __floatsisf __subsf3; do
+    printf '.section .text.%s\n.global %s\n.type %s, @function\n%s:\n\tbreak\n' "$f" "$f" "$f" "$f"
+  done >> "$OUT/playstation-yaroze-cleanimage-clib.S"
+fi
 python3 -I "$HERE/gen.py" . "$OUT" "$OUT/exports.txt"
 # A package compiled just now can differ in size from the same one read back
 # from the cache, so the sizes are learned from a link that reads the cache, as
 # the packed link will.
 link
+if [ "$OPT" != 2 ]; then
+  cp "$WORK/prog.elf" "$OUT/image.elf"
+  echo "wrote $OUT/image.elf, unpacked, for TestNoHeapAnyOpt"
+  exit 0
+fi
 link
 cp "$SYS/map.txt" "$OUT/map1.txt"
 # The public entry points alone, for the comparison tools to name calls by: tools
