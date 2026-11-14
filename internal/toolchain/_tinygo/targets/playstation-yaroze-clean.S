@@ -4583,34 +4583,42 @@ VSync:
 
 # libps_wait_blanks(n) waits until the count of vertical blanks reaches n, for VSync on
 # a display of 240 lines, in sync.go. A pass and the way out take Sony's time, which
-# sets where a program is when the next blank comes: the loads before the read of the
-# count take a pass's time on a console, and the nops after it the time to the return
-# (probe spec/probes/vsyncpoll, spec 45).
+# sets where a program is when the next blank comes: 12 instructions a pass, and 7 on
+# the way out (probe spec/probes/vsyncpoll, spec 45). Which of them are loads from RAM
+# sets the time on a console, where a load costs 6 or 7 cycles and a nop 1, and where
+# the interrupt leaves the loop's cache lines to be filled again: with three loads
+# before the count in a pass of 36 cycles, and three on the way out, VSync returns 85
+# to 133 cycles after the interrupt, 110 on average, where Sony's returns 86 to 137
+# and 110 (probe spec/probes/waitpass, spec 57). The first wait after a program
+# prints returns up to 20 later, with libps_vsync_wait's lines to fill as well, and
+# TestVSyncPoll allows 155. The section is pinned (image/pins.txt): which lines its
+# instructions share is part of that.
 	.section .text.libps_wait_blanks, "ax", @progbits
 	.align 2
 	.globl libps_wait_blanks
 	.type libps_wait_blanks, @function
 libps_wait_blanks:
 	lui	$t0, %hi(libps_vsync_blanks)
-1:
+1:	NOPS	1
 #ifdef LIBPS_FIDELITY
-	.rept 5
 	lw	$t2, %lo(libps_vsync_blanks)($t0)
-	.endr
+	lw	$t2, %lo(libps_vsync_blanks)($t0)
+	lw	$t2, %lo(libps_vsync_blanks)($t0)
 #endif
-	NOPS	1
+	NOPS	2
 	lw	$t1, %lo(libps_vsync_blanks)($t0)
-#ifdef LIBPS_FIDELITY
-	lw	$t2, %lo(libps_vsync_blanks)($t0)
-	lw	$t3, %lo(libps_vsync_blanks)($t0)
-#endif
+	nop
+	NOPS	1
 	subu	$t1, $t1, $a0
 	bltz	$t1, 1b
 	nop
 #ifdef LIBPS_FIDELITY
 	lw	$t2, %lo(libps_vsync_blanks)($t0)
+	nop
+	lw	$t2, %lo(libps_vsync_blanks)($t0)
+	nop
+	lw	$t2, %lo(libps_vsync_blanks)($t0)
 #endif
-	NOPS	4
 	jr	$ra
 	nop
 	.size libps_wait_blanks, .-libps_wait_blanks
