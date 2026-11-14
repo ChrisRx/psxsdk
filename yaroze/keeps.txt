@@ -1,0 +1,40 @@
+# The parameters the library keeps after it returns, which hdr2go --keeps
+# writes onto the bindings as //go:keeps pragmas. A line is a function, one
+# of its parameters, and the function after which the library is done with
+# it, if there is one; none means it is kept for good. # starts a remark.
+#
+# TinyGo takes every //export declaration to keep none of the pointers it is
+# given, as cgo has C do, so a variable whose address is passed to one stays
+# on the stack. The library does not keep to that for these. Its patched
+# TinyGo leaves a parameter kept for good off that, so that what is passed
+# to it lives on the heap, or in a global if it is made once (see
+# docs/architecture/compiler.md), and refuses to build a program that would
+# allocate one every frame. A parameter kept until a later call stays on
+# the stack, and the program has to make that call before the function the
+# variable belongs to returns, unless that is main. yaroze vet checks the
+# same in the source.
+#
+# What each keeps is from the clean room library's reading of Sony's
+# (exp/cleanlib on the libps-go branch).
+
+# The packets each sort builds are written there until the next call.
+GsSetWorkBase       outpacketp
+# Each system is linked to the other: base.Super is super, and super.Sub is
+# base.
+GsInitCoordinate2   super
+GsInitCoordinate2   base
+# The image's description points into the image.
+GsGetTimInfo        im
+# The transfer goes on after the call; DrawSync waits for it.
+LoadImage           p           DrawSync
+StoreImage          p           DrawSync
+# The read goes on after the call; CdReadSync waits for it.
+CdRead              buf         CdReadSync
+CdReadFile          addr        CdReadSync
+# The header is read for as long as the bank is open.
+SsVabTransfer       a0
+# The sequence is read for as long as it plays.
+SsSeqOpen           a0
+# The background's packets are built in the work area, and drawn from it.
+GsInitFixBg16       work
+GsSortFixBg16       work

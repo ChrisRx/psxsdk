@@ -203,7 +203,7 @@ func main() {
 // start loads the level, which puts back the coins taken, and puts the
 // hero where it starts.
 func start(b yaroze.RECT) {
-	if err = world.Load(levelDAT.Data(), scene.Files(disc.Registered())); err != nil {
+	if err = world.LoadFiles(levelDAT.Data(), disc.Registered()); err != nil {
 		return
 	}
 	read(b)

@@ -23,20 +23,83 @@
  */
 
 /*
- * Shift-and-subtract, one bit at a time, so that nothing in here needs a
- * 64-bit shift by a variable amount: that would itself be a call to a
- * builtin, and these are the builtins.
+ * Division by the R3000A's own 32-bit divide, after Hacker's Delight: a
+ * divisor that fits in 32 bits divides the high word and then, through
+ * divlu, the remainder and the low word; a larger one leaves a quotient
+ * that fits in 32 bits, which one divlu of the normalized operands
+ * estimates to within one. Everything is done on 32-bit halves, so that
+ * nothing in here needs a 64-bit shift by a variable amount: that would
+ * itself be a call to a builtin, and these are the builtins.
  *
- * 64 iterations is some 500 cycles a division. compiler-rt's version is far
- * cleverer. If 64-bit division ever turns up in something that has to keep
- * to a frame, the answer is to not divide rather than to tune this.
+ * It replaces shift-and-subtract, a bit at a time, some 500 cycles a
+ * division, under which GCC's 920501-6 took 2000 frames to find its
+ * primes.
  */
+
+/* nlz returns the number of leading zero bits in x, which is not 0. */
+static int
+nlz(unsigned int x)
+{
+	int n = 0;
+
+	if (x <= 0x0000ffffu) { n += 16; x <<= 16; }
+	if (x <= 0x00ffffffu) { n += 8; x <<= 8; }
+	if (x <= 0x0fffffffu) { n += 4; x <<= 4; }
+	if (x <= 0x3fffffffu) { n += 2; x <<= 2; }
+	if (x <= 0x7fffffffu) { n += 1; }
+	return n;
+}
+
+/*
+ * divlu divides the 64-bit (u1, u0) by v, which must be greater than u1 so
+ * that the quotient fits in 32 bits, two 16-bit digits at a time on the
+ * normalized divisor, and stores the remainder in *r.
+ */
+static unsigned int
+divlu(unsigned int u1, unsigned int u0, unsigned int v, unsigned int *r)
+{
+	const unsigned int b = 0x10000;
+	unsigned int un1, un0, vn1, vn0, q1, q0, un32, un21, un10, rhat;
+	int s = nlz(v);
+
+	v <<= s;
+	vn1 = v >> 16;
+	vn0 = v & 0xffff;
+	un32 = s == 0 ? u1 : u1 << s | u0 >> (32 - s);
+	un10 = u0 << s;
+	un1 = un10 >> 16;
+	un0 = un10 & 0xffff;
+
+	q1 = un32 / vn1;
+	rhat = un32 - q1 * vn1;
+	while (q1 >= b || q1 * vn0 > b * rhat + un1) {
+		q1--;
+		rhat += vn1;
+		if (rhat >= b)
+			break;
+	}
+	un21 = un32 * b + un1 - q1 * v;
+
+	q0 = un21 / vn1;
+	rhat = un21 - q0 * vn1;
+	while (q0 >= b || q0 * vn0 > b * rhat + un0) {
+		q0--;
+		rhat += vn1;
+		if (rhat >= b)
+			break;
+	}
+	*r = (un21 * b + un0 - q0 * v) >> s;
+	return q1 * b + q0;
+}
+
 static unsigned long long
 udivmod64(unsigned long long n, unsigned long long d, unsigned long long *rem)
 {
-	unsigned long long q = 0;
-	unsigned long long r = 0;
-	int i;
+	unsigned int nh = (unsigned int)(n >> 32), nl = (unsigned int)n;
+	unsigned int dh = (unsigned int)(d >> 32), dl = (unsigned int)d;
+	unsigned int qh, ql, r, v1, u1h, u1l, q;
+	unsigned long long qd;
+	int s;
 
 	/* Division by zero is undefined, and there is nothing useful to do
 	 * about it here: the trap instruction LLVM would normally use to
@@ -47,19 +110,38 @@ udivmod64(unsigned long long n, unsigned long long d, unsigned long long *rem)
 		return 0;
 	}
 
-	for (i = 0; i < 64; i++) {
-		r = (r << 1) | (n >> 63);
-		n <<= 1;
-		if (r >= d) {
-			r -= d;
-			q = (q << 1) | 1;
-		} else {
-			q <<= 1;
+	if (dh == 0) {
+		if (nh == 0) {
+			/* Both fit in 32 bits: one divide. */
+			if (rem != 0)
+				*rem = nl % dl;
+			return nl / dl;
 		}
+		qh = nh / dl;
+		ql = divlu(nh % dl, nl, dl, &r);
+		if (rem != 0)
+			*rem = r;
+		return (unsigned long long)qh << 32 | ql;
 	}
 
+	/* The divisor is at least 2^32, so the quotient fits in 32 bits.
+	 * Normalize the divisor's top word, divide n/2 by it, which cannot
+	 * overflow, and correct the estimate, which is at most one short. */
+	s = nlz(dh);
+	v1 = s == 0 ? dh : dh << s | dl >> (32 - s);
+	u1h = nh >> 1;
+	u1l = nl >> 1 | nh << 31;
+	q = divlu(u1h, u1l, v1, &r);
+	q = s == 0 ? q >> 31 : q >> (31 - s);
+	if (q != 0)
+		q--;
+	qd = (unsigned long long)q * dl + ((unsigned long long)(q * dh) << 32);
+	if (n - qd >= d) {
+		q++;
+		qd += d;
+	}
 	if (rem != 0)
-		*rem = r;
+		*rem = n - qd;
 	return q;
 }
 

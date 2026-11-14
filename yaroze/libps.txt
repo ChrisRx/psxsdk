@@ -994,8 +994,8 @@ Krom2Tim2
 # ---------------------------------------------------------------------------
 
 SsSetMVol
-	SsSetMVol sets the main volume, left and right, from 0 to 127. It has
-	to be set before anything is played.
+	SsSetMVol sets the main volume, left and right, from 0 to 127. It
+	starts at 127, set before main runs.
 
 SsGetMVol
 	SsGetMVol reads the main volume into a0.

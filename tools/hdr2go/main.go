@@ -305,6 +305,7 @@ var opts struct {
 	OutDir  string
 	Tag     string
 	Doc     string
+	Keeps   string
 	Skip    []string
 }
 
@@ -316,6 +317,10 @@ func run(*cobra.Command, []string) error {
 	sizes, offsets, bitRecords := parseLayouts(string(raw))
 
 	docs, err := readDocs(opts.Doc)
+	if err != nil {
+		return err
+	}
+	keeps, err := readKeeps(opts.Keeps)
 	if err != nil {
 		return err
 	}
@@ -530,7 +535,11 @@ func run(*cobra.Command, []string) error {
 	slices.SortFunc(records, func(a, b record) int { return strings.Compare(a.Name, b.Name) })
 	slices.SortFunc(funcs, func(a, b function) int { return strings.Compare(a.Name, b.Name) })
 
-	if err := writeBindings(records, aliases, funcs, docs); err != nil {
+	byHand, err := checkKeeps(keeps, funcs)
+	if err != nil {
+		return err
+	}
+	if err := writeBindings(records, aliases, funcs, docs, keeps); err != nil {
 		return err
 	}
 
@@ -548,6 +557,11 @@ func run(*cobra.Command, []string) error {
 		}
 	}
 	docs.report()
+	for _, name := range byHand {
+		for _, k := range keeps[name] {
+			fmt.Fprintf(os.Stderr, "%s is bound by hand: give it //go:keeps %s\n", name, k)
+		}
+	}
 	return nil
 }
 
@@ -680,6 +694,122 @@ func (d *docs) report() {
 	}
 }
 
+// keep is a parameter the library keeps after it returns, and the function
+// after which it is done with it, if there is one.
+type keep struct {
+	Param, Until string
+}
+
+func (k keep) String() string {
+	if k.Until == "" {
+		return k.Param
+	}
+	return k.Param + " " + k.Until
+}
+
+// keepsComment is the paragraph a declaration's comment gets for what the
+// library keeps, wrapped as the doc file's are.
+func keepsComment(ks []keep) []string {
+	var parts []string
+	for _, k := range ks {
+		if k.Until == "" {
+			parts = append(parts, "The library keeps "+k.Param+" after it returns, for good, so it has to be a package-level variable, a variable of main, or memory that is never reused.")
+		} else {
+			parts = append(parts, "The library goes on with "+k.Param+" after it returns, until "+k.Until+", so a variable passed as "+k.Param+" has to outlive that: one of a function other than main needs "+k.Until+" before the function returns.")
+		}
+	}
+	parts = append(parts, "yaroze vet and the build say where a program does otherwise.")
+	var lines []string
+	line := ""
+	for _, w := range strings.Fields(strings.Join(parts, " ")) {
+		if line != "" && len(line)+1+len(w) > 72 {
+			lines = append(lines, line)
+			line = ""
+		}
+		if line != "" {
+			line += " "
+		}
+		line += w
+	}
+	return append(lines, line)
+}
+
+// readKeeps reads the file --keeps names: lines of a function, one of its
+// parameters that the library keeps after it returns, and the function
+// after which it no longer needs it, if there is one, with # starting a
+// remark. Each becomes a //go:keeps pragma on the function's declaration,
+// which the PlayStation targets' TinyGo reads (transform/keeps.go in
+// internal/toolchain/_tinygo).
+func readKeeps(path string) (map[string][]keep, error) {
+	keeps := make(map[string][]keep)
+	if path == "" {
+		return keeps, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	for i, line := range strings.Split(string(data), "\n") {
+		if j := strings.IndexByte(line, '#'); j >= 0 {
+			line = line[:j]
+		}
+		f := strings.Fields(line)
+		if len(f) == 0 {
+			continue
+		}
+		if len(f) > 3 || len(f) < 2 {
+			return nil, fmt.Errorf("%s:%d: want a function, a parameter and maybe a function after which it is not kept", path, i+1)
+		}
+		k := keep{Param: f[1]}
+		if len(f) == 3 {
+			k.Until = f[2]
+		}
+		for _, other := range keeps[f[0]] {
+			if other.Param == k.Param {
+				return nil, fmt.Errorf("%s:%d: %s %s is listed twice", path, i+1, f[0], k.Param)
+			}
+		}
+		keeps[f[0]] = append(keeps[f[0]], k)
+	}
+	return keeps, nil
+}
+
+// checkKeeps makes sure that each parameter listed is a pointer of the
+// function named, and that the function it is kept until is generated too.
+// It returns the functions that are not generated, which are bound by hand
+// and have to be given the pragma there.
+func checkKeeps(keeps map[string][]keep, funcs []function) ([]string, error) {
+	byName := make(map[string]function)
+	for _, f := range funcs {
+		byName[f.Name] = f
+	}
+	var byHand []string
+	for _, name := range slices.Sorted(maps.Keys(keeps)) {
+		f, ok := byName[name]
+		for _, k := range keeps[name] {
+			if k.Until != "" {
+				if _, ok := byName[k.Until]; !ok {
+					return nil, fmt.Errorf("%s: %s is kept until %s, which is not a function generated", opts.Keeps, name, k.Until)
+				}
+			}
+			if !ok {
+				continue
+			}
+			i := slices.IndexFunc(f.Params, func(p param) bool { return p.Name == k.Param })
+			if i < 0 {
+				return nil, fmt.Errorf("%s: %s has no parameter %s", opts.Keeps, name, k.Param)
+			}
+			if !strings.HasPrefix(f.Params[i].Type, "*") && f.Params[i].Type != "unsafe.Pointer" {
+				return nil, fmt.Errorf("%s: %s's %s is not a pointer", opts.Keeps, name, k.Param)
+			}
+		}
+		if !ok {
+			byHand = append(byHand, name)
+		}
+	}
+	return byHand, nil
+}
+
 // writeComment writes lines as a comment, indented for a field when indent
 // is set.
 func writeComment(b *strings.Builder, indent string, lines []string) {
@@ -695,7 +825,7 @@ func writeComment(b *strings.Builder, indent string, lines []string) {
 // writeBindings writes the three files: the structs, which every build
 // shares; the bodyless declarations, for the build that has the library;
 // and the stubs, for every other build.
-func writeBindings(records []record, aliases map[string]string, funcs []function, docs *docs) error {
+func writeBindings(records []record, aliases map[string]string, funcs []function, docs *docs, keeps map[string][]keep) error {
 	header := func(b *strings.Builder, tag string) {
 		if tag != "" {
 			fmt.Fprintf(b, "//go:build %s\n\n", tag)
@@ -788,12 +918,19 @@ func writeBindings(records []record, aliases map[string]string, funcs []function
 			sig += " " + f.Ret
 		}
 		c := docs.lookup(f.Name)
+		if ks := keeps[f.Name]; len(ks) > 0 {
+			c = append(append(slices.Clone(c), ""), keepsComment(ks)...)
+		}
 		if c != nil {
 			writeComment(&target, "", c)
 			fmt.Fprintf(&target, "//\n")
 			writeComment(&stub, "", c)
 		}
-		fmt.Fprintf(&target, "//export %s\n%s\n\n", f.Name, sig)
+		fmt.Fprintf(&target, "//export %s\n", f.Name)
+		for _, k := range keeps[f.Name] {
+			fmt.Fprintf(&target, "//go:keeps %s\n", k)
+		}
+		fmt.Fprintf(&target, "%s\n\n", sig)
 		fmt.Fprintf(&stub, "%s { panic(stub(%q)) }\n\n", sig, exported(f.Name))
 	}
 
@@ -888,6 +1025,7 @@ func main() {
 	f.StringVar(&opts.OutDir, "out", ".", "directory to write zz_generated.go, zz_generated_TAG.go and zz_generated_stub.go into")
 	f.StringVar(&opts.Tag, "tag", "yaroze", "build tag of the build that has the library")
 	f.StringVar(&opts.Doc, "doc", "", "file of comments for the generated declarations")
+	f.StringVar(&opts.Keeps, "keeps", "", "file of the parameters the library keeps after it returns, to declare //go:keeps")
 	f.StringSliceVar(&opts.Skip, "skip", nil, "functions to leave out, for binding by hand")
 	cmd.MarkFlagRequired("layouts")
 

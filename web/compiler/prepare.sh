@@ -3,7 +3,8 @@
 # copy of upstream TinyGo's source at the revision the flake builds (its
 # tinygo-src package), with the PlayStation targets and their runtime from
 # internal/toolchain/_tinygo laid over it, tinygo-wasm.patch and
-# internal/toolchain/tinygo-hot.patch applied, and
+# internal/toolchain's tinygo-hot.patch, tinygo-once.patch,
+# tinygo-keeps.patch and tinygo-frame.patch applied, and
 # compiler-rt's builtins, which TinyGo's tree takes from an LLVM checkout
 # and nixpkgs copies in. Of upstream's submodules only wasi-libc, which
 # TinyGo builds its libc from, is kept; the rest are the empty directories
@@ -36,7 +37,10 @@ SRC=$(nix build --no-link --print-out-paths "$HERE/../..#tinygo-src")
 OVERLAY=$HERE/../../internal/toolchain/_tinygo
 STAMP="$SRC $(cd "$OVERLAY" && find . -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)"
 HOTPATCH=$HERE/../../internal/toolchain/tinygo-hot.patch
-if [ -e "$TREE/.prepared" ] && [ "$TREE/.prepared" -nt "$HERE/tinygo-wasm.patch" ] && [ "$TREE/.prepared" -nt "$HOTPATCH" ] && [ "$TREE/.prepared" -nt "$HERE/tinygo-hot-wasm.patch" ] && [ "$(cat "$TREE/.prepared")" = "$STAMP" ]; then
+ONCEPATCH=$HERE/../../internal/toolchain/tinygo-once.patch
+KEEPSPATCH=$HERE/../../internal/toolchain/tinygo-keeps.patch
+FRAMEPATCH=$HERE/../../internal/toolchain/tinygo-frame.patch
+if [ -e "$TREE/.prepared" ] && [ "$TREE/.prepared" -nt "$HERE/tinygo-wasm.patch" ] && [ "$TREE/.prepared" -nt "$HOTPATCH" ] && [ "$TREE/.prepared" -nt "$ONCEPATCH" ] && [ "$TREE/.prepared" -nt "$KEEPSPATCH" ] && [ "$TREE/.prepared" -nt "$FRAMEPATCH" ] && [ "$TREE/.prepared" -nt "$HERE/tinygo-hot-wasm.patch" ] && [ "$(cat "$TREE/.prepared")" = "$STAMP" ]; then
   exit 0
 fi
 echo "==> TinyGo tree"
@@ -67,4 +71,10 @@ patch -p1 -d "$TREE" < "$HERE/tinygo-wasm.patch"
 # and the same flags on the wasm build command, which only this tree has.
 patch -p1 -d "$TREE" < "$HOTPATCH"
 patch -p1 -d "$TREE" < "$HERE/tinygo-hot-wasm.patch"
+# The hooks for transform/once.go, transform/keeps.go and transform/frame.go,
+# the //go:keeps pragma and the calls' positions, which the flake applies
+# too.
+patch -p1 -d "$TREE" < "$ONCEPATCH"
+patch -p1 -d "$TREE" < "$KEEPSPATCH"
+patch -p1 -d "$TREE" < "$FRAMEPATCH"
 echo "$STAMP" > "$TREE/.prepared"

@@ -236,19 +236,16 @@ func (h *player) draw(ot *yaroze.GsOT) {
 func (h *player) interact() {
 	r := h.here()
 	at, dir := h.at(), dirs[h.facing]
-	ahead := func(p stage.Vec) bool {
-		return p.Within(at, reach, reach) && p.Sub(at).Dot(dir) > 0
-	}
 	for k := range r.npcs {
 		n := &r.npcs[k]
-		if ahead(r.Middle(n.i, n.j)) {
+		if inFront(r.Middle(n.i, n.j), at, dir) {
 			talk.say(n.say)
 			return
 		}
 	}
 	for k := range r.chests {
 		c := &r.chests[k]
-		if !ahead(r.Middle(c.i, c.j)) {
+		if !inFront(r.Middle(c.i, c.j), at, dir) {
 			continue
 		}
 		if c.opened {
@@ -260,6 +257,13 @@ func (h *player) interact() {
 		}
 		return
 	}
+}
+
+// inFront reports whether p is within reach of at and on the side dir
+// faces. It is a function rather than a closure over at and dir, which
+// would be allocated each time interact runs, and never freed.
+func inFront(p, at, dir stage.Vec) bool {
+	return p.Within(at, reach, reach) && p.Sub(at).Dot(dir) > 0
 }
 
 // drawNPCs draws the room's people, each on their cell, facing their way,

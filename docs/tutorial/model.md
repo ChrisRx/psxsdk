@@ -22,7 +22,7 @@ A model is drawn through an object, which ties it to a coordinate system that sa
 ```go src=../../examples/square/main.go#cube
 ```
 
-`Init` makes the object's coordinate system the identity with `WORLD` as its parent, and `Link`, the library's `GsLinkObject4`, ties it to the first model in the file, the only one. The object holds pointers into itself after `Init`, which is why it is a package-level variable and is never copied.
+`Init` makes the object's coordinate system the identity with `WORLD` as its parent, and `Link`, the library's `GsLinkObject4`, ties it to the first model in the file, the only one. The object holds pointers into itself after `Init`, which is why it is made once, here as a package-level variable, and never copied. `go vet` reports a copy.
 
 ## The camera and the light
 

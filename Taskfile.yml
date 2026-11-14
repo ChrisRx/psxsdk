@@ -220,11 +220,16 @@ tasks:
       - .build/hot/v1.cue
       - .build/hot/prog.elf
       - .build/hot/v2.patch.elf
+      - .build/hot/v3.cue
+      - .build/hot/prog3.elf
+      - .build/hot/v4.patch.elf
     cmds:
       - rm -rf .build/hot
       - mkdir -p .build/hot
       - go run ./cmd/yaroze disc --hot --opt=2 --elf .build/hot/prog.elf -o .build/hot/v1.bin ./internal/hot/testdata/v1
       - go run ./cmd/yaroze patch --opt=2 --base .build/hot/prog.elf -o .build/hot/v2.patch.elf ./internal/hot/testdata/v2
+      - go run ./cmd/yaroze disc --hot --opt=2 --elf .build/hot/prog3.elf -o .build/hot/v3.bin ./internal/hot/testdata/v3
+      - go run ./cmd/yaroze patch --opt=2 --base .build/hot/prog3.elf -o .build/hot/v4.patch.elf ./internal/hot/testdata/v4
 
   # Builds the serial tests' programs onto .build/serial, each an ELF of
   # the program alone, which the tests upload over the emulated cable for
@@ -511,14 +516,19 @@ tasks:
       - task: playground:tools
       - task: playground:sysroot
 
+  # Where the playground fetches its compiler from, play/compiler.json: R2,
+  # for the compiler yaroze embeds, or beside the page for one the compiler
+  # task built (web/compiler/site-compiler.sh).
   playground:compiler:
     sources:
       - .build/compiler/tinygo.wasm
+      - cmd/yaroze/wasm/full.json
+      - cmd/yaroze/wasm/tinygo.wasm.gz
+      - web/compiler/site-compiler.sh
     generates:
-      - .build/site/play/tinygo.wasm
+      - .build/site/play/compiler.json
     cmds:
-      - mkdir -p .build/site/play
-      - cp .build/compiler/tinygo.wasm .build/site/play/tinygo.wasm
+      - web/compiler/site-compiler.sh .build/site/play
 
   # The disc tools, the converters the page runs from a program's
   # go:generate lines, and gofmt, for the playground's Format button and

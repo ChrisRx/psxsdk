@@ -1,0 +1,89 @@
+--- a/compiler/symbol.go
++++ b/compiler/symbol.go
+@@ -42,6 +42,10 @@
+ 	// go:keeps: each parameter named, and the function after which it is
+ 	// not kept, if any.
+ 	keeps map[string]string
++
++	// go:allocates: the function allocates on purpose, as a load does, and
++	// the frame loop may call it (transform.CheckFrameAllocs).
++	allocates bool
+ }
+ 
+ type inlineType int
+@@ -534,6 +538,12 @@
+ 			info.inline = inlineHint
+ 		case "//go:noinline":
+ 			info.inline = inlineNone
++		case "//go:allocates":
++			// Kept out of line, so that transform.CheckFrameAllocs finds
++			// what it allocates inside it, by the attribute, after the
++			// optimizer has inlined what it calls.
++			info.allocates = true
++			info.inline = inlineNone
+ 		case "//go:linkname", "//go:linknamestd":
+ 			if len(parts) != 3 || parts[1] != f.Name() {
+ 				continue
+--- a/compiler/compiler.go
++++ b/compiler/compiler.go
+@@ -1246,6 +1246,9 @@
+ 		noinline := b.ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0)
+ 		b.llvmFn.AddFunctionAttr(noinline)
+ 	}
++	if b.info.allocates {
++		b.llvmFn.AddFunctionAttr(b.ctx.CreateStringAttribute("tinygo-allocates", ""))
++	}
+ 
+ 	if b.info.interrupt {
+ 		// Mark this function as an interrupt.
+@@ -1737,6 +1740,20 @@
+ 	return comparison != nil && isMemequalArrayComparison(comparison)
+ }
+ 
++// isUnused reports whether nothing but debug references uses v.
++func isUnused(v ssa.Value) bool {
++	refs := v.Referrers()
++	if refs == nil {
++		return false
++	}
++	for _, ref := range *refs {
++		if _, ok := ref.(*ssa.DebugRef); !ok {
++			return false
++		}
++	}
++	return true
++}
++
+ func isDereference(value ssa.Value) bool {
+ 	unop, ok := value.(*ssa.UnOp)
+ 	return ok && unop.Op == token.MUL
+@@ -3957,6 +3974,14 @@
+ 			if canUseDereferencePointer(unop) {
+ 				return x, nil
+ 			}
++			if isUnused(unop) {
++				// go/ssa loads what a range ranges over even when only the
++				// index is used, for i := range arr, and an aggregate too
++				// large to be a value is copied to storage of its own,
++				// allocated on the heap, which nothing ever frees with the
++				// leaking collector. A load nothing uses is not made.
++				return llvm.Undef(b.getLLVMType(unop.Type())), nil
++			}
+ 			return b.loadFromStorage(x, unop.Type(), ""), nil
+ 		}
+ 	case token.XOR: // ^x, toggle all bits in integer
+--- a/transform/optimizer.go
++++ b/transform/optimizer.go
+@@ -117,6 +117,12 @@
+ 		}
+ 		OptimizeStringToBytes(mod)
+ 		OptimizeStringEqual(mod)
++		// What the frame loop allocates every time round, which is never
++		// freed (transform/frame.go), and what an interrupt's callback
++		// allocates or waits for (transform/callback.go).
++		if errs := append(CheckFrameAllocs(mod), CheckCallbacks(mod)...); len(errs) > 0 {
++			return errs
++		}
+ 
+ 	} else {
+ 		// Must be run at any optimization level.

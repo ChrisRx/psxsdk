@@ -14,7 +14,7 @@ A program never had a disc of its own. The boot disc left the library, `libps`, 
 
 ## Why psxsdk exists
 
-I wanted a Net Yaroze when it was announced, but $750 in 1990s money was more than a kid could manage. When I finally got one, in the mid-2010s, the first thing I found was how hard the SDK was even to run. It was built on GCC, but a GCC decades old, and since newer versions had dropped ECOFF there was no moving it forward. I wanted to use modern tools, and I wanted anyone to be able to build Net Yaroze programs. That started [mipsel-ecoff-toolchain](https://github.com/ChrisRx/mipsel-ecoff-toolchain), and then this repository.
+I wanted a Net Yaroze when it was announced, but $750 in 1990s money was more than a kid could manage. When I finally got one, in the mid-2010s, the first thing I found was how hard the SDK was even to run. It was built on GCC, but a GCC decades old, and since newer versions had dropped ECOFF there was no moving it forward. I wanted to use modern tools, and I wanted anyone to be able to build Net Yaroze programs. That started [mipsel-ecoff-toolchain](https://github.com/ChrisRx/yaroze-toolchain), now yaroze-toolchain, and then this repository.
 
 The point is preservation: that anyone can still write, build and play Net Yaroze games, all these years later.
 

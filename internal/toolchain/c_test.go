@@ -23,6 +23,16 @@ func TestHasHeader(t *testing.T) {
 	assert.Equal(t, false, HasHeader("sys"))
 }
 
+func TestCRewrite(t *testing.T) {
+	ir := "define i32 @f() {\nentry:\n  %retval = alloca i32, align 4\n  %retval1 = alloca i32, align 4\n" +
+		"  %0 = load i32, ptr %retval, align 4\n  ret i32 %0\n}\n" +
+		"define { i32, i32 } @g() {\nentry:\n  %retval = alloca { i32, i32 }, align 8\n"
+	want := "define i32 @f() {\nentry:\n  %retval = alloca i32, align 4\n  store i32 zeroinitializer, ptr %retval, align 4\n" +
+		"  %retval1 = alloca i32, align 4\n  %0 = load i32, ptr %retval, align 4\n  ret i32 %0\n}\n" +
+		"define { i32, i32 } @g() {\nentry:\n  %retval = alloca { i32, i32 }, align 8\n  store { i32, i32 } zeroinitializer, ptr %retval, align 8\n"
+	assert.Equal(t, want, string(cRewrite([]byte(ir))))
+}
+
 func TestLineFilter(t *testing.T) {
 	var out bytes.Buffer
 	l := &lineFilter{w: &out, drop: "noise"}

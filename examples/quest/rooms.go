@@ -96,7 +96,7 @@ var rooms = [...]room{
 // given so that the scene knows its name, which the playground's live
 // view goes by.
 func (r *room) load() {
-	if err := world.Load(r.file.Data(), scene.Files(disc.Registered())); err != nil {
+	if err := world.LoadFiles(r.file.Data(), disc.Registered()); err != nil {
 		failed = r.file
 		return
 	}

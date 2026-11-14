@@ -204,7 +204,11 @@ type actor struct {
 
 // newActor makes an actor of the model, playing the animation, which may be
 // -1, in the mode. Its root starts at the world's origin, unturned. An
-// actor freeActor gave back is used again before any is made.
+// actor freeActor gave back is used again before any is made, so the pool
+// only grows to the most actors alive at once, which the pragma tells the
+// build: the frame loop calls this.
+//
+//go:allocates
 func newActor(modelIndex, anim, mode int, spline bool) *actor {
 	m := models[modelIndex]
 	var a *actor
