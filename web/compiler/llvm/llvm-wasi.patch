@@ -200,7 +200,51 @@
      *ProcStat = ProcessStatistics{UserT + KernelT, UserT, PeakMemory};
 --- a/llvm/lib/Target/Mips/MipsDelaySlotFiller.cpp
 +++ b/llvm/lib/Target/Mips/MipsDelaySlotFiller.cpp
-@@ -1054,7 +1054,15 @@
+@@ -320,6 +320,12 @@
+                         const BranchInformation &BranchInfo, RegDefsUses &RegDU,
+                         InspectMemInstr &IM) const;
+ 
++    /// On MIPS I, returns true if moving Candidate out of its block would
++    /// leave a load already in the delay slot of a predecessor's branch
++    /// followed by an instruction that reads what it loads.
++    bool moveExposesLoadHazard(const MipsSubtarget &STI,
++                               const MachineInstr &Candidate) const;
++
+     /// This function searches range [Begin, End) for an instruction that can be
+     /// moved to the delay slot. Returns true on success.
+     template <typename IterTy>
+@@ -668,6 +674,20 @@
+   }
+ }
+ 
++// Returns the first instruction that runs when control enters MBB, leaving
++// out Skip, or null when there is none to find. Debug values, CFI and other
++// meta instructions emit no code, and a bundle's header stands for the
++// instructions inside it, the first of which runs first.
++static const MachineInstr *firstExecutedInstr(const MachineBasicBlock &MBB,
++                                              const MachineInstr *Skip) {
++  for (const MachineInstr &MI : MBB.instrs()) {
++    if (&MI == Skip || MI.isBundle() || MI.isMetaInstruction())
++      continue;
++    return &MI;
++  }
++  return nullptr;
++}
++
+ /// runOnMachineBasicBlock - Fill in delay slots for the given basic block.
+ /// We assume there is only one delay slot per delayed instruction.
+ bool MipsDelaySlotFiller::runOnMachineBasicBlock(
+@@ -804,6 +824,9 @@
+     if (delayHasHazard(STI, *CurrI, BranchInfo, RegDU, IM))
+       continue;
+ 
++    if (moveExposesLoadHazard(STI, *CurrI))
++      continue;
++
+     bool InMicroMipsMode = STI.inMicroMipsMode();
+     const MipsInstrInfo *TII = STI.getInstrInfo();
+     unsigned Opcode = (*Slot).getOpcode();
+@@ -1054,16 +1077,31 @@
          return true;
        }
  
@@ -208,12 +252,69 @@
 +      // The first instruction that will run at the target: a debug value
 +      // or another meta instruction at the front of the block is not one,
 +      // and checking it instead of the instruction that follows would let
-+      // a load into the slot whose result that instruction uses.
-+      auto BranchTargetIter = TargetMBB->getFirstNonDebugInstr();
-+      if (BranchTargetIter == TargetMBB->end()) {
++      // a load into the slot whose result that instruction uses. Nor is the
++      // candidate itself, which leaves the target when the successor search
++      // takes it from there.
++      const MachineInstr *BranchTargetInstr =
++          firstExecutedInstr(*TargetMBB, &Candidate);
++      if (!BranchTargetInstr) {
 +        return true;
 +      }
-+      const auto &BranchTargetInstr = *BranchTargetIter;
        bool HasNewHazard =
-           !TII->SafeInLoadDelaySlot(BranchTargetInstr, Candidate);
+-          !TII->SafeInLoadDelaySlot(BranchTargetInstr, Candidate);
++          !TII->SafeInLoadDelaySlot(*BranchTargetInstr, Candidate);
        // If the branch is unconditional then we do not need to bother to check
+       // the next instruction after the branch
+       if (!BranchInfo.isUnconditionalBranch()) {
+         // We are a conditional branch so we should have an `else` branch
+-        if (BranchInfo.hasBranchElseInstr()) {
+-          HasNewHazard |= !TII->SafeInLoadDelaySlot(
+-              *BranchInfo.getBranchElseInstr(), Candidate);
++        const MachineInstr *ElseInstr = BranchInfo.getBranchElseInstr();
++        // The same goes for the fall-through when the candidate is its first
++        // instruction.
++        if (ElseInstr == &Candidate) {
++          ElseInstr = firstExecutedInstr(*Candidate.getParent(), &Candidate);
++        }
++        if (ElseInstr) {
++          HasNewHazard |= !TII->SafeInLoadDelaySlot(*ElseInstr, Candidate);
+         } else {
+           // Without the `else` branch we need to assume the worst
+           HasNewHazard = true;
+@@ -1076,6 +1114,36 @@
+   return HasHazard;
+ }
+ 
++bool MipsDelaySlotFiller::moveExposesLoadHazard(
++    const MipsSubtarget &STI, const MachineInstr &Candidate) const {
++  if (!STI.hasMips1() || STI.hasMips2())
++    return false;
++
++  // A delay slot filled earlier holds a load that was checked against the
++  // instruction then first in this block. Taking that instruction away for a
++  // later slot puts the next one first, and it must not read the load's
++  // result either. Any filled branch of a predecessor counts, whether this
++  // block is its target or its fall-through.
++  const MachineBasicBlock &MBB = *Candidate.getParent();
++  if (firstExecutedInstr(MBB, nullptr) != &Candidate)
++    return false;
++
++  const MipsInstrInfo *TII = STI.getInstrInfo();
++  const MachineInstr *Next = firstExecutedInstr(MBB, &Candidate);
++  for (const MachineBasicBlock *Pred : MBB.predecessors()) {
++    for (const MachineInstr &MI : Pred->instrs()) {
++      if (!MI.isBundledWithPred() || !TII->HasLoadDelaySlot(MI))
++        continue;
++      const MachineInstr &Branch = *std::prev(MI.getIterator());
++      if (!Branch.isBranch())
++        continue;
++      if (!Next || !TII->SafeInLoadDelaySlot(*Next, MI))
++        return true;
++    }
++  }
++  return false;
++}
++
+ bool MipsDelaySlotFiller::terminateSearch(const MachineInstr &Candidate) const {
+   return (Candidate.isTerminator() || Candidate.isCall() ||
+           Candidate.isPosition() || Candidate.isInlineAsm() ||
