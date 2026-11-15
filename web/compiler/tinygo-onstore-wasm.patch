@@ -1,0 +1,22 @@
+--- a/cmd/tinygo-wasm/main.go
++++ b/cmd/tinygo-wasm/main.go
+@@ -94,6 +94,7 @@
+ 	hot := flags.Bool("hot", false, "PlayStation targets: build a program that can take hot reload patches")
+ 	hotBase := flags.String("hot-base", "", "PlayStation targets: build a hot reload patch for the program whose ELF is given, built with -hot")
+ 	hotAt := flags.String("hot-at", "", "the address, hexadecimal, to link the patch of -hot-base at")
++	experiment := flags.String("experiment", "", "the compiler's experiments to turn on, comma separated, or off with no before the name: onstore")
+ 	if err := flags.Parse(args); err != nil {
+ 		return 2
+ 	}
+@@ -124,6 +125,11 @@
+ 		// There is no git to ask, and the program is not in a repository.
+ 		BuildVCS: "false",
+ 	}
++	options.Experiment = *experiment
++	if err := options.Verify(); err != nil {
++		fmt.Fprintln(os.Stderr, "error:", err)
++		return 2
++	}
+ 	// DWARF is left out unless asked for: nothing in the playground reads
+ 	// it, and the IR is a good deal smaller and quicker to handle without.
+ 	options.Debug = *debug

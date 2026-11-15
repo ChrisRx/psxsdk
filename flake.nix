@@ -118,6 +118,7 @@
               patch -p1 < ${./internal/toolchain/tinygo-once.patch}
               patch -p1 < ${./internal/toolchain/tinygo-keeps.patch}
               patch -p1 < ${./internal/toolchain/tinygo-frame.patch}
+              patch -p1 < ${./internal/toolchain/tinygo-onstore.patch}
 
               substituteInPlace make/config.mk \
                 --replace-fail 'BREW_PREFIX := $(shell brew --prefix)' 'BREW_PREFIX :='
