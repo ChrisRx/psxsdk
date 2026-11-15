@@ -75,12 +75,12 @@ func main() {
 		yaroze.GsSetWorkBase(yaroze.Packets(&s[0])) // a slice's elements: not its memory
 	}
 	screen := yaroze.Screen{}
-	for ot := range screen.Frames() {
+	for frame := range screen.Frames() {
 		var buf [64]uint32
 		yaroze.LoadImage(&r, &buf[0]) // 39: the frame loop's body returns first
 		c := &yaroze.GsCOORDINATE2{}
 		c.Init(nil) // 41: made every frame
-		yaroze.GsSortClear(0, 0, 0, ot)
+		yaroze.GsSortClear(0, 0, 0, frame.OT())
 	}
 }
 `)

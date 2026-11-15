@@ -9,7 +9,7 @@ import (
 	"go.chrisrx.dev/psx/yaroze"
 )
 
-var screen = yaroze.Screen{Background: yaroze.CVECTOR{R: 60, G: 120, B: 120}}
+var screen = yaroze.Screen{Background: yaroze.Color{R: 60, G: 120, B: 120}}
 
 var frames int
 
@@ -27,4 +27,4 @@ func main() {
 	}
 }
 
-func orange() yaroze.CVECTOR { return yaroze.CVECTOR{R: 200, G: 100, B: 0} }
+func orange() yaroze.Color { return yaroze.Color{R: 200, G: 100, B: 0} }

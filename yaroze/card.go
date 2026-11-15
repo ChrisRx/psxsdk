@@ -11,6 +11,10 @@ import "unsafe"
 // SaveHeader, and has a name in Sony's form (docs/manuals/savefile.md and
 // docs/manuals/peripherals.md). The card sample in Sony's Net Yaroze
 // samples, ported as examples/card, uses all of it.
+//
+// Talking to a card takes the kernel a moment, during which the program
+// waits, so a program asks when it starts and when told to, not every
+// frame.
 
 // Flags for Open, the kernel's.
 const (
@@ -28,34 +32,56 @@ const (
 	SEEK_CUR = 1
 )
 
-// What TestCard reports of a slot.
 const (
-	CardNone        = 0 // no card
-	CardPresent     = 1 // a card, as before
-	CardNew         = 2 // a card put in since the last test
-	CardError       = 3 // a card that did not answer properly
-	CardUnformatted = 4
+	// CardBlock is the size of a card's block, the unit files are made
+	// in.
+	CardBlock = 8192
+
+	// CardSector is the unit a card is read and written in: a read or a
+	// write is a whole number of them.
+	CardSector = 128
 )
 
-// CardBlock is the size of a card's block, the unit files are made in.
-const CardBlock = 8192
+// A CardState is what CardTest says of a slot.
+type CardState int
 
-// CardSector is the unit a card is read and written in: a read or write of
-// a file is a whole number of them.
-const CardSector = 128
+const (
+	CardNone        CardState = 0 // no card
+	CardPresent     CardState = 1 // a card, as before
+	CardNew         CardState = 2 // a card put in since the last test
+	CardError       CardState = 3 // a card that did not answer properly
+	CardUnformatted CardState = 4
+)
 
-// A SaveHeader is the 128 bytes Sony's convention puts at the start of a
-// save file, which the console's card screen and other games read to show
-// it: "SC", the number of icon frames, the file's blocks, its title in
-// Shift-JIS, and the icon's palette. The icon's frames, 16 by 16 pixels of
-// 4 bits each, 128 bytes a frame, follow it, and then the game's data.
+var (
+	// ErrCard is returned when the kernel refuses a card, or the card
+	// read back does not hold what was written.
+	ErrCard error = apiError("yaroze: the memory card refused")
+
+	// ErrNoFile is returned when a card has no file of the name.
+	ErrNoFile error = apiError("yaroze: no such file on the card")
+
+	// ErrSectors is returned for data that is not a whole number of
+	// sectors.
+	ErrSectors error = apiError("yaroze: card data must be whole sectors")
+)
+
+// CardTest asks whether a card is in the slot and what state it is in.
+func CardTest(slot int) CardState { return testCard(slot & 1) }
+
+// A SaveHeader is the 128 bytes Sony's convention puts at the start of
+// a save file, which the console's card screen and other games read to
+// show it: "SC", the number of icon frames, the file's blocks, its title
+// in Shift-JIS, and the icon's palette. The icon's frames, 16 by 16
+// pixels of 4 bits each, 128 bytes a frame, follow it, and then the
+// game's data.
 type SaveHeader struct {
 	// Frames is how many frames the icon has, 1 to 3, which the card
 	// screen shows in turn. Sony asked European games for 1.
-	Frames uint8
+	Frames int
 
 	// Blocks is the file's size in blocks.
-	Blocks uint8
+	Blocks int
 
 	// Title is the name the card screen shows, in Shift-JIS, up to 32
 	// full-width characters. SetTitle makes one from ASCII.
@@ -81,8 +107,8 @@ func (h *SaveHeader) Put(b []byte) {
 	_ = b[CardSector-1]
 	clear(b[:CardSector])
 	b[0], b[1] = 'S', 'C'
-	b[2] = 0x10 + max(h.Frames, 1)
-	b[3] = h.Blocks
+	b[2] = byte(0x10 + max(h.Frames, 1))
+	b[3] = byte(h.Blocks)
 	copy(b[4:68], h.Title[:])
 	for i, c := range h.CLUT {
 		b[96+2*i], b[97+2*i] = byte(c), byte(c>>8)
@@ -90,8 +116,8 @@ func (h *SaveHeader) Put(b []byte) {
 }
 
 // ShiftJIS returns the full-width Shift-JIS character for an ASCII one,
-// from the table in Sony's FAQ ("How can I convert an ASCII string into a
-// Kanji string?"), or the full-width space for anything it has none for.
+// from the table in Sony's FAQ, or the full-width space for anything it
+// has none for.
 func ShiftJIS(c byte) uint16 {
 	switch {
 	case c >= '0' && c <= '9':
@@ -122,12 +148,34 @@ var sjisPunct = [33]uint16{
 	0x816f, 0x8162, 0x8170, 0x8150,
 }
 
+// A CardFile is a file on a card as the kernel lists it.
+type CardFile struct {
+	name   [20]byte
+	attr   int32
+	size   int32
+	next   *CardFile
+	head   int32
+	system [4]byte
+}
+
+// Name is the file's name.
+func (f *CardFile) Name() string {
+	n := 0
+	for n < len(f.name) && f.name[n] != 0 {
+		n++
+	}
+	return unsafe.String(&f.name[0], n)
+}
+
+// Size is the file's size in bytes, a whole number of blocks.
+func (f *CardFile) Size() int { return int(f.size) }
+
 // CardPath writes the C string naming a file on the card in slot 0 or 1,
 // "bu00:name" or "bu10:name", into buf and returns it for the file
 // functions. buf must hold the name and six bytes more.
 func CardPath(buf []byte, slot int, name string) *byte {
 	dev := "bu00:"
-	if slot == 1 {
+	if slot&1 == 1 {
 		dev = "bu10:"
 	}
 	n := copy(buf, dev)
@@ -136,89 +184,110 @@ func CardPath(buf []byte, slot int, name string) *byte {
 	return &buf[0]
 }
 
-// CardWrite creates the file name on the card in slot 0 or 1, as big as
-// data needs in whole blocks, replacing one that is there, writes data,
-// which must be a whole number of sectors, to it, and reads it back to see
-// that it is there. It returns whether it is. A save file's data starts
-// with its SaveHeader and icon.
-func CardWrite(slot int, name string, data []byte) bool {
+// CardWrite makes the file on the card in the slot, as big as data
+// needs in whole blocks, in place of one of the name already there,
+// writes data to it, a whole number of sectors, and reads it back to see
+// that it is there. A save file's data starts with its SaveHeader and
+// icon.
+func CardWrite(slot int, name string, data []byte) error {
 	if len(data) == 0 || len(data)%CardSector != 0 {
-		return false
+		return ErrSectors
 	}
 	blocks := (len(data) + CardBlock - 1) / CardBlock
 	var path [32]byte
 	p := CardPath(path[:], slot, name)
-	Delete(p)
-	fd := Open(p, O_CREAT|int32(blocks)<<16)
+	fileDelete(p)
+	fd := fileOpen(p, O_CREAT|int32(blocks)<<16)
 	if fd < 0 {
-		return false
+		return ErrCard
 	}
-	Close(fd)
-	fd = Open(p, O_WRONLY)
+	fileClose(fd)
+	fd = fileOpen(p, O_WRONLY)
 	if fd < 0 {
-		return false
+		return ErrCard
 	}
-	n := Write(fd, &data[0], int32(len(data)))
-	Close(fd)
+	n := fileWrite(fd, &data[0], int32(len(data)))
+	fileClose(fd)
 	if n != int32(len(data)) {
-		return false
+		return ErrCard
 	}
-	// Read it back a sector at a time, so that a card pulled out half way
-	// is caught here rather than when the save is loaded.
-	fd = Open(p, O_RDONLY)
+	// Read it back a sector at a time, so that a card pulled out half
+	// way is caught here rather than when the save is loaded.
+	fd = fileOpen(p, O_RDONLY)
 	if fd < 0 {
-		return false
+		return ErrCard
 	}
 	ok := true
 	for i := 0; ok && i < len(data); i += CardSector {
-		ok = Read(fd, &cardCheck[0], CardSector) == CardSector && [CardSector]byte(data[i:]) == cardCheck
+		ok = fileRead(fd, &cardCheck[0], CardSector) == CardSector && [CardSector]byte(data[i:]) == cardCheck
 	}
-	Close(fd)
-	return ok
+	fileClose(fd)
+	if !ok {
+		return ErrCard
+	}
+	return nil
 }
 
 // cardCheck is the sector CardWrite reads back.
 var cardCheck [CardSector]byte
 
-// CardRead reads the start of the file name on the card in slot 0 or 1
-// into buf, a whole number of sectors, and returns how many bytes it read,
-// or -1 if there is no such file. A program checks what it reads, with a
-// mark of its own at the start of its data say, since a card can be pulled
-// out while it is written.
-func CardRead(slot int, name string, buf []byte) int {
+// CardRead reads the start of the file on the card in the slot into
+// buf, a whole number of sectors, and returns how many bytes it read. A
+// program checks what it reads, with a mark of its own at the start of
+// its data say, since a card can be pulled out while it is written.
+func CardRead(slot int, name string, buf []byte) (int, error) {
 	if len(buf) == 0 || len(buf)%CardSector != 0 {
-		return -1
+		return 0, ErrSectors
 	}
 	var path [32]byte
-	fd := Open(CardPath(path[:], slot, name), O_RDONLY)
+	fd := fileOpen(CardPath(path[:], slot, name), O_RDONLY)
 	if fd < 0 {
-		return -1
+		return 0, ErrNoFile
 	}
-	n := Read(fd, &buf[0], int32(len(buf)))
-	Close(fd)
+	n := fileRead(fd, &buf[0], int32(len(buf)))
+	fileClose(fd)
 	if n <= 0 {
-		return -1
+		return 0, ErrCard
 	}
-	return int(n)
+	return int(n), nil
 }
 
-// CardFiles fills files with the files on the card in slot 0 or 1 and
+// CardFiles fills files with the files on the card in the slot and
 // returns how many there are, up to len(files).
-func CardFiles(slot int, files []DIRENTRY) int {
+func CardFiles(slot int, files []CardFile) int {
 	if len(files) == 0 {
 		return 0
 	}
 	var path [32]byte
-	n := 0
-	if Firstfile(CardPath(path[:], slot, "*"), &files[0]) == nil {
+	if !fileFirst(CardPath(path[:], slot, "*"), &files[0]) {
 		return 0
 	}
-	for n = 1; n < len(files); n++ {
-		if Nextfile(&files[n]) == nil {
+	n := 1
+	for ; n < len(files); n++ {
+		if !fileNext(&files[n]) {
 			break
 		}
 	}
 	return n
+}
+
+// CardDelete deletes the file on the card in the slot.
+func CardDelete(slot int, name string) error {
+	var path [32]byte
+	if fileDelete(CardPath(path[:], slot, name)) != 1 {
+		return ErrNoFile
+	}
+	return nil
+}
+
+// CardFormat formats the card in the slot, which writes its directory
+// and loses whatever was on it.
+func CardFormat(slot int) error {
+	var path [8]byte
+	if fileFormat(CardPath(path[:], slot, "")) != 1 {
+		return ErrCard
+	}
+	return nil
 }
 
 // FileName returns a DIRENTRY's name as a string, without its terminator.

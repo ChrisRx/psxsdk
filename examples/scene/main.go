@@ -44,7 +44,7 @@ import (
 
 var (
 	screen = yaroze.Screen{
-		Background:   yaroze.CVECTOR{R: 40, G: 60, B: 100},
+		Background:   yaroze.Color{R: 40, G: 60, B: 100},
 		Depth:        5,
 		OverlayDepth: 1,
 	}
@@ -68,10 +68,10 @@ func main() {
 	screen.Open()
 	yaroze.GsInit3D()
 	b := screen.Bounds()
-	screen.Font(int32(b.X)+16, int32(b.Y)+16, 256, 64, 512)
+	screen.Font(b.X+16, b.Y+16, 256, 64, 512)
 
 	loader.Start(300)
-	for ot := range screen.Frames() {
+	for frame := range screen.Frames() {
 		pad.Update()
 		if !world.Ready() {
 			done, failed := loader.Step()
@@ -89,7 +89,7 @@ func main() {
 
 		if pad.Pressed(yaroze.PADstart) {
 			which = (which + 1) % len(scenes)
-			if err := world.Load(scenes[which].Data(), source); err != nil {
+			if err := world.Load(&screen, scenes[which].Data(), source); err != nil {
 				yaroze.Print(err.Error())
 				continue
 			}
@@ -100,12 +100,12 @@ func main() {
 			turning = !turning
 		}
 		if turning {
-			cube.Rotation.Vx += 8
-			cube.Rotation.Vy += 20
+			cube.Rotation.X += 8
+			cube.Rotation.Y += 20
 		}
-		cube.Rotation.Vy += int16(dx * 32)
-		cube.Rotation.Vx += int16(dy * 32)
-		world.Draw(ot, screen.Overlay())
+		cube.Rotation.Y += dx * 32
+		cube.Rotation.X += dy * 32
+		world.Draw(frame, frame.Overlay())
 
 		// The scene's name, then each object's name and its two fields.
 		text.Reset()
@@ -136,5 +136,5 @@ func open() error {
 		return err
 	}
 	source = scene.Sources{scene.Files(disc.Registered()), scene.NewArchive(a)}
-	return world.Load(scenes[which].Data(), source)
+	return world.Load(&screen, scenes[which].Data(), source)
 }

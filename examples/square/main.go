@@ -31,7 +31,7 @@ var (
 	// tables of 1<<4 depths, enough for the cube's faces to be sorted by
 	// distance.
 	screen = yaroze.Screen{
-		Background: yaroze.CVECTOR{R: 40, G: 60, B: 100},
+		Background: yaroze.Color{R: 40, G: 60, B: 100},
 		Depth:      4,
 	}
 	pad    yaroze.Pad
@@ -39,7 +39,7 @@ var (
 
 	box  = yaroze.GsBOXF{W: 40, H: 40, R: 255, G: 160, B: 32}
 	bar  = yaroze.GsBOXF{H: 4, R: 255, G: 255, B: 255}
-	cube yaroze.Object
+	cube yaroze.GsObject
 
 	view  yaroze.GsRVIEW2
 	light yaroze.GsF_LIGHT
@@ -55,13 +55,14 @@ func main() {
 	// as well, so the text and the box are placed from the corner Bounds
 	// gives.
 	yaroze.GsInit3D()
-	b := screen.Bounds()
-	screen.Font(int32(b.X)+16, int32(b.Y)+16, 256, 64, 512)
+	b := screen.Bounds().RECT()
+	screen.Font(int(b.X)+16, int(b.Y)+16, 256, 64, 512)
 	box.X, box.Y = b.X+24, b.Y+b.H-64
 	bar.X, bar.Y = b.X+b.W/2-100, b.Y+b.H/2
 
 	loader.Start(300)
-	for ot := range screen.Frames() {
+	for f := range screen.Frames() {
+		ot := f.OT()
 		pad.Update()
 		dx, dy := pad.Dir()
 		box.X, box.Y = b.Clamp(box.X+int16(dx*speed), box.Y+int16(dy*speed), box.W, box.H)

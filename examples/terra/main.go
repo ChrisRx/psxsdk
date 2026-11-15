@@ -97,7 +97,7 @@ var (
 	// The screen as the original set it up: 320 by 240 at thirty frames a
 	// second, the two buffers side by side, an ordering table of 4096
 	// depths for the world and one of four for what goes over it, and
-	// 104000 bytes of packets a frame.
+	// 104000 bytes of packets a frame, dithered.
 	screen = yaroze.Screen{
 		Width:        320,
 		Height:       240,
@@ -106,6 +106,7 @@ var (
 		Packets:      0x19640,
 		Interval:     2,
 		SideBySide:   true,
+		Dither:       true,
 	}
 	pad yaroze.Pad
 
@@ -169,7 +170,8 @@ func main() {
 	flags[flagStart] = 1
 	soundInit()
 
-	for ot := range screen.Frames() {
+	for frame := range screen.Frames() {
+		ot := frame.OT()
 		padUpdate()
 		pad.Update()
 		gameFrame(ot)

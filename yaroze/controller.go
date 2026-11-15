@@ -21,22 +21,6 @@ const (
 	KindAnalog         = 7 // the analog controller (DUAL SHOCK) in analog mode
 )
 
-// Buttons of the other controllers, as bits of a Controller's Buttons, in
-// the same word as the PAD constants, which is why they share their values.
-const (
-	MouseLeft  Buttons = 1 << 3 // PADR1's bit
-	MouseRight Buttons = 1 << 2 // PADL1's bit
-
-	NeGconStart Buttons = PADstart
-	NeGconA     Buttons = 1 << 5 // PADRright's bit
-	NeGconB     Buttons = 1 << 4 // PADRup's bit
-	NeGconR     Buttons = 1 << 3 // PADR1's bit
-
-	GunConTrigger Buttons = 1 << 5  // PADRright's bit
-	GunConA       Buttons = 1 << 11 // PADstart's bit
-	GunConB       Buttons = 1 << 6  // PADRdown's bit
-)
-
 // A Controller is what one port's controller sent at the last vertical
 // blank.
 type Controller struct {

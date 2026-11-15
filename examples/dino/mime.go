@@ -79,14 +79,14 @@ func vertexMime() {
 // offset, the count of vertices, and the differences themselves.
 func setMdfVertex(addr uintptr) {
 	p := addr
-	n := *yaroze.At(p)
+	n := *yaroze.Word(p)
 	p += 4
 	mdfTotal = min(n, mimeMax)
 	for i := range mdfTotal {
 		m := &mdfvtx0[i]
-		m.object = *yaroze.At(p)
-		m.offset = *yaroze.At(p + 4)
-		m.total = *yaroze.At(p + 8)
+		m.object = *yaroze.Word(p)
+		m.offset = *yaroze.Word(p + 4)
+		m.total = *yaroze.Word(p + 8)
 		m.top = p + 12
 		p += 12 + uintptr(m.total)*unsafe.Sizeof(yaroze.SVECTOR{})
 	}

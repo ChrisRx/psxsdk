@@ -110,11 +110,11 @@ func soundFrame() {
 		if tuneState[n] != tuneFading {
 			continue
 		}
-		yaroze.SsSeqGetVol(tunes[n].ID, 0, &tuneVol[0], &tuneVol[1])
+		yaroze.SsSeqGetVol(tunes[n].ID(), 0, &tuneVol[0], &tuneVol[1])
 		if tuneVol[0] == 0 {
 			stopTune(n)
 		} else {
-			tunes[n].SetVolume(tuneVol[0]-1, tuneVol[1]-1)
+			tunes[n].SetVolume(int(tuneVol[0])-1, int(tuneVol[1])-1)
 		}
 	}
 	if ambient {
@@ -145,7 +145,7 @@ func setAmbient(on bool) {
 // playEffect keys on effect n: at its note and volume, or with the note
 // raised by up to its range and the sound panned to one side by as much.
 func playEffect(n int) {
-	if !effectBank.Valid() {
+	if effectBank.ID() < 0 {
 		return
 	}
 	e := &effects[n]
@@ -159,5 +159,5 @@ func playEffect(n int) {
 		}
 		left, right = e.vol+p, e.vol-p
 	}
-	yaroze.SsUtKeyOn(effectBank.ID, int16(e.prog), 0, int16(note), 0, int16(left), int16(right))
+	yaroze.SsUtKeyOn(effectBank.ID(), int16(e.prog), 0, int16(note), 0, int16(left), int16(right))
 }

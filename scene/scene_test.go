@@ -60,34 +60,32 @@ func TestLoad(t *testing.T) {
 		t.FailNow()
 	}
 	var s Scene
-	assert.NoError(t, s.Load(words(b), Files(files)))
+	assert.NoError(t, s.Load(nil, words(b), Files(files)))
 	assert.Equal(t, true, s.Ready())
 
 	got := struct {
-		Camera     yaroze.GsRVIEW2
-		Projection int32
-		Ambient    [3]int32
+		Camera     yaroze.Camera
+		Ambient    [3]yaroze.Fixed
 		NLights    int
-		Light0     yaroze.GsF_LIGHT
-		Light1RGB  [3]uint8
+		Light0     yaroze.Light
+		Light1RGB  yaroze.Color
 		Counts     [4]int
-		Cube       yaroze.VECTOR
-		CubeRot    yaroze.SVECTOR
-		CubeScale  yaroze.VECTOR
+		Cube       yaroze.Vector
+		CubeRot    yaroze.Rotation
+		CubeScale  yaroze.Vector
 		Names      [2]string
 		Second     *yaroze.Object
 		None       *yaroze.Object
-		Sprite     yaroze.GsSPRITE
+		Sprite     yaroze.Sprite
 		SpriteName string
 		Texture0   uint32
 		Model0     uint32
 	}{
 		Camera:     s.Camera,
-		Projection: s.Projection,
 		Ambient:    s.Ambient,
 		NLights:    s.NLights,
 		Light0:     s.Lights[0],
-		Light1RGB:  [3]uint8{s.Lights[1].R, s.Lights[1].G, s.Lights[1].B},
+		Light1RGB:  s.Lights[1].Color,
 		Counts:     [4]int{s.NTextures, s.NModels, s.NObjects, s.NSprites},
 		Cube:       s.Object("cube").Position,
 		CubeRot:    s.Object("cube").Rotation,
@@ -97,29 +95,26 @@ func TestLoad(t *testing.T) {
 		None:       s.Object("cub"),
 		Sprite:     *s.Sprite("badge"),
 		SpriteName: s.SpriteName(0),
-		Texture0:   s.Textures[0][0],
-		Model0:     s.Models[0][0],
 	}
 	cubeData[0], stoneData[0] = 0x41, 0x10
 	want := got
-	want.Camera = yaroze.GsRVIEW2{Vpx: 0, Vpy: -200, Vpz: -1000, Vrx: 0, Vry: 0, Vrz: 50, Rz: 3, Super: yaroze.WORLD}
-	want.Projection = 320
-	want.Ambient = [3]int32{1024, 512, 256}
+	want.Camera = yaroze.Camera{Eye: yaroze.Vector{X: 0, Y: -200, Z: -1000}, Target: yaroze.Vector{X: 0, Y: 0, Z: 50}, Roll: 3, Distance: 320}
+	want.Ambient = [3]yaroze.Fixed{1024, 512, 256}
 	want.NLights = 2
-	want.Light0 = yaroze.GsF_LIGHT{Vx: 1, Vy: 1, Vz: 1, R: 0xc0, G: 0xc0, B: 0xc0}
-	want.Light1RGB = [3]uint8{0x40, 0x40, 0x80}
+	want.Light0 = yaroze.Light{Direction: yaroze.Vector{X: 1, Y: 1, Z: 1}, Color: yaroze.Color{R: 0xc0, G: 0xc0, B: 0xc0}}
+	want.Light1RGB = yaroze.Color{R: 0x40, G: 0x40, B: 0x80}
 	want.Counts = [4]int{1, 1, 2, 1}
-	want.Cube = yaroze.VECTOR{Vx: 10, Vy: -20, Vz: 300}
-	want.CubeRot = yaroze.SVECTOR{Vx: 0, Vy: 512, Vz: -4}
-	want.CubeScale = yaroze.VECTOR{Vx: 4096, Vy: 2048, Vz: 4096}
+	want.Cube = yaroze.Vector{X: 10, Y: -20, Z: 300}
+	want.CubeRot = yaroze.Rotation{X: 0, Y: 512, Z: -4}
+	want.CubeScale = yaroze.Vector{X: 4096, Y: 2048, Z: 4096}
 	want.Names = [2]string{"cube", "second cube"}
 	want.Second = &s.Objects[1]
 	want.None = nil
-	want.Sprite = yaroze.GsSPRITE{Attribute: 1 << 24, X: 10, Y: -20, W: 64, H: 32, Tpage: 0xa, U: 3, V: 7, Cx: 16, Cy: 480, R: 128, G: 100, B: 90, Mx: 2, My: 3, Scalex: 4096, Scaley: 2048, Rotate: 90 * 4096}
+	want.Sprite = yaroze.Sprite{Mode: 1 << 24, X: 10, Y: -20, W: 64, H: 32, Texture: yaroze.Texture{Page: 0xa, U: 3, V: 7, CX: 16, CY: 480}, Color: yaroze.Color{R: 128, G: 100, B: 90}, Pivot: yaroze.Point{X: 2, Y: 3}, ScaleX: 4096, ScaleY: 2048, Rotate: 90 * 4096}
 	want.SpriteName = "badge"
 	want.Texture0 = 0x10
 	want.Model0 = 0x41
-	got.Texture0, got.Model0 = s.Textures[0][0], s.Models[0][0]
+	got.Texture0, got.Model0 = s.textureWords[0][0], s.Models[0][0]
 	assert.Equal(t, want, got)
 	model, index := s.ObjectModel(1)
 	assert.Equal(t, [2]int{0, 1}, [2]int{model, index})
@@ -158,7 +153,7 @@ func TestLoadLayers(t *testing.T) {
 		t.FailNow()
 	}
 	var s Scene
-	assert.NoError(t, s.Load(words(b), Files(files)))
+	assert.NoError(t, s.Load(nil, words(b), Files(files)))
 	assert.Equal(t, 2, s.NLayers())
 	far, ground := s.Layer("far"), s.Layer("ground")
 	if far == nil || ground == nil {
@@ -172,19 +167,17 @@ func TestLoadLayers(t *testing.T) {
 		Size     [2]int
 		Scroll   [2]int16
 		Window   [4]int16
-		RGB      [3]uint8
-		Scale    [2]int16
+		RGB      yaroze.Color
 		MapBound bool
 	}{
 		Names:  [2]string{far.Name(), ground.Name()},
 		Speeds: [2]int{far.Speed, ground.Speed},
 		Size:   [2]int{ground.Width(), ground.Height()},
-		Scroll: [2]int16{ground.BG.Scrollx, ground.BG.Scrolly},
+		Scroll: [2]int16{ground.BG.ScrollX, ground.BG.ScrollY},
 		Window: [4]int16{ground.BG.X, ground.BG.Y, ground.BG.W, ground.BG.H},
-		RGB:    [3]uint8{ground.BG.R, ground.BG.G, ground.BG.B},
-		Scale:  [2]int16{ground.BG.Scalex, ground.BG.Scaley},
-		MapBound: ground.BG.Map == &ground.tileMap && ground.tileMap.Base == &ground.cells[0] && ground.tileMap.Index == &ground.index[0] &&
-			far.BG.Map == &far.tileMap && far.tileMap.Index == &far.index[0],
+		RGB:    ground.BG.Color,
+		MapBound: &ground.tileMap.Cells[0] == &ground.cells[0] && &ground.tileMap.Layout[0] == &ground.index[0] &&
+			&far.tileMap.Layout[0] == &far.index[0],
 	}
 	assert.Equal(t, struct {
 		Names    [2]string
@@ -192,10 +185,9 @@ func TestLoadLayers(t *testing.T) {
 		Size     [2]int
 		Scroll   [2]int16
 		Window   [4]int16
-		RGB      [3]uint8
-		Scale    [2]int16
+		RGB      yaroze.Color
 		MapBound bool
-	}{[2]string{"far", "ground"}, [2]int{50, 100}, [2]int{3, 2}, [2]int16{4, -8}, [4]int16{-160, -120, 320, 240}, [3]uint8{128, 100, 90}, [2]int16{4096, 4096}, true}, got)
+	}{[2]string{"far", "ground"}, [2]int{50, 100}, [2]int{3, 2}, [2]int16{4, -8}, [4]int16{-160, -120, 320, 240}, yaroze.Color{R: 128, G: 100, B: 90}, true}, got)
 
 	// Cells and their flags, by cell and by pixel, off the map none.
 	assert.Equal(t, 2, ground.Cell(0, 1))
@@ -218,13 +210,13 @@ func TestLoadLayers(t *testing.T) {
 	// Scroll moves each layer by its speed's share, from where the file
 	// put it.
 	s.Scroll(100, -20)
-	assert.Equal(t, [4]int16{50, -2, 104, -28}, [4]int16{far.BG.Scrollx, far.BG.Scrolly, ground.BG.Scrollx, ground.BG.Scrolly})
+	assert.Equal(t, [4]int16{50, -2, 104, -28}, [4]int16{far.BG.ScrollX, far.BG.ScrollY, ground.BG.ScrollX, ground.BG.ScrollY})
 	s.Scroll(0, 0)
-	assert.Equal(t, [4]int16{0, 8, 4, -8}, [4]int16{far.BG.Scrollx, far.BG.Scrolly, ground.BG.Scrollx, ground.BG.Scrolly})
+	assert.Equal(t, [4]int16{0, 8, 4, -8}, [4]int16{far.BG.ScrollX, far.BG.ScrollY, ground.BG.ScrollX, ground.BG.ScrollY})
 
 	// Without layers, a scene loaded into the same Scene has none.
 	b, _ = sample().Bytes()
-	assert.NoError(t, s.Load(words(b), Files(files)))
+	assert.NoError(t, s.Load(nil, words(b), Files(files)))
 	assert.Equal(t, 0, s.NLayers())
 	assert.Equal(t, (*Layer)(nil), s.Layer("ground"))
 }
@@ -246,7 +238,7 @@ func TestLoadBeforeLayers(t *testing.T) {
 	old := append([]byte{}, b[:at+format.LayerSize+12]...)
 	old[at+6], old[at+7], old[at+27] = 0, 0, 0
 	var s Scene
-	assert.NoError(t, s.Load(words(old), Files(files)))
+	assert.NoError(t, s.Load(nil, words(old), Files(files)))
 	assert.Equal(t, 1, s.NLayers())
 	l := s.Layer("background")
 	if l == nil {
@@ -273,7 +265,7 @@ func TestLoadRoom(t *testing.T) {
 	}
 	var s Scene
 	// A room's file needs no source: it names no texture or model.
-	assert.NoError(t, s.Load(words(b), nil))
+	assert.NoError(t, s.Load(nil, words(b), nil))
 	r := s.Room()
 	if r == nil {
 		t.Fatal("the scene has no room")
@@ -297,10 +289,10 @@ func TestLoadRoom(t *testing.T) {
 
 	// A file with no room has none, and a room's rows are read again
 	// on a second load without harm.
-	assert.NoError(t, s.Load(words(b), nil))
+	assert.NoError(t, s.Load(nil, words(b), nil))
 	assert.Equal(t, []string{"0000", "0120", "0000"}, s.Room().Heights)
 	plain, _ := sample().Bytes()
-	assert.NoError(t, s.Load(words(plain), Files(files)))
+	assert.NoError(t, s.Load(nil, words(plain), Files(files)))
 	assert.Equal(t, (*Room)(nil), s.Room())
 }
 
@@ -315,7 +307,7 @@ func TestLoadMissing(t *testing.T) {
 		t.FailNow()
 	}
 	var s Scene
-	assert.Equal(t, ErrMissing, s.Load(words(b), Files(files)))
+	assert.Equal(t, ErrMissing, s.Load(nil, words(b), Files(files)))
 	assert.Equal(t, "ASSETS/EMPTY.TMD", s.Missing)
 	assert.Equal(t, false, s.Ready())
 
@@ -323,18 +315,18 @@ func TestLoadMissing(t *testing.T) {
 	sc.Textures = []string{"ASSETS/NONE.TIM"}
 	sc.Sprites[0].Texture = "ASSETS/NONE.TIM"
 	b, _ = sc.Bytes()
-	assert.Equal(t, ErrMissing, s.Load(words(b), Files(files)))
+	assert.Equal(t, ErrMissing, s.Load(nil, words(b), Files(files)))
 	assert.Equal(t, "ASSETS/NONE.TIM", s.Missing)
 }
 
 func TestLoadFormat(t *testing.T) {
 	var s Scene
-	assert.Equal(t, ErrFormat, s.Load([]uint32{1, 2, 3}, Files(files)))
+	assert.Equal(t, ErrFormat, s.Load(nil, []uint32{1, 2, 3}, Files(files)))
 	b, _ := sample().Bytes()
 	w := words(b)
-	assert.Equal(t, ErrFormat, s.Load(w[:len(w)-1], Files(files)))
+	assert.Equal(t, ErrFormat, s.Load(nil, w[:len(w)-1], Files(files)))
 	w[1] |= 200 << 16 // more objects than a scene holds
-	assert.Equal(t, ErrFormat, s.Load(w, Files(files)))
+	assert.Equal(t, ErrFormat, s.Load(nil, w, Files(files)))
 }
 
 // TestArchive loads a scene whose texture and model are entries of an
@@ -361,7 +353,7 @@ func TestArchive(t *testing.T) {
 	b, err := sample().Bytes()
 	assert.NoError(t, err)
 	var s Scene
-	assert.NoError(t, s.Load(words(b), Sources{Files(files[2:]), src}))
+	assert.NoError(t, s.Load(nil, words(b), Sources{Files(files[2:]), src}))
 	assert.Equal(t, 2, src.n, "both entries found")
 	assert.Equal(t, "STONE.TIM", src.names[0])
 	assert.Equal(t, "", s.Name(), "a scene not from a file has no name")
@@ -375,6 +367,6 @@ func TestArchive(t *testing.T) {
 	sc.Textures = append(sc.Textures, "ASSETS/ELSEWHERE.TIM")
 	b, err = sc.Bytes()
 	assert.NoError(t, err)
-	assert.Equal(t, ErrMissing, s.Load(words(b), src))
+	assert.Equal(t, ErrMissing, s.Load(nil, words(b), src))
 	assert.Equal(t, "ASSETS/ELSEWHERE.TIM", s.Missing)
 }

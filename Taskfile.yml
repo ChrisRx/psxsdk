@@ -41,7 +41,7 @@ tasks:
       - build:disc:tutorial
     cmds:
       - task: build:discs:examples
-      - task: build:discs:exp
+      - task: build:discs:ps
       - task: build:disc:cookbook
 
   # The programs the tests also run on the resident library, each onto
@@ -53,23 +53,26 @@ tasks:
         vars: { NAME: '{{.ITEM}}' }
       - task: build:disc:resident
         vars: { NAME: hello, DIR: docs/tutorial/hello }
-      - for: [card, cdda, dino, gallery, invaders, jumpcube, pads, quest, square, tiles, timers]
+      - for: [jumpcube, quest]
         task: build:disc:resident
-        vars: { NAME: '{{.ITEM}}-ps', DIR: 'exp/examples/{{.ITEM}}' }
+        vars: { NAME: '{{.ITEM}}' }
+      - for: [card, cdda, dino, gallery, invaders, pads, square, tiles, timers]
+        task: build:disc:resident
+        vars: { NAME: '{{.ITEM}}-ps', DIR: 'yaroze/internal/examples/{{.ITEM}}' }
 
-  # The programs under exp/examples, written against the exp/ps API, go
-  # onto .build/NAME-ps, linked statically as every program is.
-  build:discs:exp:
+  # The programs under yaroze/internal/examples, examples written again
+  # against the package's Go API, which the tests check draw what the
+  # originals do, go onto .build/NAME-ps, linked statically as every
+  # program is.
+  build:discs:ps:
     internal: true
     deps:
       - for: { var: PORTS }
         task: build:disc
-        vars: { NAME: '{{.ITEM}}-ps', DIR: 'exp/examples/{{.ITEM}}' }
-      - task: build:disc
-        vars: { NAME: gallery-ps, DIR: exp/examples/gallery }
+        vars: { NAME: '{{.ITEM}}-ps', DIR: 'yaroze/internal/examples/{{.ITEM}}' }
     vars:
       PORTS:
-        sh: for f in exp/examples/*/main.go; do d=$(basename "$(dirname "$f")"); [ "$d" = gallery ] || echo "$d"; done
+        sh: for f in yaroze/internal/examples/*/main.go; do basename "$(dirname "$f")"; done
 
   build:discs:examples:
     internal: true
@@ -106,13 +109,14 @@ tasks:
       - 'disc/**/*.go'
       - 'archive/**/*.go'
       - 'scene/**/*.go'
+      - 'stage/**/*.go'
       - 'format/**/*.go'
       - 'examples/internal/**/*.go'
       - 'internal/**/*'
       - 'cmd/yaroze/**/*'
       - 'link/**/*'
       - 'tools/**/*.go'
-      - 'exp/**/*'
+      - 'exp/cleanlib/**/*'
       - go.mod
       - go.sum
     generates:
@@ -139,6 +143,7 @@ tasks:
       - 'disc/**/*.go'
       - 'archive/**/*.go'
       - 'scene/**/*.go'
+      - 'stage/**/*.go'
       - 'format/**/*.go'
       - 'examples/internal/**/*.go'
       - 'internal/**/*'

@@ -328,9 +328,8 @@ const sceneTab = (() => {
   // says where the file is and takes the flag). A scene grown past the
   // memory the program loaded it into needs a Run.
   const liveStatus = $("scene-live");
-  // The record is the scene package's, or the exp/ps one's in a program
-  // written against that API.
-  const LIVES = ["go.chrisrx.dev/psx/scene.live", "go.chrisrx.dev/psx/exp/ps/scene.live"];
+  // The record is the scene package's.
+  const LIVES = ["go.chrisrx.dev/psx/scene.live"];
   async function poke() {
     const p = project();
     if (!p || !state.running || state.current?.id !== p.id) {

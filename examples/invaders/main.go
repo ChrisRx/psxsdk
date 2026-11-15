@@ -796,12 +796,13 @@ func yOverlap(first, second *yaroze.RECT) bool {
 // remembering whether both worked so that nothing is played or closed
 // otherwise.
 func initSound() {
-	var ok bool
-	if bank, ok = yaroze.OpenBank(vh.Data(), vb.Data()); !ok {
+	var err error
+	if bank, err = yaroze.OpenBank(vh.Data(), vb.Data()); err != nil {
 		soundSuccess = false
 		return
 	}
-	song, soundSuccess = bank.Sequence(seqData[:])
+	song, err = bank.Sequence(seqData[:])
+	soundSuccess = err == nil
 }
 
 func playSound() {

@@ -4,7 +4,7 @@ package main
 import "go.chrisrx.dev/psx/yaroze"
 
 // The screen, 320 by 240, cleared to teal every frame.
-var screen = yaroze.Screen{Background: yaroze.CVECTOR{R: 60, G: 120, B: 120}}
+var screen = yaroze.Screen{Background: yaroze.Color{R: 60, G: 120, B: 120}}
 
 func main() {
 	screen.Open()

@@ -11,11 +11,6 @@ import (
 // position, and 4096ths for the camera's directions. Up is -Y, as the
 // console has it.
 
-// xy packs a screen point as a GPU packet holds one.
-//
-//go:inline
-func xy(x, y int16) uint32 { return uint32(uint16(x)) | uint32(uint16(y))<<16 }
-
 //go:inline
 func abs(v int) int {
 	if v < 0 {
@@ -29,9 +24,9 @@ func abs(v int) int {
 // clockwise, and a row for each frame of the walk, each frameW by
 // frameH with the feet on row feetRow.
 type figure struct {
-	sprite yaroze.GsSPRITE
-	feet   yaroze.SVECTOR
-	sxy    uint32
+	sprite yaroze.Sprite
+	feet   yaroze.Vertex
+	sxy    yaroze.XY
 }
 
 const (
@@ -44,37 +39,37 @@ const (
 var people figure
 
 // cut takes the sheet from an image in video memory.
-func (f *figure) cut(im yaroze.GsIMAGE) {
+func (f *figure) cut(im yaroze.Image) {
 	f.sprite = im.Sprite()
 	f.sprite.W, f.sprite.H = frameW, frameH
-	f.sprite.Mx, f.sprite.My = frameW/2, feetRow
+	f.sprite.Pivot = yaroze.Point{X: frameW / 2, Y: feetRow}
 }
 
 // draw projects the figure's feet, at p on the ground and y above it, to
 // the screen through the camera's world-to-screen matrix, puts the
 // sprite's feet there, picks the column that faces the figure's way as
-// seen from the camera and the row of the walk, and sorts it where
+// seen from the camera and the row of the walk, and draws it where
 // stage puts a figure standing at the feet's depth, in front of the
 // floor it stands on and the wall it may be against. The depth is the
 // GTE's average of the point three times over, so that it is on the
 // same scale as the depths the polygons are sorted at. It returns the
 // feet's screen point and depth, or ok false when the point is off the
 // screen.
-func (f *figure) draw(ot *yaroze.GsOT, p stage.Vec, y, facing, frame int) (sx, sy, otz int, ok bool) {
-	f.feet = yaroze.SVECTOR{Vx: int16(p.X), Vy: int16(-y), Vz: int16(p.Z)}
-	yaroze.GsSetLsMatrix(yaroze.GsWSMATRIX())
-	if yaroze.RotTransPers(&f.feet, &f.sxy) < 0 {
+func (f *figure) draw(frame *yaroze.Frame, p stage.Vec, y, facing, step int) (sx, sy, otz int, ok bool) {
+	f.feet = yaroze.Vertex{X: int16(p.X), Y: int16(-y), Z: int16(p.Z)}
+	yaroze.UseCamera()
+	if !yaroze.Project(&f.feet, &f.sxy) {
 		return 0, 0, 0, false
 	}
-	yaroze.RotTransPers(&f.feet, &f.sxy)
-	yaroze.RotTransPers(&f.feet, &f.sxy)
-	otz = int(yaroze.AverageZ3())
-	sx, sy = int(int16(f.sxy)), int(int16(f.sxy>>16))
-	if ot != nil {
-		f.sprite.X, f.sprite.Y = int16(sx), int16(sy)
-		f.sprite.U = uint8(frameW * ((facing - cam.eighths()) & 7))
-		f.sprite.V = uint8(frameH * frame)
-		f.sprite.Sort(ot, stage.Standing(otz))
+	yaroze.Project(&f.feet, &f.sxy)
+	yaroze.Project(&f.feet, &f.sxy)
+	otz = yaroze.AverageDepth3()
+	sx, sy = int(f.sxy.X), int(f.sxy.Y)
+	if frame != nil {
+		f.sprite.MoveTo(sx, sy)
+		f.sprite.Texture.U = uint8(frameW * ((facing - cam.eighths()) & 7))
+		f.sprite.Texture.V = uint8(frameH * step)
+		f.sprite.Draw(frame, stage.Standing(otz))
 	}
 	return sx, sy, otz, true
 }

@@ -490,9 +490,6 @@ func sndSet(seq, vh, vb []uint32) {
 }
 
 func sndPlay() {
-	if !song.Valid() {
-		return
-	}
 	yaroze.SsSetMVol(mvol, mvol)
 	song.SetVolume(svol, svol)
 	yaroze.SsUtReverbOn()
@@ -501,11 +498,9 @@ func sndPlay() {
 }
 
 func sndStop() {
-	if song.Valid() {
-		song.Stop()
-		yaroze.VSync(0)
-		yaroze.VSync(0)
-		song.Close()
-	}
+	song.Stop()
+	yaroze.VSync(0)
+	yaroze.VSync(0)
+	song.Close()
 	bank.Close()
 }

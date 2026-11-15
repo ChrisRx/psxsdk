@@ -45,7 +45,7 @@ var (
 var trackNames = [3]string{"RISING", "FALLING", "BEAT"}
 
 var (
-	screen = yaroze.Screen{Background: yaroze.CVECTOR{R: 10, G: 40, B: 40}, Depth: 1}
+	screen = yaroze.Screen{Background: yaroze.Color{R: 10, G: 40, B: 40}, Depth: 1}
 	pad    yaroze.Pad
 
 	// tracks is the list CdPlay plays from, the tracks' numbers ending
@@ -78,7 +78,8 @@ func main() {
 		bars[i] = yaroze.GsBOXF{X: 40 + int16(i)*90, Y: 200, W: 60, H: 8, R: 60, G: 120, B: 120}
 	}
 
-	for ot := range screen.Frames() {
+	for frame := range screen.Frames() {
+		ot := frame.OT()
 		pad.Update()
 		switch {
 		case pad.Pressed(yaroze.PADLleft) && chosen > 0:

@@ -48,7 +48,7 @@ type ball struct {
 }
 
 var (
-	screen = yaroze.Screen{Background: yaroze.CVECTOR{R: 20, G: 20, B: 40}, Depth: 1, Packets: 32 << 10}
+	screen = yaroze.Screen{Background: yaroze.Color{R: 20, G: 20, B: 40}, Depth: 1, Packets: 32 << 10}
 	pad    yaroze.Pad
 
 	sprite yaroze.GsSPRITE
@@ -103,7 +103,8 @@ func main() {
 	frameBar = yaroze.GsBOXF{X: 16, Y: 92, W: 288, H: 6, R: 60, G: 60, B: 90}
 	loadBar = yaroze.GsBOXF{X: 16, Y: 92, H: 6}
 
-	for ot := range screen.Frames() {
+	for frame := range screen.Frames() {
+		ot := frame.OT()
 		pad.Update()
 		if n := pad.Duration(yaroze.PADLup); n == 1 || n > 15 {
 			count = min(count+10, maxBalls)

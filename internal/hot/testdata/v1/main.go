@@ -8,7 +8,7 @@ import (
 	"go.chrisrx.dev/psx/yaroze"
 )
 
-var screen = yaroze.Screen{Background: yaroze.CVECTOR{R: 60, G: 120, B: 120}}
+var screen = yaroze.Screen{Background: yaroze.Color{R: 60, G: 120, B: 120}}
 
 var frames int
 
@@ -22,7 +22,7 @@ func main() {
 	for range screen.Frames() {
 		frames++
 		if volatile.LoadUint32(&speed) > 3 {
-			screen.Background = yaroze.CVECTOR{R: 200, G: 100, B: 0}
+			screen.Background = yaroze.Color{R: 200, G: 100, B: 0}
 		}
 		yaroze.Print("version one")
 	}
