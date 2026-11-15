@@ -69,7 +69,7 @@ text "480" rjust at (-0.06, -480*$sy)
 text "511" rjust at (-0.06, -512*$sy)
 ```
 
-That is the default `Screen`, 320 by 240 with its two buffers one above the other. `SideBySide` puts them both at the top, which frees the rows below for images. A texture lies inside one texture page, 64 units wide and 256 lines tall, which is 256 pixels of a 4-bit image, 128 of an 8-bit one and 64 of a 16-bit one, and several small images can share a page. `Screen.Font` puts the font at the corner it is given, with its palette 128 lines below. Two images must not overlap, and `png2tim` prints where each one goes, with `-r` for a TIM already made.
+That is the default `Screen`, 320 by 240 with its two buffers one above the other. `Buffers: yaroze.ScreenBuffersSideBySide` puts them both at the top, which frees the rows below for images. A texture lies inside one texture page, 64 units wide and 256 lines tall, which is 256 pixels of a 4-bit image, 128 of an 8-bit one and 64 of a 16-bit one, and several small images can share a page. `Screen.Font` puts the font at the corner it is given, with its palette 128 lines below. Two images must not overlap, and `png2tim` prints where each one goes, with `-r` for a TIM already made.
 
 A model's TMD names its textures by where they are, so the TIM a model's material names is converted first, and the program loads that same TIM before it draws the model.
 

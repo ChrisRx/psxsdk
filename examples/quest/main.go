@@ -104,6 +104,8 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/stage"
 	"go.chrisrx.dev/psx/yaroze"
 )
@@ -124,9 +126,9 @@ var (
 		Background: yaroze.Color{R: 8, G: 8, B: 16},
 		Depth:      stage.Depth,
 		Packets:    32 << 10,
-		Center:     true,
+		Origin:     yaroze.ScreenOriginMiddle,
 	}
-	pad    yaroze.Pad
+	pad    input.Controller
 	failed *disc.File
 	text   yaroze.Text
 
@@ -188,7 +190,7 @@ func main() {
 			// A press counts once, on the first step. While the
 			// text box is up, Cross reads on and nothing else
 			// moves.
-			cross := k == 0 && pad.Pressed(yaroze.Cross)
+			cross := k == 0 && pad.Pressed(input.Cross)
 			if talk.up {
 				talk.update(cross)
 			} else {
@@ -217,7 +219,7 @@ func main() {
 // setup loads the textures and the sprite sheets into video memory,
 // keeps what the polygons name the textures by, cuts the sprites, sets up
 // the sky and the text box, and places the camera.
-func setup(b yaroze.Rect) {
+func setup(b geom.Rect) {
 	floors[floorStone] = stage.NewSurface(yaroze.LoadTIM(floorTIM.Data()).Texture())
 	floors[floorGrass] = stage.NewSurface(yaroze.LoadTIM(grassTIM.Data()).Texture())
 	walls[wallStone] = stage.NewSurface(yaroze.LoadTIM(wallTIM.Data()).Texture())

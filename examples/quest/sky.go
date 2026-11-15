@@ -1,6 +1,7 @@
 package main
 
 import (
+	"go.chrisrx.dev/psx/geom"
 	"go.chrisrx.dev/psx/stage"
 	"go.chrisrx.dev/psx/yaroze"
 )
@@ -31,14 +32,14 @@ var sky backdrop
 
 // setup cuts the strips and the sun from their images and sizes the
 // land to the screen.
-func (s *backdrop) setup(b yaroze.Rect) {
+func (s *backdrop) setup(b geom.Rect) {
 	s.sun = yaroze.LoadTIM(sunTIM.Data()).Sprite()
 	s.clouds = yaroze.LoadTIM(skyTIM.Data()).Sprite()
 	s.clouds.H = 32
 	s.hills = s.clouds
 	s.hills.Texture.V += 32
 	s.land = yaroze.Box{Color: yaroze.Color{R: 50, G: 110, B: 80}}
-	s.land.SetRect(yaroze.Rect{
+	s.land.SetRect(geom.Rect{
 		W: b.W,
 		H: b.H - 68,
 	})
@@ -50,7 +51,7 @@ func (s *backdrop) setup(b yaroze.Rect) {
 // it all; and over it the sun, the clouds and the hills. The ground
 // covers them where it reaches the top of the screen. A room without
 // sky colors has no sky, and the screen's own background shows.
-func (s *backdrop) draw(frame *yaroze.Frame, b yaroze.Rect) {
+func (s *backdrop) draw(frame *yaroze.Frame, b geom.Rect) {
 	colors := world.Room().Sky
 	if colors == ([2]stage.Color{}) {
 		return
@@ -81,7 +82,7 @@ func (s *backdrop) draw(frame *yaroze.Frame, b yaroze.Rect) {
 // strip draws a strip of the backdrop across the screen at y, scrolled
 // left by scroll and wrapped, as many times as it takes to cover the
 // screen's width.
-func (s *backdrop) strip(frame *yaroze.Frame, sp *yaroze.Sprite, scroll int, b yaroze.Rect, y, depth int) {
+func (s *backdrop) strip(frame *yaroze.Frame, sp *yaroze.Sprite, scroll int, b geom.Rect, y, depth int) {
 	x := b.X - scroll&(backdropW-1)
 	for ; x < b.X+b.W; x += backdropW {
 		sp.MoveTo(x, y)

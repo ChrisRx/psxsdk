@@ -32,9 +32,9 @@ type Controller struct {
 	Kind uint8
 
 	// Buttons are the buttons held, in PadRead's word, the PAD constants
-	// naming the standard and analog controllers' and the Mouse, NeGcon and
-	// GunCon constants the others'. The direction buttons of a neGcon are
-	// the PAD constants'.
+	// naming the standard and analog controllers' and the input package's
+	// Mouse, NeGcon and GunCon constants the others'. The direction
+	// buttons of a neGcon are the PAD constants'.
 	Buttons Buttons
 
 	// Axes are the four bytes after the buttons. An analog controller's or

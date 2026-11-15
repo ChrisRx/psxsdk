@@ -105,8 +105,8 @@ var (
 		OverlayDepth: 2,
 		Packets:      0x19640,
 		Interval:     2,
-		SideBySide:   true,
-		Dither:       true,
+		Buffers:      yaroze.ScreenBuffersSideBySide,
+		Dithered:     true,
 	}
 	pad yaroze.Pad
 

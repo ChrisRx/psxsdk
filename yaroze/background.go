@@ -58,11 +58,11 @@ type tileMapImpl struct {
 //		bg.Draw(frame, 1)
 //	}
 //
-// Mode is read by Init, for Translucent; the rest can change between
-// frames. A Background is the library's own layout, with its unused
-// fields hidden, so drawing one copies nothing.
+// Blend is read by Init; the rest can change between frames. A
+// Background starts with the library's own layout, with its unused fields
+// hidden, so drawing one copies nothing.
 type Background struct {
-	Mode             Mode
+	attribute        uint32
 	X, Y             int16
 	W, H             int16
 	ScrollX, ScrollY int16
@@ -77,6 +77,9 @@ type Background struct {
 	// work is where the library builds the window's packets, one a cell
 	// position on the screen, for each display buffer.
 	work []uint32
+
+	// Blend is how the cells are blended with what is behind them.
+	Blend BlendMode
 }
 
 // Init points the background at the map, builds the map as the library
@@ -106,9 +109,9 @@ func (bg *Background) InitBuffer(s *Screen, m *TileMap, work []uint32) {
 		cells: &m.Cells[0], layout: &m.Layout[0],
 	}
 	bg.m = &m.impl
-	// The cells' color depth goes into the mode, where the library reads
-	// it, from the first cell's page.
-	bg.Mode = bg.Mode&^(3<<24) | Mode(m.Cells[0].Page>>7&3)<<24
+	// The blend and the cells' color depth go into the attribute word,
+	// where the library reads them, the depth from the first cell's page.
+	bg.attribute = bg.Blend.attribute() | uint32(m.Cells[0].Page)>>7&3<<24
 	bg.work = work
 	initBackground(bg)
 }

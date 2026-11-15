@@ -6,6 +6,7 @@ import (
 	"testing"
 	"unsafe"
 
+	"go.chrisrx.dev/psx/geom"
 	"go.chrisrx.dev/x/assert"
 )
 
@@ -19,7 +20,6 @@ func TestAPIStubPanics(t *testing.T) {
 		"Screen.Open":  func() { screen.Open() },
 		"Sprite.Draw":  func() { sprite.Draw(nil, 0) },
 		"LoadTIM":      func() { LoadTIM(nil) },
-		"PadButtons":   func() { PadButtons(0) },
 		"OpenBank":     func() { OpenBank([]uint32{1}, []uint32{1}) },
 		"Random":       func() { Random() },
 		"Text.Print":   func() { Text{}.Print("x") },
@@ -50,22 +50,6 @@ func TestZeroSound(t *testing.T) {
 	assert.Equal(t, ErrEmpty, err)
 }
 
-func TestOverlaps(t *testing.T) {
-	a := Rect{X: 10, Y: 10, W: 20, H: 20}
-	assert.Equal(t, true, a.Overlaps(Rect{X: 29, Y: 29, W: 5, H: 5}), "corner touching inside")
-	assert.Equal(t, false, a.Overlaps(Rect{X: 30, Y: 10, W: 5, H: 5}), "edge to edge")
-	assert.Equal(t, false, a.Overlaps(Rect{X: 0, Y: 0, W: 10, H: 10}), "apart")
-	assert.Equal(t, true, a.Overlaps(Rect{X: 0, Y: 0, W: 100, H: 100}), "inside")
-}
-
-func TestButtons(t *testing.T) {
-	held := Start | Select | Cross
-	assert.Equal(t, true, held.Has(Start|Select))
-	assert.Equal(t, false, held.Has(Start|Triangle))
-	assert.Equal(t, true, held.Any(Triangle|Cross))
-	assert.Equal(t, false, held.Any(Up|Down))
-}
-
 func TestDecimal(t *testing.T) {
 	for n, want := range map[int]string{0: "0", 7: "7", 10: "10", 12345: "12345", -1: "-1", -32768: "-32768", -1 << 31: "-2147483648"} {
 		var buf [20]byte
@@ -74,20 +58,61 @@ func TestDecimal(t *testing.T) {
 }
 
 // TestImageSprite checks what a sprite takes from an image: its size,
-// its texture, its depth in the mode, its own colors and a pivot at its
-// middle.
+// its texture with its depth, its own colors and a pivot at its middle.
 func TestImageSprite(t *testing.T) {
-	im := Image{depth: 1, w: 44, h: 24, texture: Texture{Page: 0x15, CX: 320, CY: 480}}
+	im := Image{
+		depth: 1,
+		w:     44,
+		h:     24,
+		texture: Texture{
+			Page: 1<<7 | 0x15,
+			CX:   320,
+			CY:   480,
+		},
+	}
 	s := im.Sprite()
-	assert.Equal(t, Depth8, s.Mode)
+	assert.Equal(t, uint32(1<<24), s.pack(), "8 bits a pixel")
 	assert.Equal(t, uint16(44), s.W)
 	assert.Equal(t, uint16(24), s.H)
 	assert.Equal(t, im.texture, s.Texture)
 	assert.Equal(t, Color{128, 128, 128}, s.Color)
-	assert.Equal(t, Point{22, 12}, s.Pivot)
-	assert.Equal(t, One, s.ScaleX)
+	assert.Equal(t, geom.Point{X: 22, Y: 12}, s.Pivot)
+	assert.Equal(t, geom.One, s.ScaleX)
 	assert.Equal(t, 44, im.Width())
-	assert.Equal(t, Angle(90<<12), Degrees(90))
+}
+
+// TestAttribute checks the attribute word Draw packs for the library:
+// the blend, the lighting and the color depth, the same for a sprite
+// turned or not, and nothing for a hidden one, which is never sorted.
+func TestAttribute(t *testing.T) {
+	sp := Sprite{
+		Texture: Texture{Page: 2 << 7},
+		ScaleX:  geom.One,
+		ScaleY:  geom.One,
+		Blend:   BlendSubtract,
+		Unlit:   true,
+	}
+	const want = 1<<30 | 2<<28 | 2<<24 | 1<<6
+	assert.Panic(t, stub("Sprite.Draw"), func() { sp.Draw(nil, 0) })
+	assert.Equal(t, uint32(want), sp.attribute)
+	sp.attribute, sp.Rotate = 0, geom.Degrees(10)
+	assert.Panic(t, stub("Sprite.Draw"), func() { sp.Draw(nil, 0) })
+	assert.Equal(t, uint32(want), sp.attribute, "turned")
+	sp.attribute = 0
+	assert.Panic(t, stub("Sprite.DrawFast"), func() { sp.DrawFast(nil, 0) })
+	assert.Equal(t, uint32(want), sp.attribute, "fast")
+	sp.Hidden = true
+	sp.Draw(nil, 0)
+	sp.DrawFast(nil, 0)
+
+	box := Box{Blend: BlendAverage}
+	assert.Panic(t, stub("Box.Draw"), func() { box.Draw(nil, 0) })
+	assert.Equal(t, uint32(1<<30), box.attribute)
+	box = Box{Blend: BlendQuarter}
+	assert.Panic(t, stub("Box.Draw"), func() { box.Draw(nil, 0) })
+	assert.Equal(t, uint32(1<<30|3<<28), box.attribute)
+	line := Line{Hidden: true}
+	line.Draw(nil, 0)
 }
 
 // TestImageCell checks a cell cut from an image: its corner from the
@@ -96,26 +121,6 @@ func TestImageCell(t *testing.T) {
 	im := Image{depth: 1, w: 128, h: 32, texture: Texture{Page: 0x15, U: 0, V: 0, CX: 320, CY: 509}}
 	c := im.Cell(16, 16)
 	assert.Equal(t, Cell{U: 16, V: 16, Clut: 509<<6 | 320>>4, Page: 0x15}, c)
-}
-
-// TestPad checks a press from a hold: a button acts the frame it
-// goes down, not while it stays down, and the directions give an axis.
-func TestPad(t *testing.T) {
-	var c Pad
-	c.update(Start | Right)
-	assert.Equal(t, true, c.Pressed(Start))
-	assert.Equal(t, true, c.Held(Start))
-	c.update(Start | Right | Down)
-	assert.Equal(t, false, c.Pressed(Start), "still held")
-	assert.Equal(t, true, c.Pressed(Down))
-	dx, dy := c.Dir()
-	assert.Equal(t, [2]int{1, 1}, [2]int{dx, dy})
-	c.update(Left | Right)
-	assert.Equal(t, true, c.Released(Start))
-	dx, dy = c.Dir()
-	assert.Equal(t, [2]int{0, 0}, [2]int{dx, dy}, "both ways cancel")
-	x, y := (Rect{X: 0, Y: 0, W: 50, H: 140}).Clamp(-5, 200, 40, 40)
-	assert.Equal(t, [2]int{0, 100}, [2]int{x, y}, "clamped into the rectangle")
 }
 
 // TestPacketTypes checks each packet type's size in words against the
@@ -190,24 +195,10 @@ func TestVerticesOfWords(t *testing.T) {
 	assert.Equal(t, 0, len(Vertices(nil)))
 	assert.Equal(t, 1234, Image{words: 1234}.Len())
 	var o Object
-	var m Matrix
+	var m geom.Matrix
 	assert.Panic(t, stub("Object.Transform"), func() { o.Transform(&m, &m) })
 	assert.Panic(t, stub("SetReverb"), func() { SetReverb(ReverbHall, 1, 1) })
-	assert.Panic(t, stub("CopyRect"), func() { CopyRect(Rect{}, 0, 0) })
-}
-
-// TestStick checks the sticks' dead zone and that a controller without
-// sticks reports none.
-func TestStick(t *testing.T) {
-	c := Pad{Connected: true, Kind: Analog, Axes: [4]int{0xff, 0x80, 0x10, 0x85}}
-	x, y := c.Stick(0, 24)
-	assert.Equal(t, [2]int{-112, 0}, [2]int{x, y}, "the left stick, its small push in the dead zone")
-	x, y = c.Stick(1, 24)
-	assert.Equal(t, [2]int{127, 0}, [2]int{x, y}, "the right stick hard right")
-	c.Kind = Digital
-	x, y = c.Stick(0, 0)
-	assert.Equal(t, [2]int{0, 0}, [2]int{x, y}, "no sticks on a digital controller")
-	assert.Equal(t, 0, deadZone(0x80, 0), "the center is 0")
+	assert.Panic(t, stub("CopyRect"), func() { CopyRect(geom.Rect{}, 0, 0) })
 }
 
 // TestFogParams checks the depth cue against the ones two examples set

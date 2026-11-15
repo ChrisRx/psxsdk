@@ -49,6 +49,8 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/scene"
 	"go.chrisrx.dev/psx/yaroze"
 )
@@ -91,8 +93,8 @@ const (
 var (
 	// The level's sprites are placed from the middle of the screen, as the
 	// editor places them.
-	screen = yaroze.Screen{Background: yaroze.Color{R: 104, G: 172, B: 236}, Depth: 2, Center: true}
-	pad    yaroze.Pad
+	screen = yaroze.Screen{Background: yaroze.Color{R: 104, G: 172, B: 236}, Depth: 2, Origin: yaroze.ScreenOriginMiddle}
+	pad    input.Controller
 	world  scene.Scene
 	failed *disc.File
 	err    error
@@ -126,8 +128,18 @@ var (
 	// Dark panels under the text, so that it reads over a cloud:
 	// see-through, subtracting from what is under them, as the quest
 	// example's talk box does.
-	hudBack = yaroze.Box{Mode: yaroze.Translucent | yaroze.Subtract, W: 120, H: 16, Color: yaroze.Color{R: 150, G: 150, B: 150}}
-	wonBack = yaroze.Box{Mode: yaroze.Translucent | yaroze.Subtract, W: 176, H: 60, Color: yaroze.Color{R: 150, G: 150, B: 150}}
+	hudBack = yaroze.Box{
+		W:     120,
+		H:     16,
+		Color: yaroze.Color{R: 150, G: 150, B: 150},
+		Blend: yaroze.BlendSubtract,
+	}
+	wonBack = yaroze.Box{
+		W:     176,
+		H:     60,
+		Color: yaroze.Color{R: 150, G: 150, B: 150},
+		Blend: yaroze.BlendSubtract,
+	}
 )
 
 func main() {
@@ -163,7 +175,7 @@ func main() {
 			continue
 		}
 		if won {
-			if pad.Pressed(yaroze.Start) {
+			if pad.Pressed(input.Start) {
 				start(b)
 				continue
 			}
@@ -196,7 +208,7 @@ func main() {
 
 // start loads the level, which puts back the coins taken, and puts the
 // hero where it starts.
-func start(b yaroze.Rect) {
+func start(b geom.Rect) {
 	if err = world.LoadFiles(&screen, levelDAT.Data(), disc.Registered()); err != nil {
 		return
 	}
@@ -211,7 +223,7 @@ func start(b yaroze.Rect) {
 // read takes what the program needs from the level as the file has it:
 // where the hero's sprite is, before the program moves it, and how many
 // coins the ground has.
-func read(b yaroze.Rect) {
+func read(b geom.Rect) {
 	sp, ground := world.Sprite("hero"), world.Layer("ground")
 	if sp == nil || ground == nil {
 		return
@@ -250,7 +262,7 @@ func play(l *scene.Layer) {
 
 	// A press of Cross waits a few frames for the ground, and the ground
 	// stays under the hero for a few after they run off it.
-	if pad.Pressed(yaroze.Cross) {
+	if pad.Pressed(input.Cross) {
 		jumpWait = buffered
 	} else if jumpWait > 0 {
 		jumpWait--
@@ -260,7 +272,7 @@ func play(l *scene.Layer) {
 		jumpWait = 0
 		airTime = coyote + 1
 	}
-	if !pad.Held(yaroze.Cross) && speedY < -jumpCut {
+	if !pad.Held(input.Cross) && speedY < -jumpCut {
 		speedY = -jumpCut
 	}
 	speedY = min(fallSpeed, speedY+gravity)
@@ -376,7 +388,7 @@ func touch(l *scene.Layer) bool {
 
 // follow scrolls the level to keep the hero within the middle fifth of the
 // screen, never past the level's ends.
-func follow(l *scene.Layer, b yaroze.Rect) {
+func follow(l *scene.Layer, b geom.Rect) {
 	lo, hi := b.W*2/5, b.W*3/5
 	if heroX-camX > hi {
 		camX = heroX - hi
@@ -421,18 +433,18 @@ func turn() {
 // which Draw draws as a textured quad. At rest on a side it looks as it
 // does unturned, and is a plain sprite placed by its top left corner,
 // which DrawFast draws texel for texel, so its border is exact.
-func show(sp *yaroze.Sprite, b yaroze.Rect) {
+func show(sp *yaroze.Sprite, b geom.Rect) {
 	cube = *sp
-	cube.Mode &^= yaroze.Hidden
+	cube.Hidden = false
 	w, h := sp.Size()
 	x, y := heroX-camX+b.X, heroY-tall+h/2-1+b.Y // the middle
 	if spin%quarter == 0 {
 		cube.MoveTo(x-w/2, y-h/2)
 	} else {
-		cube.Pivot = yaroze.Point{X: int16(sp.W / 2), Y: int16(sp.H / 2)}
-		cube.ScaleX, cube.ScaleY = yaroze.One, yaroze.One
-		cube.Rotate = yaroze.Angle(spin)
+		cube.Pivot = geom.Point{X: int16(sp.W / 2), Y: int16(sp.H / 2)}
+		cube.ScaleX, cube.ScaleY = geom.One, geom.One
+		cube.Rotate = geom.Angle(spin)
 		cube.MoveTo(x, y)
 	}
-	sp.Mode |= yaroze.Hidden
+	sp.Hidden = true
 }

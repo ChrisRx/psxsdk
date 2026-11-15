@@ -28,6 +28,8 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -71,7 +73,7 @@ var screen = yaroze.Screen{
 	Depth:      1,
 	Packets:    (maxInvaders + maxShots + 1) * 24,
 	Background: yaroze.Color{R: 60, G: 120, B: 120},
-	Offset:     yaroze.Point{Y: 16},
+	Offset:     geom.Point{Y: 16},
 }
 
 // The sound and the textures, read into the program's own memory, in
@@ -101,8 +103,8 @@ type movement struct {
 }
 
 // rect is where the movement is on the screen, in pixels.
-func (m *movement) rect() yaroze.Rect {
-	return yaroze.Rect{
+func (m *movement) rect() geom.Rect {
+	return geom.Rect{
 		X: m.x / fix,
 		Y: m.y / fix,
 		W: m.w,
@@ -136,9 +138,9 @@ var (
 	// background is the box behind everything: black, and
 	// semi-transparent, which takes the hard black edges off the sprites.
 	background = yaroze.Box{
-		Mode: yaroze.Translucent,
-		W:    screenWidth,
-		H:    screenHeight,
+		W:     screenWidth,
+		H:     screenHeight,
+		Blend: yaroze.BlendAverage,
 	}
 
 	text yaroze.Text
@@ -281,12 +283,12 @@ func dealWithEnd(heading string) bool {
 		if frameNow == whenToLeaveLoop {
 			break
 		}
-		pad := yaroze.PadButtons(0)
+		pad := input.Read(0)
 		if whenToLeaveLoop < 0 {
-			if pad.Has(yaroze.L1 | yaroze.R1) {
+			if pad.Has(input.L1 | input.R1) {
 				newGame = false
 				whenToLeaveLoop = frameNow + 60
-			} else if pad.Has(yaroze.Cross) {
+			} else if pad.Has(input.Cross) {
 				newGame = true
 				whenToLeaveLoop = frameNow + 60
 			}
@@ -344,7 +346,7 @@ func dealWithNewScore(last *score, table []score) int {
 // fail shows what went wrong until the program is quit.
 func fail(what, detail string) {
 	for frame := range screen.Frames() {
-		if yaroze.PadButtons(0).Has(yaroze.Start | yaroze.Select) {
+		if input.Read(0).Has(input.Start | input.Select) {
 			break
 		}
 		background.Draw(frame, 0)
@@ -444,46 +446,46 @@ func destroyAllShots() {
 func initializeTexturesAndSprites() {
 	ship := yaroze.LoadTIMAt(shipFile.Data(), 320, 0)
 	playersSprite = ship.Sprite()
-	playersSprite.Pivot = yaroze.Point{}
-	playersSprite.Mode |= yaroze.Translucent | yaroze.Subtract
+	playersSprite.Pivot = geom.Point{}
+	playersSprite.Blend = yaroze.BlendSubtract
 
 	image := yaroze.LoadTIMAt(invaderFile.Data(), 320, 256)
 	for i := range invaders {
 		s := &invaders[i].sprite
 		*s = image.Sprite()
-		s.Pivot = yaroze.Point{}
-		s.Mode |= yaroze.Translucent | yaroze.Subtract
-		s.ScaleX, s.ScaleY = yaroze.One/2, yaroze.One/2
+		s.Pivot = geom.Point{}
+		s.Blend = yaroze.BlendSubtract
+		s.ScaleX, s.ScaleY = geom.One/2, geom.One/2
 	}
 
 	image = yaroze.LoadTIMAt(shotFile.Data(), 640, 0)
 	for i := range shots {
 		s := &shots[i].sprite
 		*s = image.Sprite()
-		s.Pivot = yaroze.Point{}
-		s.ScaleX, s.ScaleY = yaroze.One/4, yaroze.One/4
+		s.Pivot = geom.Point{}
+		s.ScaleX, s.ScaleY = geom.One/4, geom.One/4
 	}
 }
 
 func dealWithControllerPad() {
-	pad := yaroze.PadButtons(0)
-	if pad.Has(yaroze.Select | yaroze.Start) {
+	pad := input.Read(0)
+	if pad.Has(input.Select | input.Start) {
 		quit = true
 		return
 	}
 
-	for pad.Has(yaroze.L1) { // pause
-		pad = yaroze.PadButtons(0)
+	for pad.Has(input.L1) { // pause
+		pad = input.Read(0)
 	}
 
-	if pad.Has(yaroze.Left) {
+	if pad.Has(input.Left) {
 		player.dx = max(player.dx-1*fix, -maxXSpeed*fix)
 	}
-	if pad.Has(yaroze.Right) {
+	if pad.Has(input.Right) {
 		player.dx = min(player.dx+1*fix, maxXSpeed*fix)
 	}
 
-	if pad.Has(yaroze.Triangle) && timeSincePlayerLastFired > 10 {
+	if pad.Has(input.Triangle) && timeSincePlayerLastFired > 10 {
 		if id := createNewShot(playersShot); id >= 0 {
 			// Above the ship, moving up at two and a half pixels a
 			// frame.

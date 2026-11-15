@@ -29,7 +29,10 @@
 // mouse, a neGcon's twist, or a GunCon's aim. Every button held is listed.
 package main
 
-import "go.chrisrx.dev/psx/yaroze"
+import (
+	"go.chrisrx.dev/psx/input"
+	"go.chrisrx.dev/psx/yaroze"
+)
 
 var (
 	screen = yaroze.Screen{Background: yaroze.Color{R: 20, G: 30, B: 50}, Depth: 1}
@@ -62,14 +65,14 @@ var padButtons = []buttonName{
 	{yaroze.PADi, "L3"}, {yaroze.PADj, "R3"}, {yaroze.PADstart, "START"}, {yaroze.PADselect, "SELECT"},
 }
 
-var mouseButtons = []buttonName{{yaroze.MouseLeft, "LEFT"}, {yaroze.MouseRight, "RIGHT"}}
+var mouseButtons = []buttonName{{input.MouseLeft, "LEFT"}, {input.MouseRight, "RIGHT"}}
 
 var negconButtons = []buttonName{
 	{yaroze.PADLup, "UP"}, {yaroze.PADLdown, "DOWN"}, {yaroze.PADLleft, "LEFT"}, {yaroze.PADLright, "RIGHT"},
-	{yaroze.NeGconA, "A"}, {yaroze.NeGconB, "B"}, {yaroze.NeGconR, "R"}, {yaroze.NeGconStart, "START"},
+	{input.NeGconA, "A"}, {input.NeGconB, "B"}, {input.NeGconR, "R"}, {input.NeGconStart, "START"},
 }
 
-var gunconButtons = []buttonName{{yaroze.GunConTrigger, "TRIGGER"}, {yaroze.GunConA, "A"}, {yaroze.GunConB, "B"}}
+var gunconButtons = []buttonName{{input.GunConTrigger, "TRIGGER"}, {input.GunConA, "A"}, {input.GunConB, "B"}}
 
 func main() {
 	screen.Open()

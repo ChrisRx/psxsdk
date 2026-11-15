@@ -17,6 +17,8 @@ import (
 	"unsafe"
 
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -48,7 +50,7 @@ var (
 		Background: yaroze.Color{R: 60, G: 40, B: 90},
 		Depth:      1,
 	}
-	pad yaroze.Pad
+	pad input.Controller
 
 	icon yaroze.Sprite
 
@@ -87,7 +89,7 @@ func main() {
 	} else {
 		icon = yaroze.LoadTIM(iconTIM.Data()).Sprite()
 		icon.X, icon.Y = 296, 24
-		icon.ScaleX, icon.ScaleY = 2*yaroze.One, 2*yaroze.One
+		icon.ScaleX, icon.ScaleY = 2*geom.One, 2*geom.One
 	}
 
 	for frame := range screen.Frames() {
@@ -108,15 +110,15 @@ func main() {
 // chooseMenu moves through the menu and does what is chosen.
 func chooseMenu() {
 	switch {
-	case pad.Pressed(yaroze.Up):
+	case pad.Pressed(input.Up):
 		menu = (menu + menuItems - 1) % menuItems
-	case pad.Pressed(yaroze.Down):
+	case pad.Pressed(input.Down):
 		menu = (menu + 1) % menuItems
-	case pad.Duration(yaroze.Left) == 1 || pad.Duration(yaroze.Left) > 20:
+	case pad.Duration(input.Left) == 1 || pad.Duration(input.Left) > 20:
 		number--
-	case pad.Duration(yaroze.Right) == 1 || pad.Duration(yaroze.Right) > 20:
+	case pad.Duration(input.Right) == 1 || pad.Duration(input.Right) > 20:
 		number++
-	case pad.Pressed(yaroze.Cross):
+	case pad.Pressed(input.Cross):
 		do(menu)
 	}
 }
@@ -199,15 +201,15 @@ func getInt(b []byte) int {
 // asked for.
 func list() {
 	switch {
-	case pad.Pressed(yaroze.Circle):
+	case pad.Pressed(input.Circle):
 		listing = false
-	case pad.Pressed(yaroze.Up) && chosen > 0:
+	case pad.Pressed(input.Up) && chosen > 0:
 		chosen--
 		dumped = false
-	case pad.Pressed(yaroze.Down) && chosen < nfiles-1:
+	case pad.Pressed(input.Down) && chosen < nfiles-1:
 		chosen++
 		dumped = false
-	case pad.Pressed(yaroze.Cross) && nfiles > 0:
+	case pad.Pressed(input.Cross) && nfiles > 0:
 		name := dir[chosen].Name()
 		switch menu {
 		case doDelete:

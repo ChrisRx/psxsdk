@@ -1,6 +1,7 @@
 package main
 
 import (
+	"go.chrisrx.dev/psx/geom"
 	"go.chrisrx.dev/psx/stage"
 	"go.chrisrx.dev/psx/yaroze"
 )
@@ -42,7 +43,7 @@ var people figure
 func (f *figure) cut(im yaroze.Image) {
 	f.sprite = im.Sprite()
 	f.sprite.W, f.sprite.H = frameW, frameH
-	f.sprite.Pivot = yaroze.Point{X: frameW / 2, Y: feetRow}
+	f.sprite.Pivot = geom.Point{X: frameW / 2, Y: feetRow}
 }
 
 // draw projects the figure's feet, at p on the ground and y above it, to

@@ -38,12 +38,5 @@ func ClipArea() int { return clipArea() }
 func AverageDepth3() int { return averageDepth3() }
 func AverageDepth4() int { return averageDepth4() }
 
-// Rotate sets the matrix's rotation to r, each a turn about an axis in
-// 4096ths, and clears nothing else.
-func (m *Matrix) Rotate(r Rotation) { rotateMatrix(m, r) }
-
-// Apply rotates v by the matrix and adds its translation.
-func (m *Matrix) Apply(v Vector) Vector { return applyMatrix(m, v) }
-
 // Clut is the texture's palette as a packet takes it.
 func (t Texture) Clut() uint16 { return uint16(t.CY)<<6 | uint16(t.CX)>>4 }

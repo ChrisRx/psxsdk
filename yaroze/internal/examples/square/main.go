@@ -17,6 +17,8 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -40,10 +42,10 @@ var (
 	screen = yaroze.Screen{
 		Background: yaroze.Color{R: 40, G: 60, B: 100},
 		Depth:      4,
-		Center:     true,
+		Origin:     yaroze.ScreenOriginMiddle,
 	}
 	text   yaroze.Text
-	pad    yaroze.Pad
+	pad    input.Controller
 	loader disc.Loader
 
 	box  = yaroze.Box{W: 40, H: 40, Color: yaroze.Color{R: 255, G: 160, B: 32}}
@@ -70,7 +72,7 @@ func main() {
 		dx, dy := pad.Dir()
 		r := box.Rect()
 		box.MoveTo(b.Clamp(r.X+dx*speed, r.Y+dy*speed, r.W, r.H))
-		if pad.Pressed(yaroze.Start) {
+		if pad.Pressed(input.Start) {
 			pauseMusic()
 		}
 
@@ -111,13 +113,13 @@ func setupCube() {
 
 	// The camera looks at the cube from in front, far enough back that it
 	// is a small thing in the middle of the screen.
-	camera := yaroze.Camera{Eye: yaroze.Vector{Z: -1000}, Distance: 320}
+	camera := yaroze.Camera{Eye: geom.Vector{Z: -1000}, Distance: 320}
 	camera.Set()
 
 	// One light from over the camera's shoulder, and some ambient light,
 	// so that the faces turned away from it are not black.
-	yaroze.SetLight(0, yaroze.Light{Direction: yaroze.Vector{X: 1, Y: 1, Z: 1}, Color: yaroze.Color{R: 0xc0, G: 0xc0, B: 0xc0}})
-	yaroze.SetAmbient(yaroze.One/4, yaroze.One/4, yaroze.One/4)
+	yaroze.SetLight(0, yaroze.Light{Direction: geom.Vector{X: 1, Y: 1, Z: 1}, Color: yaroze.Color{R: 0xc0, G: 0xc0, B: 0xc0}})
+	yaroze.SetAmbient(geom.One/4, geom.One/4, geom.One/4)
 }
 
 // startMusic sends the sound bank to the sound processor and plays the

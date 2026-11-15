@@ -123,7 +123,7 @@ func main() {
 	}
 	// The window is the whole screen, the cells 8-bit and drawn as they
 	// are.
-	b := screen.Bounds().RECT()
+	b := yaroze.ToRECT(screen.Bounds())
 	bg = yaroze.GsBG{
 		Attribute: 1 << 24,
 		X:         b.X, Y: b.Y, W: b.W, H: b.H,
