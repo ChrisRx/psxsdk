@@ -6,7 +6,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"testing"
 
@@ -108,6 +110,121 @@ func TestLoadUseHazardScanner(t *testing.T) {
 	assert.Equal(t, []string{
 		"0000100c lw $5 is read by 00001018, the target of 00001008",
 	}, loadUseHazards(code, 0x1000, nil))
+}
+
+// The compiler fills a branch's delay slot, and the load delay ahead of a
+// branch, with instructions from the blocks the branch leads to, which then
+// run whichever way the branch goes. A load may be among them only when it
+// is safe wherever it runs. TestGuardedLoadsStay builds testdata/specload,
+// whose two functions each test a value and then load what the test allows,
+// an array's element at an index in range and a field of a pointer that is
+// not nil, and checks that no load from memory other than the stack sits at
+// or ahead of the first branch's delay slot.
+func TestGuardedLoadsStay(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds a program")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "prog.elf")
+	out, err := exec.Command("go", "run", "go.chrisrx.dev/psx/cmd/yaroze", "build",
+		"-o", path, "./testdata/specload").CombinedOutput()
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+
+	f, err := elf.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	syms, err := f.Symbols()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"main.guarded", "main.field"} {
+		t.Run(name, func(t *testing.T) {
+			i := slices.IndexFunc(syms, func(s elf.Symbol) bool { return s.Name == name })
+			if i < 0 {
+				t.Fatal("the function is not in the program")
+			}
+			sym := syms[i]
+			data := make([]byte, sym.Size)
+			_, err := f.Sections[sym.Section].ReadAt(data, int64(sym.Value-f.Sections[sym.Section].Addr))
+			assert.NoError(t, err)
+			code := make([]uint32, len(data)/4)
+			for i := range code {
+				code[i] = binary.LittleEndian.Uint32(data[i*4:])
+			}
+			assert.Equal(t, []string(nil), loadsAheadOfBranch(code, uint32(sym.Value)))
+		})
+	}
+}
+
+// TestLoadsAheadOfBranch checks loadsAheadOfBranch on the function field of
+// testdata/specload as the compiler builds it, and with its load moved into
+// the delay slot and ahead of the branch.
+func TestLoadsAheadOfBranch(t *testing.T) {
+	code := []uint32{
+		0x10800004, // 1000 beqz $4, 1014
+		0x2402ffff, // 1004 addiu $2, $zero, -1
+		0x8c820008, // 1008 lw $2, 8($4)
+		0x03e00008, // 100c jr $ra
+		0x00000000, // 1010 nop
+	}
+	assert.Equal(t, []string(nil), loadsAheadOfBranch(code, 0x1000))
+
+	code[1], code[2] = code[2], code[1]
+	assert.Equal(t, []string{"00001004 lw $2 from $4"}, loadsAheadOfBranch(code, 0x1000))
+
+	code[0], code[1] = code[1], code[0]
+	assert.Equal(t, []string{"00001000 lw $2 from $4"}, loadsAheadOfBranch(code, 0x1000))
+
+	// A load from the stack may run early.
+	code[0] = 0x8fa20010 // lw $2, 16($sp)
+	assert.Equal(t, []string(nil), loadsAheadOfBranch(code, 0x1000))
+}
+
+// loadsAheadOfBranch returns a line for each load in code, a function that
+// starts at base, that runs whichever way the function's first conditional
+// branch goes: one ahead of the branch or in its delay slot. Loads from the
+// stack are left out.
+func loadsAheadOfBranch(code []uint32, base uint32) []string {
+	var loads []string
+	for i, insn := range code {
+		if i > 0 && isConditionalBranch(code[i-1]) {
+			if line, ok := memoryLoad(insn, base+uint32(i)*4); ok {
+				loads = append(loads, line)
+			}
+			break
+		}
+		if line, ok := memoryLoad(insn, base+uint32(i)*4); ok {
+			loads = append(loads, line)
+		}
+	}
+	return loads
+}
+
+// memoryLoad describes insn if it loads from memory through a register
+// other than the stack pointer.
+func memoryLoad(insn, addr uint32) (string, bool) {
+	op, rs, rt := insn>>26, insn>>21&31, insn>>16&31
+	if op < 0x20 || op > 0x26 || rs == 29 {
+		return "", false
+	}
+	name := [...]string{"lb", "lh", "lwl", "lw", "lbu", "lhu", "lwr"}[op-0x20]
+	return fmt.Sprintf("%08x %s $%d from $%d", addr, name, rt, rs), true
+}
+
+// isConditionalBranch reports whether insn is a branch that may fall
+// through.
+func isConditionalBranch(insn uint32) bool {
+	switch op := insn >> 26; op {
+	case 0x01, 0x06, 0x07: // REGIMM, blez, bgtz
+		return true
+	case 0x04, 0x05: // beq, bne
+		return op == 0x05 || insn>>21&31 != insn>>16&31
+	}
+	return false
 }
 
 // scanLoadUseHazards reads the executable sections of the ELF at path.
