@@ -7,6 +7,9 @@
 // tells the Setting where the camera looks from in a View and has it
 // Draw.
 //
+// The polygons go through the camera with yaroze.Project3 and come out as
+// the frame's typed packets.
+//
 // The ground is the X-Z plane, up is -Y as the console has it, and a
 // cell is a tile of Tile units, which is what the textures are made for.
 // Cells with heights slope between their corners, up to a level a tile;
@@ -17,10 +20,10 @@
 // camera and the figure in View is drawn half see-through, as Dragon
 // Quest's was.
 //
-// The ordering table a room is drawn into is 1<<Depth entries deep, with
-// Shift turning the GTE's depth into an entry; a game's own figures and
-// models go into the same table at the entries Standing gives them, and
-// a model sorted by the library at Shift.
+// The frame a room is drawn on sorts into 1<<Depth depths, with Shift
+// turning the GTE's depth into one; a game's own figures and models go
+// onto the same frame at the depths Standing gives them, and a model
+// drawn by the library at Shift.
 package stage
 
 import "go.chrisrx.dev/psx/yaroze"
@@ -36,30 +39,30 @@ const (
 	// MaxCells is the most cells a map is across or down.
 	MaxCells = 32
 
-	// Depth sizes the ordering table, 1<<Depth entries, and Shift turns
-	// the GTE's depth, a quarter of the camera Z, into an entry: 8 units
-	// of Z each, fine enough that a wall's face and the floor beside it
-	// do not share one and get drawn in the order they were sorted,
-	// which is the wrong way round half the time.
+	// Depth is the screen's Depth a room needs, 1<<Depth depths, and
+	// Shift turns the GTE's depth, a quarter of the camera Z, into one:
+	// 8 units of Z each, fine enough that a wall's face and the floor
+	// beside it do not share one and get drawn in the order they were
+	// sorted, which is the wrong way round half the time.
 	Depth = 10
 	Shift = 1
 
-	// The floor goes floorBack entries further back than it is, since
+	// The floor goes floorBack depths further back than it is, since
 	// from a camera above it it is never in front of a wall; a figure
-	// comes figureFront entries forward, in front of the floor under
-	// them and a wall they stand against. nearest is the depth a face is
-	// left out under, too near the camera to draw sensibly.
+	// comes figureFront depths forward, in front of the floor under them
+	// and a wall they stand against. nearest is the depth a face is left
+	// out under, too near the camera to draw sensibly.
 	floorBack   = 8
 	figureFront = 16
 	nearest     = 8
 )
 
-// Standing is the ordering table entry for a figure or a thing standing
-// on the ground at the GTE's depth otz: in front of the floor under it
-// and a wall it stands against.
+// Standing is the depth for a figure or a thing standing on the ground
+// at the GTE's depth otz: in front of the floor under it and a wall it
+// stands against.
 //
 //go:inline
-func Standing(otz int) uint16 { return uint16(max(otz>>Shift-figureFront, 0)) }
+func Standing(otz int) int { return max(otz>>Shift-figureFront, 0) }
 
 // A Kind is what a cell is, which its rune in a map says.
 type Kind uint8
@@ -122,7 +125,6 @@ func (k Kind) Walkable() bool { return k == Floor || k == Chest || k == Door }
 func (k Kind) Solid() bool { return k == Wall || k == Rock }
 
 func ground(c byte) bool { return KindOf(c).Ground() }
-func wall(c byte) bool   { return KindOf(c).Solid() }
 func bed(c byte) bool    { return c == 'b' || c == 'p' }
 func door(c byte) bool   { return c >= '0' && c <= '9' }
 
@@ -264,7 +266,7 @@ type Art struct {
 	Logs, Roof    Surface
 	Rock, Water   Surface
 	Bed, Chest    yaroze.Texture
-	Props         yaroze.GsSPRITE
+	Props         yaroze.Sprite
 }
 
 // A prop on the sheet is PropSize square, with its base on row PropFeet.

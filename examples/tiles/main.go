@@ -123,7 +123,7 @@ func main() {
 	}
 	// The window is the whole screen, the cells 8-bit and drawn as they
 	// are.
-	b := screen.Bounds()
+	b := screen.Bounds().RECT()
 	bg = yaroze.GsBG{
 		Attribute: 1 << 24,
 		X:         b.X, Y: b.Y, W: b.W, H: b.H,
@@ -133,7 +133,8 @@ func main() {
 	}
 	yaroze.GsInitFixBg16(&bg, &work[0])
 
-	for ot := range screen.Frames() {
+	for frame := range screen.Frames() {
+		ot := frame.OT()
 		pad.Update()
 		dx, dy := pad.Dir()
 		bg.Scrollx = max(0, min(bg.Scrollx+int16(dx*speed), mapW*tileSize-bg.W))

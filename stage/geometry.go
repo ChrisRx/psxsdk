@@ -13,7 +13,7 @@ type Vec struct{ X, Z int }
 func (v Vec) Add(o Vec) Vec { return Vec{v.X + o.X, v.Z + o.Z} }
 func (v Vec) Sub(o Vec) Vec { return Vec{v.X - o.X, v.Z - o.Z} }
 
-// dot is the dot product, for how far along a direction in 4096ths v
+// Dot is the dot product, for how far along a direction in 4096ths v
 // reaches: v.Dot(dir) >> 12.
 func (v Vec) Dot(o Vec) int { return v.X*o.X + v.Z*o.Z }
 
@@ -34,7 +34,7 @@ type Color [3]uint8
 
 func Gray(v uint8) Color { return Color{v, v, v} }
 
-// shade scales the Color by a brightness, 128 leaving it as it is.
+// Shade scales the Color by a brightness, 128 leaving it as it is.
 func (c Color) Shade(bright int) Color {
 	return Color{scale(c[0], bright), scale(c[1], bright), scale(c[2], bright)}
 }
@@ -42,12 +42,10 @@ func (c Color) Shade(bright int) Color {
 //go:inline
 func scale(c uint8, bright int) uint8 { return uint8(min(int(c)*bright/128, 255)) }
 
-// word packs the Color as a GPU packet holds one, under a command code.
+// RGB is the Color as a packet takes it.
 //
 //go:inline
-func (c Color) Word(code uint32) uint32 {
-	return code<<24 | uint32(c[2])<<16 | uint32(c[1])<<8 | uint32(c[0])
-}
+func (c Color) RGB() yaroze.Color { return yaroze.Color{R: c[0], G: c[1], B: c[2]} }
 
 //go:inline
 func abs(v int) int {
@@ -57,9 +55,8 @@ func abs(v int) int {
 	return v
 }
 
-// A skin is the texel words of a quad's four corners, as a packet takes
-// them: the first with the palette, the second with the texture page.
-type skin [4]uint32
+// A skin is the texture corners of a quad, as a packet takes them.
+type skin [4]yaroze.UV
 
 // A Surface is a texture loaded into video memory, with the skin of a
 // quad that shows the whole of it worked out once, since most quads do.
@@ -73,11 +70,14 @@ func NewSurface(tex yaroze.Texture) Surface {
 	return Surface{Texture: tex, full: skinOf(&tex, &fullUV)}
 }
 
-// skinOf is the texel words at the corners uv gives within the texture.
+// skinOf is the texture corners uv gives within the texture.
 //
 //go:inline
 func skinOf(t *yaroze.Texture, uv *[4][2]uint8) skin {
-	return skin{t.WithClut(uv[0][0], uv[0][1]), t.WithPage(uv[1][0], uv[1][1]), t.Texel(uv[2][0], uv[2][1]), t.Texel(uv[3][0], uv[3][1])}
+	return skin{
+		{U: t.U + uv[0][0], V: t.V + uv[0][1]}, {U: t.U + uv[1][0], V: t.V + uv[1][1]},
+		{U: t.U + uv[2][0], V: t.V + uv[2][1]}, {U: t.U + uv[3][0], V: t.V + uv[3][1]},
+	}
 }
 
 // fullUV is the texture corners of a quad that shows the whole of a 64
@@ -91,9 +91,9 @@ var fullUV = [4][2]uint8{{0, 0}, {63, 0}, {0, 63}, {63, 63}}
 // builds its packet. One polygon is kept for the whole program, since
 // handing its address to the GTE must not allocate.
 type polygon struct {
-	v    [4]yaroze.SVECTOR
-	sxy  [3]uint32
-	sxy3 uint32
+	v    [4]yaroze.Vertex
+	sxy  [3]yaroze.XY
+	sxy3 yaroze.XY
 }
 
 var poly polygon
@@ -104,20 +104,12 @@ var poly polygon
 //
 //go:inline
 func (p *polygon) corner(n, x, y, z int) {
-	p.v[n] = yaroze.SVECTOR{Vx: int16(x), Vy: int16(y), Vz: int16(z)}
+	p.v[n] = yaroze.Vertex{X: int16(x), Y: int16(y), Z: int16(z)}
 }
 
 // The screen's size, which the quads are culled against: the usual 320
 // by 240.
 const screenW, screenH = 320, 240
-
-// The GPU's codes for a textured quad and triangle in one shade, and the
-// bit that makes either half see-through.
-const (
-	quadCode = 0x2c
-	triCode  = 0x24
-	ghostBit = 0x02
-)
 
 // quad draws the quad in the corners, when its front is towards the
 // camera, textured with the whole of sf and colored, as a textured quad
@@ -127,8 +119,8 @@ const (
 // --semi. It reports whether the quad was drawn.
 //
 //go:inline
-func (p *polygon) quad(ot *yaroze.GsOT, sf *Surface, c Color, ghost bool, back int) bool {
-	return p.place(ot, &p.v, &sf.full, c.Word(quadCode|ghosted(ghost)), back, true)
+func (p *polygon) quad(f *yaroze.Frame, sf *Surface, c Color, ghost bool, back int) bool {
+	return p.place(f, &p.v, &sf.full, &sf.Texture, c.RGB(), ghost, back, true)
 }
 
 // ground draws the quad in the corners as a piece of the ground: the
@@ -139,80 +131,69 @@ func (p *polygon) quad(ot *yaroze.GsOT, sf *Surface, c Color, ghost bool, back i
 // faces the camera, which would leave a hole.
 //
 //go:inline
-func (p *polygon) ground(ot *yaroze.GsOT, sf *Surface, c Color, ghost bool, back int) bool {
-	return p.place(ot, &p.v, &sf.full, c.Word(quadCode|ghosted(ghost)), back, false)
+func (p *polygon) ground(f *yaroze.Frame, sf *Surface, c Color, ghost bool, back int) bool {
+	return p.place(f, &p.v, &sf.full, &sf.Texture, c.RGB(), ghost, back, false)
 }
 
 // quadUV is quad with the texture at the corners uv gives within tex.
 //
 //go:inline
-func (p *polygon) quadUV(ot *yaroze.GsOT, tex *yaroze.Texture, uv *[4][2]uint8, c Color, ghost bool, back int) bool {
+func (p *polygon) quadUV(f *yaroze.Frame, tex *yaroze.Texture, uv *[4][2]uint8, c Color, ghost bool, back int) bool {
 	sk := skinOf(tex, uv)
-	return p.place(ot, &p.v, &sk, c.Word(quadCode|ghosted(ghost)), back, true)
-}
-
-//go:inline
-func ghosted(ghost bool) uint32 {
-	if ghost {
-		return ghostBit
-	}
-	return 0
+	return p.place(f, &p.v, &sk, tex, c.RGB(), ghost, back, true)
 }
 
 // place draws the quad whose corners are v, wherever they are kept,
-// skinned with sk and colored by the packet word rgb, code included,
-// back entries further back, when it faces the camera if cull, and
-// reports whether it was drawn. The quad is left out when a corner is
-// behind the camera or beyond the GTE's range, when it is nearer than
-// nearest, and when the whole of it lies off one side of the screen,
-// where the GPU would clip it away after the packet was built.
-func (p *polygon) place(ot *yaroze.GsOT, v *[4]yaroze.SVECTOR, sk *skin, rgb uint32, back int, cull bool) bool {
-	if yaroze.RotTransPers3(&v[0], &v[1], &v[2], &p.sxy) < 0 {
+// skinned with sk of tex and colored rgb, back entries further back,
+// when it faces the camera if cull, and reports whether it was drawn.
+// The quad is left out when a corner is behind the camera or beyond the
+// GTE's range, when it is nearer than nearest, and when the whole of it
+// lies off one side of the screen, where the GPU would clip it away
+// after the packet was built.
+func (p *polygon) place(f *yaroze.Frame, v *[4]yaroze.Vertex, sk *skin, tex *yaroze.Texture, rgb yaroze.Color, ghost bool, back int, cull bool) bool {
+	if !yaroze.Project3(&v[0], &v[1], &v[2], &p.sxy) {
 		return false
 	}
 	if cull {
-		area := yaroze.NormalClip()
+		area := yaroze.ClipArea()
 		if area == 0 {
-			// The first three corners have no area on the screen, as at
-			// the end of a cliff face that tapers to nothing, so the
-			// other three decide, so that the face is not dropped whole.
-			// The second triangle of a quad in the GPU's order, top left,
-			// top right, bottom left, bottom right, winds the other way
-			// round from the first.
-			if yaroze.RotTransPers3(&v[1], &v[2], &v[3], &p.sxy) < 0 {
+			// The first three corners have no area on the screen,
+			// as at the end of a cliff face that tapers to
+			// nothing, so the other three decide, so that the face
+			// is not dropped whole. The second triangle of a quad
+			// in the GPU's order, top left, top right, bottom
+			// left, bottom right, winds the other way round from
+			// the first.
+			if !yaroze.Project3(&v[1], &v[2], &v[3], &p.sxy) {
 				return false
 			}
-			area = -yaroze.NormalClip()
-			// The corners again in their order, for the packet and the
-			// depth.
-			yaroze.RotTransPers3(&v[0], &v[1], &v[2], &p.sxy)
+			area = -yaroze.ClipArea()
+			// The corners again in their order, for the packet and
+			// the depth.
+			yaroze.Project3(&v[0], &v[1], &v[2], &p.sxy)
 		}
 		if area <= 0 {
 			return false
 		}
 	}
-	if yaroze.RotTransPers(&v[3], &p.sxy3) < 0 {
+	if !yaroze.Project(&v[3], &p.sxy3) {
 		return false
 	}
-	otz := int(yaroze.AverageZ4())
+	otz := yaroze.AverageDepth4()
 	if otz < nearest || p.offScreen() {
 		return false
 	}
 	if cur.block != 0 {
 		cur.covers(p, 4, otz)
 	}
-	k := yaroze.AllocPacket(10)
-	k[0] = 9 << 24
-	k[1] = rgb
-	k[2] = p.sxy[0]
-	k[3] = sk[0]
-	k[4] = p.sxy[1]
-	k[5] = sk[1]
-	k[6] = p.sxy[2]
-	k[7] = sk[2]
-	k[8] = p.sxy3
-	k[9] = sk[3]
-	ot.Link(min(otz>>Shift+back, 1<<Depth-1), k)
+	k := f.Packet[yaroze.PolyFT4](min(otz>>Shift+back, f.Depths()-1))
+	k.Color = rgb
+	if ghost {
+		k.Code |= yaroze.CodeTranslucent
+	}
+	k.XY0, k.XY1, k.XY2, k.XY3 = p.sxy[0], p.sxy[1], p.sxy[2], p.sxy3
+	k.UV0, k.UV1, k.UV2, k.UV3 = sk[0], sk[1], sk[2], sk[3]
+	k.Clut, k.Page = tex.Clut(), tex.Page
 	return true
 }
 
@@ -223,52 +204,52 @@ func (p *polygon) place(ot *yaroze.GsOT, v *[4]yaroze.SVECTOR, sk *skin, rgb uin
 //go:inline
 func (p *polygon) offScreen() bool {
 	const hw, hh = screenW / 2, screenH / 2
-	x0, x1, x2, x3 := int16(p.sxy[0]), int16(p.sxy[1]), int16(p.sxy[2]), int16(p.sxy3)
+	x0, x1, x2, x3 := p.sxy[0].X, p.sxy[1].X, p.sxy[2].X, p.sxy3.X
 	if x0 < -hw && x1 < -hw && x2 < -hw && x3 < -hw || x0 > hw && x1 > hw && x2 > hw && x3 > hw {
 		return true
 	}
-	y0, y1, y2, y3 := int16(p.sxy[0]>>16), int16(p.sxy[1]>>16), int16(p.sxy[2]>>16), int16(p.sxy3>>16)
+	y0, y1, y2, y3 := p.sxy[0].Y, p.sxy[1].Y, p.sxy[2].Y, p.sxy3.Y
 	return y0 < -hh && y1 < -hh && y2 < -hh && y3 < -hh || y0 > hh && y1 > hh && y2 > hh && y3 > hh
 }
 
 // tri draws the triangle in the first three corners, when they turn
 // clockwise on the screen, textured from tex at the corners uv gives
 // within it, in one shade, as quadUV draws a quad.
-func (p *polygon) tri(ot *yaroze.GsOT, tex *yaroze.Texture, uv *[3][2]uint8, c Color, ghost bool) bool {
-	if yaroze.RotTransPers3(&p.v[0], &p.v[1], &p.v[2], &p.sxy) < 0 || yaroze.NormalClip() <= 0 {
+func (p *polygon) tri(f *yaroze.Frame, tex *yaroze.Texture, uv *[3][2]uint8, c Color, ghost bool) bool {
+	if !yaroze.Project3(&p.v[0], &p.v[1], &p.v[2], &p.sxy) || yaroze.ClipArea() <= 0 {
 		return false
 	}
-	otz := int(yaroze.AverageZ3())
+	otz := yaroze.AverageDepth3()
 	if otz < nearest {
 		return false
 	}
 	if cur.block != 0 {
 		cur.covers(p, 3, otz)
 	}
-	k := yaroze.AllocPacket(8)
-	k[0] = 7 << 24
-	k[1] = c.Word(triCode | ghosted(ghost))
-	k[2] = p.sxy[0]
-	k[3] = tex.WithClut(uv[0][0], uv[0][1])
-	k[4] = p.sxy[1]
-	k[5] = tex.WithPage(uv[1][0], uv[1][1])
-	k[6] = p.sxy[2]
-	k[7] = tex.Texel(uv[2][0], uv[2][1])
-	ot.Link(min(otz>>Shift, 1<<Depth-1), k)
+	k := f.Packet[yaroze.PolyFT3](min(otz>>Shift, f.Depths()-1))
+	k.Color = c.RGB()
+	if ghost {
+		k.Code |= yaroze.CodeTranslucent
+	}
+	k.XY0, k.XY1, k.XY2 = p.sxy[0], p.sxy[1], p.sxy[2]
+	k.UV0 = yaroze.UV{U: tex.U + uv[0][0], V: tex.V + uv[0][1]}
+	k.UV1 = yaroze.UV{U: tex.U + uv[1][0], V: tex.V + uv[1][1]}
+	k.UV2 = yaroze.UV{U: tex.U + uv[2][0], V: tex.V + uv[2][1]}
+	k.Clut, k.Page = tex.Clut(), tex.Page
 	return true
 }
 
 // bounds is the box on the screen round the first n corners as they
 // were last transformed.
 func (p *polygon) bounds(n int) (minX, minY, maxX, maxY int) {
-	minX, maxX = int(int16(p.sxy[0])), int(int16(p.sxy[0]))
-	minY, maxY = int(int16(p.sxy[0]>>16)), int(int16(p.sxy[0]>>16))
+	minX, maxX = int(p.sxy[0].X), int(p.sxy[0].X)
+	minY, maxY = int(p.sxy[0].Y), int(p.sxy[0].Y)
 	for k := 1; k < n; k++ {
 		s := p.sxy3
 		if k < 3 {
 			s = p.sxy[k]
 		}
-		x, y := int(int16(s)), int(int16(s>>16))
+		x, y := int(s.X), int(s.Y)
 		minX, maxX = min(minX, x), max(maxX, x)
 		minY, maxY = min(minY, y), max(maxY, y)
 	}

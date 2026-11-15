@@ -1,113 +1,167 @@
 package yaroze
 
-// The sequencer, as a program uses it: a sound bank sent to the SPU, and
-// sequences played on it. The library's functions take small integer
-// handles and report failure as a negative one, which these carry along
-// with whether they are valid, so that a program whose sound did not load
-// can carry on without it.
+// The sequencer: a sound bank sent to the sound processor, and
+// sequences, pieces of music, played on it. A Bank or a Sequence that
+// is the zero value, or that failed to open, does nothing, so a program
+// whose music did not load can carry on without it.
 
-import "unsafe"
+var (
+	// ErrBank is returned when the sound processor does not accept a
+	// bank: its header is not a VAB's, or its waveforms do not fit.
+	ErrBank error = apiError("yaroze: the sound bank was not accepted")
 
-// A Bank is a sound bank, a VAB, open on the SPU: the instruments a
-// sequence plays with. OpenBank sends one.
+	// ErrSequence is returned when a sequence does not open: it is not
+	// a SEQ, or the library's sixteen are open.
+	ErrSequence error = apiError("yaroze: the sequence did not open")
+
+	// ErrEmpty is returned for a file with nothing in it, a disc file
+	// that was not read.
+	ErrEmpty error = apiError("yaroze: the file is empty")
+)
+
+// SetVolume sets the main volume, left and right, 0 to 127. It starts
+// at full, 127.
+func SetVolume(left, right int) { mainVolume(left, right) }
+
+// A Reverb is one of the sound processor's reverbs.
+type Reverb int
+
+const (
+	ReverbRoom    Reverb = 1
+	ReverbStudioA Reverb = 2
+	ReverbStudioB Reverb = 3
+	ReverbStudioC Reverb = 4
+	ReverbHall    Reverb = 5
+	ReverbSpace   Reverb = 6
+	ReverbEcho    Reverb = 7
+	ReverbDelay   Reverb = 8
+	ReverbPipe    Reverb = 9
+)
+
+// SetReverb turns the reverb on, of the kind given, at a depth left and
+// right, 0 to 127.
+func SetReverb(kind Reverb, left, right int) { setReverb(kind, left, right) }
+
+// ReverbOff turns the reverb off.
+func ReverbOff() { reverbOff() }
+
+// A Bank is a sound bank open on the sound processor: the instruments
+// sequences play with. It holds the library's id plus one, so that the
+// zero value is no bank.
 type Bank struct {
-	ID int16
+	h int16
 }
 
-// OpenBank is SsVabTransfer: it reads the bank's header, the VH file in vh,
-// sends its waveforms, the VB file in vb, to the SPU, and returns the bank
-// and whether it was accepted. Each is a file's words, as package disc reads
-// them. A bank that was not accepted has a negative ID, and its methods do
-// nothing; nor is one with either file empty sent.
-func OpenBank(vh, vb []uint32) (Bank, bool) {
+// OpenBank sends a bank to the sound processor: its header, the VH file
+// in vh, and its waveforms, the VB file in vb, each a file's words as
+// package disc reads them.
+func OpenBank(vh, vb []uint32) (Bank, error) {
 	if len(vh) == 0 || len(vb) == 0 {
-		return Bank{-1}, false
+		return Bank{}, ErrEmpty
 	}
-	id := SsVabTransfer(firstByte(vh), firstByte(vb), -1, 1)
-	return Bank{id}, id >= 0
+	id := vabTransfer(vh, vb)
+	if id < 0 {
+		return Bank{}, ErrBank
+	}
+	return Bank{id + 1}, nil
 }
 
-// firstByte is the first byte of words, as the library takes a sound bank.
-//
-//go:inline
-func firstByte(words []uint32) *uint8 { return (*uint8)(unsafe.Pointer(&words[0])) }
+// ID is the library's id for the bank, for the Ss calls that take one,
+// or -1 for no bank.
+func (b Bank) ID() int16 { return b.h - 1 }
 
-// Valid reports whether the bank was accepted by the SPU.
-func (b Bank) Valid() bool { return b.ID >= 0 }
-
-// Close is SsVabClose on the bank.
+// Close takes the bank off the sound processor.
 func (b Bank) Close() {
-	if b.Valid() {
-		SsVabClose(b.ID)
+	if b.h > 0 {
+		vabClose(b.h - 1)
 	}
 }
 
-// Sequence is SsSeqOpen: it opens the sequence, the SEQ file in seq, to
-// play on the bank, and returns it and whether it opened. An invalid bank,
-// or an empty file, opens nothing.
-func (b Bank) Sequence(seq []uint32) (Sequence, bool) {
-	if !b.Valid() || len(seq) == 0 {
-		return Sequence{-1}, false
+// Sequence opens the SEQ file in seq to play on the bank.
+func (b Bank) Sequence(seq []uint32) (Sequence, error) {
+	if b.h <= 0 {
+		return Sequence{}, ErrBank
 	}
-	id := SsSeqOpen(&seq[0], b.ID)
-	return Sequence{id}, id >= 0
+	if len(seq) == 0 {
+		return Sequence{}, ErrEmpty
+	}
+	id := seqOpen(seq, b.h-1)
+	if id < 0 {
+		return Sequence{}, ErrSequence
+	}
+	return Sequence{id + 1}, nil
 }
 
-// A Sequence is a piece of music open for playing, a SEQ file on a bank.
-// One that did not open has a negative ID, and its methods do nothing.
+// A Sequence is a piece of music open for playing, the library's id
+// plus one.
 type Sequence struct {
-	ID int16
+	h int16
 }
 
-// Valid reports whether the sequence opened.
-func (s Sequence) Valid() bool { return s.ID >= 0 }
-
-// Play is SsSeqPlay: it plays the sequence times times, or for ever with
-// SSPLAY_INFINITY.
-func (s Sequence) Play(times int16) {
-	if s.Valid() {
-		SsSeqPlay(s.ID, SSPLAY_PLAY, times)
+// Play plays the sequence times times, or over and over for
+// SSPLAY_INFINITY, which is 0, as Loop does.
+func (q Sequence) Play(times int) {
+	if q.h > 0 {
+		seqPlay(q.h-1, int16(times))
 	}
 }
 
-// SetVolume is SsSeqSetVol: the sequence's volume, left and right, from 0
-// to 127.
-func (s Sequence) SetVolume(left, right int16) {
-	if s.Valid() {
-		SsSeqSetVol(s.ID, left, right)
+// Loop plays the sequence over and over.
+func (q Sequence) Loop() {
+	if q.h > 0 {
+		seqPlay(q.h-1, 0)
 	}
 }
 
-// Pause is SsSeqPause.
-func (s Sequence) Pause() {
-	if s.Valid() {
-		SsSeqPause(s.ID)
+// SetVolume sets the sequence's volume, left and right, 0 to 127.
+func (q Sequence) SetVolume(left, right int) {
+	if q.h > 0 {
+		seqVolume(q.h-1, left, right)
 	}
 }
 
-// Resume is SsSeqReplay: it resumes the sequence from where Pause left it.
-func (s Sequence) Resume() {
-	if s.Valid() {
-		SsSeqReplay(s.ID)
+// Pause stops the sequence where it is, for Resume.
+func (q Sequence) Pause() {
+	if q.h > 0 {
+		seqPause(q.h - 1)
 	}
 }
 
-// Stop is SsSeqStop.
-func (s Sequence) Stop() {
-	if s.Valid() {
-		SsSeqStop(s.ID)
+// ID is the library's id for the sequence, for the Ss calls that take
+// one, or -1 for no sequence.
+func (q Sequence) ID() int16 { return q.h - 1 }
+
+// Resume goes on from where Pause stopped.
+func (q Sequence) Resume() {
+	if q.h > 0 {
+		seqResume(q.h - 1)
 	}
 }
 
-// Playing is SsIsEos: whether the sequence is still playing.
-func (s Sequence) Playing() bool {
-	return s.Valid() && SsIsEos(s.ID, 0) != 0
-}
-
-// Close is SsSeqClose. A sequence is stopped before it is closed, and the
-// library wants a frame or two between, so a program does that itself.
-func (s Sequence) Close() {
-	if s.Valid() {
-		SsSeqClose(s.ID)
+// Stop stops the sequence.
+func (q Sequence) Stop() {
+	if q.h > 0 {
+		seqStop(q.h - 1)
 	}
 }
+
+// Playing says whether the sequence is still playing.
+func (q Sequence) Playing() bool {
+	return q.h > 0 && seqPlaying(q.h-1)
+}
+
+// Close closes the sequence. One that is playing is stopped first, and
+// the library wants a frame or two between, so a program does that
+// itself.
+func (q Sequence) Close() {
+	if q.h > 0 {
+		seqClose(q.h - 1)
+	}
+}
+
+// An apiError is one of the Go API's errors, a message as errors.New
+// makes one, kept from the errors package, whose initialization would
+// otherwise come with every program that imports this one.
+type apiError string
+
+func (e apiError) Error() string { return string(e) }

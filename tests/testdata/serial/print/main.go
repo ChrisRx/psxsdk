@@ -6,7 +6,7 @@ package main
 
 import "go.chrisrx.dev/psx/yaroze"
 
-var screen = yaroze.Screen{Background: yaroze.CVECTOR{R: 60, G: 120, B: 120}}
+var screen = yaroze.Screen{Background: yaroze.Color{R: 60, G: 120, B: 120}}
 
 var frames int
 

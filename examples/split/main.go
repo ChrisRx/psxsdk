@@ -54,7 +54,7 @@ const (
 )
 
 var (
-	screen = yaroze.Screen{Background: yaroze.CVECTOR{R: 20, G: 30, B: 60}, Depth: depth, Packets: 24 << 10}
+	screen = yaroze.Screen{Background: yaroze.Color{R: 20, G: 30, B: 60}, Depth: depth, Packets: 24 << 10}
 	pad1   yaroze.Pad
 	pad2   yaroze.Controller
 
@@ -63,8 +63,8 @@ var (
 	second     [2]yaroze.GsOT
 	secondTags [2 << depth]yaroze.GsOT_TAG
 
-	players [2]yaroze.Object
-	stones  [pillars]yaroze.Object
+	players [2]yaroze.GsObject
+	stones  [pillars]yaroze.GsObject
 	views   [2]yaroze.GsRVIEW2
 	light   yaroze.GsF_LIGHT
 
@@ -91,7 +91,7 @@ func main() {
 		second[i] = yaroze.GsOT{Length: depth, Org: &secondTags[i<<depth]}
 	}
 	b := screen.Bounds()
-	font := screen.Font(int32(b.X)+8, int32(b.Y)+8, int32(b.W)-16, int32(b.H)-16, 200)
+	font := screen.Font(b.X+8, b.Y+8, b.W-16, b.H-16, 200).ID()
 	text.Init(textBuf[:])
 
 	if f := disc.LoadAll(300); f != nil {
@@ -180,7 +180,7 @@ func setup() {
 
 // drive moves a cube across the floor, keeps it within the ring, and turns
 // it the way it is going.
-func drive(p *yaroze.Object, dx, dz int) {
+func drive(p *yaroze.GsObject, dx, dz int) {
 	if dx == 0 && dz == 0 {
 		return
 	}
@@ -191,7 +191,7 @@ func drive(p *yaroze.Object, dx, dz int) {
 }
 
 // follow puts a camera behind and above a cube, looking at it.
-func follow(v *yaroze.GsRVIEW2, p *yaroze.Object) {
+func follow(v *yaroze.GsRVIEW2, p *yaroze.GsObject) {
 	*v = yaroze.GsRVIEW2{
 		Vpx: p.Position.Vx, Vpy: p.Position.Vy - 3000, Vpz: p.Position.Vz - 6000,
 		Vrx: p.Position.Vx, Vry: p.Position.Vy, Vrz: p.Position.Vz,

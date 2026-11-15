@@ -1,6 +1,6 @@
 package yaroze
 
-// An Object is a model drawn somewhere: a GsDOBJ2 with the coordinate
+// A GsObject is a model drawn somewhere: a GsDOBJ2 with the coordinate
 // system it is drawn in, which every drawn model needs and which the
 // library keeps as a pointer from the one to the other, and where the
 // model is in that system, which Draw makes the coordinate system's matrix
@@ -9,13 +9,13 @@ package yaroze
 // once, like everything a frame draws: a package-level variable, or a
 // variable of main, which the compiler places as it would one.
 //
-//	var cube yaroze.Object
+//	var cube yaroze.GsObject
 //	cube.Init(yaroze.WORLD)
 //	cube.Link(model, 0)
 //	...
 //	cube.Rotation.Vy += 16
 //	cube.Draw(ot)
-type Object struct {
+type GsObject struct {
 	_ noCopy
 	GsDOBJ2
 	Coord GsCOORDINATE2
@@ -34,7 +34,7 @@ type Object struct {
 
 // Init sets the object's coordinate system to the identity, with super as
 // its parent, or WORLD, and makes it the system the object is drawn in.
-func (o *Object) Init(super *GsCOORDINATE2) {
+func (o *GsObject) Init(super *GsCOORDINATE2) {
 	o.Coord.Init(super)
 	o.Coord2 = &o.Coord
 }
@@ -43,13 +43,13 @@ func (o *Object) Init(super *GsCOORDINATE2) {
 // mapped.
 //
 //go:inline
-func (o *Object) Link(tmd TMD, n int32) { tmd.Link(&o.GsDOBJ2, n) }
+func (o *GsObject) Link(tmd TMD, n int32) { tmd.Link(&o.GsDOBJ2, n) }
 
 // Draw makes the coordinate system's matrix from Position, Rotation and
 // Scale, and sorts the object lit, as GsDOBJ2's Draw does. A program that
 // builds the matrix itself sets it with Coord.SetMatrix and calls
 // o.GsDOBJ2.Draw instead, which leaves it alone.
-func (o *Object) Draw(ot *GsOT) {
+func (o *GsObject) Draw(ot *GsOT) {
 	m := &o.Coord.Coord
 	RotMatrix(&o.Rotation, m)
 	if o.Scale != (VECTOR{}) {

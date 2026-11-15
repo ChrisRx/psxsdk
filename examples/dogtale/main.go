@@ -387,7 +387,7 @@ func checkPad() int32 {
 // backgrounds use to reach their second page.
 func createObject(obj *object, timAdd uintptr, extra int32) {
 	im := &obj.image
-	yaroze.GsGetTimInfo(yaroze.At(timAdd+4), im)
+	yaroze.GsGetTimInfo(yaroze.Word(timAdd+4), im)
 
 	rect := yaroze.RECT{X: im.Px, Y: im.Py, W: int16(im.Pw), H: int16(im.Ph)}
 	yaroze.LoadImage(&rect, im.Pixel)
@@ -1564,21 +1564,16 @@ func initSound() {
 }
 
 func playSEQ() {
-	if !song.Valid() {
-		return
-	}
 	yaroze.SsSetMVol(mvol, mvol)
 	song.SetVolume(svol, svol)
 	song.Play(yaroze.SSPLAY_INFINITY)
 }
 
 func stopSound() {
-	if song.Valid() {
-		song.Stop()
-		yaroze.VSync(0)
-		yaroze.VSync(0)
-		song.Close()
-	}
+	song.Stop()
+	yaroze.VSync(0)
+	yaroze.VSync(0)
+	song.Close()
 	bank.Close()
 }
 

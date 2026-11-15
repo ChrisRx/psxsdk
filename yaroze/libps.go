@@ -1,6 +1,35 @@
 // Package yaroze binds the Net Yaroze library, the one the boot disc leaves
 // resident in the console's RAM, for programs written in Go.
 //
+// It has two surfaces over the one library, and a program uses either or
+// both. The library's own functions keep their C names and signatures, so
+// a program can be written as it would be in C, from Sony's manuals and
+// samples. Beside them is a Go API: a screen drawn frame by frame, sprites
+// and boxes on it, text, the controllers, music from a sound bank, the
+// memory card and 3D, as types with methods, strings, ints and errors:
+//
+//	var screen = yaroze.Screen{Background: yaroze.Color{R: 60, G: 120, B: 120}}
+//
+//	func main() {
+//		screen.Open()
+//		text := screen.Font(16, 16, 256, 16, 64)
+//		ship := yaroze.LoadTIM(shipFile.Data()).Sprite()
+//		for frame := range screen.Frames() {
+//			if yaroze.PadButtons(0).Has(yaroze.Right) {
+//				ship.X++
+//			}
+//			ship.Draw(frame, 0)
+//			text.Print("frame ").Int(frame.Number())
+//		}
+//	}
+//
+// A frame's ordering table, Frame.OT, takes the library's own sorts, so a
+// program can draw with both. A program builds with the library linked
+// in, or with --libps resident laid over the image a Net Yaroze leaves in
+// memory, from the same source. Nothing in the Go API allocates after
+// Screen.Open, and nothing may: the collector on this target frees
+// nothing, so a program allocates at startup and keeps what it made.
+//
 // Most of the package is generated from the SDK's libps.h by hdr2go: the
 // struct layouts come from clang's record layout dump for the target, so a
 // Go struct that disagrees with the C one by a byte is a compile error

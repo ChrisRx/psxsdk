@@ -8,15 +8,15 @@
 //	var world scene.Scene
 //
 //	loader.Start(300)
-//	for ot := range screen.Frames() {
+//	for frame := range screen.Frames() {
 //		if !world.Ready() {
 //			if done, failed := loader.Step(); done && !failed {
-//				world.Load(sceneDAT.Data(), scene.Files(disc.Registered()))
+//				world.Load(&screen, sceneDAT.Data(), files)
 //			}
 //			continue
 //		}
-//		world.Object("cube").Rotation.Vy += 16
-//		world.Draw(ot, screen.Overlay())
+//		world.Object("cube").Rotation.Y += 16
+//		world.Draw(frame, frame.Overlay())
 //	}
 //
 // A scene's layers are the tile maps of a 2D game, drawn behind everything
@@ -44,6 +44,9 @@
 // A Scene holds its objects and sprites in arrays of a fixed size, the
 // most a file holds, so that nothing is allocated; its layout is
 // format/scene's.
+//
+// The camera, the lights, the objects, the sprites and the layers are the
+// yaroze package's Go API types, and the scene is drawn on a frame.
 package scene
 
 import (
@@ -79,7 +82,7 @@ const (
 	// MaxMarkers markers.
 	MaxLinks   = 10
 	MaxMarkers = 64
-	workWords  = ((320/CellSize+1)*(240/CellSize+2)*6+4)*2 + 2
+	workWords  = 2 + 2*(4+(320/CellSize+1)*(240/CellSize+1)*5)
 )
 
 // The flags the scene's editor names for a layer's cells; the other four
@@ -149,17 +152,19 @@ func setLive(s *Scene, data []uint32, name string) {
 
 // A Scene is a scene file read in: what it places, ready to draw.
 type Scene struct {
-	Camera     yaroze.GsRVIEW2
-	Projection int32
-	Ambient    [3]int32
-	Lights     [MaxLights]yaroze.GsF_LIGHT
-	NLights    int
+	// Camera is the file's camera, with its Distance the projection, and
+	// Ambient the light from everywhere, each a Fixed.
+	Camera  yaroze.Camera
+	Ambient [3]yaroze.Fixed
+	Lights  [MaxLights]yaroze.Light
+	NLights int
 
 	// Textures and Models are the scene's TIMs and TMDs, in the order the
-	// file lists them, each the memory its disc.File was loaded into.
-	Textures  [MaxTextures]yaroze.TIM
+	// file lists them: each texture loaded into video memory, and each
+	// model the memory its disc.File was loaded into, mapped.
+	Textures  [MaxTextures]yaroze.Image
 	NTextures int
-	Models    [MaxModels]yaroze.TMD
+	Models    [MaxModels]yaroze.Model
 	NModels   int
 
 	// Objects are the placed models, in the file's order, each linked to
@@ -167,8 +172,8 @@ type Scene struct {
 	Objects  [MaxObjects]yaroze.Object
 	NObjects int
 
-	// Sprites are the file's sprites, in its order, ready to sort.
-	Sprites  [MaxSprites]yaroze.GsSPRITE
+	// Sprites are the file's sprites, in its order, ready to draw.
+	Sprites  [MaxSprites]yaroze.Sprite
 	NSprites int
 
 	// layers are the maps drawn behind everything, the first farthest.
@@ -196,9 +201,11 @@ type Scene struct {
 	// next Load.
 	Missing string
 
-	objectNames [MaxObjects][16]byte
-	spriteNames [MaxSprites][16]byte
-	// Each object's model, an index into Models, and its number in the TMD.
+	textureWords [MaxTextures][]uint32
+	objectNames  [MaxObjects][16]byte
+	spriteNames  [MaxSprites][16]byte
+	// Each object's model, an index into Models, and its number in the
+	// TMD.
 	objectModel  [MaxObjects]uint8
 	objectIndex  [MaxObjects]int
 	objectFields [MaxObjects][2]int
@@ -206,24 +213,25 @@ type Scene struct {
 
 	// What Load was given, for reload, and the files LoadFiles was given,
 	// for src to point at.
-	data  []uint32
-	src   Source
-	files Files
+	screen *yaroze.Screen
+	data   []uint32
+	src    Source
+	files  Files
 
 	// path holds the disc path parse is looking up, and missingPath the one
 	// Missing names.
 	path, missingPath [32]byte
 }
 
-// A Layer is one of the scene's tile maps: the library's background, whose
-// window and brightness the program may change, a map of cells cut from
-// one texture, and a byte of flags for each of those cells, which says
-// what the cell is to the program. The map is the scene's own copy, which
+// A Layer is one of the scene's tile maps: a background, whose window
+// and brightness the program may change, a map of cells cut from one
+// texture, and a byte of flags for each of those cells, which says what
+// the cell is to the program. The map is the scene's own copy, which
 // SetCell changes and the file does not.
 type Layer struct {
-	// BG is the background GsSortFixBg16 draws. Scroll sets its Scrollx
-	// and Scrolly, which the program may set itself instead.
-	BG yaroze.GsBG
+	// BG is the background the layer is drawn as. Scroll sets its
+	// ScrollX and ScrollY, which the program may set itself instead.
+	BG yaroze.Background
 
 	// Speed is the percent of the scene's scroll the layer moves, as the
 	// file says: 100 with it, less for one farther off.
@@ -232,8 +240,8 @@ type Layer struct {
 	name    [16]byte
 	tex     int
 	scroll  [2]int16 // where the file scrolled it, where Scroll(0, 0) puts it
-	tileMap yaroze.GsMAP
-	cells   [MaxCells]yaroze.GsCELL
+	tileMap yaroze.TileMap
+	cells   [MaxCells]yaroze.Cell
 	index   [MaxMapCells]uint16
 	flags   [MaxCells]uint8
 	work    [workWords]uint32
@@ -243,8 +251,8 @@ type Layer struct {
 func (l *Layer) Name() string { return nameString(&l.name) }
 
 // Width and Height are the size of the layer's map in cells.
-func (l *Layer) Width() int  { return int(l.tileMap.Ncellw) }
-func (l *Layer) Height() int { return int(l.tileMap.Ncellh) }
+func (l *Layer) Width() int  { return l.tileMap.Width }
+func (l *Layer) Height() int { return l.tileMap.Height }
 
 // Cell returns the cell at column x and row y of the map, an index into
 // the texture's cells, or EmptyCell for an empty one or one off the map.
@@ -306,8 +314,8 @@ func (s *Scene) LayerAt(i int) *Layer { return &s.layers[i] }
 func (s *Scene) Scroll(x, y int) {
 	for i := range s.nLayers {
 		l := &s.layers[i]
-		l.BG.Scrollx = int16(int(l.scroll[0]) + x*l.Speed/100)
-		l.BG.Scrolly = int16(int(l.scroll[1]) + y*l.Speed/100)
+		l.BG.ScrollX = int16(int(l.scroll[0]) + x*l.Speed/100)
+		l.BG.ScrollY = int16(int(l.scroll[1]) + y*l.Speed/100)
 	}
 }
 
@@ -373,19 +381,21 @@ func (s *Scene) Ready() bool { return s.ready }
 // loaded them, binds its textures and models to the files src gives by
 // their disc paths (Files for the disc's own, an Archive for the entries
 // of one, Sources for both), sends the textures to video memory, maps the
-// models, links and places the objects, and sets the camera, the
-// projection and the lights. It returns ErrFormat for a file it cannot
-// read and ErrMissing, with Missing set, for a texture or model src does
-// not have or has not loaded.
+// models, links and places the objects, sets the camera, the projection
+// and the lights, and makes the layers ready for the screen, which is
+// open. It returns ErrFormat for a file it cannot read and ErrMissing,
+// with Missing set, for a texture or model src does not have or has not
+// loaded.
 //
 // It allocates nothing, so a frame loop may call it to change the level;
 // the Source it is given it keeps, for Reload, so that one made for the
 // call, as scene.Files(files) is, is allocated each time. LoadFiles keeps
 // the disc's files in the scene instead.
-func (s *Scene) Load(data []uint32, src Source) error {
+func (s *Scene) Load(screen *yaroze.Screen, data []uint32, src Source) error {
 	if err := s.parse(data, src); err != nil {
 		return err
 	}
+	s.screen = screen
 	s.setup()
 	s.ready = true
 	s.data = data
@@ -403,9 +413,9 @@ func (s *Scene) Load(data []uint32, src Source) error {
 // LoadFiles is Load with the files registered with package disc as the
 // source, kept in the scene, so that changing the level allocates no
 // Source for them, as scene.Files(files) would each time.
-func (s *Scene) LoadFiles(data []uint32, files []*disc.File) error {
+func (s *Scene) LoadFiles(screen *yaroze.Screen, data []uint32, files []*disc.File) error {
 	s.files = files
-	return s.Load(data, &s.files)
+	return s.Load(screen, data, &s.files)
 }
 
 // Name is the disc path of the file the scene was loaded from, when the
@@ -474,24 +484,23 @@ func (s *Scene) parse(data []uint32, src Source) error {
 	}
 	s.nLayers = 0
 	s.hasRoom = false
-	s.Projection = int32(data[projectionAt])
 	for i := range s.Ambient {
-		s.Ambient[i] = int32(data[ambientAt+i])
+		s.Ambient[i] = yaroze.Fixed(data[ambientAt+i])
 	}
 	cam := data[cameraAt:]
-	s.Camera = yaroze.GsRVIEW2{
-		Vpx: int32(cam[0]), Vpy: int32(cam[1]), Vpz: int32(cam[2]),
-		Vrx: int32(cam[3]), Vry: int32(cam[4]), Vrz: int32(cam[5]),
-		Rz:    int32(cam[6]),
-		Super: yaroze.WORLD,
+	s.Camera = yaroze.Camera{
+		Eye:      vector(cam[0:3]),
+		Target:   vector(cam[3:6]),
+		Roll:     int(int32(cam[6])),
+		Distance: int(int32(data[projectionAt])),
 	}
 	s.NLights = nl
 	for i := range s.Lights {
 		l := data[lightsAt+4*i:]
-		s.Lights[i] = yaroze.GsF_LIGHT{}
+		s.Lights[i] = yaroze.Light{}
 		if i < nl {
-			s.Lights[i].Vx, s.Lights[i].Vy, s.Lights[i].Vz = int32(l[0]), int32(l[1]), int32(l[2])
-			s.Lights[i].R, s.Lights[i].G, s.Lights[i].B = uint8(l[3]), uint8(l[3]>>8), uint8(l[3]>>16)
+			s.Lights[i].Direction = vector(l[0:3])
+			s.Lights[i].Color = yaroze.Color{R: uint8(l[3]), G: uint8(l[3] >> 8), B: uint8(l[3] >> 16)}
 		}
 	}
 	at := headerWords
@@ -502,7 +511,7 @@ func (s *Scene) parse(data []uint32, src Source) error {
 			s.Missing = s.missing(data[at : at+pathWords])
 			return ErrMissing
 		}
-		s.Textures[i] = yaroze.TIM(w)
+		s.textureWords[i] = w
 		at += pathWords
 	}
 	s.NModels = nm
@@ -512,7 +521,7 @@ func (s *Scene) parse(data []uint32, src Source) error {
 			s.Missing = s.missing(data[at : at+pathWords])
 			return ErrMissing
 		}
-		s.Models[i] = yaroze.TMD(w)
+		s.Models[i] = yaroze.Model(w)
 		at += pathWords
 	}
 	s.NObjects = no
@@ -520,9 +529,9 @@ func (s *Scene) parse(data []uint32, src Source) error {
 		r := data[at:]
 		copyName(&s.objectNames[i], r[:nameWords])
 		o := &s.Objects[i]
-		o.Position = yaroze.VECTOR{Vx: int32(r[6]), Vy: int32(r[7]), Vz: int32(r[8])}
-		o.Rotation = yaroze.SVECTOR{Vx: int16(r[9]), Vy: int16(r[9] >> 16), Vz: int16(r[10])}
-		o.Scale = yaroze.VECTOR{Vx: int32(r[11]), Vy: int32(r[12]), Vz: int32(r[13])}
+		o.Position = vector(r[6:9])
+		o.Rotation = yaroze.Rotation{X: int(int16(r[9])), Y: int(int16(r[9] >> 16)), Z: int(int16(r[10]))}
+		o.Scale = vector(r[11:14])
 		if int(r[4]) >= nm {
 			return ErrFormat
 		}
@@ -539,16 +548,14 @@ func (s *Scene) parse(data []uint32, src Source) error {
 			return ErrFormat
 		}
 		sp := &s.Sprites[i]
-		sp.Attribute = r[5]
+		sp.Mode = yaroze.Mode(r[5])
 		sp.X, sp.Y = int16(r[6]), int16(r[6]>>16)
 		sp.W, sp.H = uint16(r[7]), uint16(r[7]>>16)
-		sp.Tpage = uint16(r[8])
-		sp.U, sp.V = uint8(r[8]>>16), uint8(r[8]>>24)
-		sp.Cx, sp.Cy = int16(r[9]), int16(r[9]>>16)
-		sp.R, sp.G, sp.B = uint8(r[10]), uint8(r[10]>>8), uint8(r[10]>>16)
-		sp.Mx, sp.My = int16(r[11]), int16(r[11]>>16)
-		sp.Scalex, sp.Scaley = int16(r[12]), int16(r[12]>>16)
-		sp.Rotate = int32(r[13])
+		sp.Texture = yaroze.Texture{Page: uint16(r[8]), U: uint8(r[8] >> 16), V: uint8(r[8] >> 24), CX: int16(r[9]), CY: int16(r[9] >> 16)}
+		sp.Color = yaroze.Color{R: uint8(r[10]), G: uint8(r[10] >> 8), B: uint8(r[10] >> 16)}
+		sp.Pivot = yaroze.Point{X: int16(r[11]), Y: int16(r[11] >> 16)}
+		sp.ScaleX, sp.ScaleY = yaroze.Fixed(r[12]), yaroze.Fixed(r[12]>>16)
+		sp.Rotate = yaroze.Angle(r[13])
 		at += spriteWords
 	}
 	for k := range nLayers {
@@ -591,14 +598,12 @@ func (l *Layer) parse(data []uint32, at, nt int) (int, error) {
 	l.tex = t
 	l.Speed = int(r[1] >> 16)
 	l.scroll = [2]int16{int16(r[3]), int16(r[3] >> 16)}
-	l.tileMap = yaroze.GsMAP{Cellw: CellSize, Cellh: CellSize, Ncellw: uint16(w), Ncellh: uint16(h), Base: &l.cells[0], Index: &l.index[0]}
+	l.tileMap = yaroze.TileMap{Width: w, Height: h, Cells: l.cells[:], Layout: l.index[:]}
 	bg := &l.BG
-	*bg = yaroze.GsBG{
-		Scrollx: l.scroll[0], Scrolly: l.scroll[1],
+	*bg = yaroze.Background{
+		ScrollX: l.scroll[0], ScrollY: l.scroll[1],
 		X: int16(r[4]), Y: int16(r[4] >> 16), W: int16(r[5]), H: int16(r[5] >> 16),
-		R: uint8(r[6]), G: uint8(r[6] >> 8), B: uint8(r[6] >> 16),
-		Map:    &l.tileMap,
-		Scalex: yaroze.ONE, Scaley: yaroze.ONE,
+		Color: yaroze.Color{R: uint8(r[6]), G: uint8(r[6] >> 8), B: uint8(r[6] >> 16)},
 	}
 	if bg.W == 0 || bg.H == 0 {
 		bg.X, bg.Y, bg.W, bg.H = -160, -120, 320, 240
@@ -616,7 +621,8 @@ func (l *Layer) parse(data []uint32, at, nt int) (int, error) {
 	at += layerWords + (n+1)/2
 	l.flags = [MaxCells]uint8{}
 	if r[6]>>24&1 == 0 {
-		// A file from before layers: its one map, moving with the scroll.
+		// A file from before layers: its one map, moving with the
+		// scroll.
 		l.name = [16]byte{}
 		copy(l.name[:], "background")
 		l.Speed = 100
@@ -729,25 +735,26 @@ func (s *Scene) ObjectFields(i int) (int, int) {
 	return s.objectFields[i][0], s.objectFields[i][1]
 }
 
-// Draw sorts the layers at the far end of ot, the first farthest, the
-// objects into ot, and the sprites into sprites, which may be the screen's
-// overlay table, so that they go in front of the models, or ot itself.
-func (s *Scene) Draw(ot, sprites *yaroze.GsOT) {
+// Draw draws the layers at the far end of the frame, the first
+// farthest, the objects on the frame, and the sprites on sprites, which
+// may be the frame's overlay, so that they go in front of the models, or
+// the frame itself.
+func (s *Scene) Draw(f, sprites *yaroze.Frame) {
 	if !s.ready {
 		return
 	}
 	s.Reload()
-	// Within one depth the last sorted is drawn first, so the nearest
+	// Within one depth the last drawn is drawn first, so the nearest
 	// layer goes in first and the farthest last, under the others.
-	far := uint16(1<<ot.Length) - 1
+	far := f.Depths() - 1
 	for i := s.nLayers - 1; i >= 0; i-- {
-		yaroze.GsSortFixBg16(&s.layers[i].BG, &s.layers[i].work[0], ot, far)
+		s.layers[i].BG.Draw(f, far)
 	}
 	for i := range s.NObjects {
-		s.Objects[i].Draw(ot)
+		s.Objects[i].Draw(f)
 	}
 	for i := range s.NSprites {
-		s.Sprites[i].SortFast(sprites, 0)
+		s.Sprites[i].DrawFast(sprites, 0)
 	}
 }
 
@@ -762,7 +769,7 @@ func (s *Scene) Object(name string) *yaroze.Object {
 }
 
 // Sprite returns the sprite the file names so, or nil.
-func (s *Scene) Sprite(name string) *yaroze.GsSPRITE {
+func (s *Scene) Sprite(name string) *yaroze.Sprite {
 	for i := range s.NSprites {
 		if nameIs(&s.spriteNames[i], name) {
 			return &s.Sprites[i]
@@ -771,11 +778,20 @@ func (s *Scene) Sprite(name string) *yaroze.GsSPRITE {
 	return nil
 }
 
-// ObjectName returns object i's name, which the next Load overwrites.
+// ObjectName returns object i's name.
 func (s *Scene) ObjectName(i int) string { return nameString(&s.objectNames[i]) }
 
-// SpriteName returns sprite i's name, which the next Load overwrites.
+// SpriteName returns sprite i's name.
 func (s *Scene) SpriteName(i int) string { return nameString(&s.spriteNames[i]) }
+
+// vector reads three signed words as a vector.
+func vector(w []uint32) yaroze.Vector {
+	return yaroze.Vector{
+		X: int(int32(w[0])),
+		Y: int(int32(w[1])),
+		Z: int(int32(w[2])),
+	}
+}
 
 func copyName(dst *[16]byte, words []uint32) {
 	for i, w := range words[:4] {
@@ -795,9 +811,6 @@ func nameIs(name *[16]byte, s string) bool {
 	return name[len(s)] == 0
 }
 
-// nameString returns a name as a string without copying it, so that a frame
-// loop can show one: the string is the scene's own memory, which the next
-// Load overwrites, and a name kept past that is copied first.
 func nameString(name *[16]byte) string {
 	n := 0
 	for n < len(name) && name[n] != 0 {

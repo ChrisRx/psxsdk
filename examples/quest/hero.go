@@ -16,9 +16,9 @@ const (
 	// Positions are in sixteenths of a unit; the hero walks 3 units a
 	// frame, and about that along a diagonal, 3 over root 2 on each axis.
 	// A step may climb or drop maxStep sixteenths for each speed of
-	// movement: a slope of a level and a quarter a stage.Tile, which the slope a
-	// stage.Tile wide between cells two levels apart is under, and three apart
-	// is over.
+	// movement: a slope of a level and a quarter a stage.Tile, which the
+	// slope a stage.Tile wide between cells two levels apart is under,
+	// and three apart is over.
 	speed   = 3 << 4
 	diag    = 34
 	maxStep = 20
@@ -59,8 +59,8 @@ type player struct {
 var hero player
 
 // screenFacing is the way the direction buttons point as eighths of a turn
-// on the screen from up clockwise, indexed by (dx+1)*3 + dy+1 as Pad.Dir
-// gives them; -1 when none is held.
+// on the screen from up clockwise, indexed by (dx+1)*3 + dy+1 as
+// Controller.Dir gives them; -1 when none is held.
 var screenFacing = [9]int{7, 6, 5, 0, -1, 4, 1, 2, 3}
 
 // dirs are the eight ways to face as steps along each axis.
@@ -220,12 +220,12 @@ func (h *player) project() {
 
 // draw draws the hero where they stand, facing their way, in the frame
 // of the walk they are at.
-func (h *player) draw(ot *yaroze.GsOT) {
-	frame := 0
+func (h *player) draw(frame *yaroze.Frame) {
+	step := 0
 	if h.walkTick > 0 {
-		frame = (h.walkTick/stepTime + 1) & 3
+		step = (h.walkTick/stepTime + 1) & 3
 	}
-	h.figure.draw(ot, h.at(), h.height, h.facing, frame)
+	h.figure.draw(frame, h.at(), h.height, h.facing, step)
 }
 
 // interact looks at what is in front of the hero and speaks to it: a
@@ -268,7 +268,7 @@ func inFront(p, at, dir stage.Vec) bool {
 
 // drawNPCs draws the room's people, each on their cell, facing their way,
 // or the hero when the hero is within three tiles of them.
-func drawNPCs(ot *yaroze.GsOT) {
+func drawNPCs(frame *yaroze.Frame) {
 	r := hero.here()
 	for k := range r.npcs {
 		n := &r.npcs[k]
@@ -278,7 +278,7 @@ func drawNPCs(ot *yaroze.GsOT) {
 		if abs(d.X) < 3*stage.Tile && abs(d.Z) < 3*stage.Tile {
 			f = toward(d)
 		}
-		people.draw(ot, p, set.HeightAt(p.Sixteenths())>>4, f, 0)
+		people.draw(frame, p, set.HeightAt(p.Sixteenths())>>4, f, 0)
 	}
 }
 

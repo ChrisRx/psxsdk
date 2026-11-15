@@ -109,7 +109,7 @@ func openMovie() bool {
 	}
 	p := uintptr(unsafe.Pointer(&movieData[headerWords]))
 	for i := range movieFrames {
-		frameAt[i] = yaroze.At(p)
+		frameAt[i] = yaroze.Word(p)
 		p += 4 * uintptr(1+*frameAt[i])
 	}
 

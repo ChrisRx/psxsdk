@@ -32,7 +32,7 @@ package main
 import "go.chrisrx.dev/psx/yaroze"
 
 var (
-	screen = yaroze.Screen{Background: yaroze.CVECTOR{R: 20, G: 30, B: 50}, Depth: 1}
+	screen = yaroze.Screen{Background: yaroze.Color{R: 20, G: 30, B: 50}, Depth: 1}
 
 	// cursorX and cursorY are where the cursor is, in the screen's
 	// coordinates from the top left, kept apart for a test to read by name.
@@ -77,7 +77,8 @@ func main() {
 	text.Init(textBuf[:])
 	cursorX, cursorY = 160, 180
 
-	for ot := range screen.Frames() {
+	for frame := range screen.Frames() {
+		ot := frame.OT()
 		for i := range ports {
 			ports[i] = yaroze.ReadController(i)
 		}

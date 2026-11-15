@@ -215,16 +215,16 @@ func TestInvadersScreenshot(t *testing.T) { invadersScreenshot(t, "invaders") }
 // checked as heard.
 func TestInvadersScreenshotResident(t *testing.T) { invadersScreenshot(t, "invaders-resident") }
 
-// TestInvadersScreenshotPS is TestInvadersScreenshot on exp/examples/invaders,
-// the game written against the exp/ps API (task build:disc NAME=invaders-ps
-// DIR=exp/examples/invaders), which has to draw the same picture.
+// TestInvadersScreenshotPS is TestInvadersScreenshot on yaroze/internal/examples/invaders,
+// the game written against the yaroze package's Go API (task build:disc NAME=invaders-ps
+// DIR=yaroze/internal/examples/invaders), which has to draw the same picture.
 func TestInvadersScreenshotPS(t *testing.T) { invadersScreenshot(t, "invaders-ps") }
 
 func invadersScreenshot(t *testing.T, name string) {
 	parallel(t)
 	m := bootExample(t, name)
 	m.SetAudio(true)
-	// The exp/ps port counts frames in its screen, whose count is the
+	// The Go API port counts frames in its screen, whose count is the
 	// screen's first field.
 	counter := "main.frameNumber"
 	if strings.HasPrefix(name, "invaders-ps") {
@@ -271,9 +271,9 @@ func TestDinoScreenshot(t *testing.T) { dinoScreenshot(t, "dino") }
 // the resident library (task build:disc:resident NAME=dino).
 func TestDinoScreenshotResident(t *testing.T) { dinoScreenshot(t, "dino-resident") }
 
-// TestDinoScreenshotPS is TestDinoScreenshot on exp/examples/dino, the
-// program written against the exp/ps API (task build:disc NAME=dino-ps
-// DIR=exp/examples/dino), which has to draw the same picture.
+// TestDinoScreenshotPS is TestDinoScreenshot on yaroze/internal/examples/dino, the
+// program written against the yaroze package's Go API (task build:disc NAME=dino-ps
+// DIR=yaroze/internal/examples/dino), which has to draw the same picture.
 func TestDinoScreenshotPS(t *testing.T) { dinoScreenshot(t, "dino-ps") }
 
 func dinoScreenshot(t *testing.T, name string) {
@@ -338,11 +338,6 @@ func questState(m *emutest.Machine) questSyms {
 // eight times turns the camera all the way round.
 func TestQuestScreenshot(t *testing.T) { questScreenshot(t, "quest") }
 
-// TestQuestScreenshotPS is TestQuestScreenshot on exp/examples/quest, the
-// program on the exp/ps API, which must draw the same pictures; the
-// other quest tests have the same.
-func TestQuestScreenshotPS(t *testing.T) { questScreenshot(t, "quest-ps") }
-
 func questScreenshot(t *testing.T, name string) {
 	parallel(t)
 	m := bootExample(t, name)
@@ -385,8 +380,7 @@ func questScreenshot(t *testing.T, name string) {
 // lines come a letter a frame, then the box waits with its arrow, Cross
 // scrolls the last line in, and Cross closes the box, leaving the chest
 // open; opened again, it is empty.
-func TestQuestChest(t *testing.T)   { questChest(t, "quest") }
-func TestQuestChestPS(t *testing.T) { questChest(t, "quest-ps") }
+func TestQuestChest(t *testing.T) { questChest(t, "quest") }
 
 func questChest(t *testing.T, name string) {
 	parallel(t)
@@ -430,8 +424,7 @@ func questChest(t *testing.T, name string) {
 // house's doorway, in its far side, and down through
 // it into the room inside, for a picture of the villager and the bed, and
 // on to the villager, who says their line.
-func TestQuestMeadow(t *testing.T)   { questMeadow(t, "quest") }
-func TestQuestMeadowPS(t *testing.T) { questMeadow(t, "quest-ps") }
+func TestQuestMeadow(t *testing.T) { questMeadow(t, "quest") }
 
 func questMeadow(t *testing.T, name string) {
 	parallel(t)
@@ -495,10 +488,6 @@ func questMeadow(t *testing.T, name string) {
 // file the program loaded, as the Room panel does, which the program
 // places again, so that the wall stops her.
 func TestQuestLive(t *testing.T) { questLive(t, "quest", "go.chrisrx.dev/psx/scene.live") }
-
-// TestQuestLivePS is TestQuestLive on exp/examples/quest, whose scene
-// package, exp/ps/scene, has a live record of its own.
-func TestQuestLivePS(t *testing.T) { questLive(t, "quest-ps", "go.chrisrx.dev/psx/exp/ps/scene.live") }
 
 func questLive(t *testing.T, program, liveSym string) {
 	parallel(t)
@@ -633,10 +622,6 @@ func TestSceneLive(t *testing.T) {
 // level is by writing its position between frames.
 func TestJumpcube(t *testing.T) { jumpcube(t, "jumpcube") }
 
-// TestJumpcubePS is TestJumpcube on exp/examples/jumpcube, the program
-// on the exp/ps API, which must draw the same pictures.
-func TestJumpcubePS(t *testing.T) { jumpcube(t, "jumpcube-ps") }
-
 func jumpcube(t *testing.T, name string) {
 	parallel(t)
 	m := bootExample(t, name)
@@ -721,8 +706,8 @@ func TestSquareScreenshot(t *testing.T) { squareScreenshot(t, "square") }
 // the resident library (task build:disc:resident NAME=square).
 func TestSquareScreenshotResident(t *testing.T) { squareScreenshot(t, "square-resident") }
 
-// TestGalleryScreenshotPS checks exp/examples/gallery, one of everything
-// the exp/ps API draws, against its own picture.
+// TestGalleryScreenshotPS checks yaroze/internal/examples/gallery, one of everything
+// the yaroze package's Go API draws, against its own picture.
 func TestGalleryScreenshotPS(t *testing.T) { galleryScreenshot(t, "gallery-ps") }
 
 func galleryScreenshot(t *testing.T, name string) {
@@ -732,9 +717,9 @@ func galleryScreenshot(t *testing.T, name string) {
 	noComplaints(t, m)
 }
 
-// TestSquareScreenshotPS is TestSquareScreenshot on exp/examples/square,
-// the program written against the exp/ps API (task build:disc
-// NAME=square-ps DIR=exp/examples/square), which has to draw the same
+// TestSquareScreenshotPS is TestSquareScreenshot on yaroze/internal/examples/square,
+// the program written against the yaroze package's Go API (task build:disc
+// NAME=square-ps DIR=yaroze/internal/examples/square), which has to draw the same
 // picture.
 func TestSquareScreenshotPS(t *testing.T) { squareScreenshot(t, "square-ps") }
 
@@ -811,8 +796,8 @@ func peak(m *emutest.Machine, frames int) int {
 // names both and what they send.
 func TestPadsScreenshot(t *testing.T) { padsScreenshot(t, "pads") }
 
-// TestPadsScreenshotPS is TestPadsScreenshot on exp/examples/pads, the
-// program on the exp/ps API, which must draw the same picture.
+// TestPadsScreenshotPS is TestPadsScreenshot on yaroze/internal/examples/pads, the
+// program on the yaroze package's Go API, which must draw the same picture.
 func TestPadsScreenshotPS(t *testing.T) { padsScreenshot(t, "pads-ps") }
 
 func padsScreenshot(t *testing.T, name string) {
@@ -867,8 +852,8 @@ func TestCardScreenshot(t *testing.T) { cardScreenshot(t, "card") }
 // card calls go through the kernel as the resident library's did.
 func TestCardScreenshotResident(t *testing.T) { cardScreenshot(t, "card-resident") }
 
-// TestCardScreenshotPS is TestCardScreenshot on exp/examples/card, the
-// program on the exp/ps API, which must draw the same picture.
+// TestCardScreenshotPS is TestCardScreenshot on yaroze/internal/examples/card, the
+// program on the yaroze package's Go API, which must draw the same picture.
 func TestCardScreenshotPS(t *testing.T) { cardScreenshot(t, "card-ps") }
 
 func cardScreenshot(t *testing.T, name string) {
@@ -939,8 +924,8 @@ func TestCDDAScreenshot(t *testing.T) { cddaScreenshot(t, "cdda") }
 // tracks.
 func TestCDDAScreenshotResident(t *testing.T) { cddaScreenshot(t, "cdda-resident") }
 
-// TestCDDAScreenshotPS is TestCDDAScreenshot on exp/examples/cdda, the
-// program on the exp/ps API, which must draw the same picture.
+// TestCDDAScreenshotPS is TestCDDAScreenshot on yaroze/internal/examples/cdda, the
+// program on the yaroze package's Go API, which must draw the same picture.
 func TestCDDAScreenshotPS(t *testing.T) { cddaScreenshot(t, "cdda-ps") }
 
 func cddaScreenshot(t *testing.T, name string) {
@@ -983,8 +968,8 @@ func TestTimersScreenshot(t *testing.T) { timersScreenshot(t, "timers") }
 // not compared: it prints the lines the frame took, which depend on the build.
 func TestTimersScreenshotResident(t *testing.T) { timersScreenshot(t, "timers-resident") }
 
-// TestTimersScreenshotPS is TestTimersScreenshot on exp/examples/timers,
-// the program on the exp/ps API.
+// TestTimersScreenshotPS is TestTimersScreenshot on yaroze/internal/examples/timers,
+// the program on the yaroze package's Go API.
 func TestTimersScreenshotPS(t *testing.T) { timersScreenshot(t, "timers-ps") }
 
 func timersScreenshot(t *testing.T, name string) {
@@ -1018,9 +1003,9 @@ func TestTilesScreenshot(t *testing.T) { tilesScreenshot(t, "tiles") }
 // variable the test can read.
 func TestTilesScreenshotResident(t *testing.T) { tilesScreenshot(t, "tiles-resident") }
 
-// TestTilesScreenshotPS is TestTilesScreenshot on exp/examples/tiles, the
-// program written against the exp/ps API (task build:disc NAME=tiles-ps
-// DIR=exp/examples/tiles), which has to draw the same picture.
+// TestTilesScreenshotPS is TestTilesScreenshot on yaroze/internal/examples/tiles, the
+// program written against the yaroze package's Go API (task build:disc NAME=tiles-ps
+// DIR=yaroze/internal/examples/tiles), which has to draw the same picture.
 func TestTilesScreenshotPS(t *testing.T) { tilesScreenshot(t, "tiles-ps") }
 
 func tilesScreenshot(t *testing.T, name string) {

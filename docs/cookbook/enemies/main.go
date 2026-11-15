@@ -98,7 +98,7 @@ var steps = [100]uint8{
 }
 
 var (
-	screen = yaroze.Screen{Background: yaroze.CVECTOR{B: 128}, Depth: 1}
+	screen = yaroze.Screen{Background: yaroze.Color{B: 128}, Depth: 1}
 	pad    yaroze.Pad
 
 	player, enemy yaroze.GsSPRITE
@@ -146,7 +146,8 @@ func main() {
 	}
 	start()
 
-	for ot := range screen.Frames() {
+	for frame := range screen.Frames() {
+		ot := frame.OT()
 		pad.Update()
 		switch {
 		case pad.Pressed(yaroze.PADR1):
