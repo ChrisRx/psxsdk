@@ -76,6 +76,38 @@ func TestLoadUseHazardScanner(t *testing.T) {
 		0x98a30000, // lwr $3, 0($5)
 	}
 	assert.Equal(t, []string(nil), loadUseHazards(code, 0x1000, nil))
+
+	// A branch that reads the load ahead of it, which is where the compiler
+	// moves an instruction up from one of the branch's successors.
+	code = []uint32{
+		0x92210025, // lbu $1, 0x25($17)
+		0x14200003, // bnez $1, +3
+		0x00000000, // nop
+	}
+	assert.Equal(t, []string{
+		"00001000 lbu $1 is read by 00001004",
+	}, loadUseHazards(code, 0x1000, nil))
+
+	// The same loop as the compiler lays it out: an instruction from the
+	// fall-through between the load and the branch, and a load from there
+	// in the slot, which neither the target nor the call it falls through
+	// to reads.
+	code = []uint32{
+		0x92210025, // 1000 lbu $1, 0x25($17)
+		0x02202025, // 1004 move $4, $17
+		0x14200003, // 1008 bnez $1, 1018
+		0x8e650098, // 100c lw $5, 0x98($19), in the slot
+		0x0c000400, // 1010 jal 1000
+		0x24060001, // 1014 addiu $6, $zero, 1
+		0x26310028, // 1018 addiu $17, $17, 40
+	}
+	assert.Equal(t, []string(nil), loadUseHazards(code, 0x1000, nil))
+
+	// And with the target reading it.
+	code[6] = 0x00a01025 // 1018 move $2, $5
+	assert.Equal(t, []string{
+		"0000100c lw $5 is read by 00001018, the target of 00001008",
+	}, loadUseHazards(code, 0x1000, nil))
 }
 
 // scanLoadUseHazards reads the executable sections of the ELF at path.
