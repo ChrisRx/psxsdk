@@ -58,9 +58,9 @@ type tileMapImpl struct {
 //		bg.Draw(frame, 1)
 //	}
 //
-// Blend is read by Init; the rest can change between frames. A
-// Background starts with the library's own layout, with its unused fields
-// hidden, so drawing one copies nothing.
+// Any of them can change between frames, Blend included. A Background
+// starts with the library's own layout, with its unused fields hidden, so
+// drawing one copies nothing.
 type Background struct {
 	attribute        uint32
 	X, Y             int16
@@ -117,7 +117,25 @@ func (bg *Background) InitBuffer(s *Screen, m *TileMap, work []uint32) {
 }
 
 // Draw puts the background on the frame at depth.
-func (bg *Background) Draw(f *Frame, depth int) { sortBackground(bg, f, depth) }
+func (bg *Background) Draw(f *Frame, depth int) {
+	bg.repack()
+	sortBackground(bg, f, depth)
+}
+
+// pack sets the blend in the attribute word, beside the cells' color
+// depth that InitBuffer put there, as Sprite.pack does. The library reads
+// whether the cells are blended at all, the attribute's bit 30, only when it
+// prepares the packets, and the rate on every Draw, so a blend turned on or
+// off prepares them again.
+//
+//go:onstore Blend
+func (bg *Background) pack() {
+	old := bg.attribute
+	bg.attribute = old&^(7<<28) | bg.Blend.attribute()
+	if (old^bg.attribute)&(1<<30) != 0 && bg.work != nil {
+		initBackground(bg)
+	}
+}
 
 // MoveTo puts the window's top left corner on the screen at x, y.
 func (bg *Background) MoveTo(x, y int) { bg.X, bg.Y = int16(x), int16(y) }

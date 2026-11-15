@@ -9,6 +9,8 @@ var generated = Table{
 		"(*Background).Draw":       {{Param: -1, Name: "bg", Until: ""}},
 		"(*Background).Init":       {{Param: -1, Name: "bg", Until: ""}},
 		"(*Background).InitBuffer": {{Param: -1, Name: "bg", Until: ""}},
+		"(*Background).pack":       {{Param: -1, Name: "bg", Until: ""}},
+		"(*Background).repack":     {{Param: -1, Name: "bg", Until: ""}},
 		"(*GsCOORDINATE2).Init":    {{Param: -1, Name: "c", Until: ""}, {Param: 0, Name: "super", Until: ""}},
 		"(*GsIMAGE).Read":          {{Param: 0, Name: "tim", Until: ""}},
 		"(*Object).Init":           {{Param: -1, Name: "o", Until: ""}},

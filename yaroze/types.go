@@ -60,8 +60,8 @@ func (t Texture) depth() uint32 { return uint32(t.Page) >> 7 & 3 << 24 }
 // Image.Sprite makes one showing the whole image.
 //
 // A Sprite starts with the library's own layout, so drawing one copies
-// nothing: Draw packs the attribute word the library reads from Blend,
-// Hidden, Unlit and the texture's color depth.
+// nothing. The attribute word the library reads is packed from Blend,
+// Unlit and the texture's color depth as they are set (see pack).
 type Sprite struct {
 	attribute uint32
 	X, Y      int16
@@ -99,7 +99,7 @@ func (sp *Sprite) Draw(f *Frame, depth int) {
 	if sp.Hidden {
 		return
 	}
-	sp.attribute = sp.pack()
+	sp.repack()
 	sortSprite(sp, f, depth)
 }
 
@@ -109,18 +109,23 @@ func (sp *Sprite) DrawFast(f *Frame, depth int) {
 	if sp.Hidden {
 		return
 	}
-	sp.attribute = sp.pack()
+	sp.repack()
 	sortFastSprite(sp, f, depth)
 }
 
-// pack is the attribute word of the sprite's blend, color depth and
-// lighting.
-func (sp *Sprite) pack() uint32 {
+// pack sets the attribute word from the sprite's blend, color depth and
+// lighting. With the compiler's onstore experiment, the compiler calls it
+// after each store to the fields named below, wherever the program sets
+// them, so that Draw has nothing to pack; without it, Draw calls it
+// (repack).
+//
+//go:onstore Blend Unlit Texture
+func (sp *Sprite) pack() {
 	attr := sp.Blend.attribute() | sp.Texture.depth()
 	if sp.Unlit {
 		attr |= attrUnlit
 	}
-	return attr
+	sp.attribute = attr
 }
 
 // MoveTo puts the sprite's pivot at x, y. The layout's fields are 16 bits,
@@ -134,7 +139,7 @@ func (sp *Sprite) Position() (x, y int) { return int(sp.X), int(sp.Y) }
 func (sp *Sprite) Size() (w, h int) { return int(sp.W), int(sp.H) }
 
 // A Box is a filled rectangle of one color. Like a Sprite, it starts with
-// the library's layout, and Draw packs the attribute word.
+// the library's layout, and its attribute word is packed from Blend.
 type Box struct {
 	attribute uint32
 	X, Y      int16
@@ -154,9 +159,14 @@ func (b *Box) Draw(f *Frame, depth int) {
 	if b.Hidden {
 		return
 	}
-	b.attribute = b.Blend.attribute()
+	b.repack()
 	sortBox(b, f, depth)
 }
+
+// pack sets the attribute word from the box's blend, as Sprite.pack does.
+//
+//go:onstore Blend
+func (b *Box) pack() { b.attribute = b.Blend.attribute() }
 
 // MoveTo puts the box's top left corner at x, y.
 func (b *Box) MoveTo(x, y int) { b.X, b.Y = int16(x), int16(y) }
@@ -202,9 +212,14 @@ func (l *Line) Draw(f *Frame, depth int) {
 	if l.Hidden {
 		return
 	}
-	l.attribute = l.Blend.attribute()
+	l.repack()
 	sortLine(l, f, depth)
 }
+
+// pack sets the attribute word from the line's blend, as Sprite.pack does.
+//
+//go:onstore Blend
+func (l *Line) pack() { l.attribute = l.Blend.attribute() }
 
 // SetEnds puts the line's ends at x0, y0 and x1, y1.
 func (l *Line) SetEnds(x0, y0, x1, y1 int) {
@@ -233,9 +248,14 @@ func (l *GradientLine) Draw(f *Frame, depth int) {
 	if l.Hidden {
 		return
 	}
-	l.attribute = l.Blend.attribute()
+	l.repack()
 	sortGradientLine(l, f, depth)
 }
+
+// pack sets the attribute word from the line's blend, as Sprite.pack does.
+//
+//go:onstore Blend
+func (l *GradientLine) pack() { l.attribute = l.Blend.attribute() }
 
 // SetEnds puts the line's ends at x0, y0 and x1, y1.
 func (l *GradientLine) SetEnds(x0, y0, x1, y1 int) {
