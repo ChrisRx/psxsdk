@@ -55,7 +55,7 @@ func main() {
 	// as well, so the text and the box are placed from the corner Bounds
 	// gives.
 	yaroze.GsInit3D()
-	b := screen.Bounds().RECT()
+	b := yaroze.ToRECT(screen.Bounds())
 	screen.Font(int(b.X)+16, int(b.Y)+16, 256, 64, 512)
 	box.X, box.Y = b.X+24, b.Y+b.H-64
 	bar.X, bar.Y = b.X+b.W/2-100, b.Y+b.H/2

@@ -99,7 +99,7 @@ var opts = struct {
 	Static:   "web/static",
 	Starters: "jumpcube,quest",
 	Goldens:  "tests/testdata",
-	API:      "yaroze,scene,stage,disc,archive",
+	API:      "yaroze,input,geom,scene,stage,disc,archive",
 	Out:      ".build/site",
 	Repo:     "https://github.com/ChrisRx/psxsdk",
 	Name:     "psxsdk",

@@ -1,20 +1,13 @@
 package yaroze
 
-import "unsafe"
+import (
+	"unsafe"
+
+	"go.chrisrx.dev/psx/geom"
+)
 
 // 3D: models from TMD files, placed as objects in the world, seen by a
 // camera under lights, and drawn on a frame like anything else.
-
-// A Vector is a position in the world, in a model's own units.
-type Vector struct {
-	X, Y, Z int
-}
-
-// A Rotation is a turn about each axis, with 4096 a whole turn, applied
-// about X, then Y, then Z.
-type Rotation struct {
-	X, Y, Z int
-}
 
 // A Model is a TMD file in memory, mapped by LoadTMD: the models an
 // Object can be linked to, numbered from 0.
@@ -60,7 +53,7 @@ func Vertices(words []uint32) []Vertex {
 // whole of it, through the GTE: the vertex animation of a model blended
 // towards another shape, as a set of differences describes it. The
 // shorter slice says how many.
-func Blend(vertices, diffs []Vertex, p Fixed) {
+func Blend(vertices, diffs []Vertex, p geom.Fixed) {
 	n := min(len(vertices), len(diffs))
 	if n > 0 {
 		blend(&vertices[0], &diffs[0], n, p)
@@ -88,14 +81,14 @@ type Object struct {
 
 	// Position is where the object is in its parent's coordinates, the
 	// world's for one with no parent.
-	Position Vector
+	Position geom.Vector
 
 	// Rotation is how it is turned.
-	Rotation Rotation
+	Rotation geom.Rotation
 
 	// Scale is its size along each axis, with 4096 as 1.0. The zero
 	// value leaves it unscaled.
-	Scale Vector
+	Scale geom.Vector
 
 	obj   objectImpl
 	coord coordImpl
@@ -122,7 +115,7 @@ func (o *Object) Link(m Model, n int) { linkObject(&o.obj, m, n) }
 // with the one to the screen, and Sort; a program that lights or places
 // a model another way calls those itself.
 func (o *Object) Draw(f *Frame) {
-	var world, screen Matrix
+	var world, screen geom.Matrix
 	o.Transform(&world, &screen)
 	SetLightMatrix(&world)
 	SetScreenMatrix(&screen)
@@ -132,7 +125,7 @@ func (o *Object) Draw(f *Frame) {
 // Transform makes the object's matrix from Position, Rotation and
 // Scale, and works out its matrices to the world and to the screen,
 // through its parents, into world and screen.
-func (o *Object) Transform(world, screen *Matrix) { objectMatrices(o, world, screen) }
+func (o *Object) Transform(world, screen *geom.Matrix) { objectMatrices(o, world, screen) }
 
 // Sort sorts the object's model into the frame with the lights and the
 // screen matrix as they are set.
@@ -140,29 +133,18 @@ func (o *Object) Sort(f *Frame) { sortObject(o, f) }
 
 // SetLightMatrix turns the lights by m for the models drawn after it,
 // which Draw does with the model's matrix to the world.
-func SetLightMatrix(m *Matrix) { setLightMatrix(m) }
+func SetLightMatrix(m *geom.Matrix) { setLightMatrix(m) }
 
 // SetScreenMatrix sets the matrix the models drawn after it are
 // projected by, which Draw does with the model's matrix to the screen.
-func SetScreenMatrix(m *Matrix) { setScreenMatrix(m) }
-
-// A Matrix is a rotation and a translation as the GTE takes them: the
-// rotation M in 4.12, with the rotation about Y that turns a camera
-// behind a figure having the sine and cosine of the angle at M[0][2]
-// and M[0][0], and the translation T. Object.Transform fills one, and
-// Rotate sets its rotation.
-type Matrix struct {
-	M [3][3]int16
-	_ [2]byte
-	T [3]int32
-}
+func SetScreenMatrix(m *geom.Matrix) { setScreenMatrix(m) }
 
 // The library's own layouts, which an Object holds: a coordinate system
 // and a drawn object.
 type (
 	coordImpl struct {
 		flg          uint32
-		coord, workm Matrix
+		coord, workm geom.Matrix
 		param        uintptr
 		super, sub   *coordImpl
 	}
@@ -179,7 +161,7 @@ type (
 // Distance away from the eye, which is the projection. Set makes it the
 // camera the frames are drawn with.
 type Camera struct {
-	Eye, Target Vector
+	Eye, Target geom.Vector
 	Roll        int
 	Distance    int
 }
@@ -191,7 +173,7 @@ func (c *Camera) Set() { setCamera(c) }
 // of a color. The library has three, numbered 0 to 2, which SetLight
 // sets.
 type Light struct {
-	Direction Vector
+	Direction geom.Vector
 	Color     Color
 }
 
@@ -199,9 +181,9 @@ type Light struct {
 // and the light stays as it was.
 func SetLight(n int, l Light) { setLight(n, l) }
 
-// SetAmbient sets the light from everywhere, each component a Fixed of
+// SetAmbient sets the light from everywhere, each component a geom.Fixed of
 // One for full.
-func SetAmbient(r, g, b Fixed) { setAmbient(r, g, b) }
+func SetAmbient(r, g, b geom.Fixed) { setAmbient(r, g, b) }
 
 // A Fog fades lit faces into a color with their distance: nothing of it
 // nearer than Near, all of it at Far, and a Far of 0 for a fog that

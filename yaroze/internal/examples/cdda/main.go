@@ -15,6 +15,7 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -32,7 +33,7 @@ var (
 		Background: yaroze.Color{R: 10, G: 40, B: 40},
 		Depth:      1,
 	}
-	pad yaroze.Pad
+	pad input.Controller
 
 	// tracks is the list the tracks are played from, their numbers.
 	tracks [3]int
@@ -72,15 +73,15 @@ func main() {
 	for frame := range screen.Frames() {
 		pad.Update()
 		switch {
-		case pad.Pressed(yaroze.Left) && chosen > 0:
+		case pad.Pressed(input.Left) && chosen > 0:
 			chosen--
-		case pad.Pressed(yaroze.Right) && chosen < 2:
+		case pad.Pressed(input.Right) && chosen < 2:
 			chosen++
-		case pad.Pressed(yaroze.Cross):
+		case pad.Pressed(input.Cross):
 			yaroze.PlayTracks(tracks[:], chosen)
-		case pad.Pressed(yaroze.Triangle):
+		case pad.Pressed(input.Triangle):
 			yaroze.LoopTracks(tracks[:], chosen)
-		case pad.Pressed(yaroze.Circle):
+		case pad.Pressed(input.Circle):
 			yaroze.StopTracks()
 		}
 		playing = yaroze.PlayingTrack()

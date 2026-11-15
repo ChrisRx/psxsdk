@@ -10,6 +10,7 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/geom"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -22,10 +23,10 @@ var (
 		Background:   yaroze.Color{R: 24, G: 28, B: 48},
 		Depth:        8,
 		Packets:      32 << 10,
-		Center:       true,
+		Origin:       yaroze.ScreenOriginMiddle,
 		OverlayDepth: 2,
 	}
-	bounds yaroze.Rect
+	bounds geom.Rect
 	text   yaroze.Text
 	kanji  yaroze.KanjiText
 
@@ -33,9 +34,23 @@ var (
 	sprites [5]yaroze.Sprite
 
 	boxes = [3]yaroze.Box{
-		{W: 40, H: 24, Color: yaroze.Color{R: 220, G: 80, B: 60}},
-		{W: 40, H: 24, Mode: yaroze.Translucent, Color: yaroze.Color{R: 60, G: 220, B: 80}},
-		{W: 40, H: 24, Mode: yaroze.Translucent | yaroze.Add, Color: yaroze.Color{R: 60, G: 80, B: 220}},
+		{
+			W:     40,
+			H:     24,
+			Color: yaroze.Color{R: 220, G: 80, B: 60},
+		},
+		{
+			W:     40,
+			H:     24,
+			Color: yaroze.Color{R: 60, G: 220, B: 80},
+			Blend: yaroze.BlendAverage,
+		},
+		{
+			W:     40,
+			H:     24,
+			Color: yaroze.Color{R: 60, G: 80, B: 220},
+			Blend: yaroze.BlendAdd,
+		},
 	}
 	lines = [3]yaroze.Line{
 		{Color: yaroze.Color{R: 255, G: 255, B: 255}},
@@ -93,7 +108,7 @@ func main() {
 		gradient.Draw(frame, 50)
 		packets(frame)
 
-		cube.Rotation = yaroze.Rotation{X: 400, Y: 600, Z: 200}
+		cube.Rotation = geom.Rotation{X: 400, Y: 600, Z: 200}
 		cube.Draw(frame)
 
 		panel.Draw(frame.Overlay(), 0)
@@ -110,15 +125,14 @@ func setup() {
 	}
 	sprites[0].MoveTo(b.X+8, b.Y+44)
 	sprites[1].MoveTo(b.X+76, b.Y+44)
-	sprites[1].ScaleX, sprites[1].ScaleY = yaroze.One/2, yaroze.One/2
+	sprites[1].ScaleX, sprites[1].ScaleY = geom.One/2, geom.One/2
 	sprites[2].MoveTo(b.X+144, b.Y+76)
-	sprites[2].Pivot = yaroze.Point{X: 32, Y: 32}
-	sprites[2].Rotate = yaroze.Degrees(45)
+	sprites[2].Pivot = geom.Point{X: 32, Y: 32}
+	sprites[2].Rotate = geom.Degrees(45)
 	sprites[3].MoveTo(b.X+180, b.Y+44)
 	sprites[3].Color = yaroze.Color{R: 255, G: 64, B: 64}
-	sprites[3].Mode |= yaroze.Translucent
+	sprites[3].Blend = yaroze.BlendAverage
 	sprites[4].MoveTo(b.X+248, b.Y+44)
-	sprites[4].Mode |= yaroze.Upright
 
 	for i := range boxes {
 		boxes[i].MoveTo(b.X+8+i*20, b.Y+96+i*8)
@@ -141,11 +155,11 @@ func setup() {
 	model := yaroze.LoadTMD(cubeTMD.Data())
 	cube.Init(nil)
 	cube.Link(model, 0)
-	cube.Position = yaroze.Vector{X: -190, Y: 125}
-	camera := yaroze.Camera{Eye: yaroze.Vector{Z: -1000}, Distance: 320}
+	cube.Position = geom.Vector{X: -190, Y: 125}
+	camera := yaroze.Camera{Eye: geom.Vector{Z: -1000}, Distance: 320}
 	camera.Set()
-	yaroze.SetLight(0, yaroze.Light{Direction: yaroze.Vector{X: 1, Y: 1, Z: 1}, Color: yaroze.Color{R: 0xc0, G: 0xc0, B: 0xc0}})
-	yaroze.SetAmbient(yaroze.One/4, yaroze.One/4, yaroze.One/4)
+	yaroze.SetLight(0, yaroze.Light{Direction: geom.Vector{X: 1, Y: 1, Z: 1}, Color: yaroze.Color{R: 0xc0, G: 0xc0, B: 0xc0}})
+	yaroze.SetAmbient(geom.One/4, geom.One/4, geom.One/4)
 	yaroze.SetFog(yaroze.Fog{Near: 600, Far: 1600, Color: yaroze.Color{R: 200, G: 200, B: 255}})
 
 	panel.MoveTo(b.X+250, b.Y+220)

@@ -2,7 +2,10 @@
 
 package scene
 
-import "go.chrisrx.dev/psx/yaroze"
+import (
+	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/yaroze"
+)
 
 // setup makes the library's calls for what parse read: the textures into
 // video memory, the models mapped, the objects linked and the camera and
@@ -35,7 +38,7 @@ func (s *Scene) setup() {
 	// room's, drawn through the program's own camera: it leaves the
 	// camera, the projection and the lights as the program set them.
 	c := &s.Camera
-	if c.Eye == (yaroze.Vector{}) && c.Target == (yaroze.Vector{}) {
+	if c.Eye == (geom.Vector{}) && c.Target == (geom.Vector{}) {
 		return
 	}
 	c.Set()

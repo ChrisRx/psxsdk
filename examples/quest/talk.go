@@ -1,6 +1,9 @@
 package main
 
-import "go.chrisrx.dev/psx/yaroze"
+import (
+	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/yaroze"
+)
 
 // The text box, as Dragon Quest VII's: a box along the bottom of the
 // screen with a white border and the scene darkened behind it, in which
@@ -80,20 +83,20 @@ var talk textBox
 
 // setup cuts the letter sprite from the sheet and lays out the box at
 // the bottom of the screen.
-func (t *textBox) setup(b yaroze.Rect) {
+func (t *textBox) setup(b geom.Rect) {
 	t.glyph = yaroze.LoadTIM(fontTIM.Data()).Sprite()
 	t.glyph.W, t.glyph.H = cellW, cellH
-	t.glyph.Pivot = yaroze.Point{}
+	t.glyph.Pivot = geom.Point{}
 	t.x, t.y = b.X+(b.W-boxW)/2, b.Y+b.H-8-boxH
 	x, y := t.x, t.y
 	const w, h = boxW, boxH
 	// Semi-transparent, taking its color from what is under it, so the
 	// scene shows through darkly.
 	t.back = yaroze.Box{
-		Mode:  yaroze.Translucent | yaroze.Subtract,
 		Color: yaroze.Color{R: 150, G: 150, B: 150},
+		Blend: yaroze.BlendSubtract,
 	}
-	t.back.SetRect(yaroze.Rect{
+	t.back.SetRect(geom.Rect{
 		X: x,
 		Y: y,
 		W: w,
@@ -101,7 +104,7 @@ func (t *textBox) setup(b yaroze.Rect) {
 	})
 	white := func(n, x, y, w, h int) {
 		t.edges[n] = yaroze.Box{Color: yaroze.Color{R: 255, G: 255, B: 255}}
-		t.edges[n].SetRect(yaroze.Rect{
+		t.edges[n].SetRect(geom.Rect{
 			X: x,
 			Y: y,
 			W: w,
@@ -110,7 +113,7 @@ func (t *textBox) setup(b yaroze.Rect) {
 	}
 	dark := func(n, x, y, w, h int) {
 		t.edges[n] = yaroze.Box{Color: yaroze.Color{R: 40, G: 40, B: 48}}
-		t.edges[n].SetRect(yaroze.Rect{
+		t.edges[n].SetRect(geom.Rect{
 			X: x,
 			Y: y,
 			W: w,

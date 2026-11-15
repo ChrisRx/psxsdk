@@ -55,6 +55,7 @@ import (
 
 	"go.chrisrx.dev/psx/archive"
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/geom"
 	"go.chrisrx.dev/psx/internal/volatile"
 	"go.chrisrx.dev/psx/stage"
 	"go.chrisrx.dev/psx/yaroze"
@@ -155,7 +156,7 @@ type Scene struct {
 	// Camera is the file's camera, with its Distance the projection, and
 	// Ambient the light from everywhere, each a Fixed.
 	Camera  yaroze.Camera
-	Ambient [3]yaroze.Fixed
+	Ambient [3]geom.Fixed
 	Lights  [MaxLights]yaroze.Light
 	NLights int
 
@@ -485,7 +486,7 @@ func (s *Scene) parse(data []uint32, src Source) error {
 	s.nLayers = 0
 	s.hasRoom = false
 	for i := range s.Ambient {
-		s.Ambient[i] = yaroze.Fixed(data[ambientAt+i])
+		s.Ambient[i] = geom.Fixed(data[ambientAt+i])
 	}
 	cam := data[cameraAt:]
 	s.Camera = yaroze.Camera{
@@ -530,7 +531,7 @@ func (s *Scene) parse(data []uint32, src Source) error {
 		copyName(&s.objectNames[i], r[:nameWords])
 		o := &s.Objects[i]
 		o.Position = vector(r[6:9])
-		o.Rotation = yaroze.Rotation{X: int(int16(r[9])), Y: int(int16(r[9] >> 16)), Z: int(int16(r[10]))}
+		o.Rotation = geom.Rotation{X: int(int16(r[9])), Y: int(int16(r[9] >> 16)), Z: int(int16(r[10]))}
 		o.Scale = vector(r[11:14])
 		if int(r[4]) >= nm {
 			return ErrFormat
@@ -548,14 +549,20 @@ func (s *Scene) parse(data []uint32, src Source) error {
 			return ErrFormat
 		}
 		sp := &s.Sprites[i]
-		sp.Mode = yaroze.Mode(r[5])
 		sp.X, sp.Y = int16(r[6]), int16(r[6]>>16)
 		sp.W, sp.H = uint16(r[7]), uint16(r[7]>>16)
-		sp.Texture = yaroze.Texture{Page: uint16(r[8]), U: uint8(r[8] >> 16), V: uint8(r[8] >> 24), CX: int16(r[9]), CY: int16(r[9] >> 16)}
+		sp.Texture = yaroze.Texture{
+			Page: uint16(r[8]),
+			U:    uint8(r[8] >> 16),
+			V:    uint8(r[8] >> 24),
+			CX:   int16(r[9]),
+			CY:   int16(r[9] >> 16),
+		}
+		setAttribute(sp, r[5])
 		sp.Color = yaroze.Color{R: uint8(r[10]), G: uint8(r[10] >> 8), B: uint8(r[10] >> 16)}
-		sp.Pivot = yaroze.Point{X: int16(r[11]), Y: int16(r[11] >> 16)}
-		sp.ScaleX, sp.ScaleY = yaroze.Fixed(r[12]), yaroze.Fixed(r[12]>>16)
-		sp.Rotate = yaroze.Angle(r[13])
+		sp.Pivot = geom.Point{X: int16(r[11]), Y: int16(r[11] >> 16)}
+		sp.ScaleX, sp.ScaleY = geom.Fixed(r[12]), geom.Fixed(r[12]>>16)
+		sp.Rotate = geom.Angle(r[13])
 		at += spriteWords
 	}
 	for k := range nLayers {
@@ -768,6 +775,20 @@ func (s *Scene) Object(name string) *yaroze.Object {
 	return nil
 }
 
+// setAttribute sets the sprite's fields from the library's attribute word,
+// which the file keeps as GsSPRITE does: the blend in bits 28 to 30, the
+// color depth in bits 24 and 25, which goes into the texture's page, unlit
+// in bit 6 and hidden in bit 31.
+func setAttribute(sp *yaroze.Sprite, attr uint32) {
+	sp.Blend = yaroze.BlendNone
+	if attr&(1<<30) != 0 {
+		sp.Blend = yaroze.BlendAverage + yaroze.BlendMode(attr>>28&3)
+	}
+	sp.Texture.Page = sp.Texture.Page&^(3<<7) | uint16(attr>>24&3)<<7
+	sp.Unlit = attr&(1<<6) != 0
+	sp.Hidden = attr&(1<<31) != 0
+}
+
 // Sprite returns the sprite the file names so, or nil.
 func (s *Scene) Sprite(name string) *yaroze.Sprite {
 	for i := range s.NSprites {
@@ -785,8 +806,8 @@ func (s *Scene) ObjectName(i int) string { return nameString(&s.objectNames[i]) 
 func (s *Scene) SpriteName(i int) string { return nameString(&s.spriteNames[i]) }
 
 // vector reads three signed words as a vector.
-func vector(w []uint32) yaroze.Vector {
-	return yaroze.Vector{
+func vector(w []uint32) geom.Vector {
+	return geom.Vector{
 		X: int(int32(w[0])),
 		Y: int(int32(w[1])),
 		Z: int(int32(w[2])),

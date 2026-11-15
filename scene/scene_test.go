@@ -3,15 +3,15 @@ package scene
 import (
 	"encoding/binary"
 	"go.chrisrx.dev/psx/archive"
+	"go.chrisrx.dev/psx/disc"
 	farchive "go.chrisrx.dev/psx/format/archive"
+	format "go.chrisrx.dev/psx/format/scene"
+	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/stage"
+	"go.chrisrx.dev/psx/yaroze"
 	"testing"
 
 	"go.chrisrx.dev/x/assert"
-
-	"go.chrisrx.dev/psx/disc"
-	format "go.chrisrx.dev/psx/format/scene"
-	"go.chrisrx.dev/psx/stage"
-	"go.chrisrx.dev/psx/yaroze"
 )
 
 func words(b []byte) []uint32 {
@@ -65,14 +65,14 @@ func TestLoad(t *testing.T) {
 
 	got := struct {
 		Camera     yaroze.Camera
-		Ambient    [3]yaroze.Fixed
+		Ambient    [3]geom.Fixed
 		NLights    int
 		Light0     yaroze.Light
 		Light1RGB  yaroze.Color
 		Counts     [4]int
-		Cube       yaroze.Vector
-		CubeRot    yaroze.Rotation
-		CubeScale  yaroze.Vector
+		Cube       geom.Vector
+		CubeRot    geom.Rotation
+		CubeScale  geom.Vector
 		Names      [2]string
 		Second     *yaroze.Object
 		None       *yaroze.Object
@@ -98,19 +98,36 @@ func TestLoad(t *testing.T) {
 	}
 	cubeData[0], stoneData[0] = 0x41, 0x10
 	want := got
-	want.Camera = yaroze.Camera{Eye: yaroze.Vector{X: 0, Y: -200, Z: -1000}, Target: yaroze.Vector{X: 0, Y: 0, Z: 50}, Roll: 3, Distance: 320}
-	want.Ambient = [3]yaroze.Fixed{1024, 512, 256}
+	want.Camera = yaroze.Camera{Eye: geom.Vector{X: 0, Y: -200, Z: -1000}, Target: geom.Vector{X: 0, Y: 0, Z: 50}, Roll: 3, Distance: 320}
+	want.Ambient = [3]geom.Fixed{1024, 512, 256}
 	want.NLights = 2
-	want.Light0 = yaroze.Light{Direction: yaroze.Vector{X: 1, Y: 1, Z: 1}, Color: yaroze.Color{R: 0xc0, G: 0xc0, B: 0xc0}}
+	want.Light0 = yaroze.Light{Direction: geom.Vector{X: 1, Y: 1, Z: 1}, Color: yaroze.Color{R: 0xc0, G: 0xc0, B: 0xc0}}
 	want.Light1RGB = yaroze.Color{R: 0x40, G: 0x40, B: 0x80}
 	want.Counts = [4]int{1, 1, 2, 1}
-	want.Cube = yaroze.Vector{X: 10, Y: -20, Z: 300}
-	want.CubeRot = yaroze.Rotation{X: 0, Y: 512, Z: -4}
-	want.CubeScale = yaroze.Vector{X: 4096, Y: 2048, Z: 4096}
+	want.Cube = geom.Vector{X: 10, Y: -20, Z: 300}
+	want.CubeRot = geom.Rotation{X: 0, Y: 512, Z: -4}
+	want.CubeScale = geom.Vector{X: 4096, Y: 2048, Z: 4096}
 	want.Names = [2]string{"cube", "second cube"}
 	want.Second = &s.Objects[1]
 	want.None = nil
-	want.Sprite = yaroze.Sprite{Mode: 1 << 24, X: 10, Y: -20, W: 64, H: 32, Texture: yaroze.Texture{Page: 0xa, U: 3, V: 7, CX: 16, CY: 480}, Color: yaroze.Color{R: 128, G: 100, B: 90}, Pivot: yaroze.Point{X: 2, Y: 3}, ScaleX: 4096, ScaleY: 2048, Rotate: 90 * 4096}
+	want.Sprite = yaroze.Sprite{
+		X: 10,
+		Y: -20,
+		W: 64,
+		H: 32,
+		Texture: yaroze.Texture{
+			Page: 1<<7 | 0xa, // the attribute's 8 bits a pixel
+			U:    3,
+			V:    7,
+			CX:   16,
+			CY:   480,
+		},
+		Color:  yaroze.Color{R: 128, G: 100, B: 90},
+		Pivot:  geom.Point{X: 2, Y: 3},
+		ScaleX: 4096,
+		ScaleY: 2048,
+		Rotate: 90 * 4096,
+	}
 	want.SpriteName = "badge"
 	want.Texture0 = 0x10
 	want.Model0 = 0x41
@@ -369,4 +386,20 @@ func TestArchive(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, ErrMissing, s.Load(nil, words(b), src))
 	assert.Equal(t, "ASSETS/ELSEWHERE.TIM", s.Missing)
+}
+
+// TestSpriteAttribute checks the file's attribute word taken apart into
+// the sprite's fields.
+func TestSpriteAttribute(t *testing.T) {
+	var sp yaroze.Sprite
+	sp.Texture.Page = 2<<7 | 0x15
+	setAttribute(&sp, 1<<31|1<<30|3<<28|1<<27|1<<24|1<<6)
+	assert.Equal(t, yaroze.BlendQuarter, sp.Blend)
+	assert.Equal(t, uint16(1<<7|0x15), sp.Texture.Page)
+	assert.Equal(t, true, sp.Unlit)
+	assert.Equal(t, true, sp.Hidden)
+	setAttribute(&sp, 2<<28)
+	assert.Equal(t, yaroze.BlendNone, sp.Blend, "a rate without the blend bit")
+	assert.Equal(t, uint16(0x15), sp.Texture.Page)
+	assert.Equal(t, false, sp.Hidden)
 }

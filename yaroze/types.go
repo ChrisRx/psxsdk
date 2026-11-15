@@ -1,91 +1,72 @@
 package yaroze
 
+import "go.chrisrx.dev/psx/geom"
+
 // A Color is a color as the GPU takes it, a byte a component.
 type Color struct {
 	R, G, B uint8
 }
 
-// A Point is a position on the screen.
-type Point struct {
-	X, Y int16
-}
-
-// A Rect is a rectangle on the screen or in video memory.
-type Rect struct {
-	X, Y int
-	W, H int
-}
-
-// Overlaps says whether the two rectangles share any pixel.
-func (r Rect) Overlaps(o Rect) bool {
-	return r.X < o.X+o.W && o.X < r.X+r.W && r.Y < o.Y+o.H && o.Y < r.Y+r.H
-}
-
-// A Mode is how a sprite or a box is drawn: a set of the Mode bits.
-type Mode uint32
+// A BlendMode is how a sprite, a box or a line is blended with what is
+// behind it. Its values are the library's attribute word's bits 28 to 30,
+// the blend and its rate, which Draw shifts into place.
+type BlendMode uint8
 
 const (
-	// Translucent blends the sprite with what is behind it, by the blend
-	// in the mode: Average unless Add, Subtract or Quarter is set.
-	Translucent Mode = 1 << 30
+	// BlendNone draws it over what is behind it.
+	BlendNone BlendMode = 0
 
-	// Average, the blend when no other is set, takes half the sprite and
-	// half the background; Add adds the sprite to the background,
-	// Subtract takes it away, and Quarter adds a quarter of it.
-	Average  Mode = 0 << 28
-	Add      Mode = 1 << 28
-	Subtract Mode = 2 << 28
-	Quarter  Mode = 3 << 28
+	// BlendAverage takes half of it and half of what is behind it.
+	BlendAverage BlendMode = 4
 
-	// Unlit draws the texture's colors as they are, ignoring Color.
-	Unlit Mode = 1 << 6
+	// BlendAdd adds it to what is behind it.
+	BlendAdd BlendMode = 5
 
-	// Upright skips rotation and scaling, which is faster, for a sprite
-	// that has neither.
-	Upright Mode = 1 << 27
+	// BlendSubtract takes it away from what is behind it.
+	BlendSubtract BlendMode = 6
 
-	// Hidden leaves the sprite undrawn.
-	Hidden Mode = 1 << 31
-
-	// The texture's color depth, which Image.Sprite sets: 4 bits a pixel,
-	// 8, or 16.
-	Depth4  Mode = 0 << 24
-	Depth8  Mode = 1 << 24
-	Depth16 Mode = 2 << 24
+	// BlendQuarter adds a quarter of it to what is behind it.
+	BlendQuarter BlendMode = 7
 )
 
-// A Fixed is a number with twelve bits of fraction: One is 1.0.
-type Fixed int16
+// attrUnlit is the bit of the library's attribute word that leaves a
+// sprite's Color out, which its Draw sets for Unlit.
+const attrUnlit = 1 << 6
 
-// One is 1.0 as a Fixed.
-const One Fixed = 4096
-
-// An Angle is a turn in units of a 4096th of a degree.
-type Angle int32
-
-// Degrees returns the angle of d degrees.
-func Degrees(d int) Angle { return Angle(d) << 12 }
+// attribute is the blend as the attribute word takes it.
+func (b BlendMode) attribute() uint32 { return uint32(b&7) << 28 }
 
 // A Texture names an image in video memory as a sprite shows it: the
 // texture page, the corner within it, and the palette. Image.Texture
 // gives one.
 type Texture struct {
-	Page   uint16
+	// Page is the texture page as the GPU takes it, as GetTPage makes
+	// it: where in video memory the image lies, and its color depth,
+	// 4, 8 or 16 bits a pixel, in bits 7 and 8.
+	Page uint16
+
+	// U and V are the image's corner within the page, and CX and CY
+	// where its palette is in video memory.
 	U, V   uint8
 	CX, CY int16
 }
+
+// depth is the texture's color depth as the attribute word takes it.
+func (t Texture) depth() uint32 { return uint32(t.Page) >> 7 & 3 << 24 }
 
 // A Sprite is a rectangle of an image drawn on the screen, scaled and
 // turned about its pivot if it has any of either. X and Y are where the
 // pivot goes; W and H are the size cut from the texture, from U, V.
 // Image.Sprite makes one showing the whole image.
 //
-// A Sprite is the library's own layout, so drawing one copies nothing.
+// A Sprite starts with the library's own layout, so drawing one copies
+// nothing: Draw packs the attribute word the library reads from Blend,
+// Hidden, Unlit and the texture's color depth.
 type Sprite struct {
-	Mode    Mode
-	X, Y    int16
-	W, H    uint16
-	Texture Texture
+	attribute uint32
+	X, Y      int16
+	W, H      uint16
+	Texture   Texture
 
 	// Color tints the sprite: 128 a component leaves it as it is.
 	Color Color
@@ -93,22 +74,54 @@ type Sprite struct {
 
 	// Pivot is the point of the sprite that X, Y places and that it is
 	// turned and scaled about, from its top left corner.
-	Pivot Point
+	Pivot geom.Point
 
 	// ScaleX and ScaleY are its size, One for its own.
-	ScaleX, ScaleY Fixed
+	ScaleX, ScaleY geom.Fixed
 
 	// Rotate turns it clockwise about the pivot.
-	Rotate Angle
+	Rotate geom.Angle
+
+	// Blend is how it is blended with what is behind it.
+	Blend BlendMode
+
+	// Hidden leaves it undrawn.
+	Hidden bool
+
+	// Unlit draws the texture's colors as they are, ignoring Color.
+	Unlit bool
 }
 
-// Draw puts the sprite on the frame at depth, 0 in front.
-func (sp *Sprite) Draw(f *Frame, depth int) { sortSprite(sp, f, depth) }
+// Draw puts the sprite on the frame at depth, 0 in front. A sprite that
+// is neither turned nor scaled is drawn the quicker way, a plain sprite
+// placed by its pivot, which the library chooses for itself.
+func (sp *Sprite) Draw(f *Frame, depth int) {
+	if sp.Hidden {
+		return
+	}
+	sp.attribute = sp.pack()
+	sortSprite(sp, f, depth)
+}
 
 // DrawFast puts the sprite on the frame at depth without its scaling
-// and rotation, with X, Y its top left corner, which is quicker than
-// Draw with Upright.
-func (sp *Sprite) DrawFast(f *Frame, depth int) { sortFastSprite(sp, f, depth) }
+// and rotation, with X, Y its top left corner, which is quicker still.
+func (sp *Sprite) DrawFast(f *Frame, depth int) {
+	if sp.Hidden {
+		return
+	}
+	sp.attribute = sp.pack()
+	sortFastSprite(sp, f, depth)
+}
+
+// pack is the attribute word of the sprite's blend, color depth and
+// lighting.
+func (sp *Sprite) pack() uint32 {
+	attr := sp.Blend.attribute() | sp.Texture.depth()
+	if sp.Unlit {
+		attr |= attrUnlit
+	}
+	return attr
+}
 
 // MoveTo puts the sprite's pivot at x, y. The layout's fields are 16 bits,
 // and MoveTo is how a program working in ints sets them.
@@ -120,17 +133,30 @@ func (sp *Sprite) Position() (x, y int) { return int(sp.X), int(sp.Y) }
 // Size returns the sprite's width and height, as cut from the texture.
 func (sp *Sprite) Size() (w, h int) { return int(sp.W), int(sp.H) }
 
-// A Box is a filled rectangle of one color.
+// A Box is a filled rectangle of one color. Like a Sprite, it starts with
+// the library's layout, and Draw packs the attribute word.
 type Box struct {
-	Mode  Mode
-	X, Y  int16
-	W, H  uint16
-	Color Color
-	_     uint8
+	attribute uint32
+	X, Y      int16
+	W, H      uint16
+	Color     Color
+	_         uint8
+
+	// Blend is how it is blended with what is behind it.
+	Blend BlendMode
+
+	// Hidden leaves it undrawn.
+	Hidden bool
 }
 
 // Draw puts the box on the frame at depth.
-func (b *Box) Draw(f *Frame, depth int) { sortBox(b, f, depth) }
+func (b *Box) Draw(f *Frame, depth int) {
+	if b.Hidden {
+		return
+	}
+	b.attribute = b.Blend.attribute()
+	sortBox(b, f, depth)
+}
 
 // MoveTo puts the box's top left corner at x, y.
 func (b *Box) MoveTo(x, y int) { b.X, b.Y = int16(x), int16(y) }
@@ -142,8 +168,8 @@ func (b *Box) Position() (x, y int) { return int(b.X), int(b.Y) }
 func (b *Box) Size() (w, h int) { return int(b.W), int(b.H) }
 
 // Rect is the box's position and size as a Rect.
-func (b *Box) Rect() Rect {
-	return Rect{
+func (b *Box) Rect() geom.Rect {
+	return geom.Rect{
 		X: int(b.X),
 		Y: int(b.Y),
 		W: int(b.W),
@@ -152,21 +178,33 @@ func (b *Box) Rect() Rect {
 }
 
 // SetRect places and sizes the box to cover r.
-func (b *Box) SetRect(r Rect) {
+func (b *Box) SetRect(r geom.Rect) {
 	b.X, b.Y, b.W, b.H = int16(r.X), int16(r.Y), uint16(r.W), uint16(r.H)
 }
 
 // A Line is a straight line of one color from one point to another.
 type Line struct {
-	Mode   Mode
-	X0, Y0 int16
-	X1, Y1 int16
-	Color  Color
-	_      uint8
+	attribute uint32
+	X0, Y0    int16
+	X1, Y1    int16
+	Color     Color
+	_         uint8
+
+	// Blend is how it is blended with what is behind it.
+	Blend BlendMode
+
+	// Hidden leaves it undrawn.
+	Hidden bool
 }
 
 // Draw puts the line on the frame at depth.
-func (l *Line) Draw(f *Frame, depth int) { sortLine(l, f, depth) }
+func (l *Line) Draw(f *Frame, depth int) {
+	if l.Hidden {
+		return
+	}
+	l.attribute = l.Blend.attribute()
+	sortLine(l, f, depth)
+}
 
 // SetEnds puts the line's ends at x0, y0 and x1, y1.
 func (l *Line) SetEnds(x0, y0, x1, y1 int) {
@@ -176,16 +214,28 @@ func (l *Line) SetEnds(x0, y0, x1, y1 int) {
 // A GradientLine is a line shaded from one color at its first point to
 // another at its second.
 type GradientLine struct {
-	Mode   Mode
-	X0, Y0 int16
-	X1, Y1 int16
-	From   Color
-	To     Color
-	_      [2]uint8
+	attribute uint32
+	X0, Y0    int16
+	X1, Y1    int16
+	From      Color
+	To        Color
+	_         [2]uint8
+
+	// Blend is how it is blended with what is behind it.
+	Blend BlendMode
+
+	// Hidden leaves it undrawn.
+	Hidden bool
 }
 
 // Draw puts the line on the frame at depth.
-func (l *GradientLine) Draw(f *Frame, depth int) { sortGradientLine(l, f, depth) }
+func (l *GradientLine) Draw(f *Frame, depth int) {
+	if l.Hidden {
+		return
+	}
+	l.attribute = l.Blend.attribute()
+	sortGradientLine(l, f, depth)
+}
 
 // SetEnds puts the line's ends at x0, y0 and x1, y1.
 func (l *GradientLine) SetEnds(x0, y0, x1, y1 int) {

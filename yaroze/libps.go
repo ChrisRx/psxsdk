@@ -5,8 +5,9 @@
 // both. The library's own functions keep their C names and signatures, so
 // a program can be written as it would be in C, from Sony's manuals and
 // samples. Beside them is a Go API: a screen drawn frame by frame, sprites
-// and boxes on it, text, the controllers, music from a sound bank, the
-// memory card and 3D, as types with methods, strings, ints and errors:
+// and boxes on it, text, music from a sound bank, the memory card and 3D,
+// as types with methods, strings, ints and errors, with the controllers in
+// package input and the geometry in package geom:
 //
 //	var screen = yaroze.Screen{Background: yaroze.Color{R: 60, G: 120, B: 120}}
 //
@@ -15,7 +16,7 @@
 //		text := screen.Font(16, 16, 256, 16, 64)
 //		ship := yaroze.LoadTIM(shipFile.Data()).Sprite()
 //		for frame := range screen.Frames() {
-//			if yaroze.PadButtons(0).Has(yaroze.Right) {
+//			if input.Read(0).Has(input.Right) {
 //				ship.X++
 //			}
 //			ship.Draw(frame, 0)

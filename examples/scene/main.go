@@ -38,6 +38,7 @@ package main
 import (
 	"go.chrisrx.dev/psx/archive"
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/scene"
 	"go.chrisrx.dev/psx/yaroze"
 )
@@ -48,7 +49,7 @@ var (
 		Depth:        5,
 		OverlayDepth: 1,
 	}
-	pad     yaroze.Pad
+	pad     input.Controller
 	loader  disc.Loader
 	world   scene.Scene
 	turning = true

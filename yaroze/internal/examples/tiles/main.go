@@ -18,6 +18,7 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -103,7 +104,7 @@ func main() {
 	bg.Init(&screen, &tiles)
 
 	for frame := range screen.Frames() {
-		dx, dy := direction(yaroze.PadButtons(0))
+		dx, dy := direction(input.Read(0))
 		x, y := bg.Scroll()
 		w, h := bg.Size()
 		x = max(0, min(x+dx*speed, mapW*tileSize-w))
@@ -117,17 +118,17 @@ func main() {
 }
 
 // direction is which way the directions push, -1, 0 or 1 each way.
-func direction(held yaroze.Buttons) (dx, dy int) {
-	if held.Has(yaroze.Left) {
+func direction(held input.Buttons) (dx, dy int) {
+	if held.Has(input.Left) {
 		dx--
 	}
-	if held.Has(yaroze.Right) {
+	if held.Has(input.Right) {
 		dx++
 	}
-	if held.Has(yaroze.Up) {
+	if held.Has(input.Up) {
 		dy--
 	}
-	if held.Has(yaroze.Down) {
+	if held.Has(input.Down) {
 		dy++
 	}
 	return dx, dy

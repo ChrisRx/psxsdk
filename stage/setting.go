@@ -1,6 +1,9 @@
 package stage
 
-import "go.chrisrx.dev/psx/yaroze"
+import (
+	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/yaroze"
+)
 
 // The room the hero is in, drawn from its map every frame: a textured
 // quad for each floor cell, lit by its slope, for each side of a wall
@@ -136,7 +139,7 @@ func (s *Setting) Load(r *Map) {
 	s.m = r
 	s.prop = s.Art.Props
 	s.prop.W, s.prop.H = PropSize, PropSize
-	s.prop.Pivot = yaroze.Point{X: PropSize / 2, Y: PropFeet}
+	s.prop.Pivot = geom.Point{X: PropSize / 2, Y: PropFeet}
 	for j := range r.Rows() {
 		for i := range r.Cols() {
 			s.blocks[j][i] = 0

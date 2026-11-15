@@ -35,6 +35,8 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -75,10 +77,10 @@ var (
 	// frames of 1<<10 depths and room for five thousand packets.
 	screen = yaroze.Screen{
 		Width: 640, Height: 240,
-		Depth:   10,
-		Packets: 5000 * 24,
-		Dither:  true,
-		Center:  true,
+		Depth:    10,
+		Packets:  5000 * 24,
+		Dithered: true,
+		Origin:   yaroze.ScreenOriginMiddle,
 	}
 
 	model  yaroze.Model
@@ -93,7 +95,7 @@ var (
 	modeflag   int
 	modeflagex int
 
-	padd yaroze.Buttons
+	padd input.Buttons
 
 	bank yaroze.Bank
 	song yaroze.Sequence
@@ -206,7 +208,7 @@ func main() {
 
 		// Every part is in the dinosaur's coordinates, so its matrix
 		// to the screen is the dinosaur's, which lights it as well.
-		var world, toScreen yaroze.Matrix
+		var world, toScreen geom.Matrix
 		dino.Transform(&world, &toScreen)
 		yaroze.SetLightMatrix(&toScreen)
 		yaroze.SetScreenMatrix(&toScreen)
@@ -216,7 +218,7 @@ func main() {
 		dino.Rotation.Y += ctlfc[4].out
 		dino.Rotation.X += ctlfc[5].out
 
-		padd = yaroze.PadButtons(0)
+		padd = input.Read(0)
 	}
 
 	sndStop()
@@ -228,10 +230,10 @@ func pick(x uint32) int {
 }
 
 // pressed reports whether any of the buttons in bits are down.
-func pressed(bits yaroze.Buttons) bool { return padd.Any(bits) }
+func pressed(bits input.Buttons) bool { return padd.Any(bits) }
 
 // choose returns by if up is pressed, -by if down is, and 0 otherwise.
-func choose(up, down yaroze.Buttons, by int) int {
+func choose(up, down input.Buttons, by int) int {
 	switch {
 	case pressed(up):
 		return by
@@ -242,7 +244,7 @@ func choose(up, down yaroze.Buttons, by int) int {
 }
 
 // onOff returns on while bits are pressed, and 0 otherwise.
-func onOff(bits yaroze.Buttons, on int) int {
+func onOff(bits input.Buttons, on int) int {
 	if pressed(bits) {
 		return on
 	}
@@ -252,25 +254,25 @@ func onOff(bits yaroze.Buttons, on int) int {
 // objInteractive turns the pad into the transfer functions' inputs, and
 // returns -1 when the program is to quit.
 func objInteractive() int {
-	ctlfc[4].in = choose(yaroze.Square, yaroze.Circle, 6*4096/360)
-	ctlfc[5].in = choose(yaroze.Triangle, yaroze.Cross, 6*4096/360)
-	ctlfc[8].in = choose(yaroze.Select, yaroze.Start, 300)
-	ctlfc[6].in = choose(yaroze.Left, yaroze.Right, 200)
-	ctlfc[7].in = choose(yaroze.Down, yaroze.Up, 200)
+	ctlfc[4].in = choose(input.Square, input.Circle, 6*4096/360)
+	ctlfc[5].in = choose(input.Triangle, input.Cross, 6*4096/360)
+	ctlfc[8].in = choose(input.Select, input.Start, 300)
+	ctlfc[6].in = choose(input.Left, input.Right, 200)
+	ctlfc[7].in = choose(input.Down, input.Up, 200)
 
 	// L1 and R1 with another button switch modes.
-	if pressed(yaroze.R1) && pressed(yaroze.L1) {
+	if pressed(input.R1) && pressed(input.L1) {
 		switch {
-		case pressed(yaroze.Select):
+		case pressed(input.Select):
 			modeflag = 0
 			ctlfc[0].in, ctlfc[1].in, ctlfc[2].in, ctlfc[3].in = 0, 0, 0, 0
-		case pressed(yaroze.Start):
+		case pressed(input.Start):
 			modeflag = 1
 			ctlfc[9].in, ctlfc[10].in, ctlfc[11].in, ctlfc[12].in = 0, 0, 0, 0
-		case pressed(yaroze.Up):
+		case pressed(input.Up):
 			modeflagex = 0
 			ctlfc[0].in, ctlfc[1].in, ctlfc[2].in, ctlfc[3].in = 0, 0, 0, 0
-		case pressed(yaroze.Down):
+		case pressed(input.Down):
 			modeflagex = 1
 			ctlfc[9].in, ctlfc[10].in, ctlfc[11].in, ctlfc[12].in = 0, 0, 0, 0
 		}
@@ -278,62 +280,62 @@ func objInteractive() int {
 
 	switch {
 	case modeflag == 0 && modeflagex == 1: // the feet on the buttons
-		ctlfc[0].in = onOff(yaroze.R1, 4096)
-		ctlfc[1].in = onOff(yaroze.R2, 4096)
-		ctlfc[2].in = onOff(yaroze.L1, 4096)
-		ctlfc[3].in = onOff(yaroze.L2, 4096)
+		ctlfc[0].in = onOff(input.R1, 4096)
+		ctlfc[1].in = onOff(input.R2, 4096)
+		ctlfc[2].in = onOff(input.L1, 4096)
+		ctlfc[3].in = onOff(input.L2, 4096)
 	case modeflag == 0: // the knees, and the mouth, the eyes and the head
-		ctlfc[9].in = onOff(yaroze.R2, 4096)
-		ctlfc[10].in = onOff(yaroze.L2, 4096)
-		ctlfc[11].in = onOff(yaroze.R1, 6000)
-		if pressed(yaroze.L1) {
+		ctlfc[9].in = onOff(input.R2, 4096)
+		ctlfc[10].in = onOff(input.L2, 4096)
+		ctlfc[11].in = onOff(input.R1, 6000)
+		if pressed(input.L1) {
 			ctlfc[0].in = 4096
 		} else {
 			ctlfc[0].in = 0
 			ctlfc[12].in = 0
 		}
 	case modeflagex == 1: // walking: the speed of the walk
-		if pressed(yaroze.R1) {
+		if pressed(input.R1) {
 			alpha++
 		}
-		if pressed(yaroze.R2) {
+		if pressed(input.R2) {
 			alpha--
 		}
-		if pressed(yaroze.L1) {
+		if pressed(input.L1) {
 			alpha = 32
 		}
 	default: // walking: the mouth, the eyes, the head and the tail
-		ctlfc[9].in = onOff(yaroze.R2, 6000)
-		ctlfc[10].in = onOff(yaroze.L2, 4096)
-		ctlfc[11].in = onOff(yaroze.R1, 6000)
-		ctlfc[12].in = onOff(yaroze.L1, 6000)
+		ctlfc[9].in = onOff(input.R2, 6000)
+		ctlfc[10].in = onOff(input.L2, 4096)
+		ctlfc[11].in = onOff(input.R1, 6000)
+		ctlfc[12].in = onOff(input.L1, 6000)
 	}
 
-	if pressed(yaroze.Start) && pressed(yaroze.Select) {
+	if pressed(input.Start) && pressed(input.Select) {
 		return -1
 	}
 	return 0
 }
 
 func viewInit() {
-	camera := yaroze.Camera{Eye: yaroze.Vector{Z: 2000}, Distance: 1000}
+	camera := yaroze.Camera{Eye: geom.Vector{Z: 2000}, Distance: 1000}
 	camera.Set()
 }
 
 func lightInit() {
 	yaroze.SetLight(0, yaroze.Light{
-		Direction: yaroze.Vector{X: 20, Y: -100, Z: 100},
+		Direction: geom.Vector{X: 20, Y: -100, Z: 100},
 		Color:     yaroze.Color{R: 0xf0, G: 0xf0, B: 0xf0},
 	})
 	yaroze.SetLight(1, yaroze.Light{
-		Direction: yaroze.Vector{X: 20, Y: -50, Z: -100},
+		Direction: geom.Vector{X: 20, Y: -50, Z: -100},
 		Color:     yaroze.Color{R: 0x80, G: 0x80, B: 0x80},
 	})
 	yaroze.SetLight(2, yaroze.Light{
-		Direction: yaroze.Vector{X: -20, Y: 20, Z: 100},
+		Direction: geom.Vector{X: -20, Y: 20, Z: 100},
 		Color:     yaroze.Color{R: 0x80, G: 0x80, B: 0x80},
 	})
-	yaroze.SetAmbient(yaroze.One/4, yaroze.One/4, yaroze.One/4)
+	yaroze.SetAmbient(geom.One/4, geom.One/4, geom.One/4)
 
 	// The fog the demo set by hand: black, from 25000 away, and never
 	// complete, since its offset came out as 1.0 rather than the usual
@@ -368,7 +370,7 @@ func modelInit() {
 func fail(what, detail string) {
 	text := screen.Font(16, 16, 320, 32, 128)
 	for range screen.Frames() {
-		if yaroze.PadButtons(0).Has(yaroze.Start | yaroze.Select) {
+		if input.Read(0).Has(input.Start | input.Select) {
 			break
 		}
 		text.Print(what).Print(detail)

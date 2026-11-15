@@ -1,6 +1,9 @@
 package main
 
-import "go.chrisrx.dev/psx/yaroze"
+import (
+	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/yaroze"
+)
 
 // The animation: the demo's mime.c and control.c.
 //
@@ -92,7 +95,7 @@ func setMimeVertex() {
 		if m.offset+len(m.diffs) > len(verts) {
 			continue
 		}
-		yaroze.Blend(verts[m.offset:], m.diffs, yaroze.Fixed(mimepr[i]))
+		yaroze.Blend(verts[m.offset:], m.diffs, geom.Fixed(mimepr[i]))
 	}
 }
 

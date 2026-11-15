@@ -106,6 +106,8 @@ tasks:
     sources:
       - '{{.DIR}}/**/*'
       - 'yaroze/**/*.go'
+      - 'input/**/*.go'
+      - 'geom/**/*.go'
       - 'disc/**/*.go'
       - 'archive/**/*.go'
       - 'scene/**/*.go'
@@ -140,6 +142,8 @@ tasks:
     sources:
       - '{{.DIR}}/**/*'
       - 'yaroze/**/*.go'
+      - 'input/**/*.go'
+      - 'geom/**/*.go'
       - 'disc/**/*.go'
       - 'archive/**/*.go'
       - 'scene/**/*.go'
@@ -218,6 +222,8 @@ tasks:
     sources:
       - 'internal/hot/testdata/**/*'
       - 'yaroze/**/*.go'
+      - 'input/**/*.go'
+      - 'geom/**/*.go'
       - 'internal/**/*'
       - 'cmd/yaroze/**/*.go'
       - 'link/**/*'
@@ -246,6 +252,8 @@ tasks:
       - 'tests/testdata/serial/**/*'
       - 'serial/monitor/**/*'
       - 'yaroze/**/*.go'
+      - 'input/**/*.go'
+      - 'geom/**/*.go'
       - 'internal/**/*'
       - 'cmd/yaroze/**/*.go'
       - 'link/**/*'
@@ -273,6 +281,8 @@ tasks:
     sources:
       - 'internal/hot/testdata/**/*'
       - 'yaroze/**/*.go'
+      - 'input/**/*.go'
+      - 'geom/**/*.go'
       - 'exp/cleanlib/**/*'
       - 'internal/**/*'
       - 'cmd/yaroze/**/*.go'
@@ -364,6 +374,8 @@ tasks:
       - 'web/site/**/*'
       - 'web/static/**/*'
       - 'yaroze/**/*.go'
+      - 'input/**/*.go'
+      - 'geom/**/*.go'
       # The starters' pictures, the screenshots the tests keep.
       - 'tests/testdata/jumpcube.png'
       - 'tests/testdata/quest.png'

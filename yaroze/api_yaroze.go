@@ -4,6 +4,8 @@ package yaroze
 
 import (
 	"unsafe"
+
+	"go.chrisrx.dev/psx/geom"
 )
 
 // The console side of the Go API: what it calls on the library in a
@@ -25,18 +27,19 @@ const (
 	playForever int16 = 0
 )
 
-// A Sprite and a Box are the library's structs under other names.
+// A Sprite and a Box start with the library's structs under other names,
+// up to the fields Draw packs into the attribute word.
 var (
-	_ [unsafe.Sizeof(Sprite{}) - unsafe.Sizeof(GsSPRITE{})]byte
-	_ [unsafe.Sizeof(GsSPRITE{}) - unsafe.Sizeof(Sprite{})]byte
-	_ [unsafe.Sizeof(Box{}) - unsafe.Sizeof(GsBOXF{})]byte
-	_ [unsafe.Sizeof(GsBOXF{}) - unsafe.Sizeof(Box{})]byte
+	_ [unsafe.Offsetof(Sprite{}.Blend) - unsafe.Sizeof(GsSPRITE{})]byte
+	_ [unsafe.Sizeof(GsSPRITE{}) - unsafe.Offsetof(Sprite{}.Blend)]byte
+	_ [unsafe.Offsetof(Box{}.Blend) - unsafe.Sizeof(GsBOXF{})]byte
+	_ [unsafe.Sizeof(GsBOXF{}) - unsafe.Offsetof(Box{}.Blend)]byte
 )
 
 func openScreen(s *Screen) {
 	SetVideoMode(nativeVideoMode())
 	dither := uint16(0)
-	if s.Dither {
+	if s.Dithered {
 		dither = 1
 	}
 	w, h := uint16(s.Width), uint16(s.Height)
@@ -45,7 +48,7 @@ func openScreen(s *Screen) {
 		GsDefDispBuff(0, 0, 0, 0)
 	} else {
 		GsInitGraph(w, h, offsetGPU, dither, 0)
-		if s.SideBySide {
+		if s.Buffers == ScreenBuffersSideBySide {
 			GsDefDispBuff(0, 0, w, 0)
 		} else {
 			GsDefDispBuff(0, 0, 0, h)
@@ -54,7 +57,7 @@ func openScreen(s *Screen) {
 	env := GsDISPENV()
 	env.Screen.X += s.Offset.X
 	env.Screen.Y += s.Offset.Y
-	if s.Center {
+	if s.Origin == ScreenOriginMiddle {
 		GsInit3D()
 	}
 
@@ -121,7 +124,7 @@ func endFrame(s *Screen) int32 {
 			W: s.backdropW,
 			H: s.backdropH,
 		}
-		if s.SideBySide {
+		if s.Buffers == ScreenBuffersSideBySide {
 			r.X = int16(1-s.active) * int16(s.Width)
 		} else {
 			r.Y = int16(1-s.active) * int16(s.Height)
@@ -188,13 +191,13 @@ func sortBox(b *Box, f *Frame, depth int) {
 	GsSortBoxFill((*GsBOXF)(unsafe.Pointer(b)), f.table, uint16(depth))
 }
 
-// A Line, a GradientLine, a Cell, a tileMapImpl and a Background's first
-// fields are the library's structs under other names.
+// A Line's and a GradientLine's first fields, a Cell, a tileMapImpl and a
+// Background's first fields are the library's structs under other names.
 var (
-	_ [unsafe.Sizeof(Line{}) - unsafe.Sizeof(GsLINE{})]byte
-	_ [unsafe.Sizeof(GsLINE{}) - unsafe.Sizeof(Line{})]byte
-	_ [unsafe.Sizeof(GradientLine{}) - unsafe.Sizeof(GsGLINE{})]byte
-	_ [unsafe.Sizeof(GsGLINE{}) - unsafe.Sizeof(GradientLine{})]byte
+	_ [unsafe.Offsetof(Line{}.Blend) - unsafe.Sizeof(GsLINE{})]byte
+	_ [unsafe.Sizeof(GsLINE{}) - unsafe.Offsetof(Line{}.Blend)]byte
+	_ [unsafe.Offsetof(GradientLine{}.Blend) - unsafe.Sizeof(GsGLINE{})]byte
+	_ [unsafe.Sizeof(GsGLINE{}) - unsafe.Offsetof(GradientLine{}.Blend)]byte
 	_ [unsafe.Sizeof(Cell{}) - unsafe.Sizeof(GsCELL{})]byte
 	_ [unsafe.Sizeof(GsCELL{}) - unsafe.Sizeof(Cell{})]byte
 	_ [unsafe.Sizeof(tileMapImpl{}) - unsafe.Sizeof(GsMAP{})]byte
@@ -274,32 +277,6 @@ func loadTIM(words []uint32, at bool, x, y int) Image {
 	}
 }
 
-// The library reads both controllers every vertical blank into buffers
-// of its own: a byte that is 0 while a controller is connected, a byte
-// of its type and length, and then what it sent, two bytes of buttons
-// for the standard controller, each bit clear while its button is held.
-func padButtons(port int) Buttons {
-	_, _, _, held := padReading(port)
-	return held
-}
-
-// padReading decodes a port's buffer: whether a controller is there,
-// what it is, the four bytes after its buttons, and the buttons held.
-func padReading(port int) (connected bool, kind Kind, axes [4]uint8, held Buttons) {
-	if padBuf0 == nil || padBuf1 == nil {
-		PadInit()
-	}
-	buf := unsafe.Slice(padBuf0, 8)
-	if port == 1 {
-		buf = unsafe.Slice(padBuf1, 8)
-	}
-	if buf[0] != 0 {
-		return false, 0, axes, 0
-	}
-	copy(axes[:], buf[4:8])
-	return true, Kind(buf[1] >> 4), axes, Buttons(^(uint16(buf[3]) | uint16(buf[2])<<8))
-}
-
 func mainVolume(left, right int) { SsSetMVol(int16(left), int16(right)) }
 
 func vabTransfer(vh, vb []uint32) int16 {
@@ -327,11 +304,11 @@ func origin() (x, y int) {
 	return int(ox), int(oy)
 }
 
-// A Matrix, a coordImpl and an objectImpl are the library's MATRIX,
+// A geom.Matrix, a coordImpl and an objectImpl are the library's MATRIX,
 // GsCOORDINATE2 and GsDOBJ2 under other names.
 var (
-	_ [unsafe.Sizeof(Matrix{}) - unsafe.Sizeof(MATRIX{})]byte
-	_ [unsafe.Sizeof(MATRIX{}) - unsafe.Sizeof(Matrix{})]byte
+	_ [unsafe.Sizeof(geom.Matrix{}) - unsafe.Sizeof(MATRIX{})]byte
+	_ [unsafe.Sizeof(MATRIX{}) - unsafe.Sizeof(geom.Matrix{})]byte
 	_ [unsafe.Sizeof(coordImpl{}) - unsafe.Sizeof(GsCOORDINATE2{})]byte
 	_ [unsafe.Sizeof(GsCOORDINATE2{}) - unsafe.Sizeof(coordImpl{})]byte
 	_ [unsafe.Sizeof(objectImpl{}) - unsafe.Sizeof(GsDOBJ2{})]byte
@@ -351,12 +328,12 @@ func linkObject(o *objectImpl, m Model, n int) {
 // objectMatrices makes the object's matrix from its position, rotation
 // and scale, and works out its matrices to the world and the screen in
 // one walk of its parents.
-func objectMatrices(o *Object, world, screen *Matrix) {
+func objectMatrices(o *Object, world, screen *geom.Matrix) {
 	coord := (*GsCOORDINATE2)(unsafe.Pointer(&o.coord))
 	m := &coord.Coord
 	r := svector(o.Rotation)
 	RotMatrix(&r, m)
-	if o.Scale != (Vector{}) {
+	if o.Scale != (geom.Vector{}) {
 		s := lvector(o.Scale)
 		ScaleMatrix(m, &s)
 	}
@@ -365,8 +342,8 @@ func objectMatrices(o *Object, world, screen *Matrix) {
 	GsGetLws(coord, (*MATRIX)(unsafe.Pointer(world)), (*MATRIX)(unsafe.Pointer(screen)))
 }
 
-func setLightMatrix(m *Matrix)  { GsSetLightMatrix((*MATRIX)(unsafe.Pointer(m))) }
-func setScreenMatrix(m *Matrix) { GsSetLsMatrix((*MATRIX)(unsafe.Pointer(m))) }
+func setLightMatrix(m *geom.Matrix)  { GsSetLightMatrix((*MATRIX)(unsafe.Pointer(m))) }
+func setScreenMatrix(m *geom.Matrix) { GsSetLsMatrix((*MATRIX)(unsafe.Pointer(m))) }
 
 // sortObject sorts the model with the CPU's scratchpad as the
 // subdivision's work space.
@@ -390,25 +367,23 @@ func backdropOf(tim []uint32) (pixels *uint32, w, h int16) {
 	return info.Pixel, int16(info.Pw), int16(info.Ph)
 }
 
-func rect(r Rect) RECT { return r.RECT() }
-
-func copyRect(src Rect, x, y int) {
-	r := rect(src)
+func copyRect(src geom.Rect, x, y int) {
+	r := ToRECT(src)
 	MoveImage(&r, int32(x), int32(y))
 }
 
-func clearRect(r Rect, c Color) {
-	rr := rect(r)
+func clearRect(r geom.Rect, c Color) {
+	rr := ToRECT(r)
 	ClearImage(&rr, c.R, c.G, c.B)
 }
 
-func loadRect(r Rect, words []uint32) {
-	rr := rect(r)
+func loadRect(r geom.Rect, words []uint32) {
+	rr := ToRECT(r)
 	LoadImage(&rr, &words[0])
 }
 
-func storeRect(r Rect, words []uint32) {
-	rr := rect(r)
+func storeRect(r geom.Rect, words []uint32) {
+	rr := ToRECT(r)
 	StoreImage(&rr, &words[0])
 	DrawSync(0)
 }
@@ -432,7 +407,7 @@ var (
 	_ [unsafe.Sizeof(SVECTOR{}) - unsafe.Sizeof(Vertex{})]byte
 )
 
-func blend(vertices, diffs *Vertex, n int, p Fixed) {
+func blend(vertices, diffs *Vertex, n int, p geom.Fixed) {
 	GteMIMefunc((*SVECTOR)(unsafe.Pointer(vertices)), (*SVECTOR)(unsafe.Pointer(diffs)), int32(n), int32(p))
 }
 
@@ -498,7 +473,7 @@ func setLight(n int, l Light) {
 	GsSetFlatLight(int32(n), &light)
 }
 
-func setAmbient(r, g, b Fixed) { GsSetAmbient(int32(r), int32(g), int32(b)) }
+func setAmbient(r, g, b geom.Fixed) { GsSetAmbient(int32(r), int32(g), int32(b)) }
 
 func startCounter(c Counter)    { StartRCnt(0xf2000000 | uint32(c)) }
 func resetCounter(c Counter)    { ResetRCnt(0xf2000000 | uint32(c)) }
@@ -588,25 +563,9 @@ func clipArea() int      { return int(NormalClip()) }
 func averageDepth3() int { return int(AverageZ3()) }
 func averageDepth4() int { return int(AverageZ4()) }
 
-func rotateMatrix(m *Matrix, r Rotation) {
-	v := svector(r)
-	RotMatrix(&v, (*MATRIX)(unsafe.Pointer(m)))
-}
-
-func applyMatrix(m *Matrix, v Vector) Vector {
-	in := lvector(v)
-	var out VECTOR
-	ApplyMatrixLV((*MATRIX)(unsafe.Pointer(m)), &in, &out)
-	return Vector{
-		X: int(out.Vx),
-		Y: int(out.Vy),
-		Z: int(out.Vz),
-	}
-}
-
 // svector and lvector are a rotation and a vector as the library takes
 // them, 16 and 32 bits a component.
-func svector(r Rotation) SVECTOR {
+func svector(r geom.Rotation) SVECTOR {
 	return SVECTOR{
 		Vx: int16(r.X),
 		Vy: int16(r.Y),
@@ -614,7 +573,7 @@ func svector(r Rotation) SVECTOR {
 	}
 }
 
-func lvector(v Vector) VECTOR {
+func lvector(v geom.Vector) VECTOR {
 	return VECTOR{
 		Vx: int32(v.X),
 		Vy: int32(v.Y),

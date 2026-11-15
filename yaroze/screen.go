@@ -3,6 +3,8 @@ package yaroze
 import (
 	"iter"
 	"math/bits"
+
+	"go.chrisrx.dev/psx/geom"
 )
 
 // A Screen is the double-buffered picture and the frames drawn into it.
@@ -56,23 +58,20 @@ type Screen struct {
 
 	// Offset moves the picture on the television, for one that sits too
 	// high or too far left.
-	Offset Point
+	Offset geom.Point
 
-	// Dither says whether shaded colors are dithered, which smooths a
+	// Dithered is whether shaded colors are dithered, which smooths a
 	// gouraud polygon's bands and leaves a sprite alone.
-	Dither bool
+	Dithered bool
 
-	// SideBySide puts the two display buffers next to each other at the
-	// top of video memory, at 0, 0 and Width, 0, rather than one above
-	// the other, leaving the rows below Height whole for textures. It
-	// is for a picture no wider than 512.
-	SideBySide bool
+	// Buffers is where the two display buffers lie in video memory:
+	// one above the other, the default, or side by side.
+	Buffers ScreenBuffers
 
-	// Center puts the origin in the middle of the picture rather than its
-	// top left corner, which is where 3D drawing wants it: a camera looks
-	// through the middle. Sprites and text are then placed from the
-	// middle too, or from the corner Bounds gives.
-	Center bool
+	// Origin is where a frame's coordinates start on the picture: its
+	// top left corner, the default, or its middle, which is where 3D
+	// drawing wants it.
+	Origin ScreenOrigin
 
 	// OverlayDepth, when it is not zero, gives each frame an overlay of
 	// 1<<OverlayDepth depths, drawn after the frame: for what goes in
@@ -114,6 +113,35 @@ type screenImpl struct {
 
 // A frameTable is the ordering table a frame sorts into.
 type frameTable = *GsOT
+
+// A ScreenBuffers is where a screen's two display buffers lie in video
+// memory.
+type ScreenBuffers uint8
+
+const (
+	// ScreenBuffersStacked puts the buffers one above the other, at 0, 0
+	// and 0, Height.
+	ScreenBuffersStacked ScreenBuffers = iota
+
+	// ScreenBuffersSideBySide puts them next to each other at the top of
+	// video memory, at 0, 0 and Width, 0, leaving the rows below Height
+	// whole for textures. It is for a picture no wider than 512.
+	ScreenBuffersSideBySide
+)
+
+// A ScreenOrigin is where a frame's coordinates start on the picture.
+type ScreenOrigin uint8
+
+const (
+	// ScreenOriginTopLeft puts 0, 0 at the picture's top left corner.
+	ScreenOriginTopLeft ScreenOrigin = iota
+
+	// ScreenOriginMiddle puts 0, 0 in the middle of the picture, which is
+	// where 3D drawing wants it: a camera looks through the middle.
+	// Sprites and text are then placed from the middle too, or from the
+	// corner Bounds gives.
+	ScreenOriginMiddle
+)
 
 // A VideoMode is the television standard the picture is sent as.
 type VideoMode int32
@@ -180,7 +208,7 @@ func (f *Frame) Overlay() *Frame {
 
 // Open sets the display up and gives the screen its storage: the
 // console's own video mode, sixty frames a second or fifty, the picture
-// at Width by Height with its origin at the top left, the two display
+// at Width by Height with its origin where Origin puts it, the two display
 // buffers, and, unless Init gave it some, the ordering tables and packet
 // space from the heap.
 func (s *Screen) Open() {
@@ -242,19 +270,18 @@ func (s *Screen) Init(tags []GsOT_TAG, packets []uint32) {
 func (s *Screen) Close() { resetGraph() }
 
 // Bounds is the picture as a frame's coordinates see it: its top left
-// corner, which is 0, 0 unless Center moved the origin, and its size.
+// corner, which is 0, 0 unless Origin moved the origin, and its size.
 //
 //	b := screen.Bounds()
 //	box.MoveTo(b.X+24, b.Y+b.H-64)
-func (s *Screen) Bounds() Rect {
+func (s *Screen) Bounds() geom.Rect {
 	x, y := origin()
-	return Rect{X: -x, Y: -y, W: s.Width, H: s.Height}
-}
-
-// Clamp returns x and y moved as little as they need to be for a w by h
-// box at them to lie inside the rectangle.
-func (r Rect) Clamp(x, y, w, h int) (int, int) {
-	return min(max(x, r.X), r.X+r.W-w), min(max(y, r.Y), r.Y+r.H-h)
+	return geom.Rect{
+		X: -x,
+		Y: -y,
+		W: s.Width,
+		H: s.Height,
+	}
 }
 
 // Frame returns how many frames have been finished, for animation that

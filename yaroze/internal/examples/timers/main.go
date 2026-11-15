@@ -13,6 +13,7 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -30,7 +31,7 @@ var (
 		Depth:      1,
 		Packets:    32 << 10,
 	}
-	pad yaroze.Pad
+	pad input.Controller
 
 	sprite yaroze.Sprite
 	balls  [maxBalls]ball
@@ -94,10 +95,10 @@ func main() {
 
 	for frame := range screen.Frames() {
 		pad.Update()
-		if n := pad.Duration(yaroze.Up); n == 1 || n > 15 {
+		if n := pad.Duration(input.Up); n == 1 || n > 15 {
 			count = min(count+10, maxBalls)
 		}
-		if n := pad.Duration(yaroze.Down); n == 1 || n > 15 {
+		if n := pad.Duration(input.Down); n == 1 || n > 15 {
 			count = max(count-10, 0)
 		}
 

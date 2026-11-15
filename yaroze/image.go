@@ -1,5 +1,7 @@
 package yaroze
 
+import "go.chrisrx.dev/psx/geom"
+
 // An Image is a picture in video memory, loaded from a TIM file: its
 // pixels, and its palette if it has one. A sprite shows it, or part of
 // it.
@@ -33,20 +35,20 @@ func (im Image) Len() int { return im.words }
 
 // CopyRect copies the rectangle src of video memory to x, y in it, as
 // the GPU does, queued with the drawing.
-func CopyRect(src Rect, x, y int) { copyRect(src, x, y) }
+func CopyRect(src geom.Rect, x, y int) { copyRect(src, x, y) }
 
 // ClearRect fills the rectangle of video memory with a color, queued
 // with the drawing.
-func ClearRect(r Rect, c Color) { clearRect(r, c) }
+func ClearRect(r geom.Rect, c Color) { clearRect(r, c) }
 
 // LoadRect puts the words into the rectangle of video memory, row by
 // row, queued with the drawing: the words stay in use until the GPU
 // has them, which the frame's end waits for.
-func LoadRect(r Rect, words []uint32) { loadRect(r, words) }
+func LoadRect(r geom.Rect, words []uint32) { loadRect(r, words) }
 
 // StoreRect reads the rectangle of video memory into the words, row by
 // row, and waits for it.
-func StoreRect(r Rect, words []uint32) { storeRect(r, words) }
+func StoreRect(r geom.Rect, words []uint32) { storeRect(r, words) }
 
 // Texture is how a sprite names the image: its page, its corner within
 // it, and its palette.
@@ -57,13 +59,15 @@ func (im Image) Texture() Texture { return im.texture }
 // image cannot be a sprite.
 func (im Image) Sprite() Sprite {
 	return Sprite{
-		Mode:    Mode(im.depth) << 24,
 		W:       im.w,
 		H:       im.h,
 		Texture: im.texture,
 		Color:   Color{128, 128, 128},
-		Pivot:   Point{int16(im.w / 2), int16(im.h / 2)},
-		ScaleX:  One,
-		ScaleY:  One,
+		Pivot: geom.Point{
+			X: int16(im.w / 2),
+			Y: int16(im.h / 2),
+		},
+		ScaleX: geom.One,
+		ScaleY: geom.One,
 	}
 }
