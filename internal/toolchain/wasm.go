@@ -276,6 +276,9 @@ func (w *Wasm) Compile(ctx context.Context, b *Build) error {
 		args = append(args, "-tags="+strings.Join(b.Tags, " "))
 	}
 	args = append(args, b.hotArgs()...)
+	if b.Experiment != "" {
+		args = append(args, "-experiment="+b.Experiment)
+	}
 	args = append(args, filepath.ToSlash(pkg))
 
 	start := time.Now()

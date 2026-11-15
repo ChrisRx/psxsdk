@@ -60,6 +60,7 @@ func (f *buildFlags) patch(ctx context.Context, pkg, base string, at uint32, out
 		Tags:       f.tags,
 		HotBase:    abs,
 		HotAt:      at,
+		Experiment: f.experiment,
 		Output:     filepath.Join(tmp, "patch.elf"),
 		Stderr:     os.Stderr,
 		Log:        f.logf,

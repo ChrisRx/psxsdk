@@ -46,6 +46,11 @@ type Build struct {
 	HotBase string
 	HotAt   uint32
 
+	// Experiment turns the compiler's experiments on or off, as
+	// GOEXPERIMENT does: names separated by commas, each after "no" to
+	// turn it off, such as noonstore (see docs/architecture/compiler.md).
+	Experiment string
+
 	// TargetName is the TinyGo target, one the compiler's cache holds,
 	// DefaultTarget if empty.
 	TargetName string

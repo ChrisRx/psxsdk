@@ -32,6 +32,9 @@ type buildFlags struct {
 	target  string
 	libps   string
 
+	// experiment is the compiler's -experiment flag.
+	experiment string
+
 	// c is the compiler, found once and kept for every build of the
 	// command: under wazero it stays loaded between builds.
 	c *toolchain.Wasm
@@ -67,6 +70,7 @@ func (f *buildFlags) register(cmd *cobra.Command) {
 	fl.StringVar(&f.target, "target", "", "a TinyGo target file, JSON that inherits playstation-yaroze and changes what the program needs, such as where it is linked")
 	fl.BoolVar(&f.hot, "hot", false, "build a program that can take patches from the patch command while it runs: its main package's functions are called through slots, which costs a little speed, and 256KB is reserved for the patches")
 	fl.StringVar(&f.libps, "libps", "static", "the Net Yaroze library: static, linked into the program, or resident, the program laid over the image a Net Yaroze leaves in memory")
+	fl.StringVar(&f.experiment, "experiment", "", "turn the compiler's experiments on, or off with no before the name, comma separated: noonstore turns off onstore, which keeps the library's words in sprites and shapes up to date as their fields are set")
 }
 
 // targetName is the TinyGo target the --libps flag chooses.
@@ -137,6 +141,7 @@ func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
 		Opt:        f.opt,
 		Tags:       f.tags,
 		Hot:        f.hot,
+		Experiment: f.experiment,
 		Target:     f.target,
 		Output:     filepath.Join(tmp, "prog.elf"),
 		Stderr:     os.Stderr,
@@ -149,8 +154,8 @@ func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
 // sources as Prepare leaves them, linked where the Makefile says, with what
 // auto loads put in the executable.
 func (f *buildFlags) buildC(ctx context.Context, c *toolchain.Wasm, dir, tmp, exe, elf string) error {
-	if f.hot || f.target != "" || len(f.tags) > 0 {
-		return errors.New("--hot, --target and --tags are for Go packages, and this is a C project")
+	if f.hot || f.target != "" || len(f.tags) > 0 || f.experiment != "" {
+		return errors.New("--hot, --target, --tags and --experiment are for Go packages, and this is a C project")
 	}
 	// A C project calls the library it was written for, at its addresses.
 	f.libps = "resident"
