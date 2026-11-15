@@ -11,7 +11,7 @@ These are what a PlayStation program imports. Each builds on the host too, with 
 
 | Package | Purpose |
 | --- | --- |
-| [`yaroze`](https://pkg.go.dev/go.chrisrx.dev/psx/yaroze) | The Net Yaroze library, `libps`, with Sony's names |
+| [`yaroze`](https://pkg.go.dev/go.chrisrx.dev/psx/yaroze) | The Net Yaroze library, `libps`, with Sony's names, and a Go API over it: screens, frames, sprites, controllers, sound, cards and 3D |
 | [`disc`](https://pkg.go.dev/go.chrisrx.dev/psx/disc) | Declaring the files a program reads off its disc, which the build puts there |
 | [`archive`](https://pkg.go.dev/go.chrisrx.dev/psx/archive) | Reading archives: many files in one, unpacked piece by piece |
 | [`scene`](https://pkg.go.dev/go.chrisrx.dev/psx/scene) | Drawing a scene made in the playground's scene editor |

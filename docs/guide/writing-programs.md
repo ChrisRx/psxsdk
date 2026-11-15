@@ -11,19 +11,19 @@ package main
 import "go.chrisrx.dev/psx/yaroze"
 
 var (
-	screen = yaroze.Screen{Background: yaroze.CVECTOR{R: 40, G: 60, B: 100}}
+	screen = yaroze.Screen{Background: yaroze.Color{R: 40, G: 60, B: 100}}
 	pad    yaroze.Pad
 	box    = yaroze.GsBOXF{W: 40, H: 40, R: 255, G: 160, B: 32}
 )
 
 func main() {
 	screen.Open()
-	b := screen.Bounds()
-	for ot := range screen.Frames() {
+	b := screen.Bounds().RECT()
+	for frame := range screen.Frames() {
 		pad.Update()
 		dx, dy := pad.Dir()
 		box.X, box.Y = b.Clamp(box.X+int16(dx*2), box.Y+int16(dy*2), box.W, box.H)
-		box.Sort(ot, 0)
+		box.Sort(frame.OT(), 0)
 	}
 }
 ```
@@ -49,14 +49,14 @@ A `Screen` is the double-buffered frame: two ordering tables and two packet area
 
 - `Open` puts the console in its own video mode, `NativeVideoMode`, sets up the display, and allocates the storage, unless `Init` gave it some.
 - `Font` opens the on-screen font for its frames.
-- `Begin` and `End` do what every frame does around its drawing. `Frames` puts them around the body of a loop, `for ot := range screen.Frames()`, so a `break` leaves between frames.
+- `Begin` and `End` do what every frame does around its drawing. `Frames` puts them around the body of a loop, `for frame := range screen.Frames()`, so a `break` leaves between frames, and `frame.OT()` is the frame's ordering table.
 - `Bounds` is the screen in the frame's coordinates, wherever the origin is, `Clamp` keeps a box inside it, and `Frame` counts the frames.
 
 ### Models and images
 
 - A `TMD` is a model file in memory, with `Map` and `Link`.
 - A `TIM` is an image file, with `Load`, whose image makes a ready `Sprite`.
-- An `Object` is a model with the coordinate system it is drawn in, and its `Position`, `Rotation` and `Scale`. Its `Draw` makes those the system's matrix and sorts the model lit, with the light and screen matrices set from where it is. `SetMatrix` places a coordinate system directly, clearing the flag that tells the library it moved.
+- A `GsObject` is a model with the coordinate system it is drawn in, and its `Position`, `Rotation` and `Scale`. Its `Draw` makes those the system's matrix and sorts the model lit, with the light and screen matrices set from where it is. `SetMatrix` places a coordinate system directly, clearing the flag that tells the library it moved.
 
 ### Sound
 

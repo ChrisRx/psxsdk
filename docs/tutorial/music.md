@@ -20,7 +20,7 @@ The bank and the sequence are kept in package-level variables, for pausing:
 ```go src=../../examples/square/main.go#bank,song,paused
 ```
 
-Each of `OpenBank` and `Sequence` also reports whether it worked, which the square ignores. A bank that was not accepted, or a sequence that did not open, has a negative ID, and every method on it does nothing, so a program whose sound did not load carries on silently rather than stopping.
+Each of `OpenBank` and `Sequence` also returns an error when it did not work, which the square ignores. A bank that was not accepted, or a sequence that did not open, is the zero value, and every method on it does nothing, so a program whose sound did not load carries on silently rather than stopping.
 
 ## Pausing it
 
