@@ -17,7 +17,7 @@ The GPU draws textures from its own video memory, a megabyte arranged as a pictu
 
 `yaroze.TMD` is a view of the file's words as a model file. The file holds offsets, from where it starts to its vertices, normals and polygons, since it could have been loaded anywhere; `Map`, the library's `GsMapModelingData`, turns them into addresses once it is in memory, before anything uses it.
 
-A model is drawn through an object, which ties it to a coordinate system that says where it is and which way it faces. `yaroze.Object` is the two together, since every drawn model needs both, declared with the rest of the program's state:
+A model is drawn through an object, which ties it to a coordinate system that says where it is and which way it faces. `yaroze.GsObject` is the two together, since every drawn model needs both, declared with the rest of the program's state:
 
 ```go src=../../examples/square/main.go#cube
 ```
