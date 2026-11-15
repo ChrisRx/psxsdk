@@ -71,7 +71,8 @@ func TestImageSprite(t *testing.T) {
 		},
 	}
 	s := im.Sprite()
-	assert.Equal(t, uint32(1<<24), s.pack(), "8 bits a pixel")
+	s.pack()
+	assert.Equal(t, uint32(1<<24), s.attribute, "8 bits a pixel")
 	assert.Equal(t, uint16(44), s.W)
 	assert.Equal(t, uint16(24), s.H)
 	assert.Equal(t, im.texture, s.Texture)
