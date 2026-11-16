@@ -84,8 +84,8 @@ func POSITION() *GsPOSITION { panic(stub("POSITION")) }
 
 // PacketPointer returns GsOUT_PACKET_P, where the library builds the next
 // GPU packet in the space GsSetWorkBase gave it, and SetPacketPointer moves
-// it, for a program that builds packets of its own there; AllocPacket does
-// both.
+// it, for a program that builds packets of its own there. Frame.Packet
+// does both for one of the gpu package's packet types.
 func PacketPointer() *PACKET { panic(stub("PacketPointer")) }
 
 // SetPacketPointer sets GsOUT_PACKET_P; see PacketPointer.

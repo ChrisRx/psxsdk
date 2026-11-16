@@ -62,7 +62,11 @@ func (im Image) Sprite() Sprite {
 		W:       im.w,
 		H:       im.h,
 		Texture: im.texture,
-		Color:   Color{128, 128, 128},
+		Color: Color{
+			R: 128,
+			G: 128,
+			B: 128,
+		},
 		Pivot: geom.Point{
 			X: int16(im.w / 2),
 			Y: int16(im.h / 2),

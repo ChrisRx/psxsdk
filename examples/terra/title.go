@@ -5,7 +5,7 @@ package main
 // a press, and fades away as the camera's tour of the port goes on into
 // the first conversation.
 
-import "go.chrisrx.dev/psx/yaroze"
+import "go.chrisrx.dev/psx/gpu"
 
 var (
 	// sceneT is the frame counter the overlays share.
@@ -43,11 +43,10 @@ func titleStart() {
 
 // titleFrame draws a frame of the title and moves it on.
 func titleFrame() {
-	over := screen.Overlay()
 	t := sceneT
 	if t < 0x80 {
 		c := max(0xff-2*t, 0)
-		fillRect(over.Entry(0), -160, -120, 320, 240, uint8(c), uint8(c), uint8(c), true, 1)
+		fillRect(over, 0, -160, -120, 320, 240, uint8(c), uint8(c), uint8(c), true, 1)
 	}
 	if t == 0x80 {
 		spawnGull(0x1e, 5, 0x1e, -1)
@@ -71,17 +70,14 @@ func titleFrame() {
 			if piece.language != -1 && int(piece.language) != language {
 				c = bright / 4
 			}
-			p := yaroze.AllocPacket(5)
-			p[0] = 4 << 24
-			p[1] = 0x66<<24 | uint32(uint8(c))<<16 | uint32(uint8(c))<<8 | uint32(uint8(c))
-			p[2] = xy(piece.x-0xa0, piece.y-0x78)
-			p[3] = uint32(tex.u) | uint32(tex.v)<<8 | uint32(tex.clut())<<16
-			p[4] = xy(tex.w, tex.h)
-			yaroze.LinkTag(over.Entry(0), p)
-			q := yaroze.AllocPacket(2)
-			q[0] = 1 << 24
-			q[1] = 0xe1000200 | piece.depth&3<<7 | piece.abr&3<<5 | uint32(tex.tpageY>>4&0x10) | uint32((tex.tpageX&0x3ff)>>6) | uint32((tex.tpageY&0x200)<<2)
-			yaroze.LinkTag(over.Entry(0), q)
+			p := over.Packet[gpu.Sprite](0)
+			p.Color = gray(uint8(c))
+			p.Code |= gpu.CodeTranslucent
+			p.XY = gpu.XY{X: piece.x - 0xa0, Y: piece.y - 0x78}
+			p.UV = gpu.UV{U: tex.u, V: tex.v}
+			p.Clut = tex.clut()
+			p.W, p.H = uint16(tex.w), uint16(tex.h)
+			over.Packet[gpu.DrawMode](0).Page = tex.mode() | piece.depth&3<<7 | piece.abr&3<<5
 		}
 	}
 	if t == 0xe0 {

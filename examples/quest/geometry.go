@@ -2,6 +2,7 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/gpu"
 	"go.chrisrx.dev/psx/stage"
 	"go.chrisrx.dev/psx/yaroze"
 )
@@ -27,7 +28,7 @@ func abs(v int) int {
 type figure struct {
 	sprite yaroze.Sprite
 	feet   yaroze.Vertex
-	sxy    yaroze.XY
+	sxy    gpu.XY
 }
 
 const (

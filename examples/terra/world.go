@@ -880,8 +880,11 @@ func drawPrims(ot *yaroze.GsOT, first, count int) {
 		z := max(worldSZ[0], worldSZ[1], worldSZ[2], worldSZ[3]) >> 2
 		pk[11] = sxy3
 		pk[1], pk[4], pk[7], pk[10] = p.rgb[0], p.rgb[1], p.rgb[2], p.rgb[3]
-		pk[0] = 12 << 24
-		ot.Link(int(min(max((int32(p.bias)+z)>>shift, 0), maxDepth)), pk)
+		// The packet is linked into the table as the models' are, in
+		// words (see drawContext.link), and then taken.
+		tag := (*uint32)(unsafe.Add(unsafe.Pointer(ot.Org), 4*min(max((int32(p.bias)+z)>>shift, 0), maxDepth)))
+		pk[0] = 12<<24 | *tag&0xffffff
+		*tag = *tag&0xff000000 | uint32(uintptr(unsafe.Pointer(&pk[0])))&0xffffff
 		commit(13)
 	}
 }

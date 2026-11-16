@@ -2,6 +2,7 @@ package stage
 
 import (
 	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/gpu"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -72,7 +73,7 @@ type Setting struct {
 	frame int
 	prop  yaroze.Sprite
 	feet  yaroze.Vertex
-	fsxy  yaroze.XY
+	fsxy  gpu.XY
 
 	// cells holds each cell's shape, ready to draw.
 	cells [MaxCells][MaxCells]cellShape

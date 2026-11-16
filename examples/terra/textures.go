@@ -24,6 +24,17 @@ func (t *texture) tpage(abr uint16) uint16 {
 	return yaroze.GetTPage(int32(t.depth), int32(abr), int32(t.tpageX), int32(t.tpageY))
 }
 
+// mode returns the drawing mode word for the texture's page, dithered,
+// without its color depth, as the original sent most of them, and with
+// the first semi-transparency rate, for the caller to add either to.
+func (t *texture) mode() uint32 { return modeDither | uint32(t.page()) }
+
+// page returns the texture's page as a textured polygon takes it, the
+// same without the command.
+func (t *texture) page() uint16 {
+	return t.tpageY>>4&0x10 | (t.tpageX&0x3ff)>>6 | (t.tpageY&0x200)<<2
+}
+
 // clut returns the GPU's palette word for the texture.
 func (t *texture) clut() uint16 {
 	return uint16(t.cy)<<6 | uint16(t.cx)>>4&0x3f

@@ -6,6 +6,7 @@ import (
 	"unsafe"
 
 	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/gpu"
 )
 
 // The console side of the Go API: what it calls on the library in a
@@ -425,25 +426,27 @@ func setFog(dqa int16, dqb int32, c Color) {
 func setLightMode(mode int32) { GsSetLightMode(mode) }
 
 // allocPacket takes n words of the frame's packet space, from where the
-// library's own drawing has got to, and moves it on.
+// library's own drawing has got to, and moves it on. It reads and writes
+// the library's pointer itself, as PacketPointer and SetPacketPointer do,
+// which saves the frame a call to GsSetWorkBase for every packet.
 func allocPacket(n int) *uint32 {
-	p := unsafe.Pointer(GsGetWorkBase())
-	GsSetWorkBase((*PACKET)(unsafe.Add(p, 4*n)))
+	p := unsafe.Pointer(gsOUT_PACKET_P)
+	gsOUT_PACKET_P = (*PACKET)(unsafe.Add(p, 4*n))
 	return (*uint32)(p)
 }
 
 // linkPacket puts the packet whose tag is at tag at the head of the
 // frame's entry for depth, keeping the tag's length and the entry's.
-func linkPacket(f *Frame, depth int, tag *Tag) {
+func linkPacket(f *Frame, depth int, tag *gpu.Tag) {
 	entry := (*uint32)(unsafe.Add(unsafe.Pointer(f.table.Org), 4*depth))
-	linkAfter((*Tag)(unsafe.Pointer(entry)), tag)
+	linkAfter((*gpu.Tag)(unsafe.Pointer(entry)), tag)
 }
 
 // linkAfter puts the packet whose tag is at tag after the tag prev, an
 // entry's or another packet's.
-func linkAfter(prev, tag *Tag) {
+func linkAfter(prev, tag *gpu.Tag) {
 	*tag = *tag&0xff000000 | *prev&0xffffff
-	*prev = *prev&0xff000000 | Tag(uintptr(unsafe.Pointer(tag)))&0xffffff
+	*prev = *prev&0xff000000 | gpu.Tag(uintptr(unsafe.Pointer(tag)))&0xffffff
 }
 
 func setCamera(c *Camera) {
@@ -551,11 +554,11 @@ func kanjiImage(s string, words []uint32, x, y, clutX, clutY int, fg, bg uint16)
 
 func useCamera() { GsSetLsMatrix(GsWSMATRIX()) }
 
-func project3(a, b, c *Vertex, sxy *[3]XY) bool {
+func project3(a, b, c *Vertex, sxy *[3]gpu.XY) bool {
 	return RotTransPers3((*SVECTOR)(unsafe.Pointer(a)), (*SVECTOR)(unsafe.Pointer(b)), (*SVECTOR)(unsafe.Pointer(c)), (*[3]uint32)(unsafe.Pointer(sxy))) >= 0
 }
 
-func project(v *Vertex, sxy *XY) bool {
+func project(v *Vertex, sxy *gpu.XY) bool {
 	return RotTransPers((*SVECTOR)(unsafe.Pointer(v)), (*uint32)(unsafe.Pointer(sxy))) >= 0
 }
 

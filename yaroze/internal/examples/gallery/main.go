@@ -11,6 +11,7 @@ package main
 import (
 	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/gpu"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -172,38 +173,38 @@ func packets(frame *yaroze.Frame) {
 	t := image.Texture()
 	clut := uint16(t.CY)<<6 | uint16(t.CX)>>4
 
-	f3 := frame.Packet[yaroze.PolyF3](60)
+	f3 := frame.Packet[gpu.FlatTriangle](60)
 	f3.Color = yaroze.Color{R: 240, G: 200, B: 40}
-	f3.XY0, f3.XY1, f3.XY2 = yaroze.At(x, y+30), yaroze.At(x+15, y), yaroze.At(x+30, y+30)
+	f3.XY0, f3.XY1, f3.XY2 = gpu.At(x, y+30), gpu.At(x+15, y), gpu.At(x+30, y+30)
 
-	g4 := frame.Packet[yaroze.PolyG4](60)
+	g4 := frame.Packet[gpu.ShadedQuad](60)
 	g4.Color0, g4.Color1, g4.Color2, g4.Color3 = yaroze.Color{R: 255}, yaroze.Color{G: 255}, yaroze.Color{B: 255}, yaroze.Color{R: 255, G: 255, B: 255}
-	g4.XY0, g4.XY1 = yaroze.At(x+36, y), yaroze.At(x+66, y)
-	g4.XY2, g4.XY3 = yaroze.At(x+36, y+30), yaroze.At(x+66, y+30)
+	g4.XY0, g4.XY1 = gpu.At(x+36, y), gpu.At(x+66, y)
+	g4.XY2, g4.XY3 = gpu.At(x+36, y+30), gpu.At(x+66, y+30)
 
-	ft4 := frame.Packet[yaroze.PolyFT4](60)
+	ft4 := frame.Packet[gpu.TexturedQuad](60)
 	ft4.Color = yaroze.Color{R: 128, G: 128, B: 128}
 	ft4.Clut, ft4.Page = clut, t.Page
-	ft4.XY0, ft4.UV0 = yaroze.At(x+72, y), yaroze.UV{U: t.U, V: t.V}
-	ft4.XY1, ft4.UV1 = yaroze.At(x+112, y+6), yaroze.UV{U: t.U + 63, V: t.V}
-	ft4.XY2, ft4.UV2 = yaroze.At(x+72, y+30), yaroze.UV{U: t.U, V: t.V + 63}
-	ft4.XY3, ft4.UV3 = yaroze.At(x+112, y+36), yaroze.UV{U: t.U + 63, V: t.V + 63}
+	ft4.XY0, ft4.UV0 = gpu.At(x+72, y), gpu.UV{U: t.U, V: t.V}
+	ft4.XY1, ft4.UV1 = gpu.At(x+112, y+6), gpu.UV{U: t.U + 63, V: t.V}
+	ft4.XY2, ft4.UV2 = gpu.At(x+72, y+30), gpu.UV{U: t.U, V: t.V + 63}
+	ft4.XY3, ft4.UV3 = gpu.At(x+112, y+36), gpu.UV{U: t.U + 63, V: t.V + 63}
 
-	g2 := frame.Packet[yaroze.LineG2](60)
+	g2 := frame.Packet[gpu.ShadedLine](60)
 	g2.Color0, g2.Color1 = yaroze.Color{R: 255, G: 255}, yaroze.Color{G: 255, B: 255}
-	g2.XY0, g2.XY1 = yaroze.At(x, y+36), yaroze.At(x+66, y+44)
+	g2.XY0, g2.XY1 = gpu.At(x, y+36), gpu.At(x+66, y+44)
 
-	tile := frame.Packet[yaroze.Tile](60)
+	tile := frame.Packet[gpu.Tile](60)
 	tile.Color = yaroze.Color{R: 90, G: 200, B: 160}
-	tile.XY, tile.W, tile.H = yaroze.At(x, y+50), 30, 12
+	tile.XY, tile.W, tile.H = gpu.At(x, y+50), 30, 12
 
 	// A sprite packet takes its page from the drawing mode before it,
 	// which is linked after it at the same depth so that it is drawn
 	// first: at one depth, the packet linked last is drawn first.
-	sprt := frame.Packet[yaroze.Sprt](60)
+	sprt := frame.Packet[gpu.Sprite](60)
 	sprt.Color = yaroze.Color{R: 128, G: 128, B: 128}
-	sprt.XY, sprt.UV, sprt.Clut = yaroze.At(x+36, y+50), yaroze.UV{U: t.U, V: t.V}, clut
+	sprt.XY, sprt.UV, sprt.Clut = gpu.At(x+36, y+50), gpu.UV{U: t.U, V: t.V}, clut
 	sprt.W, sprt.H = 32, 16
-	mode := frame.Packet[yaroze.DrawMode](60)
-	mode.Page = t.Mode(0)
+	mode := frame.Packet[gpu.DrawMode](60)
+	mode.Page = t.Mode(yaroze.BlendNone)
 }

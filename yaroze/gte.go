@@ -1,5 +1,7 @@
 package yaroze
 
+import "go.chrisrx.dev/psx/gpu"
+
 // The GTE, the console's geometry coprocessor, for a program that
 // transforms its own vertices and builds its own packets rather than
 // leaving every model to Object.Draw: the commands a polygon takes, in
@@ -9,7 +11,7 @@ package yaroze
 //	yaroze.UseCamera()
 //	if yaroze.Project3(&a, &b, &c, &sxy) && yaroze.ClipArea() > 0 {
 //		depth := yaroze.AverageDepth3()
-//		p := frame.Packet[yaroze.PolyF3](depth)
+//		p := frame.Packet[gpu.FlatTriangle](depth)
 //		p.XY0, p.XY1, p.XY2 = sxy[0], sxy[1], sxy[2]
 //	}
 
@@ -20,12 +22,12 @@ func UseCamera() { useCamera() }
 // Project3 projects three vertices to the screen, into sxy, and reports
 // whether every result was in range. Their depths stay in the
 // coprocessor for AverageDepth3, and their points for ClipArea.
-func Project3(a, b, c *Vertex, sxy *[3]XY) bool { return project3(a, b, c, sxy) }
+func Project3(a, b, c *Vertex, sxy *[3]gpu.XY) bool { return project3(a, b, c, sxy) }
 
 // Project projects one vertex to the screen, into sxy, and reports
 // whether it was in range. After Project3 it makes a quad's fourth
 // corner, which AverageDepth4 then takes in.
-func Project(v *Vertex, sxy *XY) bool { return project(v, sxy) }
+func Project(v *Vertex, sxy *gpu.XY) bool { return project(v, sxy) }
 
 // ClipArea is the signed area the last three screen points enclose:
 // positive when they turn clockwise on the screen, a polygon facing the

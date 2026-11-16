@@ -2,7 +2,10 @@
 
 package yaroze
 
-import "go.chrisrx.dev/psx/geom"
+import (
+	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/gpu"
+)
 
 // The host side of the Go API, for every build that is not for the
 // console, where an editor, go vet and a program's own tests see it:
@@ -32,8 +35,8 @@ func sortBackground(bg *Background, f *Frame, depth int) {
 }
 func loadTIM(words []uint32, at bool, x, y int) Image      { panic(stub("LoadTIM")) }
 func allocPacket(n int) *uint32                            { panic(stub("Frame.Packet")) }
-func linkPacket(f *Frame, depth int, tag *Tag)             { panic(stub("Frame.Packet")) }
-func linkAfter(prev, tag *Tag)                             { panic(stub("Frame.PacketAfter")) }
+func linkPacket(f *Frame, depth int, tag *gpu.Tag)         { panic(stub("Frame.Packet")) }
+func linkAfter(prev, tag *gpu.Tag)                         { panic(stub("Frame.PacketAfter")) }
 func mainVolume(left, right int)                           { panic(stub("SetVolume")) }
 func vabTransfer(vh, vb []uint32) int16                    { panic(stub("OpenBank")) }
 func vabClose(id int16)                                    { panic(stub("Bank.Close")) }
@@ -93,9 +96,9 @@ func kanjiPrint(id int32, s string)                        { panic(stub("KanjiTe
 func kanjiImage(s string, words []uint32, x, y, cx, cy int, fg, bg uint16) bool {
 	panic(stub("KanjiImage"))
 }
-func useCamera()                                { panic(stub("UseCamera")) }
-func project3(a, b, c *Vertex, sxy *[3]XY) bool { panic(stub("Project3")) }
-func project(v *Vertex, sxy *XY) bool           { panic(stub("Project")) }
-func clipArea() int                             { panic(stub("ClipArea")) }
-func averageDepth3() int                        { panic(stub("AverageDepth3")) }
-func averageDepth4() int                        { panic(stub("AverageDepth4")) }
+func useCamera()                                    { panic(stub("UseCamera")) }
+func project3(a, b, c *Vertex, sxy *[3]gpu.XY) bool { panic(stub("Project3")) }
+func project(v *Vertex, sxy *gpu.XY) bool           { panic(stub("Project")) }
+func clipArea() int                                 { panic(stub("ClipArea")) }
+func averageDepth3() int                            { panic(stub("AverageDepth3")) }
+func averageDepth4() int                            { panic(stub("AverageDepth4")) }

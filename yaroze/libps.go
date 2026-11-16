@@ -7,7 +7,8 @@
 // samples. Beside them is a Go API: a screen drawn frame by frame, sprites
 // and boxes on it, text, music from a sound bank, the memory card and 3D,
 // as types with methods, strings, ints and errors, with the controllers in
-// package input and the geometry in package geom:
+// package input, the geometry in package geom, and the GPU's packets, for
+// a program that builds its own, in package gpu:
 //
 //	var screen = yaroze.Screen{Background: yaroze.Color{R: 60, G: 120, B: 120}}
 //
