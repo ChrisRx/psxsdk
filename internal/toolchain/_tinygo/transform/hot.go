@@ -62,17 +62,17 @@ import (
 const hotKeepName = "__hot_keep"
 
 // isHotVariable reports whether name is a variable the keeper holds as
-// declared: any with a name but the runtime's and the compiler's own.
+// declared: one of the program's own packages, main and those it imports
+// by a path with a domain, such as go.chrisrx.dev/psx/yaroze. The runtime's
+// and the standard library's, whose import paths have no dot in their
+// first element, and the compiler's own are not.
 func isHotVariable(name string) bool {
-	if name == "" {
-		return false
+	// A name the compiler made has the package before a $, as main$pack
+	// has, and a variable made of an allocation its position after an @.
+	if i := strings.IndexAny(name, "$@"); i >= 0 {
+		name = name[:i]
 	}
-	for _, prefix := range []string{"llvm.", "runtime.", "runtime/", "internal/task.", "reflect/", "machine.", "device."} {
-		if strings.HasPrefix(name, prefix) {
-			return false
-		}
-	}
-	return true
+	return name != "" && !isStandard(name)
 }
 
 // typeLayout describes a type as far as its layout goes.
@@ -143,13 +143,20 @@ func HotStubs(mod llvm.Module, config *compileopts.Config) {
 	// of a variable puts it beyond the optimizer's analysis, so a function
 	// that is never called, kept through the link, loads a byte of every
 	// one. In a patch build the function is in the base already, and is
-	// bound away with the rest. The runtime's own variables are left to
-	// the optimizer: it links what it does by proving some of them never
-	// set, the main task's defer frame among them, without which the
-	// panic unwinding it never does would need a longjmp the target has
-	// not. A patch that changes what the runtime stores, the first defer
-	// of a program say, is refused for the size, and the program started
-	// again.
+	// bound away with the rest. The variables of the runtime and the
+	// standard library are left to the optimizer. It links what it does
+	// by proving some of them never set: the main task's defer frame,
+	// without which the panic unwinding it never does would need a
+	// longjmp the target has not, and the type errors.Is and errors.As
+	// compare with, which kept would keep internal/reflectlite, and with
+	// it the code that prints a panic's value of any type, whose errors'
+	// messages allocate, and a loop the compiler makes a call of strlen,
+	// which the target has not either. A patch that changes what the
+	// program stores in one of them, the first defer of a program say,
+	// is refused for the size where the variable is in both, and the
+	// program started again. Where the base's optimizer folded the
+	// variable away, the patch has one of its own, which the base's code
+	// does not read.
 	keeper := llvm.AddFunction(mod, hotKeepName, llvm.FunctionType(ctx.VoidType(), nil, false))
 	keeper.SetLinkage(llvm.ExternalLinkage)
 	keep := ctx.NewBuilder()
