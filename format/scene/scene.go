@@ -80,66 +80,69 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+
+	layout "go.chrisrx.dev/psx/internal/scenelayout"
 )
 
 // ID is the first word of a scene file.
-const ID = 0x314E4353
+const ID = layout.ID
 
 // The most of each a file holds, which are the sizes of package scene's
 // arrays.
 const (
-	MaxTextures = 16
-	MaxModels   = 16
-	MaxObjects  = 64
-	MaxSprites  = 128
-	MaxLights   = 3
-	MaxName     = 15 // bytes of an object's or a sprite's name
-	MaxPath     = 31 // bytes of a disc path
+	MaxTextures = layout.MaxTextures
+	MaxModels   = layout.MaxModels
+	MaxObjects  = layout.MaxObjects
+	MaxSprites  = layout.MaxSprites
+	MaxLights   = layout.MaxLights
+	MaxName     = layout.MaxName // bytes of an object's or a sprite's name
+	MaxPath     = layout.MaxPath // bytes of a disc path
 
 	// A scene has at most MaxLayers layers. A layer's map holds at most
 	// MaxMapCells cells, its texture at most MaxCells, and its cells are
 	// CellSize square.
-	MaxLayers   = 3
-	MaxMapCells = 4096
-	MaxCells    = 256
-	CellSize    = 16
-	EmptyCell   = 0xffff
+	MaxLayers   = layout.MaxLayers
+	MaxMapCells = layout.MaxMapCells
+	MaxCells    = layout.MaxCells
+	CellSize    = layout.CellSize
+	EmptyCell   = layout.EmptyCell
 
 	// A room is at most MaxRoomCells across and down, as package stage
 	// has it, with at most MaxLinks links, one a digit, and MaxMarkers
 	// markers.
-	MaxRoomCells = 32
-	MaxLinks     = 10
-	MaxMarkers   = 64
+	MaxRoomCells = layout.MaxRoomCells
+	MaxLinks     = layout.MaxLinks
+	MaxMarkers   = layout.MaxMarkers
 )
 
 // The flags the editor names for a layer's cells; the other four bits are
 // the program's own.
 const (
-	Solid  = 1 << 0 // nothing passes through it
-	OneWay = 1 << 1 // stood on from above, passed through from below
-	Hurts  = 1 << 2 // hurts what touches it
-	Pickup = 1 << 3 // taken by what touches it
+	Solid  = layout.Solid  // nothing passes through it
+	OneWay = layout.OneWay // stood on from above, passed through from below
+	Hurts  = layout.Hurts  // hurts what touches it
+	Pickup = layout.Pickup // taken by what touches it
 )
 
-// The sizes of the records, in bytes.
+// The sizes of the records, in bytes. They are package layout's, which
+// package scene reads the file by as well.
 const (
-	HeaderSize    = 0x68
-	PathSize      = 32
-	ObjectSize    = 64
-	SpriteSize    = 64
-	LayerSize     = 28 // before its map
-	LayerNameSize = 20 // after its map: the name, the count of flags and a pad
-	RoomSize      = 36 // before its cells
-	LinkSize      = 36
-	MarkerSize    = 28
-	ObjectsAt     = HeaderSize // plus the paths
-	nameSize      = 16
-	lightSize     = 16
-	lightsAt      = 0x38
-	cameraAt      = 0x1C
-	ambientAt     = 0x10
-	projectionAt  = 0x0C
+	HeaderSize    = layout.HeaderSize
+	PathSize      = layout.PathSize
+	ObjectSize    = layout.ObjectSize
+	SpriteSize    = layout.SpriteSize
+	LayerSize     = layout.LayerSize     // before its map
+	LayerNameSize = layout.LayerNameSize // after its map: the name, the count of flags and a pad
+	RoomSize      = layout.RoomSize      // before its cells
+	LinkSize      = layout.LinkSize
+	MarkerSize    = layout.MarkerSize
+	ObjectsAt     = layout.ObjectsAt // plus the paths
+	nameSize      = layout.NameSize
+	lightSize     = layout.LightSize
+	lightsAt      = layout.LightsAt
+	cameraAt      = layout.CameraAt
+	ambientAt     = layout.AmbientAt
+	projectionAt  = layout.ProjectionAt
 )
 
 // A Camera is a viewpoint and the point it looks at, with a twist about
