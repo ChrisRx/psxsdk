@@ -1,6 +1,7 @@
 // Package gpu is the GPU's packets as it takes them: the triangles,
 // quads, lines, rectangles and sprites it draws, and the drawing mode it
-// draws them in, each laid out as the SDK's libgpu.h has it under a name
+// draws them in, with the texture window and the copy within video memory
+// that go into a frame as they do, each laid out as the SDK's libgpu.h has it under a name
 // that says what it draws.
 //
 // A packet is a Tag, which the GPU reads the packet's length and the next
@@ -267,10 +268,50 @@ type Sprite struct {
 // DrawMode sets the texture page and the blend for the packets after it,
 // the SDK's DR_MODE: Page is the command and under it the page as a
 // yaroze Texture gives it, with the blend in bits 5 and 6, which
-// Texture.Mode returns whole.
+// Texture.DrawMode returns whole.
 type DrawMode struct {
 	Tag  Tag
 	Page uint32
+}
+
+// TextureWindow sets the window textures repeat within for the packets
+// after it, the SDK's DR_TWIN: a textured primitive larger than the
+// window is filled with the window's pixels over and over. A window of
+// none, as Init leaves it, has textures drawn as they are, and a program
+// that sets one puts it back to none after what it was for.
+//
+// Window is the command and under it the window as the GPU takes it, in
+// units of 8 pixels: in bits 0 to 4 and 5 to 9 the bits of a texture
+// coordinate to replace, across and down, and in bits 10 to 14 and 15 to
+// 19 what replaces them. Repeat works the word out. The packet ends with
+// a word of nothing, as the SDK's does.
+type TextureWindow struct {
+	Tag    Tag
+	Window uint32
+	nop    uint32
+}
+
+// Repeat sets the window to the w by h pixels at u, v in the texture
+// page. The sizes are powers of two from 8 to 256, and the corner a
+// multiple of its size each way; 256 by 256 is no window.
+func (p *TextureWindow) Repeat(u, v, w, h int) {
+	p.Window = 0xe2<<24 | uint32(v>>3&0x1f)<<15 | uint32(u>>3&0x1f)<<10 | uint32(-h>>3&0x1f)<<5 | uint32(-w>>3&0x1f)
+}
+
+// VRAMCopy copies a rectangle of video memory to another place, the
+// SDK's DR_MOVE: the W by H pixels at From go to To, when the GPU reaches
+// the packet among the frame's others. The points are places in video
+// memory, as a yaroze RECT's are, not on the screen: the drawing offset
+// and the clip do not apply. The packet first has the GPU empty its
+// texture cache, so that primitives after it that take the copied pixels
+// as a texture get the new ones.
+type VRAMCopy struct {
+	Tag   Tag
+	flush uint32
+	code  uint32
+	From  XY
+	To    XY
+	W, H  uint16
 }
 
 // Init sets the packet's command code. Frame.Packet calls it; a program
@@ -313,3 +354,9 @@ func (p *Sprite) Init() { p.Code = 0x64 }
 // Init sets the packet's command, with page 0 and the average blend
 // until Page is set.
 func (p *DrawMode) Init() { p.Page = 0xe1 << 24 }
+
+// Init sets the packet's command, with no window, and its last word.
+func (p *TextureWindow) Init() { p.Window, p.nop = 0xe2<<24, 0 }
+
+// Init sets the packet's two commands, the cache's and the copy's.
+func (p *VRAMCopy) Init() { p.flush, p.code = 0x01<<24, 0x80<<24 }

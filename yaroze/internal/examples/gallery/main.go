@@ -206,5 +206,5 @@ func packets(frame *yaroze.Frame) {
 	sprt.XY, sprt.UV, sprt.Clut = gpu.At(x+36, y+50), gpu.UV{U: t.U, V: t.V}, clut
 	sprt.W, sprt.H = 32, 16
 	mode := frame.Packet[gpu.DrawMode](60)
-	mode.Page = t.Mode(yaroze.BlendNone)
+	mode.Page = t.DrawMode(yaroze.BlendNone)
 }

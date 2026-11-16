@@ -369,30 +369,3 @@ func fillRect(f *yaroze.Frame, depth int, x, y, w, h int16, r, g, b uint8, semi 
 		f.Packet[gpu.DrawMode](depth).Page = modeDither | abr&3<<5
 	}
 }
-
-// A textureWindow sets the part of the texture page a texture repeats
-// within, the SDK's DR_TWIN, which the gpu package has no type for. The
-// command is followed by a word of nothing, as the SDK's is.
-type textureWindow struct {
-	Tag    gpu.Tag
-	Window uint32
-	nop    uint32
-}
-
-// Init sets the packet's command, with no window.
-func (p *textureWindow) Init() { p.Window, p.nop = 0xe2<<24, 0 }
-
-// A vramCopy copies a rectangle of video memory to another place, the
-// SDK's DR_MOVE, which the gpu package has no type for: the command that
-// empties the texture cache, then the copy.
-type vramCopy struct {
-	Tag   gpu.Tag
-	flush uint32
-	code  uint32
-	From  gpu.XY
-	To    gpu.XY
-	W, H  uint16
-}
-
-// Init sets the packet's two commands.
-func (p *vramCopy) Init() { p.flush, p.code = 0x01<<24, 0x80<<24 }

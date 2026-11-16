@@ -68,7 +68,7 @@ func probeFrame() {
 // copyPixel links a copy of one pixel of video memory, from one place to
 // another, into the frame at depth.
 func copyPixel(depth int, sx, sy, dx, dy int32) {
-	p := frame.Packet[vramCopy](depth)
+	p := frame.Packet[gpu.VRAMCopy](depth)
 	p.From = gpu.XY{X: int16(sx), Y: int16(sy)}
 	p.To = gpu.XY{X: int16(dx), Y: int16(dy)}
 	p.W, p.H = 1, 1
