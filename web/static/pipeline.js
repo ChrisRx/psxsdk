@@ -195,8 +195,10 @@ export class Pipeline {
 	// package's functions are called through slots and memory is reserved
 	// for the patches. libps names the Net Yaroze library: "static", linked
 	// into the program, or "resident", the one laid under it. The cache has
-	// to hold the target's C and assembly (see targets).
-	async build(project, log, { hot = false, libps = "static" } = {}) {
+	// to hold the target's C and assembly (see targets). experiment is the
+	// compiler's -experiment flag, as "noonstore" to build without onstore
+	// (see docs/architecture/compiler.md), or empty for its defaults.
+	async build(project, log, { hot = false, libps = "static", experiment = "" } = {}) {
 		if (libps !== "static" && libps !== "resident") throw new Error(`no ${libps} library: static or resident`);
 		const linked = libps === "static";
 		const target = linked ? STATIC_TARGET : this.env.target;
@@ -205,6 +207,7 @@ export class Pipeline {
 		if (!(await this.generate(project, fs, log))) return { ok: false };
 		const tinygo = ["tinygo", "-target=" + target];
 		if (hot) tinygo.push("-hot");
+		if (experiment) tinygo.push("-experiment=" + experiment);
 		const steps = [
 			["tinygo", [...tinygo, "-o", "/work/prog.elf", "/work/prog"]],
 			["mips1fix", ["mips1fix", "-q", "/work/prog.elf"]],
@@ -226,18 +229,19 @@ export class Pipeline {
 
 	// patch compiles a project as a hot reload patch for the program whose
 	// ELF is base, built with hot and running, against the library libps
-	// as the program was, linked at the address at inside the program's
-	// region for patches, and returns {ok, elf}, the patch's ELF for the
+	// and with the experiments of experiment as the program was, linked at
+	// the address at inside the program's region for patches, and returns
+	// {ok, elf}, the patch's ELF for the
 	// emulator to load. The compiler says on the log, in a line starting
 	// "hot:", when the program has to be built and started again instead:
 	// a variable that changed size, say.
-	async patch(project, base, at, log, { libps = "static" } = {}) {
+	async patch(project, base, at, log, { libps = "static", experiment = "" } = {}) {
 		const { fs, env } = this.workspace(project);
 		fs.put("/work/base.elf", base);
 		if (!(await this.generate(project, fs, log))) return { ok: false };
 		const target = libps === "static" ? STATIC_TARGET : this.env.target;
 		const steps = [
-			["tinygo", ["tinygo", "-target=" + target, "-hot-base=/work/base.elf", "-hot-at=0x" + at.toString(16), "-o", "/work/patch.elf", "/work/prog"]],
+			["tinygo", ["tinygo", "-target=" + target, ...(experiment ? ["-experiment=" + experiment] : []), "-hot-base=/work/base.elf", "-hot-at=0x" + at.toString(16), "-o", "/work/patch.elf", "/work/prog"]],
 			["mips1fix", ["mips1fix", "-q", "/work/patch.elf"]],
 		];
 		if (!(await this.steps(steps, env, fs, log))) return { ok: false };

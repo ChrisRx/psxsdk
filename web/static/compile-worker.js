@@ -2,10 +2,12 @@
 // the sysroot the first time it is asked to build, keeps them, and builds
 // each project it is sent with pipeline.js.
 //
-// The page sends {type: "build", id, files, hot, libps}, the project's
-// files as {path, data}, its Go files at the root and its data files under
-// assets/, with libps "static" or "resident" naming the Net Yaroze library to
-// build against (see pipeline.js), or {type: "load", id} to fetch the
+// The page sends {type: "build", id, files, hot, libps, experiment}, the
+// project's files as {path, data}, its Go files at the root and its data
+// files under assets/, with libps "static" or "resident" naming the Net
+// Yaroze library to build against and experiment the compiler's
+// experiments to turn off, as "noonstore", or empty for its defaults (see
+// pipeline.js), or {type: "load", id} to fetch the
 // compiler ahead of the first build, answered by {id, ok, targets}, the
 // targets the compiler's cache can build for, or {id, ok: false, error}.
 // While loading or
@@ -18,9 +20,10 @@
 // {id, ok, files} with those that changed, or {id, ok: false, error} with
 // gofmt's complaints, which name the files as they were sent.
 //
-// {type: "patch", id, files, base, at, libps} compiles the project as a hot
-// reload patch for the running program whose ELF is base, built with hot
-// against the library libps, linked at address at, and replies {ok, elf}.
+// {type: "patch", id, files, base, at, libps, experiment} compiles the
+// project as a hot reload patch for the running program whose ELF is base,
+// built with hot against the library libps and with the experiments of
+// experiment, linked at address at, and replies {ok, elf}.
 //
 // {type: "convert", id, files} runs the project's go:generate lines other
 // than discgen's, the converters that make assets/ from assets/, which needs
@@ -169,7 +172,7 @@ self.onmessage = async (e) => {
 			return;
 		}
 		if (msg.type === "patch") {
-			const result = await loaded.patch(msg.files, msg.base, msg.at, log, { libps: msg.libps });
+			const result = await loaded.patch(msg.files, msg.base, msg.at, log, { libps: msg.libps, experiment: msg.experiment });
 			if (!result.ok) {
 				self.postMessage({ id: msg.id, ok: false, error: "the patch failed" });
 				return;
@@ -177,7 +180,7 @@ self.onmessage = async (e) => {
 			self.postMessage({ id: msg.id, ok: true, elf: result.elf }, [result.elf.buffer]);
 			return;
 		}
-		const result = await loaded.build(msg.files, log, { hot: !!msg.hot, libps: msg.libps });
+		const result = await loaded.build(msg.files, log, { hot: !!msg.hot, libps: msg.libps, experiment: msg.experiment });
 		if (!result.ok) {
 			self.postMessage({ id: msg.id, ok: false, error: "the build failed" });
 			return;
