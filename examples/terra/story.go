@@ -5,7 +5,10 @@ package main
 // with the pedestal or without it, the sunset that strands them, and the
 // sailing away; and the picture-card scenes over them.
 
-import "go.chrisrx.dev/psx/yaroze"
+import (
+	"go.chrisrx.dev/psx/gpu"
+	"go.chrisrx.dev/psx/yaroze"
+)
 
 var (
 	pedestalEnt *entity
@@ -401,7 +404,6 @@ var scene2Cards = [10]card{
 func scene2Frame() {
 	t := sceneT
 	sceneT++
-	over := screen.Overlay()
 	for i := range scene2Cards {
 		c := &scene2Cards[i]
 		if int(c.from) > t || t > int(c.to) {
@@ -417,7 +419,7 @@ func scene2Frame() {
 		}
 		x := -int(tex.w) / 2
 		y := int(c.y) - int(tex.h)/2 - 0x78
-		cardSprite(over.Entry(0), int16(x), int16(y), tex, uint8(bright), 1)
+		cardSprite(over, 0, int16(x), int16(y), tex, uint8(bright), 1)
 	}
 	if t == 800 {
 		scene2On = false
@@ -425,19 +427,16 @@ func scene2Frame() {
 }
 
 // cardSprite links a semi-transparent sprite of the texture, lit c, with
-// its texture page at the rate, at tag.
-func cardSprite(tag *uint32, x, y int16, tex *texture, c uint8, abr uint32) {
-	p := yaroze.AllocPacket(5)
-	p[0] = 4 << 24
-	p[1] = 0x66<<24 | uint32(c)<<16 | uint32(c)<<8 | uint32(c)
-	p[2] = xy(x, y)
-	p[3] = uint32(tex.u) | uint32(tex.v)<<8 | uint32(tex.clut())<<16
-	p[4] = uint32(uint16(tex.w)) | uint32(uint16(tex.h))<<16
-	yaroze.LinkTag(tag, p)
-	q := yaroze.AllocPacket(2)
-	q[0] = 1 << 24
-	q[1] = 0xe1000200 | abr<<5 | uint32(tex.tpageY>>4&0x10) | uint32((tex.tpageX&0x3ff)>>6) | uint32((tex.tpageY&0x200)<<2)
-	yaroze.LinkTag(tag, q)
+// its drawing mode at the rate, into f at depth.
+func cardSprite(f *yaroze.Frame, depth int, x, y int16, tex *texture, c uint8, abr uint32) {
+	p := f.Packet[gpu.Sprite](depth)
+	p.Color = gray(c)
+	p.Code |= gpu.CodeTranslucent
+	p.XY = gpu.XY{X: x, Y: y}
+	p.UV = gpu.UV{U: tex.u, V: tex.v}
+	p.Clut = tex.clut()
+	p.W, p.H = uint16(tex.w), uint16(tex.h)
+	f.Packet[gpu.DrawMode](depth).Page = tex.mode() | abr<<5
 }
 
 // A credit is one line of the roll: when it starts, its texture, and how
@@ -459,7 +458,6 @@ var credits = [16]credit{
 func scene3Frame() {
 	t := sceneT
 	sceneT++
-	over := screen.Overlay()
 	for i := range credits {
 		c := &credits[i]
 		tex := &panels[c.tex]
@@ -476,14 +474,14 @@ func scene3Frame() {
 		case 2:
 			x = 0x10
 		}
-		cardSprite(over.Entry(0), x, int16(0x78-y), tex, 0x80, 1)
+		cardSprite(over, 0, x, int16(0x78-y), tex, 0x80, 1)
 	}
 	switch {
 	case t-0x100 >= 0 && t-0x100 < 0x100:
 		c := uint8(t - 0x100)
-		fillRect(over.Entry(0), -160, -120, 320, 240, c, c, c, true, 2)
+		fillRect(over, 0, -160, -120, 320, 240, c, c, c, true, 2)
 	case t >= 0x200:
-		fillRect(over.Entry(0), -160, -120, 320, 240, 0, 0, 0, false, 0)
+		fillRect(over, 0, -160, -120, 320, 240, 0, 0, 0, false, 0)
 	}
 	if t == 0xc08 {
 		fadeTune(tunePort)

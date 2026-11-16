@@ -1,11 +1,13 @@
 package yaroze
 
-import "go.chrisrx.dev/psx/geom"
+import (
+	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/gpu"
+)
 
-// A Color is a color as the GPU takes it, a byte a component.
-type Color struct {
-	R, G, B uint8
-}
+// A Color is a color as the GPU takes it, a byte a component: the gpu
+// package's Color, which its packets take as well.
+type Color = gpu.Color
 
 // A BlendMode is how a sprite, a box or a line is blended with what is
 // behind it. Its values are the library's attribute word's bits 28 to 30,
@@ -58,6 +60,11 @@ func (t Texture) depth() uint32 { return uint32(t.Page) >> 7 & 3 << 24 }
 // turned about its pivot if it has any of either. X and Y are where the
 // pivot goes; W and H are the size cut from the texture, from U, V.
 // Image.Sprite makes one showing the whole image.
+//
+// It is the library's sprite, the SDK's GsSPRITE, which carries its own
+// texture and blend and which Draw sorts into a frame. The gpu package's
+// Sprite is the GPU's, the one packet a program builds itself with
+// Frame.Packet, upright and unscaled, in the page a gpu.DrawMode set.
 //
 // A Sprite starts with the library's own layout, so drawing one copies
 // nothing. The attribute word the library reads is packed from Blend,

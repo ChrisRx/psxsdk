@@ -376,7 +376,6 @@ func playerDie(e *entity) {
 	if e.state&entStateDead == 0 {
 		return
 	}
-	over := screen.Overlay()
 	t := e.t9
 	e.vx, e.vz = 0, 0
 	if t == 0 {
@@ -393,7 +392,7 @@ func playerDie(e *entity) {
 			e.frame |= entFrameHidden
 		}
 		c := uint8(t * 2)
-		fillRect(over.Entry(0), -160, -120, 320, 240, c, c, c, true, 1)
+		fillRect(over, 0, -160, -120, 320, 240, c, c, c, true, 1)
 		if t == 0x7f {
 			e.frame |= entFrameAtEdge
 			flags[storyLost] = 1

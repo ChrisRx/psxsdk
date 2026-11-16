@@ -7,7 +7,10 @@ package main
 // the pixel comes back white the sun is in view and a glare washes over
 // the screen with a line of flares across it.
 
-import "go.chrisrx.dev/psx/yaroze"
+import (
+	"go.chrisrx.dev/psx/gpu"
+	"go.chrisrx.dev/psx/yaroze"
+)
 
 var (
 	// probeOn turns the pixel test on; probeX and probeY are where on the
@@ -44,7 +47,7 @@ func probeInit() {
 // place at the back of the table and the copy back from there at the
 // front, or blanks the result when there is nowhere to test, and reads
 // what the last frame's copy brought back.
-func probeFrame(ot *yaroze.GsOT) {
+func probeFrame() {
 	if !probeOn {
 		return
 	}
@@ -53,8 +56,8 @@ func probeFrame(ot *yaroze.GsOT) {
 		probeRect.Clear(0, 0, 0)
 	} else {
 		x := int32(probeX) + (1-yaroze.GsGetActiveBuff())*320
-		copyPixel(ot.Entry(4093), probeSrcX, probeSrcY, x, int32(probeY))
-		copyPixel(ot.Entry(1), x, int32(probeY), probeDstX, probeDstY)
+		copyPixel(4093, probeSrcX, probeSrcY, x, int32(probeY))
+		copyPixel(1, x, int32(probeY), probeDstX, probeDstY)
 	}
 	probeRect = yaroze.RECT{X: probeDstX, Y: probeDstY, W: 1, H: 1}
 	probeRect.Store(&probePixel[0])
@@ -63,21 +66,17 @@ func probeFrame(ot *yaroze.GsOT) {
 }
 
 // copyPixel links a copy of one pixel of video memory, from one place to
-// another, at tag.
-func copyPixel(tag *uint32, sx, sy, dx, dy int32) {
-	p := yaroze.AllocPacket(6)
-	p[0] = 5 << 24
-	p[1] = 0x01000000
-	p[2] = 0x80000000
-	p[3] = xy(int16(sx), int16(sy))
-	p[4] = xy(int16(dx), int16(dy))
-	p[5] = 1 | 1<<16
-	yaroze.LinkTag(tag, p)
+// another, into the frame at depth.
+func copyPixel(depth int, sx, sy, dx, dy int32) {
+	p := frame.Packet[vramCopy](depth)
+	p.From = gpu.XY{X: int16(sx), Y: int16(sy)}
+	p.To = gpu.XY{X: int16(dx), Y: int16(dy)}
+	p.W, p.H = 1, 1
 }
 
 // drawSun draws the sun behind the world and, when the last frame's probe
 // saw it, the glare and flares over everything.
-func drawSun(ot, over *yaroze.GsOT) {
+func drawSun() {
 	sunDir = yaroze.SVECTOR{Vx: -4096, Vy: -1365, Vz: -4096}
 	if areaStyle == areaDark {
 		sunDir.Vy = -682
@@ -94,9 +93,9 @@ func drawSun(ot, over *yaroze.GsOT) {
 	}
 	if flag >= 0 {
 		t := &sunTextures[0]
-		sprite(ot.Entry(4094), sx-t.w/2, sy-t.h/2, t, 0x67)
+		sprite(frame, 4094, sx-t.w/2, sy-t.h/2, t)
 	}
-	tpagePacket(ot.Entry(4094), &sunTextures[1], 1)
+	frame.Packet[gpu.DrawMode](4094).Page = sunTextures[1].mode() | 1<<5
 	if !probeSeen {
 		return
 	}
@@ -106,41 +105,28 @@ func drawSun(ot, over *yaroze.GsOT) {
 	}
 	if d < 0x1900 {
 		c := uint8((0x1900 - d) * 0x5c / 0x1900)
-		p := yaroze.AllocPacket(6)
-		p[0] = 5 << 24
-		p[1] = 0x2a<<24 | uint32(c)<<16 | uint32(c)<<8 | uint32(c)
-		p[2] = xy(-160, -120)
-		p[3] = xy(160, -120)
-		p[4] = xy(-160, 120)
-		p[5] = xy(160, 120)
-		yaroze.LinkTag(over.Entry(2), p)
+		p := over.Packet[gpu.FlatQuad](2)
+		p.Color = gray(c)
+		p.Code |= gpu.CodeTranslucent
+		p.XY0, p.XY1 = gpu.At(-160, -120), gpu.At(160, -120)
+		p.XY2, p.XY3 = gpu.At(-160, 120), gpu.At(160, 120)
 	}
 	for i := range 7 {
 		t := &sunTextures[1+i]
 		k := flareSpacing[i]
-		sprite(over.Entry(2), int16(int32(sx)*k>>12)-t.w/2, int16(int32(sy)*k>>12)-t.h/2, t, 0x67)
+		sprite(over, 2, int16(int32(sx)*k>>12)-t.w/2, int16(int32(sy)*k>>12)-t.h/2, t)
 	}
-	tpagePacket(over.Entry(2), &sunTextures[1], 1)
+	over.Packet[gpu.DrawMode](2).Page = sunTextures[1].mode() | 1<<5
 }
 
-// sprite links a sprite of the whole texture at x, y with the given GPU
-// code, 0x64 for plain and 0x66 or 0x67 for semi-transparent, at tag.
-func sprite(tag *uint32, x, y int16, t *texture, code uint32) {
-	p := yaroze.AllocPacket(5)
-	p[0] = 4 << 24
-	p[1] = code<<24 | 0x808080
-	p[2] = xy(x, y)
-	p[3] = uint32(t.u) | uint32(t.v)<<8 | uint32(t.clut())<<16
-	p[4] = xy(t.w, t.h)
-	yaroze.LinkTag(tag, p)
-}
-
-// tpagePacket links a texture page setting for the texture, at the
-// semi-transparency rate, at tag. The packets at a tag run last to
-// first, so it goes after the sprites it is for.
-func tpagePacket(tag *uint32, t *texture, abr uint32) {
-	p := yaroze.AllocPacket(2)
-	p[0] = 1 << 24
-	p[1] = 0xe1000200 | uint32(t.tpageY>>4&0x10) | uint32((t.tpageX&0x3ff)>>6) | abr<<5 | uint32((t.tpageY&0x200)<<2)
-	yaroze.LinkTag(tag, p)
+// sprite links a semi-transparent sprite of the whole texture, in its own
+// colors, at x, y, into f at depth.
+func sprite(f *yaroze.Frame, depth int, x, y int16, t *texture) {
+	p := f.Packet[gpu.Sprite](depth)
+	p.Color = gray(0x80)
+	p.Code |= gpu.CodeTranslucent | gpu.CodeRaw
+	p.XY = gpu.XY{X: x, Y: y}
+	p.UV = gpu.UV{U: t.u, V: t.v}
+	p.Clut = t.clut()
+	p.W, p.H = uint16(t.w), uint16(t.h)
 }

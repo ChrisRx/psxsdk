@@ -942,7 +942,6 @@ func shipBehavior(e *entity) {
 		}
 	}
 	if flags[storyEnding] != 0 {
-		over := screen.Overlay()
 		s := e.t4
 		e.t4 = s + 1
 		switch {
@@ -955,9 +954,9 @@ func shipBehavior(e *entity) {
 		}
 		if s-0x100 >= 0 && s-0x100 < 0x80 {
 			c := uint8((s - 0x100) * 2)
-			fillRect(over.Entry(0), -160, -120, 320, 240, c, c, c, true, 2)
+			fillRect(over, 0, -160, -120, 320, 240, c, c, c, true, 2)
 		} else if s > 0x17f {
-			fillRect(over.Entry(0), -160, -120, 320, 240, 0, 0, 0, false, 0)
+			fillRect(over, 0, -160, -120, 320, 240, 0, 0, 0, false, 0)
 		}
 		if s == 0x1c0 {
 			flags[flagStart] = 1
@@ -1032,20 +1031,9 @@ func spriteQuad(tex *texture, c uint32, abr uint32) {
 	if yaroze.RotTransPers3(&fxCorner[0], &fxCorner[1], &fxCorner[2], &fxSXY) < 0 {
 		return
 	}
-	p := yaroze.AllocPacket(10)
-	p[2], p[4], p[6] = fxSXY[0], fxSXY[1], fxSXY[2]
 	yaroze.RotTransPers(&fxCorner[3], &fxSXY3)
-	p[8] = fxSXY3
 	otz := yaroze.AverageZ4()
-	p[0] = 9 << 24
-	p[1] = 0x2e<<24 | c<<16 | c<<8 | c
-	u0, v0 := uint32(tex.u), uint32(tex.v)
-	u1, v1 := uint32(uint8(int(tex.u)+int(tex.w)-1)), uint32(uint8(int(tex.v)+int(tex.h)-1))
-	p[3] = u0 | v0<<8 | uint32(tex.clut())<<16
-	p[5] = u1 | v0<<8 | uint32(tex.tpageY>>4&0x10|(tex.tpageX&0x3ff)>>6|uint16(abr)<<5|(tex.tpageY&0x200)<<2)<<16
-	p[7] = u0 | v1<<8
-	p[9] = u1 | v1<<8
-	screen.OT().Link(int(max(otz>>2, 0)), p)
+	texQuad(int(max(otz>>2, 0)), &fxSXY, fxSXY3, tex, gray(uint8(c)), uint16(abr))
 }
 
 // billboard draws frame f of a run of textures facing the camera at the

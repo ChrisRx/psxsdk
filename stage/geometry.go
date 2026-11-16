@@ -1,6 +1,9 @@
 package stage
 
-import "go.chrisrx.dev/psx/yaroze"
+import (
+	"go.chrisrx.dev/psx/gpu"
+	"go.chrisrx.dev/psx/yaroze"
+)
 
 // The ground is the X-Z plane, and most of what moves on it is a point
 // or a step on it; the units are whatever the use says, world units
@@ -56,7 +59,7 @@ func abs(v int) int {
 }
 
 // A skin is the texture corners of a quad, as a packet takes them.
-type skin [4]yaroze.UV
+type skin [4]gpu.UV
 
 // A Surface is a texture loaded into video memory, with the skin of a
 // quad that shows the whole of it worked out once, since most quads do.
@@ -92,8 +95,8 @@ var fullUV = [4][2]uint8{{0, 0}, {63, 0}, {0, 63}, {63, 63}}
 // handing its address to the GTE must not allocate.
 type polygon struct {
 	v    [4]yaroze.Vertex
-	sxy  [3]yaroze.XY
-	sxy3 yaroze.XY
+	sxy  [3]gpu.XY
+	sxy3 gpu.XY
 }
 
 var poly polygon
@@ -186,10 +189,10 @@ func (p *polygon) place(f *yaroze.Frame, v *[4]yaroze.Vertex, sk *skin, tex *yar
 	if cur.block != 0 {
 		cur.covers(p, 4, otz)
 	}
-	k := f.Packet[yaroze.PolyFT4](min(otz>>Shift+back, f.Depths()-1))
+	k := f.Packet[gpu.TexturedQuad](min(otz>>Shift+back, f.Depths()-1))
 	k.Color = rgb
 	if ghost {
-		k.Code |= yaroze.CodeTranslucent
+		k.Code |= gpu.CodeTranslucent
 	}
 	k.XY0, k.XY1, k.XY2, k.XY3 = p.sxy[0], p.sxy[1], p.sxy[2], p.sxy3
 	k.UV0, k.UV1, k.UV2, k.UV3 = sk[0], sk[1], sk[2], sk[3]
@@ -226,15 +229,15 @@ func (p *polygon) tri(f *yaroze.Frame, tex *yaroze.Texture, uv *[3][2]uint8, c C
 	if cur.block != 0 {
 		cur.covers(p, 3, otz)
 	}
-	k := f.Packet[yaroze.PolyFT3](min(otz>>Shift, f.Depths()-1))
+	k := f.Packet[gpu.TexturedTriangle](min(otz>>Shift, f.Depths()-1))
 	k.Color = c.RGB()
 	if ghost {
-		k.Code |= yaroze.CodeTranslucent
+		k.Code |= gpu.CodeTranslucent
 	}
 	k.XY0, k.XY1, k.XY2 = p.sxy[0], p.sxy[1], p.sxy[2]
-	k.UV0 = yaroze.UV{U: tex.U + uv[0][0], V: tex.V + uv[0][1]}
-	k.UV1 = yaroze.UV{U: tex.U + uv[1][0], V: tex.V + uv[1][1]}
-	k.UV2 = yaroze.UV{U: tex.U + uv[2][0], V: tex.V + uv[2][1]}
+	k.UV0 = gpu.UV{U: tex.U + uv[0][0], V: tex.V + uv[0][1]}
+	k.UV1 = gpu.UV{U: tex.U + uv[1][0], V: tex.V + uv[1][1]}
+	k.UV2 = gpu.UV{U: tex.U + uv[2][0], V: tex.V + uv[2][1]}
 	k.Clut, k.Page = tex.Clut(), tex.Page
 	return true
 }

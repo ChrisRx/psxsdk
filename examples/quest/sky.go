@@ -2,6 +2,7 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/gpu"
 	"go.chrisrx.dev/psx/stage"
 	"go.chrisrx.dev/psx/yaroze"
 )
@@ -71,12 +72,12 @@ func (s *backdrop) draw(frame *yaroze.Frame, b geom.Rect) {
 	s.land.Draw(frame, deepest-3)
 
 	top, bottom := colors[0].RGB(), colors[1].RGB()
-	p := frame.Packet[yaroze.PolyG4](deepest)
+	p := frame.Packet[gpu.ShadedQuad](deepest)
 	p.Color0, p.Color1, p.Color2, p.Color3 = top, top, bottom, bottom
-	p.XY0 = yaroze.At(b.X, b.Y)
-	p.XY1 = yaroze.At(b.X+b.W, b.Y)
-	p.XY2 = yaroze.At(b.X, b.Y+b.H)
-	p.XY3 = yaroze.At(b.X+b.W, b.Y+b.H)
+	p.XY0 = gpu.At(b.X, b.Y)
+	p.XY1 = gpu.At(b.X+b.W, b.Y)
+	p.XY2 = gpu.At(b.X, b.Y+b.H)
+	p.XY3 = gpu.At(b.X+b.W, b.Y+b.H)
 }
 
 // strip draws a strip of the backdrop across the screen at y, scrolled

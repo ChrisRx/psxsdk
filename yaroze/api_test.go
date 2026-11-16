@@ -4,9 +4,9 @@ package yaroze
 
 import (
 	"testing"
-	"unsafe"
 
 	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/gpu"
 	"go.chrisrx.dev/x/assert"
 )
 
@@ -76,7 +76,12 @@ func TestImageSprite(t *testing.T) {
 	assert.Equal(t, uint16(44), s.W)
 	assert.Equal(t, uint16(24), s.H)
 	assert.Equal(t, im.texture, s.Texture)
-	assert.Equal(t, Color{128, 128, 128}, s.Color)
+	gray := Color{
+		R: 128,
+		G: 128,
+		B: 128,
+	}
+	assert.Equal(t, gray, s.Color)
 	assert.Equal(t, geom.Point{X: 22, Y: 12}, s.Pivot)
 	assert.Equal(t, geom.One, s.ScaleX)
 	assert.Equal(t, 44, im.Width())
@@ -124,65 +129,15 @@ func TestImageCell(t *testing.T) {
 	assert.Equal(t, Cell{U: 16, V: 16, Clut: 509<<6 | 320>>4, Page: 0x15}, c)
 }
 
-// TestPacketTypes checks each packet type's size in words against the
-// GPU's, and the code its allocation gives it.
-func TestPacketTypes(t *testing.T) {
-	for _, c := range []struct {
-		p     any
-		words uintptr
-		code  Code
-	}{
-		{&PolyF3{}, 5, 0x20}, {&PolyF4{}, 6, 0x28}, {&PolyFT3{}, 8, 0x24}, {&PolyFT4{}, 10, 0x2c},
-		{&PolyG3{}, 7, 0x30}, {&PolyG4{}, 9, 0x38}, {&PolyGT3{}, 10, 0x34}, {&PolyGT4{}, 13, 0x3c},
-		{&LineF2{}, 4, 0x40}, {&LineG2{}, 5, 0x50}, {&Tile{}, 4, 0x60}, {&Sprt{}, 5, 0x64},
-	} {
-		setCode(c.p)
-		switch p := c.p.(type) {
-		case *PolyF3:
-			assert.Equal(t, c.words, unsafe.Sizeof(*p)/4)
-			assert.Equal(t, c.code, p.Code)
-		case *PolyF4:
-			assert.Equal(t, c.words, unsafe.Sizeof(*p)/4)
-			assert.Equal(t, c.code, p.Code)
-		case *PolyFT3:
-			assert.Equal(t, c.words, unsafe.Sizeof(*p)/4)
-			assert.Equal(t, c.code, p.Code)
-		case *PolyFT4:
-			assert.Equal(t, c.words, unsafe.Sizeof(*p)/4)
-			assert.Equal(t, c.code, p.Code)
-		case *PolyG3:
-			assert.Equal(t, c.words, unsafe.Sizeof(*p)/4)
-			assert.Equal(t, c.code, p.Code)
-		case *PolyG4:
-			assert.Equal(t, c.words, unsafe.Sizeof(*p)/4)
-			assert.Equal(t, c.code, p.Code)
-		case *PolyGT3:
-			assert.Equal(t, c.words, unsafe.Sizeof(*p)/4)
-			assert.Equal(t, c.code, p.Code)
-		case *PolyGT4:
-			assert.Equal(t, c.words, unsafe.Sizeof(*p)/4)
-			assert.Equal(t, c.code, p.Code)
-		case *LineF2:
-			assert.Equal(t, c.words, unsafe.Sizeof(*p)/4)
-			assert.Equal(t, c.code, p.Code)
-		case *LineG2:
-			assert.Equal(t, c.words, unsafe.Sizeof(*p)/4)
-			assert.Equal(t, c.code, p.Code)
-		case *Tile:
-			assert.Equal(t, c.words, unsafe.Sizeof(*p)/4)
-			assert.Equal(t, c.code, p.Code)
-		case *Sprt:
-			assert.Equal(t, c.words, unsafe.Sizeof(*p)/4)
-			assert.Equal(t, c.code, p.Code)
-		}
-	}
-	var mode DrawMode
-	setCode(&mode)
-	assert.Equal(t, uintptr(2), unsafe.Sizeof(mode)/4)
-	assert.Equal(t, uint32(0xe1000000), mode.Page)
-	assert.Equal(t, uint32(0xe1000020|0x15), Texture{Page: 0x15}.Mode(1), "the add blend on the page")
+// TestPacketMode checks the drawing mode word a texture gives for a
+// blend, and that the stub's frame has no packet space.
+func TestPacketMode(t *testing.T) {
+	tex := Texture{Page: 0x15 | 2<<5}
+	assert.Equal(t, uint32(0xe1000020|0x15), tex.Mode(BlendAdd), "the add blend on the page")
+	assert.Equal(t, uint32(0xe1000060|0x15), tex.Mode(BlendQuarter))
+	assert.Equal(t, tex.Mode(BlendAverage), tex.Mode(BlendNone), "no blend leaves the first")
 	var frame Frame
-	assert.Panic(t, stub("Frame.Packet"), func() { frame.Packet[Tile](0) })
+	assert.Panic(t, stub("Frame.Packet"), func() { frame.Packet[gpu.Tile](0) })
 }
 
 // TestVerticesOfWords checks a file's words read as vertices, two words
