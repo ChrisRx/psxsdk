@@ -59,7 +59,7 @@ What a patch cannot do, the compiler reports as an error starting `hot:`, and th
 
 ## Experiments
 
-An experiment is a change to how the compiler builds a program that is on by default and can be turned off, as Go's `GOEXPERIMENT` turns changes in progress on and off. `yaroze build`, `run`, `disc` and `patch` take `--experiment=NAMES`, a comma separated list with `no` before a name to turn it off, and pass it to the compiler's `-experiment` flag. An experiment may be removed, changed, or folded into a better optimization, so nothing should depend on one being there: a program built with all of them off is always correct. The playground builds with them on, as they are by default. There is one, `onstore`.
+An experiment is a change to how the compiler builds a program that is on by default and can be turned off, as Go's `GOEXPERIMENT` turns changes in progress on and off. `yaroze build`, `run`, `disc` and `patch` take `--experiment=NAMES`, a comma separated list with `no` before a name to turn it off, and pass it to the compiler's `-experiment` flag. An experiment may be removed, changed, or folded into a better optimization, so nothing should depend on one being there: a program built with all of them off is always correct. The playground builds with them on, as they are by default, and its Onstore box, unticked, builds with `noonstore`. There is one, `onstore`.
 
 ### onstore
 

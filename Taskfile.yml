@@ -637,6 +637,10 @@ tasks:
       # otherwise leaves out as excluded for the target: the file store has
       # to hold what the static target compiles too.
       - '{{.TREE}}/build/tinygo-sysroot -target=playstation-yaroze -tags cleanlib -o .build/sysroot ./examples/... ./docs/tutorial/hello ./exp/...'
+      # The files built only with the onstore experiment off, which the tool
+      # leaves out since it is on by default, for the playground's Onstore
+      # box: no tag set selects both these and the files they replace.
+      - git grep -l '^//go:build !psx.onstore' -- '*.go' | xargs -r cp --parents -t .build/sysroot/mod/go.chrisrx.dev/psx
       # The programs are built for the static target, as yaroze builds them,
       # and the tutorial's for the resident target too, so that the cache holds
       # each target's C and assembly, compiled with its flags.
