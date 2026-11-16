@@ -226,7 +226,7 @@ func bevel(f *yaroze.Frame, depth int, x0, y0, x1, y1 int16, c gpu.Color) {
 func windowSprite(f *yaroze.Frame, depth int, x, y, w, h int16, tex *texture, r, g, b uint8, semi bool, abr uint32) {
 	// The window is put back to none after the sprite, which the packet
 	// linked first, drawn last, does.
-	f.Packet[textureWindow](depth)
+	f.Packet[gpu.TextureWindow](depth)
 	p := f.Packet[gpu.Sprite](depth)
 	p.Color = gpu.Color{
 		R: r,
@@ -247,7 +247,7 @@ func windowSprite(f *yaroze.Frame, depth int, x, y, w, h int16, tex *texture, r,
 	// The window's masks come out of the texture's size the way the
 	// original worked them, which repeats a texture of 32 by 16.
 	tw, th := int(tex.w), int(tex.h)
-	win := f.Packet[textureWindow](depth)
+	win := f.Packet[gpu.TextureWindow](depth)
 	win.Window |= uint32(tex.v)<<12 | uint32(tex.u)<<7 | uint32(th<<2|th<<3|th<<4|th<<5)&0x3e0 | uint32(tw>>3|tw>>2|tw>>1|tw)&0x1f
 }
 

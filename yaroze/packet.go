@@ -54,11 +54,11 @@ func newPacket[T any, P gpu.Packet[T]]() *T {
 	return p
 }
 
-// Mode returns the word a gpu.DrawMode's Page takes to draw from the
+// DrawMode returns the word a gpu.DrawMode's Page takes to draw from the
 // texture's page with the blend, which the packets after it use when
 // their Code has gpu.CodeTranslucent. A drawing mode always holds one of
 // the four blends, so BlendNone, for packets that do not blend, gives
 // the same word as BlendAverage.
-func (t Texture) Mode(blend BlendMode) uint32 {
+func (t Texture) DrawMode(blend BlendMode) uint32 {
 	return 0xe1<<24 | uint32(t.Page)&^0x60 | uint32(blend&3)<<5
 }

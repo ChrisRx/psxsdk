@@ -133,9 +133,9 @@ func TestImageCell(t *testing.T) {
 // blend, and that the stub's frame has no packet space.
 func TestPacketMode(t *testing.T) {
 	tex := Texture{Page: 0x15 | 2<<5}
-	assert.Equal(t, uint32(0xe1000020|0x15), tex.Mode(BlendAdd), "the add blend on the page")
-	assert.Equal(t, uint32(0xe1000060|0x15), tex.Mode(BlendQuarter))
-	assert.Equal(t, tex.Mode(BlendAverage), tex.Mode(BlendNone), "no blend leaves the first")
+	assert.Equal(t, uint32(0xe1000020|0x15), tex.DrawMode(BlendAdd), "the add blend on the page")
+	assert.Equal(t, uint32(0xe1000060|0x15), tex.DrawMode(BlendQuarter))
+	assert.Equal(t, tex.DrawMode(BlendAverage), tex.DrawMode(BlendNone), "no blend leaves the first")
 	var frame Frame
 	assert.Panic(t, stub("Frame.Packet"), func() { frame.Packet[gpu.Tile](0) })
 }

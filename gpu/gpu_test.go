@@ -35,6 +35,36 @@ func TestPacketTypes(t *testing.T) {
 	check[Tile](t, "Tile", 4, 0x60)
 	check[Sprite](t, "Sprite", 5, 0x64)
 	check[DrawMode](t, "DrawMode", 2, 0xe1)
+	check[TextureWindow](t, "TextureWindow", 3, 0xe2)
+	check[VRAMCopy](t, "VRAMCopy", 6, 0x01)
+}
+
+// TestTextureWindow checks the window's word: none after Init, with the
+// word after it clear whatever was there, and the masks and the corner
+// Repeat works out, in the GPU's units of 8 pixels.
+func TestTextureWindow(t *testing.T) {
+	win := TextureWindow{nop: 0xffffffff}
+	win.Init()
+	w := (*[3]uint32)(unsafe.Pointer(&win))
+	assert.Equal(t, [3]uint32{0, 0xe2000000, 0}, *w)
+	win.Repeat(64, 32, 32, 16)
+	assert.Equal(t, uint32(0xe2000000|4<<15|8<<10|0x1e<<5|0x1c), win.Window)
+	win.Repeat(0, 0, 256, 256)
+	assert.Equal(t, uint32(0xe2000000), win.Window, "the whole page is no window")
+}
+
+// TestVRAMCopy checks the copy's words: the cache's command, the copy's,
+// and the two places and the size after them.
+func TestVRAMCopy(t *testing.T) {
+	c := VRAMCopy{
+		From: At(832, 352),
+		To:   At(836, 352),
+		W:    1,
+		H:    1,
+	}
+	c.Init()
+	w := (*[6]uint32)(unsafe.Pointer(&c))
+	assert.Equal(t, [6]uint32{0, 0x01000000, 0x80000000, 352<<16 | 832, 352<<16 | 836, 1<<16 | 1}, *w)
 }
 
 // TestLayout checks that the fields lie where the GPU reads them: the
