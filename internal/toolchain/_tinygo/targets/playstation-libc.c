@@ -3,10 +3,11 @@
  * the compiler emits calls to on its own.
  *
  * This target has no libc. Setting one would mean building picolibc for
- * mipsel to get three functions, when what is actually needed is only what
+ * mipsel to get a few functions, when what is actually needed is only what
  * LLVM reaches for while compiling ordinary Go: zeroing a struct becomes a
- * memset, copying a slice becomes a memcpy, and copying one that might
- * overlap becomes a memmove.
+ * memset, copying a slice becomes a memcpy, copying one that might overlap
+ * becomes a memmove, and a loop that counts bytes up to a NUL, as
+ * internal/reflectlite's reading of a type's name does, becomes a strlen.
  *
  * The target compiles this with -fno-builtin, without which clang
  * recognises each loop below as the very function it is defining and
@@ -96,3 +97,12 @@ memcmp(const void *a, const void *b, size_t n)
 	return 0;
 }
 
+size_t
+strlen(const char *s)
+{
+	const char *p = s;
+
+	while (*p != '\0')
+		p++;
+	return (size_t)(p - s);
+}
