@@ -56,56 +56,63 @@ import (
 	"go.chrisrx.dev/psx/archive"
 	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/geom"
+	layout "go.chrisrx.dev/psx/internal/scenelayout"
 	"go.chrisrx.dev/psx/internal/volatile"
 	"go.chrisrx.dev/psx/stage"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
-// The most of each a scene holds, as format/scene's.
+// The most of each a scene holds, which are the file's limits.
 const (
-	MaxTextures = 16
-	MaxModels   = 16
-	MaxObjects  = 64
-	MaxSprites  = 128
-	MaxLights   = 3
+	MaxTextures = layout.MaxTextures
+	MaxModels   = layout.MaxModels
+	MaxObjects  = layout.MaxObjects
+	MaxSprites  = layout.MaxSprites
+	MaxLights   = layout.MaxLights
 
 	// A scene has at most MaxLayers layers. A layer's map holds at most
 	// MaxMapCells, cut from at most MaxCells cells of its texture, each
 	// CellSize pixels square, and is drawn through a window of at most
 	// 320 by 240.
-	MaxLayers   = 3
-	MaxMapCells = 4096
-	MaxCells    = 256
-	EmptyCell   = 0xffff
-	CellSize    = 16
+	MaxLayers   = layout.MaxLayers
+	MaxMapCells = layout.MaxMapCells
+	MaxCells    = layout.MaxCells
+	EmptyCell   = layout.EmptyCell
+	CellSize    = layout.CellSize
 
 	// A room has at most MaxLinks links, one a doorway digit, and
 	// MaxMarkers markers.
-	MaxLinks   = 10
-	MaxMarkers = 64
+	MaxLinks   = layout.MaxLinks
+	MaxMarkers = layout.MaxMarkers
 	workWords  = 2 + 2*(4+(320/CellSize+1)*(240/CellSize+1)*5)
 )
 
 // The flags the scene's editor names for a layer's cells; the other four
 // bits are the program's own.
 const (
-	Solid  = 1 << 0 // nothing passes through it
-	OneWay = 1 << 1 // stood on from above, passed through from below
-	Hurts  = 1 << 2 // hurts what touches it
-	Pickup = 1 << 3 // taken by what touches it
+	Solid  = layout.Solid  // nothing passes through it
+	OneWay = layout.OneWay // stood on from above, passed through from below
+	Hurts  = layout.Hurts  // hurts what touches it
+	Pickup = layout.Pickup // taken by what touches it
 )
 
+// The file's sizes and offsets in words, from package layout's in bytes.
 const (
-	id           = 0x314E4353
-	headerWords  = 0x68 / 4
-	pathWords    = 8
-	objectWords  = 16
-	spriteWords  = 16
-	nameWords    = 4
-	lightsAt     = 0x38 / 4
-	cameraAt     = 0x1C / 4
-	ambientAt    = 0x10 / 4
-	projectionAt = 0x0C / 4
+	id             = layout.ID
+	headerWords    = layout.HeaderSize / 4
+	pathWords      = layout.PathSize / 4
+	objectWords    = layout.ObjectSize / 4
+	spriteWords    = layout.SpriteSize / 4
+	nameWords      = layout.NameSize / 4
+	layerWords     = layout.LayerSize / 4
+	layerNameWords = layout.LayerNameSize / 4
+	roomWords      = layout.RoomSize / 4
+	linkWords      = layout.LinkSize / 4
+	markerWords    = layout.MarkerSize / 4
+	lightsAt       = layout.LightsAt / 4
+	cameraAt       = layout.CameraAt / 4
+	ambientAt      = layout.AmbientAt / 4
+	projectionAt   = layout.ProjectionAt / 4
 )
 
 // Load's errors.
@@ -580,14 +587,6 @@ func (s *Scene) parse(data []uint32, src Source) error {
 	}
 	return nil
 }
-
-const (
-	layerWords     = 28 / 4
-	layerNameWords = 20 / 4
-	roomWords      = 36 / 4
-	linkWords      = 36 / 4
-	markerWords    = 28 / 4
-)
 
 // parse reads the layer's record at word at of data, a file of nt
 // textures, and returns the word after it.
