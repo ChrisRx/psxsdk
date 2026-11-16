@@ -25,6 +25,13 @@ package transform
 // function does is reported. The compiler keeps it out of line, so that
 // what it allocates is still found inside it after the optimizer is done.
 //
+// A panic is not an allocation of the frame loop's. The runtime may
+// allocate to print a panic's value, an error's message say, and then it
+// stops the program: that is made once, on the way out. So what the
+// runtime's functions that do not return allocate does not count for their
+// callers. What the program allocates for the value it panics with is its
+// own code's, and is reported as any other.
+//
 // It is reported at the program's line, from the tinygo.pos metadata the
 // compiler gives calls when there is no DWARF: the allocation itself in the
 // program's code, or the call into the standard library that makes it, such
@@ -54,7 +61,7 @@ func CheckFrameAllocs(mod llvm.Module) []error {
 	// The functions that wait for the screen, and those that allocate, by
 	// way of direct calls.
 	waits := callersOf(vsync, nil)
-	allocates := callersOf(alloc, allocatesOnPurpose)
+	allocates := callersOf(alloc, func(fn llvm.Value) bool { return allocatesOnPurpose(fn) || stops(fn) })
 
 	// Function values, by type, for the calls through one.
 	values := make(map[llvm.Type][]llvm.Value)
@@ -228,6 +235,15 @@ func sortErrors(errs []error) {
 // says it allocates as a load does, and that the frame loop may call it.
 func allocatesOnPurpose(fn llvm.Value) bool {
 	return !fn.GetStringAttributeAtIndex(-1, "tinygo-allocates").IsNil()
+}
+
+// stops reports whether fn is one of the runtime's functions that do not
+// return, a panic or a fatal error. What one allocates is for the message
+// it prints before it stops the program: a panic that is recovered leaves
+// by a jump before that.
+func stops(fn llvm.Value) bool {
+	noreturn := llvm.AttributeKindID("noreturn")
+	return packageOf(fn.Name()) == "runtime" && !fn.GetEnumAttributeAtIndex(-1, noreturn).IsNil()
 }
 
 // callersOf returns fn and the functions that call it, directly or through

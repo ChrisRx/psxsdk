@@ -63,3 +63,56 @@ func TestCheckFrameAllocsHot(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// TestCheckFrameAllocsPanic checks that what the runtime allocates to print
+// a panic's value, before it stops the program, is not the frame loop's,
+// in a program that keeps an error whose message allocates; and that what
+// the program's own code allocates on the way to a panic still is, whether
+// or not the program recovers, since one that does could run it every
+// frame.
+func TestCheckFrameAllocsPanic(t *testing.T) {
+	t.Parallel()
+	const tail = " allocates each time the frame loop runs it"
+	const fix = ", and nothing is ever freed: make what it makes once, before the loop, and reuse it"
+	want := []string{
+		"main.go:26:10: this" + tail + fix,
+		"main.go:28:12: lib.Check" + tail + ", at lib.go:20" + fix,
+	}
+	for _, test := range []struct {
+		name     string
+		recovers bool
+	}{
+		{
+			name: "stops",
+		},
+		{
+			name:     "recovers",
+			recovers: true,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			buf, err := llvm.NewMemoryBufferFromFile("testdata/framepanic.ll")
+			if err != nil {
+				t.Fatal(err)
+			}
+			mod, err := ctx.ParseIR(buf)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer mod.Dispose()
+			if test.recovers {
+				// The function a call of recover becomes.
+				llvm.AddFunction(mod, "runtime._recover", llvm.FunctionType(ctx.VoidType(), nil, false))
+			}
+			var got []string
+			for _, err := range transform.CheckFrameAllocs(mod) {
+				got = append(got, err.Error())
+			}
+			if !slices.Equal(got, want) {
+				t.Errorf("got:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+			}
+		})
+	}
+}
