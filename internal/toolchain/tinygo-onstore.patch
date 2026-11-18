@@ -18,7 +18,7 @@
  		options.PrintCommands = printCommand
 --- a/compileopts/options.go
 +++ b/compileopts/options.go
-@@ -76,10 +76,30 @@
+@@ -76,10 +76,42 @@
  	Hot     bool   // -hot flag
  	HotBase string // -hot-base flag
  	HotAt   string // -hot-at flag
@@ -36,6 +36,18 @@
 +	// fields it names (compiler/onstore.go). Its packages are built with
 +	// the psx.onstore tag.
 +	"onstore": true,
++}
++
++// Experiments returns the names of the compiler's experiments, in order.
++// A program built with -hot records which are on, and a patch for it has
++// to be built with the same (transform.HotExperiments).
++func Experiments() []string {
++	names := make([]string, 0, len(experiments))
++	for name := range experiments {
++		names = append(names, name)
++	}
++	slices.Sort(names)
++	return names
  }
  
  // Verify performs a validation on the given options, raising an error if options are not valid.
