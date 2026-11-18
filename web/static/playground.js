@@ -372,7 +372,7 @@ async function patchRunning(project) {
     buildStatus.textContent = "Building a patch…";
     const t0 = performance.now();
     let log = "";
-    const result = await request("patch", { files: project.list(), base: state.hot.base, at: region.at, libps: library(), experiment: state.hot.experiment }, (text) => {
+    const result = await request("patch", { files: project.list(), base: state.hot.base, at: region.at, libps: state.hot.libps, experiment: state.hot.experiment }, (text) => {
       log += text;
       appendLog(text);
     });
@@ -405,9 +405,9 @@ async function patchRunning(project) {
 async function buildAndRun() {
   if (building || !projects.current) return;
   const project = projects.current;
-  // A patch is compiled with the experiments its program was, so a change
-  // of them since starts the program over.
-  if (hotChosen() && state.hot?.projectId === project.id && state.current?.id === project.id && state.hot.base && state.hot.experiment === experiments()) {
+  // A patch is compiled against the library and with the experiments its
+  // program was, so a change of either since starts the program over.
+  if (hotChosen() && state.hot?.projectId === project.id && state.current?.id === project.id && state.hot.base && state.hot.libps === library() && state.hot.experiment === experiments()) {
     if (await patchRunning(project)) return;
   }
   building = true;
@@ -432,13 +432,16 @@ async function buildAndRun() {
   // A build made ahead of this one, of these very files, is this one.
   if (prebuilding) await prebuilding;
   const list = project.list();
+  // The settings are taken once, since the boxes may change while it builds.
+  const hot = hotChosen();
+  const libps = library();
   const experiment = experiments();
-  const ahead = prebuilt && prebuilt.projectId === project.id && prebuilt.hot === hotChosen() && prebuilt.libps === library() && prebuilt.experiment === experiment && prebuilt.sig === signature(list) ? prebuilt : null;
+  const ahead = prebuilt && prebuilt.projectId === project.id && prebuilt.hot === hot && prebuilt.libps === libps && prebuilt.experiment === experiment && prebuilt.sig === signature(list) ? prebuilt : null;
   prebuilt = null;
   let result = ahead?.result;
   let log = "";
   if (!ahead) {
-    result = await request("build", { files: list, hot: hotChosen(), libps: library(), experiment }, (text) => {
+    result = await request("build", { files: list, hot, libps, experiment }, (text) => {
       log += text;
       appendLog(text);
     });
@@ -458,7 +461,7 @@ async function buildAndRun() {
   buildStatus.textContent = ahead ? `Built ahead of time, in ${(ahead.took / 1000).toFixed(1)}s` : `Built in ${((performance.now() - t0) / 1000).toFixed(1)}s`;
   state.current = { name: project.name, id: project.id };
   state.disc = { cue: "prog.cue", files: result.files, elf: result.elf };
-  state.hot = hotChosen() ? { projectId: project.id, base: result.elf, experiment } : null;
+  state.hot = hot ? { projectId: project.id, base: result.elf, libps, experiment } : null;
   ttyLog.textContent = "";
   showTab("tty");
   try {
