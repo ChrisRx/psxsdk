@@ -77,10 +77,9 @@ var (
 	// frames of 1<<10 depths and room for five thousand packets.
 	screen = yaroze.Screen{
 		Width: 640, Height: 240,
-		Depth:    10,
-		Packets:  5000 * 24,
-		Dithered: true,
-		Origin:   yaroze.ScreenOriginMiddle,
+		Depth:   10,
+		Packets: 5000 * 24,
+		Origin:  yaroze.ScreenOriginMiddle,
 	}
 
 	model  yaroze.Model

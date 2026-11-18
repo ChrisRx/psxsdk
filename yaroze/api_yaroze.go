@@ -39,9 +39,9 @@ var (
 
 func openScreen(s *Screen) {
 	SetVideoMode(nativeVideoMode())
-	dither := uint16(0)
-	if s.Dithered {
-		dither = 1
+	dither := uint16(1)
+	if s.NoDither {
+		dither = 0
 	}
 	w, h := uint16(s.Width), uint16(s.Height)
 	if s.Height > 256 {

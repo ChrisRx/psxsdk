@@ -107,7 +107,6 @@ var (
 		Packets:      0x19640,
 		Interval:     2,
 		Buffers:      yaroze.ScreenBuffersSideBySide,
-		Dithered:     true,
 	}
 	pad yaroze.Pad
 

@@ -60,9 +60,10 @@ type Screen struct {
 	// high or too far left.
 	Offset geom.Point
 
-	// Dithered is whether shaded colors are dithered, which smooths a
-	// gouraud polygon's bands and leaves a sprite alone.
-	Dithered bool
+	// NoDither turns dithering off. Shaded colors are dithered unless it
+	// is set, which smooths a gouraud polygon's bands and leaves a sprite
+	// alone.
+	NoDither bool
 
 	// Buffers is where the two display buffers lie in video memory:
 	// one above the other, the default, or side by side.
