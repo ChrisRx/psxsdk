@@ -74,17 +74,18 @@ import (
 const hotKeepName = "__hot_keep"
 
 // isHotVariable reports whether name is a variable the keeper holds as
-// declared: one of the program's own packages, main and those it imports
-// by a path with a domain, such as go.chrisrx.dev/psx/yaroze. The runtime's
-// and the standard library's, whose import paths have no dot in their
-// first element, and the compiler's own are not.
-func isHotVariable(name string) bool {
+// declared: one of the program's own packages, which are those outside
+// GOROOT, main and the packages it imports from its own module, whatever
+// the module is named, and from the modules that one requires, such as
+// go.chrisrx.dev/psx/yaroze. The runtime's and the standard library's,
+// which are in GOROOT, and the compiler's own are not (isStandard).
+func isHotVariable(config *compileopts.Config, name string) bool {
 	// A name the compiler made has the package before a $, as main$pack
 	// has, and a variable made of an allocation its position after an @.
 	if i := strings.IndexAny(name, "$@"); i >= 0 {
 		name = name[:i]
 	}
-	return name != "" && !isStandard(name)
+	return name != "" && !isStandard(config, name)
 }
 
 // hotExperimentPrefix starts the name of the symbol a program built with
@@ -236,7 +237,7 @@ func HotStubs(mod llvm.Module, config *compileopts.Config) {
 	defer keep.Dispose()
 	keep.SetInsertPointAtEnd(ctx.AddBasicBlock(keeper, "entry"))
 	for g := mod.FirstGlobal(); !g.IsNil(); g = llvm.NextGlobal(g) {
-		if g.IsDeclaration() || g.IsGlobalConstant() || !isHotVariable(g.Name()) {
+		if g.IsDeclaration() || g.IsGlobalConstant() || !isHotVariable(config, g.Name()) {
 			continue
 		}
 		keep.CreateLoad(ctx.Int8Type(), g, "").SetVolatile(true)

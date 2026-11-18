@@ -78,13 +78,14 @@
  
  	switch instr := instr.(type) {
  	case ssa.Value:
-@@ -2546,6 +2549,34 @@
+@@ -2546,6 +2549,35 @@
  	return min(maxSize, (uint64(1)<<goHeapAddressBits)/elementSize)
  }
  
-+// addCallPosition gives a call in a package outside the standard library
-+// its position, as tinygo.pos metadata: the file, line and column, and the
-+// package the call is in. The passes that report on a call
++// addCallPosition gives a call in a package outside the standard library,
++// which is one the loader did not find in GOROOT, whatever its import path
++// looks like, its position, as tinygo.pos metadata: the file, line and
++// column, and the package the call is in. The passes that report on a call
 +// (transform.CheckKeeps and transform.CheckFrameAllocs) say where it is
 +// from it when there is no DWARF: on the PlayStation targets, an R3000A,
 +// whose compiler leaves it out. Every call createCall makes has the
@@ -96,10 +97,10 @@
 +	if b.Debug || b.CPU != "mips1" || !pos.IsValid() || b.fn == nil || b.fn.Pkg == nil {
 +		return
 +	}
-+	path := b.fn.Pkg.Pkg.Path()
-+	if first, _, _ := strings.Cut(path, "/"); path != "main" && !strings.Contains(first, ".") {
++	if b.loaderPkg == nil || b.loaderPkg.Standard {
 +		return
 +	}
++	path := b.fn.Pkg.Pkg.Path()
 +	p := b.program.Fset.Position(pos)
 +	i32 := b.ctx.Int32Type()
 +	call.SetMetadata(b.ctx.MDKindID("tinygo.pos"), b.ctx.MDNode([]llvm.Metadata{
