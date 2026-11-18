@@ -3,6 +3,9 @@ package yaroze
 // A Cell is a kind of tile: a 16 by 16 square of an image in video
 // memory, with its palette. Image.Cell cuts one.
 type Cell struct {
+	// The library reads U, V and Clut as one word, so a Cell is aligned as
+	// a word is.
+	_    [0]uint32
 	U, V uint8
 	Clut uint16
 	_    uint16

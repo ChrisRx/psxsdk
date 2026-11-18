@@ -494,6 +494,10 @@ func fileClose(fd int32)                           { Close(fd) }
 func fileFormat(name *byte) int32                  { return Format(name) }
 func fileDelete(name *byte) int32                  { return Delete(name) }
 
+// The library reads a Cell's first word with one load, so cells are
+// aligned as words are.
+var _ [unsafe.Alignof(Cell{}) - 4]byte
+
 // A CardFile is the kernel's DIRENTRY under another name, which Firstfile
 // and Nextfile write whole, so the two stay the same size.
 var (
