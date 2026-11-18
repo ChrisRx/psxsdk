@@ -21,7 +21,7 @@ go get -tool go.chrisrx.dev/psx/cmd/yaroze
 
 Then a `main.go`:
 
-```go src=../tutorial/hello/main.go
+```go src=../../examples/blank/main.go
 ```
 
 Build it onto a disc, or build it and play it in a window, with the keyboard as the controller:
@@ -38,7 +38,8 @@ The program needs no build constraint. The `yaroze` package builds under the ord
 ## Where next
 
 - [Writing programs in Go](writing-programs.md): what the packages give a program.
-- [The tutorial](../tutorial/index.md) explains the program above, then writes a bigger one, with a model, the controller and music.
+- [The cookbook](../cookbook/index.md): how games did what most games do, each with a program that does nothing else.
+- [square](../examples/square.md), the next program up: the controller, files read off the disc, a model and music.
 - [The playground](/play/) does all of this in the browser, with nothing installed.
 
 ## The compiler

@@ -22,7 +22,6 @@ tasks:
   test:emu:
     cmds:
       - task: build:discs
-      - task: build:disc:tutorial
       - task: build:hot
       - task: build:serial
       - task: build:hot:resident
@@ -32,13 +31,14 @@ tasks:
   # Builds every example's disc, each onto .build/NAME/NAME.cue: every
   # directory under examples with a main.go, since examples/internal holds
   # what they share and is not one, and the cookbook's programs. The
-  # tutorial's disc goes first, on its own, so that the compiler is
+  # blank example's disc goes first, on its own, so that the compiler is
   # unpacked and compiled for the runtime once, rather than by every build
   # at the same time; the rest then run in parallel, as many at once as
   # task -C allows, which CI limits to the runner's cores.
   build:discs:
     deps:
-      - build:disc:tutorial
+      - task: build:disc
+        vars: { NAME: blank }
     cmds:
       - task: build:discs:examples
       - task: build:discs:ps
@@ -51,9 +51,7 @@ tasks:
       - for: [breakout, card, car, cdda, dino, dogtale, dungeon, flame, invaders, morph, oden, offscr, split, square, terra, tiles, timers, tunnel]
         task: build:disc:resident
         vars: { NAME: '{{.ITEM}}' }
-      - task: build:disc:resident
-        vars: { NAME: hello, DIR: docs/tutorial/hello }
-      - for: [jumpcube, quest]
+      - for: [blank, jumpcube, quest]
         task: build:disc:resident
         vars: { NAME: '{{.ITEM}}' }
       - for: [card, cdda, dino, gallery, invaders, pads, square, tiles, timers]
@@ -302,14 +300,6 @@ tasks:
       - go run ./cmd/yaroze disc --hot --libps resident --opt=2 --elf .build/hot-resident/prog.elf -o .build/hot-resident/v1.bin ./internal/hot/testdata/v1
       - go run ./cmd/yaroze patch --libps resident --opt=2 --base .build/hot-resident/prog.elf -o .build/hot-resident/v2.patch.elf ./internal/hot/testdata/v2
 
-  # Builds the tutorial's first program onto .build/hello/hello.cue, so
-  # that it runs on its page like the examples and in the emulator tests.
-  # The rest of the tutorial writes the square example.
-  build:disc:tutorial:
-    cmds:
-      - task: build:disc
-        vars: { NAME: hello, DIR: docs/tutorial/hello }
-
   # Builds the cookbook's programs, which live beside their pages rather
   # than among the examples, onto .build/NAME/NAME.cue, so that they run on
   # their pages and in the emulator tests.
@@ -345,9 +335,9 @@ tasks:
   # playground and the player from web/static, the api.json the
   # playground's completion reads and the starters it begins a project
   # from, also written by web/site, the OpenBIOS image the examples boot
-  # with from emu/openbios, every example's disc and the tutorial's, and
-  # the emulator compiled to WebAssembly from web/. Each part is skipped
-  # when what it reads has not changed; task site:clean starts over.
+  # with from emu/openbios, every example's disc, and the emulator
+  # compiled to WebAssembly from web/. Each part is skipped when what it
+  # reads has not changed; task site:clean starts over.
   # Sony's BIOS must never be copied in.
   #
   # .github/workflows/pages.yml publishes this directory to GitHub Pages
@@ -356,7 +346,6 @@ tasks:
     desc: Build what has changed of the site into .build/site
     cmds:
       - task: build:discs
-      - task: build:disc:tutorial
       - task: site:docs
       - task: site:play
       - task: site:emu
@@ -383,6 +372,7 @@ tasks:
       - 'geom/**/*.go'
       - 'gpu/**/*.go'
       # The starters' pictures, the screenshots the tests keep.
+      - 'tests/testdata/blank.png'
       - 'tests/testdata/jumpcube.png'
       - 'tests/testdata/quest.png'
     generates:
@@ -401,15 +391,14 @@ tasks:
       PLAY: .build/site/play
       EXAMPLES:
         # Every directory under examples with a main.go; examples/internal
-        # holds what they share, and is not one. The tutorial's first
-        # program and the cookbook's programs join them.
-        sh: for f in examples/*/main.go docs/cookbook/*/main.go; do basename "$(dirname "$f")"; done; echo hello
+        # holds what they share, and is not one. The cookbook's programs
+        # join them.
+        sh: for f in examples/*/main.go docs/cookbook/*/main.go; do basename "$(dirname "$f")"; done
     sources:
       - 'emu/openbios/*'
       - '.build/*/*.cue'
       - '.build/*/*.bin'
       - 'examples/*/assets/**/*'
-      - 'docs/tutorial/*/assets/**/*'
       - 'docs/cookbook/*/assets/**/*'
     generates:
       - '{{.PLAY}}/examples.json'
@@ -421,7 +410,7 @@ tasks:
         cmd: |
           mkdir -p {{.PLAY}}/examples/{{.ITEM}}
           cp .build/{{.ITEM}}/{{.ITEM}}.cue .build/{{.ITEM}}/{{.ITEM}}.bin {{.PLAY}}/examples/{{.ITEM}}/
-          src=examples/{{.ITEM}}; [ -d "$src" ] || src=docs/tutorial/{{.ITEM}}; [ -d "$src" ] || src=docs/cookbook/{{.ITEM}}
+          src=examples/{{.ITEM}}; [ -d "$src" ] || src=docs/cookbook/{{.ITEM}}
           rm -rf {{.PLAY}}/examples/{{.ITEM}}/data {{.PLAY}}/examples/{{.ITEM}}/assets
           if [ -d "$src/assets" ]; then cp -R "$src/assets" {{.PLAY}}/examples/{{.ITEM}}/; fi
       - |
@@ -429,7 +418,7 @@ tasks:
           printf '['
           sep=''
           for name in {{.EXAMPLES | splitLines | join " "}}; do
-            src=examples/$name; [ -d "$src" ] || src=docs/tutorial/$name; [ -d "$src" ] || src=docs/cookbook/$name
+            src=examples/$name; [ -d "$src" ] || src=docs/cookbook/$name
             assets=
             if [ -d "$src/assets" ]; then assets=$(cd "$src" && find assets -type f | LC_ALL=C sort | sed 's/.*/"&"/' | paste -sd, - | sed 's/,/, /g'); fi
             printf '%s\n  {"name": "%s", "cue": "examples/%s/%s.cue", "assets": [%s]}' "$sep" "$name" "$name" "$name" "$assets"
@@ -605,7 +594,6 @@ tasks:
       TREE: .build/compiler/tinygo
     sources:
       - '**/*.go'
-      - 'docs/tutorial/hello/**/*'
       - 'examples/*/assets/**/*'
       - 'examples/*/pack/**/*'
       - .build/compiler/tinygo.wasm
@@ -636,16 +624,16 @@ tasks:
       # The tags bring yaroze/libps_clean.go into the copy, which the tool
       # otherwise leaves out as excluded for the target: the file store has
       # to hold what the static target compiles too.
-      - '{{.TREE}}/build/tinygo-sysroot -target=playstation-yaroze -tags cleanlib -o .build/sysroot ./examples/... ./docs/tutorial/hello ./exp/...'
+      - '{{.TREE}}/build/tinygo-sysroot -target=playstation-yaroze -tags cleanlib -o .build/sysroot ./examples/... ./exp/...'
       # The files built only with the onstore experiment off, which the tool
       # leaves out since it is on by default, for the playground's Onstore
       # box: no tag set selects both these and the files they replace.
       - git grep -l '^//go:build !psx.onstore' -- '*.go' | xargs -r cp --parents -t .build/sysroot/mod/go.chrisrx.dev/psx
       # The programs are built for the static target, as yaroze builds them,
-      # and the tutorial's for the resident target too, so that the cache holds
-      # each target's C and assembly, compiled with its flags.
+      # and the blank example for the resident target too, so that the cache
+      # holds each target's C and assembly, compiled with its flags.
       - |
-        programs="$(cd .build/sysroot && ls -d mod/go.chrisrx.dev/psx/examples/*/ mod/go.chrisrx.dev/psx/docs/tutorial/hello/ | grep -v /internal/ | sed 's,$,@playstation-yaroze-clean,') mod/go.chrisrx.dev/psx/docs/tutorial/hello/"
+        programs="$(cd .build/sysroot && ls -d mod/go.chrisrx.dev/psx/examples/*/ | grep -v /internal/ | sed 's,$,@playstation-yaroze-clean,') mod/go.chrisrx.dev/psx/examples/blank/"
         if [ -f .build/compiler/tinygo-full.wasm ]; then
           web/compiler/mkcache.sh .build/compiler/tinygo-full.wasm .build/compiler/tinygo.wasm .build/sysroot $programs
         else
@@ -680,7 +668,7 @@ tasks:
       - rm -rf {{.SYSROOT}}
       - cp -R .build/sysroot {{.SYSROOT}}
       # The programs again, as playground:sysroot built them, at this level.
-      - OPTS=2 web/compiler/mkcache.sh .build/compiler/tinygo-full.wasm .build/compiler/tinygo.wasm {{.SYSROOT}} $(cd {{.SYSROOT}} && ls -d mod/go.chrisrx.dev/psx/examples/*/ mod/go.chrisrx.dev/psx/docs/tutorial/hello/ | grep -v /internal/ | sed 's,$,@playstation-yaroze-clean,') mod/go.chrisrx.dev/psx/docs/tutorial/hello/
+      - OPTS=2 web/compiler/mkcache.sh .build/compiler/tinygo-full.wasm .build/compiler/tinygo.wasm {{.SYSROOT}} $(cd {{.SYSROOT}} && ls -d mod/go.chrisrx.dev/psx/examples/*/ | grep -v /internal/ | sed 's,$,@playstation-yaroze-clean,') mod/go.chrisrx.dev/psx/examples/blank/
       - mkdir -p cmd/yaroze/wasm
       - gzip -9 -n -c .build/compiler/tinygo.wasm > cmd/yaroze/wasm/tinygo.wasm.gz
       # The archive's directory is sysroot, as the playground's is.

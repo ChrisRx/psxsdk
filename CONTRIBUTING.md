@@ -25,7 +25,7 @@ Commits follow a short conventional style: a type, then a sentence in lower case
 ```
 feat: breakpoints in the emulator
 fix: the playground's sidebar fits a phone
-docs: the tutorial covers sound
+docs: the cookbook covers sound
 ```
 
 The types in use are `feat`, `fix`, `perf`, `refactor`, `docs`, `test` and `chore`.

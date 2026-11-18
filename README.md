@@ -13,7 +13,7 @@ The Net Yaroze was Sony's 1990s kit for making PlayStation games at home. psxsdk
 </p>
 
 - **Play** [the examples](https://chrisrx.github.io/psxsdk/examples/) in your browser: Sony's Net Yaroze demos and members' games ported to Go, and a few new ones.
-- **Write** your own in [the playground](https://chrisrx.github.io/psxsdk/play/), or with nothing but Go installed: `go run go.chrisrx.dev/psx/cmd/yaroze@latest disc ./mygame`. [The tutorial](https://chrisrx.github.io/psxsdk/tutorial/) starts from nothing.
+- **Write** your own in [the playground](https://chrisrx.github.io/psxsdk/play/), or with nothing but Go installed: `go run go.chrisrx.dev/psx/cmd/yaroze@latest disc ./mygame`.
 - **Read** [Sony's manuals](https://chrisrx.github.io/psxsdk/manuals/), with the FAQs, supplements and tutorial the members' websites carried.
 
 ## What it does

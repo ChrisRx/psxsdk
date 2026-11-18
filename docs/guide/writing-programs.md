@@ -89,4 +89,4 @@ The [`disc`](disc) package declares a program's files. A registration names the 
 
 A program's data lives in its own memory, as everything else does. The program loads at 0x80010000 with its library inside it, and has the rest of the console's two megabytes, less the stack, to itself. With `--libps resident` it loads at 0x80090000, where Sony's memory map starts the application area, just above the resident library.
 
-The [examples](../examples/index.md) are ports of Sony's Net Yaroze samples and demos, each using a different part of the machine, and the [tutorial](../tutorial/index.md) starts from nothing.
+The [examples](../examples/index.md) are ports of Sony's Net Yaroze samples and demos, each using a different part of the machine, and [Getting started](index.md) starts from nothing.
