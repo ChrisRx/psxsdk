@@ -338,7 +338,7 @@ const linkedNodesMax = 1 << 19
 // ended. One that loops never ends on a console: the channel stays busy, and
 // a library's DrawSync times out, as Sony's does on a list linked into
 // address 0, whose word the BIOS leaves linking to itself
-// (exp/cleanlib/spec/35-hardware-session.md, the Kanji stall). Here the walk
+// (internal/libps/spec/35-hardware-session.md, the Kanji stall). Here the walk
 // stops after linkedNodesMax nodes and leaves the channel busy for good.
 func (d *dma) transferGPULinked() bool {
 	addr := *d.madr(dmaGPU)

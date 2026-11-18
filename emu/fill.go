@@ -4,7 +4,7 @@ package emu
 // for a machine about to boot. The emulator otherwise starts with all three
 // cleared, where a console starts with whatever they held: a reset clears
 // RAM from 800A0000h up and leaves the scratchpad and VRAM as they were
-// (exp/cleanlib/spec/35-hardware-session.md). A program that reads memory it
+// (internal/libps/spec/35-hardware-session.md). A program that reads memory it
 // never wrote shows it, as different runs with different seeds. The same
 // seed fills the same bytes.
 func (m *Machine) FillMemory(seed uint64) {

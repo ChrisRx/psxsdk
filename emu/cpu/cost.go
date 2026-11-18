@@ -3,7 +3,7 @@ package cpu
 // The CPU charges 2 cycles for every instruction, as psxe does, plus what
 // the bus charges for the fetch. Under SetCost it charges what a console's
 // instructions cost instead, as two probes measured them on a console
-// (exp/cleanlib/spec/35-hardware-session.md, "2026-11-10: what the CPU's
+// (internal/libps/spec/35-hardware-session.md, "2026-11-10: what the CPU's
 // accesses cost", probes/cpucost and probes/cpucost2): the instruction
 // cache, the memory a load reads, the write buffer stores go through, the
 // HI/LO wait after a multiply or divide, and the bus a DMA holds. Each
@@ -319,7 +319,7 @@ func (c *CPU) HoldBus(cycles uint64) {
 // (a load, a store leaving the write buffer, a cache miss's fill) may start
 // only while the bus is open, and waits for that otherwise.
 //
-// On a console (probes/dmahold, exp/cleanlib/spec/50-image-console-time.md)
+// On a console (probes/dmahold, internal/libps/spec/50-image-console-time.md)
 // an image of 64 blocks of 16 words takes 1,800 cycles to go to the GPU,
 // 28.1 a block. While it goes, 256 cached nops take 259 cycles as they do
 // alone, and a counter read after them some 20 more. Loads from RAM go one

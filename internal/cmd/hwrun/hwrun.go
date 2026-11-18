@@ -71,7 +71,7 @@ func NewJob(path string) Job {
 }
 
 // ArchiveJobs reads the jobs named from a programs.tsv, as
-// exp/cleanlib/image/archive.py writes it from each program's AUTO batch: its
+// internal/libps/image/archive.py writes it from each program's AUTO batch: its
 // name, directory, executable, and files to load, separated by spaces.
 func ArchiveJobs(path string, names []string) ([]Job, error) {
 	data, err := os.ReadFile(path)

@@ -1,6 +1,6 @@
 // Command libpsdis writes an annotated disassembly of the Net Yaroze
 // resident library, for the spec side of the clean-room work in
-// exp/cleanlib. Neither its input nor its output is committed: they are Sony's code.
+// internal/libps. Neither its input nor its output is committed: they are Sony's code.
 //
 // The image is a private copy of Sony's, which --image or PSX_SONY_LIBPS names.
 // The only names are the entry points the SDK's symusr.o gives, converted

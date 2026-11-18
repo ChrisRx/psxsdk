@@ -26,7 +26,7 @@ func scoreCommand() *cobra.Command {
 		Use:   "score",
 		Short: "compare the clean library's instructions with Sony's, by entry point",
 		Long: `score compares each entry point's instructions on Sony's image and on the clean
-library's, an ELF built by exp/cleanlib/image/make.sh. "body" is the function itself and
+library's, an ELF built by internal/libps/image/make.sh. "body" is the function itself and
 what it jumps to, "all" goes on through what it calls, each callee placed once at its
 first call, so a helper Sony's keeps apart lines up with code Go inlined.
 

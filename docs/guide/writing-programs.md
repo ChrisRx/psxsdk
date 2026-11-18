@@ -32,7 +32,7 @@ func main() {
 
 The `yaroze` package binds the Net Yaroze library for TinyGo. Functions, types and constants keep the exact names from Sony's `libps.h`, so Sony's [manuals](../manuals/index.md) apply to the Go code unchanged.
 
-- **On the console**, under the `yaroze` build tag, each function is a bodyless declaration the linker resolves. By default that is the clean-room library, `exp/cleanlib`, linked into the program. With `--libps resident` it is the library's fixed addresses, exactly as a C program's calls are on a Net Yaroze.
+- **On the console**, under the `yaroze` build tag, each function is a bodyless declaration the linker resolves. By default that is the clean-room library, `internal/libps`, linked into the program. With `--libps resident` it is the library's fixed addresses, exactly as a C program's calls are on a Net Yaroze.
 - **In every other build**, each is a stub that panics, naming itself and saying where the real one is. A program still compiles and type-checks on the host: an editor shows the library's documentation, `go vet` runs, and a call into the library fails at run time rather than at the build.
 
 The bindings are generated from `libps.h` by [`hdr2go`](../tools/hdr2go.md), with comments condensed from Sony's library reference. Every struct's size is asserted against clang's layout when the console build compiles, so a struct a byte off from the C one fails the build rather than making a disc that draws nothing.

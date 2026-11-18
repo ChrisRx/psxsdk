@@ -117,7 +117,7 @@ tasks:
       - 'cmd/yaroze/**/*'
       - 'link/**/*'
       - 'tools/**/*.go'
-      - 'exp/cleanlib/**/*'
+      - 'internal/libps/**/*'
       - go.mod
       - go.sum
     generates:
@@ -286,7 +286,7 @@ tasks:
       - 'input/**/*.go'
       - 'geom/**/*.go'
       - 'gpu/**/*.go'
-      - 'exp/cleanlib/**/*'
+      - 'internal/libps/**/*'
       - 'internal/**/*'
       - 'cmd/yaroze/**/*.go'
       - 'link/**/*'
@@ -624,7 +624,7 @@ tasks:
       # The tags bring yaroze/libps_clean.go into the copy, which the tool
       # otherwise leaves out as excluded for the target: the file store has
       # to hold what the static target compiles too.
-      - '{{.TREE}}/build/tinygo-sysroot -target=playstation-yaroze -tags cleanlib -o .build/sysroot ./examples/... ./exp/...'
+      - '{{.TREE}}/build/tinygo-sysroot -target=playstation-yaroze -tags cleanlib -o .build/sysroot ./examples/... ./internal/libps/...'
       # The files built only with the onstore experiment off, which the tool
       # leaves out since it is on by default, for the playground's Onstore
       # box: no tag set selects both these and the files they replace.
@@ -644,12 +644,12 @@ tasks:
       - mkdir -p .build/site/play
       - tar --format=ustar -C .build -cf - sysroot | gzip -9 > .build/site/play/sysroot.tar.gz
 
-  # Builds the resident image from the clean library, exp/cleanlib, onto
+  # Builds the resident image from the clean library, internal/libps, onto
   # link/libps.exe.gz, which is committed, as eco2exe and yaroze lay programs
   # over it. Run yaroze first, which leaves the sysroot this builds from.
   image:
     cmds:
-      - exp/cleanlib/image/make.sh
+      - internal/libps/image/make.sh
       - gzip -9 -n -c .build/cleanimage/libps.exe > link/libps.exe.gz
 
   # Refreshes the compiler yaroze has built in, and builds yaroze onto

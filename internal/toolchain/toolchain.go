@@ -19,7 +19,7 @@ import (
 )
 
 // DefaultTarget is the TinyGo target yaroze builds for unless a Build names
-// another: the program with the clean library, exp/cleanlib, linked in.
+// another: the program with the clean library, internal/libps, linked in.
 const DefaultTarget = "playstation-yaroze-clean"
 
 // ResidentTarget is the target of a program laid over the resident library,

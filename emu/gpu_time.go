@@ -15,7 +15,7 @@ package emu
 // imageCyclesPerWord cycles a word, after whatever the GPU was drawing.
 //
 // The cost is a fixed time per pixel drawn. A console takes about 0.8 cycles
-// a pixel for 320 by 240 semi-transparent boxes (spec 39 of exp/cleanlib), so
+// a pixel for 320 by 240 semi-transparent boxes (spec 39 of internal/libps), so
 // a cycle a pixel is near enough.
 
 // gpustatReadyCmd is GPUSTAT's bit 26: ready for a command.
@@ -30,13 +30,13 @@ const drawCyclesPerPixel = 1
 // imageCyclesTenths is the cycles, in tenths, a word of an image takes to go
 // to the GPU by DMA under SetDrawTime. A console takes about 1.7: 8192 words
 // in 14,700 cycles and 16,384 in 28,800 from the call (probes/readybusy of
-// exp/cleanlib), and is ready for a command 16 cycles after the channel ends.
+// internal/libps), and is ready for a command 16 cycles after the channel ends.
 const imageCyclesTenths = 17
 
 // imageFromCyclesHundredths is the cycles, in hundredths, a word of an image
 // takes to come from the GPU by DMA under SetDrawTime. A console takes 2,215
 // cycles for 64 blocks of 16 words and 8,930 for 256 (probes/dmahold of
-// exp/cleanlib, "store alone"): 34.6 a block.
+// internal/libps, "store alone"): 34.6 a block.
 const imageFromCyclesHundredths = 216
 
 // drawTime is the GPU's clock for SetDrawTime: whether it is on, the CPU's
