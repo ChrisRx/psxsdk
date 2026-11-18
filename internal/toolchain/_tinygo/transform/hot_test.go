@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -37,7 +38,11 @@ func TestHotCaptures(t *testing.T) {
 		if patch {
 			options.HotBase = "base.elf"
 		}
-		transform.HotStubs(mod, &compileopts.Config{Options: options, Target: &compileopts.TargetSpec{}})
+		transform.HotStubs(mod, &compileopts.Config{
+			Options:         options,
+			Target:          &compileopts.TargetSpec{},
+			ProgramPackages: map[string]bool{"main": true},
+		})
 		for name, layout := range want {
 			var got string
 			if patch {
@@ -59,6 +64,60 @@ func TestHotCaptures(t *testing.T) {
 		}
 		mod.Dispose()
 		ctx.Dispose()
+	}
+}
+
+// TestHotKeep checks which variables the keeper holds as declared: those
+// of the program's own packages, which are the ones outside GOROOT, and
+// not those whose paths have a domain. A module named with one word, as
+// go mod init mygame names it and as the playground's play is, has
+// packages such as mygame/level, whose variables a patch of package main
+// has to find as the running program has them. The standard library's are
+// left to the optimizer.
+func TestHotKeep(t *testing.T) {
+	t.Parallel()
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	buf, err := llvm.NewMemoryBufferFromFile("testdata/hotkeep.ll")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mod, err := ctx.ParseIR(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mod.Dispose()
+	config := program("mygame/level", "go.x/yaroze", "gopkg.in/yaml.v3")
+	config.Options.Hot = true
+	config.Options.Opt = "z"
+	transform.HotStubs(mod, config)
+
+	keeper := mod.NamedFunction("__hot_keep")
+	if keeper.IsNil() {
+		t.Fatal("no __hot_keep")
+	}
+	var got []string
+	for inst := keeper.EntryBasicBlock().FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+		if inst.IsALoadInst().IsNil() {
+			continue
+		}
+		if !inst.IsVolatile() {
+			t.Errorf("the load of %s is not volatile", inst.Operand(0).Name())
+		}
+		got = append(got, inst.Operand(0).Name())
+	}
+	slices.Sort(got)
+	want := []string{
+		"go.x/yaroze.frame",
+		"gopkg.in/yaml.v3.depth",
+		"main$pack",
+		"main.main$once.64@main.go:12:9",
+		"main.score",
+		"mygame/level.Count",
+		"mygame/level.tiles",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("the keeper holds:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 }
 

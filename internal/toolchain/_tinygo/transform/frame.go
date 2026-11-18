@@ -37,7 +37,9 @@ package transform
 // program's code, or the call into the standard library that makes it, such
 // as strconv.Itoa or a string concatenation. One in a package that is not
 // the standard library's, such as archive.Entry.Load, is reported where the
-// frame loop's code in package main calls it.
+// frame loop's code in package main calls it. The standard library's
+// packages are those in GOROOT, and every other is the program's
+// (isStandard).
 
 import (
 	"fmt"
@@ -46,12 +48,13 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compileopts"
 	"tinygo.org/x/go-llvm"
 )
 
 // CheckFrameAllocs returns an error at each allocation the frame loop
 // makes, as described above.
-func CheckFrameAllocs(mod llvm.Module) []error {
+func CheckFrameAllocs(mod llvm.Module, config *compileopts.Config) []error {
 	vsync := mod.NamedFunction("VSync")
 	alloc := mod.NamedFunction("runtime.alloc")
 	if vsync.IsNil() || alloc.IsNil() {
@@ -136,7 +139,7 @@ func CheckFrameAllocs(mod llvm.Module) []error {
 			return
 		}
 		fn := call.InstructionParent().Parent()
-		if isStandard(fn.Name()) || !isStandard(callee.Name()) && callee != alloc {
+		if isStandard(config, fn.Name()) || !isStandard(config, callee.Name()) && callee != alloc {
 			return // reported where the program's code calls it, or inside
 		}
 		if guarded(call) {
@@ -603,13 +606,26 @@ func packageOf(name string) string {
 	return dir + name
 }
 
-// isStandard reports whether a function is the runtime's or the standard
-// library's, whose code has no positions and is reported where the
-// program calls it.
-func isStandard(name string) bool {
-	pkg := packageOf(name)
-	first, _, _ := strings.Cut(pkg, "/")
-	return pkg != "main" && !strings.Contains(first, ".")
+// isStandard reports whether a function or a variable is the runtime's,
+// the standard library's or the compiler's own, and not one of the
+// program's packages, which are those the loader found outside GOROOT
+// (config.ProgramPackages): package main, the rest of its module and the
+// modules it requires. What a path looks like does not say: level, of a
+// module named play, is play/level, the program's, and
+// internal/reflectlite is the standard library's. The standard library's
+// code has no positions, and is reported where the program calls it.
+func isStandard(config *compileopts.Config, name string) bool {
+	name = strings.TrimLeft(name, "(*")
+	name, _, _ = strings.Cut(name, "[")
+	// The package's path ends at a dot after its last slash: the first,
+	// unless the last element has dots of its own, as gopkg.in/yaml.v3
+	// has. A name with nothing after the path is tried whole.
+	for i := strings.LastIndexByte(name, '/') + 1; i <= len(name); i++ {
+		if (i == len(name) || name[i] == '.') && config.ProgramPackages[name[:i]] {
+			return false
+		}
+	}
+	return true
 }
 
 // allocName names what a call into the runtime or the standard library
