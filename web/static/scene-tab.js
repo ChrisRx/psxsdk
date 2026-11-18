@@ -2375,7 +2375,7 @@ const sceneTab = (() => {
   }
 
   // The inspector: the selection's fields, in the console's units.
-  // field makes a labelled input. A number's label scrubs: dragging on it
+  // field makes a labeled input. A number's label scrubs: dragging on it
   // changes the value by step for every few pixels. With unit "deg" the
   // field shows degrees for a value kept in 4096ths of a turn.
   function field(label, value, onChange, { type = "number", title = "", options = null, step = 1, unit = "" } = {}) {

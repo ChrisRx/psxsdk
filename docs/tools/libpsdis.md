@@ -16,15 +16,17 @@ The only names the image has are the entry points the SDK's `symusr.o` gives, as
 Each function's listing begins with its name, address and size, what it calls and what calls it, and annotates each instruction with what it reaches for:
 
 ```
-putchar 0x80043790 size 180  calls: putchar write  called by: putc gets ...
-80043790: 27BDFFE0  addiu    sp, sp, -32
+example 0x80020000 size 64  calls: helper  called by: caller func_80020400
+80020000: 27BDFFE8  addiu    sp, sp, -24
 ...
-8004382C: 0C010BE2  jal      0x80042f88                  ; write
+80020010: 0C008010  jal      0x80020040                  ; helper
 ```
+
+The names and addresses in this excerpt are made up to show the format.
 
 - A `jal` names the function it calls, and a `j` into another function names it with the offset.
 - A `lui` and the `addiu` or `ori` that finishes it name the address they form: a function, a variable with its current value, a string in quotes, or the word there.
 - A load or store through that pair says the same of what it touches, and one through `gp` says the offset.
 - The library calls the BIOS by loading a table's address, `0xA0`, `0xB0` or `0xC0`, jumping through the register and putting the function number in `t1` in the delay slot; such a `jr` is annotated `BIOS B(0x35) write`, with the function's name where the table of the BIOS calls the library makes knows it.
 
-`--image` reads another PSX-EXE of the library in place of the one built in, and `--symbols` another symbol file.
+No image is built in. `--image` names the PSX-EXE to read, gzipped or not, when `PSX_SONY_LIBPS` does not, and `--symbols` names another symbol file.

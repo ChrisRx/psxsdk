@@ -18,7 +18,7 @@ The Net Yaroze was Sony's 1990s kit for making PlayStation games at home. psxsdk
 
 ## What it does
 
-- **Write** PlayStation programs in Go, compiled with TinyGo against bindings for the Net Yaroze library that keep Sony's names.
+- **Write** PlayStation programs in Go, compiled with TinyGo and linked with a clean-room reimplementation of the Net Yaroze library. The library keeps Sony's names, so the manuals still apply, and has a Go API beside them: screens, sprites, backgrounds, models, sound and controllers as types with methods.
 - **Make** their data with converters from PNG, WAV, MIDI and OBJ to the console's TIM, VAG, VAB, SEQ and TMD, each tested against what Sony's own tools made.
 - **Build** them into discs that boot without Net Yaroze hardware, with streamed XA/STR files and CD audio tracks.
 - **Run** them in an emulator written in Go, which drives the tests headless, runs in a browser and opens a window on the desktop.
@@ -53,7 +53,8 @@ task serve             # build the site and the playground, and serve them on lo
 
 | Directory | What is there |
 | --- | --- |
-| [`yaroze`](yaroze), [`disc`](disc), [`archive`](archive), [`scene`](scene), [`stage`](stage) | What a program imports: the Net Yaroze library, its files on the disc, archives, scenes and rooms of cells |
+| [`yaroze`](yaroze), [`input`](input), [`geom`](geom), [`gpu`](gpu) | What a program imports: the Net Yaroze library under Sony's names and as Go types, the controllers, the geometry, and the GPU's packets |
+| [`disc`](disc), [`archive`](archive), [`scene`](scene), [`stage`](stage) | A program's files on the disc, archives, scenes and rooms of cells |
 | [`cmd`](cmd) | `yaroze`, which builds a program onto a disc in one step, with its compiler built in |
 | [`tools`](tools) | The converters, the disc and executable tools, and the emulator's front ends, each [documented](https://chrisrx.github.io/psxsdk/tools/) |
 | [`link`](link), [`format`](format) | Executables, discs and the console's file formats |

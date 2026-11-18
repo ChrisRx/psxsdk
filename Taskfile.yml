@@ -163,9 +163,8 @@ tasks:
     cmds:
       - rm -rf .build/{{.NAME}}-resident
       - mkdir -p .build/{{.NAME}}-resident
-      # With the original's font, since the picture is compared with the
-      # resident library's; a program built without the tag has the
-      # library's own.
+      # Laid over the resident image (--libps resident), keeping the ELF
+      # beside the disc.
       - go run ./cmd/yaroze disc --libps resident --opt={{.OPT}} --elf .build/{{.NAME}}-resident/prog.elf -o .build/{{.NAME}}-resident/{{.NAME}}-resident.bin ./{{.DIR}}
 
   # Regenerates the resident library's entry points under _orig names, which

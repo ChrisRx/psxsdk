@@ -243,7 +243,7 @@ func buildCommand() *cobra.Command {
 		Short: "compile a program into a PSX-EXE",
 		Long: `build compiles the main package in the directory given, the current one
 if none is, into a PSX-EXE, which the BIOS of a console or an emulator
-loads and runs: the program with the Net Yaroze library combined in, so it
+loads and runs: the program with the Net Yaroze library linked in, so it
 needs no boot disc.
 
 The directory may instead hold a C project from the Net Yaroze SDK, with C

@@ -8,9 +8,9 @@ package yaroze
 
 // stub is what every function of the library panics with when called in a
 // build that is not for the console: the library is only there in a program
-// built with the playstation-yaroze TinyGo target.
+// the yaroze command built.
 func stub(name string) string {
-	return "yaroze." + name + ": the Net Yaroze library is only present in a program built with tinygo -target=playstation-yaroze"
+	return "yaroze." + name + ": the Net Yaroze library is only present in a program built for the console, with yaroze build"
 }
 
 // FntPrint writes s to print stream 0, for FntFlush to draw.

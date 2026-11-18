@@ -2,10 +2,10 @@ package yaroze
 
 import "unsafe"
 
-// Reaching memory by address. A Net Yaroze program loads its data at fixed
-// addresses, between the resident library and itself, as the demos' batch
-// files sent it there and as package disc reads it there now, and the
-// library hands back pointers into memory it owns. Go has no type for
+// Reaching memory by address. An original Net Yaroze program loaded its
+// data at fixed addresses, between the resident library and itself, where
+// the demos' batch files sent it, and a port of one may still. The library
+// also hands back pointers into memory it owns. Go has no type for
 // either, so these turn an address into a pointer in one place, rather
 // than in every program with a conversion go vet rightly suspects.
 

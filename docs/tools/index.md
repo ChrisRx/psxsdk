@@ -32,7 +32,7 @@ Each of these is a tool of its own, which `go:generate` lines and the playground
 
 | Tool | Purpose |
 | --- | --- |
-| [eco2exe](eco2exe.md) | Combine a Net Yaroze program with `libps` into a bootable PSX-EXE |
+| [eco2exe](eco2exe.md) | Combine a Net Yaroze program with the library's resident image into a bootable PSX-EXE |
 | [elf2exe](elf2exe.md) | Write a standalone ELF or ECOFF program as a PSX-EXE |
 | [mips1fix](mips1fix.md) | Replace the MIPS II traps LLVM emits with nops so the code runs on an R3000A |
 | [dumpsxiso](dumpsxiso.md) | List or extract a disc image |
@@ -46,5 +46,7 @@ Each of these is a tool of its own, which `go:generate` lines and the playground
 | [ecoff2asm](ecoff2asm.md) | Convert ECOFF objects to GNU as source, for relinking the Net Yaroze library as ELF |
 | [ecoffcmp](ecoff2asm.md) | Check ecoff2asm output against the original objects |
 | [libpsdis](libpsdis.md) | Annotated disassembly of a private copy of Sony's library, and scores against it, for the clean-room work |
+| [hwrun](hwrun.md) | Run programs on a real Net Yaroze, on Sony's library or the clean one, and keep what each prints |
+| [sioloop](sioloop.md) | Check a USB serial adapter with a loopback plug, before using it on the serial cable |
 
 [dumpsxiso](dumpsxiso.md) is a translation of the dumpsxiso in Lameguy64's mkpsxiso, and is under the GPL-2.0 as that project is.

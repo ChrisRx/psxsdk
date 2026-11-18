@@ -98,6 +98,10 @@ type Sequence struct {
 	h int16
 }
 
+// ID is the library's id for the sequence, for the Ss calls that take
+// one, or -1 for no sequence.
+func (q Sequence) ID() int16 { return q.h - 1 }
+
 // Play plays the sequence times times, or over and over for
 // SSPLAY_INFINITY, which is 0, as Loop does.
 func (q Sequence) Play(times int) {
@@ -126,10 +130,6 @@ func (q Sequence) Pause() {
 		seqPause(q.h - 1)
 	}
 }
-
-// ID is the library's id for the sequence, for the Ss calls that take
-// one, or -1 for no sequence.
-func (q Sequence) ID() int16 { return q.h - 1 }
 
 // Resume goes on from where Pause stopped.
 func (q Sequence) Resume() {

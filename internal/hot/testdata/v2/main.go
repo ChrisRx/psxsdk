@@ -1,5 +1,5 @@
 // The program of v1 after an edit: the frame loop's body prints something
-// else and a new function gives the colour, speed starts at 5, which turns
+// else and a new function gives the color, speed starts at 5, which turns
 // the background orange, and frames keeps counting from where v1 left it,
 // since a patch keeps a variable the program has written.
 package main

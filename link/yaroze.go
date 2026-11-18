@@ -69,7 +69,7 @@ func Executable(img *Image, patch bool, loads ...Load) (*psx.File, error) {
 }
 
 // Standalone makes a PSX-EXE of a program that brings its own library, as
-// one built for the playstation-yaroze-go target does: the image as it is,
+// one built for the playstation-yaroze-clean target does: the image as it is,
 // entered at its own entry point, with no library combined in and no
 // startup stub, and each of loads put into it at its address.
 func Standalone(img *Image, loads ...Load) (*psx.File, error) {

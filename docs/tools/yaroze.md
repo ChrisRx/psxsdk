@@ -13,7 +13,7 @@ yaroze run ./mygame        # the disc, played in a window
 yaroze run mygame.cue      # a disc as it is, played in a window, or a .zip of one
 ```
 
-A build runs the steps that are tools of their own here. TinyGo compiles the package for the `playstation-yaroze` target. The trap instructions LLVM leaves in that an R3000A cannot run are replaced with nops, as [`mips1fix`](mips1fix.md) does. The ELF becomes a PSX-EXE with the Net Yaroze library combined in, as [`eco2exe`](eco2exe.md) does. For a disc, the executable goes on as `MAIN.EXE` with a `SYSTEM.CNF` naming it, together with the files the program registers with package [`disc`](../guide/writing-programs.md), as [`mkdisc`](mkdisc.md) does. Only the first step is outside `yaroze`.
+A build runs the steps that are tools of their own here. TinyGo compiles the package for the `playstation-yaroze-clean` target, with the library linked in. The trap instructions LLVM leaves in that an R3000A cannot run are replaced with nops, as [`mips1fix`](mips1fix.md) does. The ELF becomes a PSX-EXE as it is, as [`elf2exe`](elf2exe.md) does. With `--libps resident` the target is `playstation-yaroze` and the program is combined with the resident library's image instead, as [`eco2exe`](eco2exe.md) does. For a disc, the executable goes on as `MAIN.EXE` with a `SYSTEM.CNF` naming it, together with the files the program registers with package [`disc`](../guide/writing-programs.md), as [`mkdisc`](mkdisc.md) does. Only the first step is outside `yaroze`.
 
 ## Installing
 
@@ -80,7 +80,7 @@ yaroze run ./chap1/3       # main.c, Makefile and auto, as they came
 
 The `Makefile` is read, not run, for the link address (`-Ttext`), the `-D` and `-I` flags, and the objects of the program `auto` loads, or else of the first thing `all` makes. With no `Makefile`, every `.c` file in the directory is built and the program is linked at 0x80140000. Each `local dload` line in `auto` puts that file in the executable at its address, as `--load` does.
 
-The sources are copied first, with what a DOS compiler took for granted spelled out for a current one: line ends, the 0x1A that ended a DOS file, includes in any case and with backslashes, a Shift-JIS character whose second byte is a backslash, and a string running over several lines. They compile as gnu89 against headers written for this repository from the [Library Reference](../manuals/index.md), which have every struct, constant and function of the SDK's in the same layout, and link against the resident library at its fixed addresses, as the SDK's did.
+The sources are copied first, changed where a DOS compiler accepted what a current one does not: line ends, the 0x1A that ended a DOS file, includes in any case and with backslashes, a Shift-JIS character whose second byte is a backslash, and a string running over several lines. They compile as gnu89 against headers written for this repository from the [Library Reference](../manuals/index.md), which have every struct, constant and function of the SDK's in the same layout, and link against the resident library at its fixed addresses, as the SDK's did.
 
 The shipped compiler has no clang, so the first C build downloads the one that does, 28MB, from `files.yaroze.dev`, checks it against a hash built into `yaroze`, and keeps it in the cache directory. A Go program never needs it, and neither does the playground. `YAROZE_CC` names a `tinygo-full.wasm` on disk to use instead.
 

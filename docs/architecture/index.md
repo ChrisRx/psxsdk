@@ -19,17 +19,17 @@ $x4 = $x3 + 0.2
 $xt = $x1 + 2.9
 $y0 = SP.start.y - 0.3
 text "yaroze disc ./examples/check" bold ljust at ($x1, $y0)
-text "TinyGo, -target=playstation-yaroze" ljust at ($x2, $y0 - 0.32)
+text "TinyGo, playstation-yaroze-clean" ljust at ($x2, $y0 - 0.32)
 text "→" ljust at ($x3, $y0 - 0.64)
 text "prog.elf, traps replaced" ljust at ($x4, $y0 - 0.64)
 text "→" ljust at ($x3, $y0 - 0.96)
-text "MAIN.EXE, libps combined in" ljust at ($x4, $y0 - 0.96)
+text "MAIN.EXE, the library linked in" ljust at ($x4, $y0 - 0.96)
 text "→" ljust at ($x3, $y0 - 1.28)
 text "the disc, with the assets" ljust at ($x4, $y0 - 1.28)
 text "the program registers" ljust at ($x4, $y0 - 1.52)
 text "tinygo, or TinyGo as WebAssembly" italic ljust at ($xt, $y0 - 0.32)
 text "mips1fix" italic ljust at ($xt, $y0 - 0.64)
-text "eco2exe" italic ljust at ($xt, $y0 - 0.96)
+text "elf2exe" italic ljust at ($xt, $y0 - 0.96)
 text "mkdisc" italic ljust at ($xt, $y0 - 1.28)
 
 # Where the disc runs: a bar under the disc, and a drop to each.

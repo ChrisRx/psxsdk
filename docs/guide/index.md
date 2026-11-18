@@ -3,7 +3,7 @@ title: Getting started
 weight: 1
 group: Docs
 section: Guide
-description: Writing PlayStation programs in Go: getting started, the packages a program uses, how the machine works, making its data, and troubleshooting.
+description: Writing PlayStation programs in Go: getting started, the packages a program uses, how the machine works, making its data, the playground, and troubleshooting.
 ---
 
 A PlayStation program is an ordinary Go module, and building one needs nothing but Go 1.27 or newer. The build command, `yaroze`, carries its own compiler, TinyGo compiled to WebAssembly, and its own emulator.
@@ -40,7 +40,7 @@ The program needs no build constraint. The `yaroze` package builds under the ord
 - [Writing programs in Go](writing-programs.md): what the packages give a program.
 - [The cookbook](../cookbook/index.md): how games did what most games do, each with a program that does nothing else.
 - [square](../examples/square.md), the next program up: the controller, files read off the disc, a model and music.
-- [The playground](/play/) does all of this in the browser, with nothing installed.
+- [The playground](playground.md) does all of this in the browser, with nothing installed, starting from one of three programs.
 
 ## The compiler
 

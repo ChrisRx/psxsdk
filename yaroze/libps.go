@@ -1,5 +1,6 @@
-// Package yaroze binds the Net Yaroze library, the one the boot disc leaves
-// resident in the console's RAM, for programs written in Go.
+// Package yaroze is the Net Yaroze library for programs written in Go: a
+// clean-room reimplementation of the one the boot disc leaves resident in
+// the console's RAM, linked into the program.
 //
 // It has two surfaces over the one library, and a program uses either or
 // both. The library's own functions keep their C names and signatures, so
@@ -36,23 +37,26 @@
 // struct layouts come from clang's record layout dump for the target, so a
 // Go struct that disagrees with the C one by a byte is a compile error
 // rather than a disc that draws nothing. Names are the C ones, so the SDK
-// documentation reads across directly, and the comments are condensed from
+// documentation applies as it is, and the comments are condensed from
 // it. What cannot be generated is bound by hand in libps_yaroze.go, and what
 // the library leaves to the program, reading the controllers and reaching
 // data at fixed addresses, is in pad.go and memory.go.
 //
 // The library is only there on the console, so the package has two
-// builds. Under the yaroze tag, which the playstation-yaroze TinyGo target
-// sets, each function is a bodyless declaration carrying //export, which in
-// TinyGo imports a C symbol rather than exporting a Go one, and the linker
-// resolves it against the fixed addresses in the target's symusr.S exactly
-// as it does for a C program. In every other build, which is what an editor,
-// go vet and go build see, each function is a stub that panics, naming
-// itself and saying where the real one is: a program compiles and
-// type-checks on a host, and fails at its first call into the library
-// rather than at the build. The host side of the toolchain, which combines
-// a program with the library's image and loads one over the serial cable,
-// is in the same package under the !yaroze tag.
+// builds. Under the yaroze tag, which the PlayStation TinyGo targets set,
+// each function is a bodyless declaration carrying //export, which in
+// TinyGo imports a C symbol rather than exporting a Go one. The yaroze
+// command builds for the playstation-yaroze-clean target by default, where
+// the linker resolves each against the clean library, internal/libps,
+// linked into the program. With --libps resident it builds for
+// playstation-yaroze, where the linker resolves each against the fixed
+// addresses in the target's symusr.S, exactly as it does for a C program.
+// In every other build, which is what an editor, go vet and go build see,
+// each function is a stub that panics, naming itself and saying where the
+// real one is: a program compiles and type-checks on a host, and fails at
+// its first call into the library rather than at the build. The host side
+// of the toolchain, which makes a linked program an executable, is in
+// package link.
 //
 // Types follow the o32 ABI the console uses: C int and long are both 32
 // bits, and pointers are 32 bits. On a 64-bit host the structs that hold

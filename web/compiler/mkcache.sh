@@ -88,7 +88,7 @@ printf 'module play\n\ngo %s\n\n%s' "$(echo "$GOVERSION" | sed -E 's/^go([0-9]+\
 wasmtime compile -o "$WORK/tinygo.cwasm" "$FULL"
 for spec in "$@"; do
   # A program is built for the sysroot's target, or for the one named
-  # after an @: dir@playstation-yaroze-go, whose C and assembly entries
+  # after an @: dir@playstation-yaroze-clean, whose C and assembly entries
   # differ from the default target's by their flags.
   prog=${spec%@*}
   progtarget=$target
