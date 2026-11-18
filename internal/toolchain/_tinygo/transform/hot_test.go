@@ -1,6 +1,12 @@
 package transform_test
 
 import (
+	"bytes"
+	"debug/elf"
+	"encoding/binary"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -53,5 +59,169 @@ func TestHotCaptures(t *testing.T) {
 		}
 		mod.Dispose()
 		ctx.Dispose()
+	}
+}
+
+// writeBase writes an ELF that has nothing but absolute symbols, as the
+// link script of a program defines them, with the values given, and
+// returns its path.
+func writeBase(t *testing.T, symbols map[string]uint32) string {
+	t.Helper()
+	strtab := []byte{0}
+	syms := []elf.Sym32{{}}
+	for name, value := range symbols {
+		syms = append(syms, elf.Sym32{
+			Name:  uint32(len(strtab)),
+			Value: value,
+			Info:  elf.ST_INFO(elf.STB_GLOBAL, elf.STT_NOTYPE),
+			Shndx: uint16(elf.SHN_ABS),
+		})
+		strtab = append(append(strtab, name...), 0)
+	}
+	shstrtab := []byte("\x00.symtab\x00.strtab\x00.shstrtab\x00")
+	const headerSize, sectionSize, symSize = 52, 40, 16
+	symOff := uint32(headerSize)
+	strOff := symOff + uint32(len(syms))*symSize
+	shstrOff := strOff + uint32(len(strtab))
+	shOff := shstrOff + uint32(len(shstrtab))
+	header := elf.Header32{
+		Type:      uint16(elf.ET_EXEC),
+		Machine:   uint16(elf.EM_MIPS),
+		Version:   uint32(elf.EV_CURRENT),
+		Shoff:     shOff,
+		Ehsize:    headerSize,
+		Shentsize: sectionSize,
+		Shnum:     4,
+		Shstrndx:  3,
+	}
+	copy(header.Ident[:], elf.ELFMAG)
+	header.Ident[elf.EI_CLASS] = byte(elf.ELFCLASS32)
+	header.Ident[elf.EI_DATA] = byte(elf.ELFDATA2LSB)
+	header.Ident[elf.EI_VERSION] = byte(elf.EV_CURRENT)
+	sections := []elf.Section32{
+		{},
+		{
+			Name:    1,
+			Type:    uint32(elf.SHT_SYMTAB),
+			Off:     symOff,
+			Size:    uint32(len(syms)) * symSize,
+			Link:    2,
+			Info:    1,
+			Entsize: symSize,
+		},
+		{
+			Name: 9,
+			Type: uint32(elf.SHT_STRTAB),
+			Off:  strOff,
+			Size: uint32(len(strtab)),
+		},
+		{
+			Name: 17,
+			Type: uint32(elf.SHT_STRTAB),
+			Off:  shstrOff,
+			Size: uint32(len(shstrtab)),
+		},
+	}
+	var buf bytes.Buffer
+	for _, part := range []any{header, syms, strtab, shstrtab, sections} {
+		if err := binary.Write(&buf, binary.LittleEndian, part); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "base.elf")
+	if err := os.WriteFile(path, buf.Bytes(), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// TestHotExperiments checks that a program built with -hot says which of
+// the compiler's experiments it was built with, and that HotBind refuses a
+// patch built with others, or for a program that does not say.
+func TestHotExperiments(t *testing.T) {
+	t.Parallel()
+	config := func(experiment, base string) *compileopts.Config {
+		return &compileopts.Config{
+			Options: &compileopts.Options{
+				Experiment: experiment,
+				HotBase:    base,
+			},
+			Target: &compileopts.TargetSpec{},
+		}
+	}
+	for experiment, want := range map[string]string{
+		"":          "__hot_experiment_onstore = 1;\n",
+		"onstore":   "__hot_experiment_onstore = 1;\n",
+		"noonstore": "__hot_experiment_onstore = 0;\n",
+	} {
+		if got := transform.HotExperiments(config(experiment, "")); got != want {
+			t.Errorf("-experiment=%s: the link script is %q, want %q", experiment, got, want)
+		}
+	}
+
+	const (
+		both  = "hot: the patch is built with the experiments "
+		older = "hot: the running program does not say which of the compiler's experiments it was built with"
+	)
+	tests := []struct {
+		name       string
+		base       map[string]uint32 // the base's symbols, besides VSync
+		experiment string            // the patch's -experiment
+		want       string            // what the error starts with, or "" for none
+	}{
+		{
+			name: "both on",
+			base: map[string]uint32{"__hot_experiment_onstore": 1},
+		},
+		{
+			name:       "both off",
+			base:       map[string]uint32{"__hot_experiment_onstore": 0},
+			experiment: "noonstore",
+		},
+		{
+			name:       "base on, patch off",
+			base:       map[string]uint32{"__hot_experiment_onstore": 1},
+			experiment: "noonstore",
+			want:       both + "noonstore and the running program was built with onstore:",
+		},
+		{
+			name: "base off, patch on",
+			base: map[string]uint32{"__hot_experiment_onstore": 0},
+			want: both + "onstore and the running program was built with noonstore:",
+		},
+		{
+			name: "an experiment this compiler has not",
+			base: map[string]uint32{
+				"__hot_experiment_onstore": 1,
+				"__hot_experiment_other":   0,
+			},
+			want: both + "onstore and the running program was built with onstore,noother:",
+		},
+		{
+			name: "a base from an older compiler",
+			want: older,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			symbols := map[string]uint32{"VSync": 0x80100000}
+			for name, value := range test.base {
+				symbols[name] = value
+			}
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			mod := ctx.NewModule("patch")
+			defer mod.Dispose()
+			mod.SetDataLayout("e-m:m-p:32:32-i8:8:32-i16:16:32-i64:64-n32-S64")
+			err := transform.HotBind(mod, config(test.experiment, writeBase(t, symbols)))
+			switch {
+			case test.want == "" && err != nil:
+				t.Errorf("got the error %q, want none", err)
+			case test.want != "" && err == nil:
+				t.Errorf("got no error, want %q", test.want)
+			case test.want != "" && !strings.HasPrefix(err.Error(), test.want):
+				t.Errorf("got the error %q, want %q", err, test.want)
+			}
+		})
 	}
 }

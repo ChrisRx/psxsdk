@@ -52,7 +52,7 @@
 +		// scripts have been evaluated.
 +		var hotScript string
 +		if config.Options.Hot {
-+			hotScript += "__hot_size = 0x40000;\n"
++			hotScript += "__hot_size = 0x40000;\n" + transform.HotExperiments(config)
 +			ldflags = append(ldflags, "-u", "__hot_keep")
 +		}
 +		if config.Options.HotBase != "" {
