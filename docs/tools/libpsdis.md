@@ -3,7 +3,7 @@ title: libpsdis
 weight: 13
 ---
 
-`libpsdis` writes an annotated disassembly of Sony's Net Yaroze resident library, and `libpsdis score` compares the clean library's instructions with it, entry point by entry point. Sony's image is not in this repository: `--image` or `PSX_SONY_LIBPS` names a private copy. Both are for the spec side of the clean-room work in `exp/cleanlib`, off limits to the side that writes the library. Their input and output are never committed.
+`libpsdis` writes an annotated disassembly of Sony's Net Yaroze resident library, and `libpsdis score` compares the clean library's instructions with it, entry point by entry point. Sony's image is not in this repository: `--image` or `PSX_SONY_LIBPS` names a private copy. Both are for the spec side of the clean-room work in `internal/libps`, off limits to the side that writes the library. Their input and output are never committed.
 
 ```bash
 $ libpsdis -o /tmp/dis          # the whole image, as /tmp/dis/libps.txt

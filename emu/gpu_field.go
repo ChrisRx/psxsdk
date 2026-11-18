@@ -13,7 +13,7 @@ package emu
 // picture, the lines the display range GP1(07h) sets, the field not being
 // shown, counted from the display area's top line, as Mednafen has it, and
 // outside the picture, the vertical blank among it, the even rows, as a
-// console is seen to (exp/cleanlib/spec/probes/statlines and teal): a clear
+// console is seen to (internal/libps/spec/probes/statlines and teal): a clear
 // that ends there every frame reaches the same rows every frame. The field
 // changes as the picture ends (hblank), so a drawing that runs past it
 // moves to the other field's lines partway through, as on a console.

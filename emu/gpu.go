@@ -146,7 +146,7 @@ const gpustatDisplayMode = 1<<14 | 0x7f<<16
 // setDisplayMode takes a GP1(08h) display mode, and shows it in GPUSTAT as
 // a console does: bits 0 to 5 of the mode at bits 17 to 22, bit 6 at 16 and
 // bit 7 at 14. A library reads them back: Sony's VSync looks at bit 19, 480
-// lines, to wait for the field (exp/cleanlib/spec/probes/vsyncphase).
+// lines, to wait for the field (internal/libps/spec/probes/vsyncphase).
 func (g *gpu) setDisplayMode(mode uint32) {
 	g.displayMode = mode
 	bits := (mode&0x3f)<<17 | (mode>>6&1)<<16 | (mode>>7&1)<<14
@@ -161,7 +161,7 @@ func (g *gpu) Read32(off uint32) uint32 {
 		// A console shows the GPU not ready for a command, nor for a VRAM
 		// read, while a command's parameters are still owed: after a fill's
 		// first word GPUSTAT reads 90822400h until the rest come
-		// (exp/cleanlib/spec/35-hardware-session.md, the monitor's screen).
+		// (internal/libps/spec/35-hardware-session.md, the monitor's screen).
 		if g.state == gpuRecvArgs {
 			return (g.gpustat | gpustatReadyBits) &^ (gpustatReadyCmd | gpustatReadyVRAM)
 		}
@@ -735,7 +735,7 @@ func (g *gpu) hblank() {
 		// The field changes as the picture ends, which on a console is
 		// after the vertical blank interrupt: the display range GP1(07h)
 		// sets runs to line 256 by default, the interrupt comes at 240
-		// (exp/cleanlib/spec/probes/statlines).
+		// (internal/libps/spec/probes/statlines).
 		if g.scanline == int(g.pictureEnd()) {
 			g.nextField()
 		}

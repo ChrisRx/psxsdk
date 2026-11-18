@@ -295,7 +295,7 @@ func TestCPUCostLoadsZero(t *testing.T) {
 // the drawing time on: cached code runs on, loads from RAM go one to a
 // block, reads of a port two to a block, and stores leave the write buffer
 // two or three to a block, wherever in RAM they go (probes/dmahold, spec 50
-// of exp/cleanlib).
+// of internal/libps).
 func TestCPUCostBlocks(t *testing.T) {
 	const (
 		at     = 0x80010000

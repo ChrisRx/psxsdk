@@ -16,7 +16,7 @@ package emu
 
 // otcHoldPerMille is the cycles, in thousandths, a word of channel 6's
 // transfer holds the bus under SetCPUCost: clearing 1,024 words takes 1,097
-// cycles on a console (exp/cleanlib/spec/35-hardware-session.md, cpucost2,
+// cycles on a console (internal/libps/spec/35-hardware-session.md, cpucost2,
 // "otc alone").
 const otcHoldPerMille = 1070
 

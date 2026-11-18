@@ -11,7 +11,7 @@ import (
 	"go.chrisrx.dev/psx/format/psx"
 )
 
-// libpsGz is the clean library, exp/cleanlib, laid out as a Net Yaroze's boot disc
+// libpsGz is the clean library, internal/libps, laid out as a Net Yaroze's boot disc
 // leaves its library resident in RAM, a PSX-EXE, gzipped. task image builds it.
 //
 //go:embed libps.exe.gz

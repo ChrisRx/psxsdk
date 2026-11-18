@@ -65,7 +65,7 @@ func TakeOver(monitor *Program, image Segment) (*Program, error) {
 // events, which its start-up opened and won't open again, so the loader opens
 // them again as they were (libraryEvents). It also puts the interrupt mask
 // back as it found it rather than leaving it clear, since nothing will set it
-// up again. Spec 46 of exp/cleanlib measured the events: eight cost the
+// up again. Spec 46 of internal/libps measured the events: eight cost the
 // interrupt some 160 cycles.
 func TakeOverMonitor(monitor *Program) (*Program, error) {
 	return takeOver(monitor, nil, true)

@@ -39,9 +39,9 @@ func (w gpuWord) String() string {
 }
 
 // TestClean compares a program built against the clean-room library,
-// exp/cleanlib, with the same program built against a reference library.
+// internal/libps, with the same program built against a reference library.
 // PSX_CLEAN names it: the reference disc is .build/NAME-ref/NAME-ref.cue
-// and the clean one .build/NAME-clean/NAME-clean.cue (exp/cleanlib/build.sh
+// and the clean one .build/NAME-clean/NAME-clean.cue (internal/libps/build.sh
 // NAME-clean DIR). PSX_CLEAN_REF=sony (or another suffix) compares
 // .build/NAME-sony/NAME-sony.cue, a build against Sony's own library,
 // with .build/NAME-sony-clean/NAME-sony-clean.cue, the clean build padded
@@ -92,7 +92,7 @@ func (w gpuWord) String() string {
 // point of the video frame in each run for no reason of the library's
 // behavior. So the run with the smaller .bss has its start-up clear as
 // many more words past _end as the other has, and both reach main on
-// the same cycle (exp/cleanlib/build.sh already pads the executables to
+// the same cycle (internal/libps/build.sh already pads the executables to
 // the same size, which lines up their loading).
 //
 // The runs in timingSensitive differ from their references only in
@@ -312,7 +312,7 @@ var withCard = map[string]bool{
 // why. A run's readout of its own frame time differs because the two
 // libraries take different times; the others have an event within a few
 // thousand cycles of a frame's edge, which the libraries' speed
-// differences move across it (exp/cleanlib/spec/08-timing.md).
+// differences move across it (internal/libps/spec/08-timing.md).
 var timingSensitive = map[string]string{
 	"timers":    "its readout of the lines its frame took",
 	"flame":     "its readout of its frame time",
@@ -532,7 +532,7 @@ func TestCleanShot(t *testing.T) {
 // shows under VSync's functions: that is the frame's spare time.
 //
 // TinyGo inlines most of the library into main, so built with DWARF
-// (TGOFLAGS=-debug exp/cleanlib/build.sh NAME DIR) the test also
+// (TGOFLAGS=-debug internal/libps/build.sh NAME DIR) the test also
 // attributes cycles to source lines, and prints the 15 costliest files
 // and 40 costliest lines.
 func TestCleanProfile(t *testing.T) {
