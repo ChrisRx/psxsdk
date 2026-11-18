@@ -10,6 +10,8 @@ NAMES="blank pads isbg isbg1 flush split jumpcube quest car scene cdda timers fl
 dir() {
   case $1 in
     isbg|isbg1|flush) echo internal/libps/spec/probes/$1 ;;
+    # sony-reference keeps blank at its old path, the tutorial's hello.
+    blank) echo docs/tutorial/hello ;;
     *) echo examples/$1 ;;
   esac
 }
@@ -17,6 +19,7 @@ build() {
   local n=$1 d
   d=$(dir "$n")
   mkdir -p ".build/$n-ref"
+  # exp/libps and --libps go exist only in a sony-reference worktree, not in this tree.
   if go run ./cmd/yaroze disc --libps go --elf ".build/$n-ref/prog.elf" -o ".build/$n-ref/$n-ref.bin" "$d" >".build/$n-ref/build.log" 2>&1; then
     echo "built $n-ref"
   else

@@ -4,9 +4,10 @@
 # .build/NAME/NAME.cue, with prog.elf beside it. Run from the repository
 # root.
 #
-# The embedded compiler's file store does not hold internal/libps, so this
-# builds with the full compiler, which has clang, over a copy of its
-# sysroot with this module's packages synced in.
+# This builds for the fidelity target, whose C and assembly no cache holds
+# compiled, so it uses the full compiler, which has clang, over a copy of
+# the sysroot task yaroze makes. This checkout's packages are synced into
+# the copy, so an edit builds without refreshing the sysroot.
 set -euo pipefail
 NAME=$1 DIR=$2
 SYS=.build/clean-sysroot
@@ -20,7 +21,7 @@ sync() {
   rm -f "$MOD/$1"/*.go
   cp "$1"/*.go "$MOD/$1/" 2>/dev/null || true
 }
-for d in yaroze internal/libps exp/ps exp/ps/scene exp/ps/stage internal/volatile disc "$DIR"; do
+for d in yaroze internal/libps internal/volatile geom gpu input scene stage internal/scenelayout disc internal/discrecord archive "$DIR"; do
   sync "$d"
 done
 for d in $(cd internal/libps && find . -mindepth 1 -type d -not -path './spec*' -not -path './gen*'); do
@@ -46,7 +47,7 @@ mkdir -p "$WORK/tmp" "$WORK/prog" "$SYS/cache"
 printf 'module play\n\ngo %s\n\n%s' "$(echo "$GOVERSION" | sed -E 's/^go([0-9]+\.[0-9]+).*/\1/')" "$GOMOD" > "$WORK/go.mod"
 cp "$DIR"/*.go "$WORK/prog/"
 CWASM=.build/tgo-full.cwasm
-if [ ! -f "$CWASM" ]; then wasmtime compile -o "$CWASM" "$FULL"; fi
+if [ ! -f "$CWASM" ] || [ "$FULL" -nt "$CWASM" ]; then wasmtime compile -o "$CWASM" "$FULL"; fi
 OUT=.build/$NAME
 mkdir -p "$OUT"
 wasmtime run --allow-precompiled \

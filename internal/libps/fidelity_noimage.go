@@ -21,11 +21,11 @@ func padReadingStart() {
 }
 
 // The remainders of the reference's printf's time between writes, past what
-// ttyPrintf's own work takes, in spin's loops. The reference (hello-ref, measured
-// with iotrace) spends 134 cycles before a plain character, 658 before a
-// conversion's first digit and 114 before each of the others, 166 before a plain
-// character after a conversion and 146 before the "\r" of a "\n", and 40 between
-// the two.
+// ttyPrintf's own work takes, in spin's loops. The reference (blank-ref, named
+// hello-ref when examples/blank was the tutorial's hello, measured with iotrace)
+// spends 134 cycles before a plain character, 658 before a conversion's first
+// digit and 114 before each of the others, 166 before a plain character after a
+// conversion and 146 before the "\r" of a "\n", and 40 between the two.
 func ttyPlainPad()     { spin(4) }
 func ttyFirstDigPad()  { spin(46) }
 func ttyDigitPad()     { spin(4) }
@@ -34,7 +34,7 @@ func ttyNewlinePad()   { spin(3) }
 
 // libTablePad is the time the reference takes to clear a 64-byte table a byte at a
 // time (512 cycles) and make the stores around it, measured with iotrace on
-// hello-ref.
+// blank-ref (then hello-ref).
 func libTablePad() { spinCycles(576) }
 
 // cdStartPad is the time of the two system calls of a critical section the

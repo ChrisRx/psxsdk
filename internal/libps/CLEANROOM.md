@@ -38,8 +38,9 @@ Work is split in two:
   `playstation-yaroze-libps-data.c`, and the TinyGo runtime.
 - The clean target, `playstation-yaroze-clean.json`, the start-up you
   write for it, `playstation-yaroze-clean.S`, and the link script
-  `playstation-yaroze.ld`. (Sony's start-up, `playstation-yaroze.S`,
-  includes yours under `LIBPS_CLEAN`; it stays off limits.)
+  `playstation-yaroze.ld`. (`playstation-yaroze-start.S` includes yours
+  under `LIBPS_CLEAN`. Sony's start-up, `playstation-yaroze.S`, left the
+  tree and stays off limits in history.)
 - Black-box tests: running programs or calling resident functions in the
   emulator and comparing observable results (`tests/`, `emu/emutest`).
   Reading the values of the library's public variables (those declared
@@ -51,9 +52,13 @@ Work is split in two:
   address. A tool must not read the instruction at the PC on Sony's side,
   even to decide what to log: `ARCHIVE_BUS` and `PROBE_BUS` show the I/O
   registers and the GTE from outside. Never save a dump of RAM that holds Sony's library. Build probes
-  against Sony's own library (`go run ./cmd/yaroze disc` without
-  `--libps`), not a `-ref` build: the reference discs exist for
-  TestClean.
+  against Sony's own library with `image/probe.sh`, which lays the probe
+  over the private copy of Sony's image (`yaroze disc --libps resident`
+  with `PSX_LIBPS_IMAGE` set to it), not a `-ref` build: the reference
+  discs exist for TestClean, and `refs.sh` builds them in a worktree of
+  `sony-reference`. A plain `go run ./cmd/yaroze disc` links the clean
+  library statically, and `--libps resident` alone lays the program over
+  the clean image, so neither is a build against Sony's library.
 - Anything else in the repository not listed below.
 
 ## Off limits (implementation side)
@@ -66,21 +71,25 @@ are the paths below where they survive, including under other names in git histo
 Never open, search, grep, diff or otherwise read these, or ask anyone to
 summarize them:
 
-- `exp/libps/` (the decompiled library), including its history in git
-  (`git log -p`, `git show`, `git diff` touching it).
-- `exp/libps/image/` and its tooling.
 - `tools/libpsdis/` and any disassembly or listing it produced.
-- `link/libps.exe.gz` (Sony's resident image), and any dump of its bytes.
-- `internal/toolchain/_tinygo/targets/playstation-yaroze-libps.S`,
-  `playstation-yaroze.S`, `playstation-yaroze-symusr-orig.S` and
-  `playstation-yaroze-libps-gte.S`.
+- Sony's resident image: the private copy that `PSX_SONY_LIBPS` names
+  (`image/regress.sh`, `probe.sh`, `archive.sh` and `terra.sh` read it), the
+  copies they unpack into `.build/cleanimage/`, and any dump of its bytes.
+  `link/libps.exe.gz` is no longer Sony's: it is the clean image, built from
+  this library by `task image`, and fine to build and read. Its history in
+  git, from when it was Sony's, is off limits.
+- `internal/toolchain/_tinygo/targets/playstation-yaroze-symusr-orig.S`.
+- Files that left the tree, in git history (`git log -p`, `git show`,
+  `git diff` touching them): `exp/libps/` (the decompiled library) with
+  `exp/libps/image/` and its tooling, `tests/zz_image_test.go`, and in
+  `internal/toolchain/_tinygo/targets/`, `playstation-yaroze-libps.S`,
+  `playstation-yaroze.S` and `playstation-yaroze-libps-gte.S`.
 - `~/src/ChrisRx/psxsdk-sony/`, which holds Sony's image, its SDK fixtures and the notes on the decompile, and `docs/architecture/libps-go.md` in history.
 - Profiles of the reference builds (`TestCleanProfile` on a `-ref` or
   `-sony` build): their symbols name the decompiled library's functions.
   `TestCleanStart` on a Sony build reads instructions at the PC: run it on
   clean builds only.
-- `tests/zz_image_test.go`, and `.build/image/`, `.build/archive/` and any
-  other build output of the library image prototype. `.build/instr/` and what
+- `.build/image/`, `.build/archive/` and any other build output of the library image prototype. `.build/instr/` and what
   `libpsdis score` writes: a score to climb would steer the work toward Sony's code.
 - `internal/libps/image/gen.py`, `internal/libps/image/sonyfont.py`, and the `.ld`,
   `.S`, `.json`, `exports.txt`, `map1.txt` and `sony-cleanfont.exe` files in
@@ -110,9 +119,9 @@ If a question can only be answered by looking at one of these, stop and
 ask the spec side for a spec of the behavior instead.
 
 Searching counts as reading. Never run a search over the whole
-repository: a grep from the root prints lines from `exp/libps/` and the
-other files above. Search only the directories you need (`internal/libps`,
-`yaroze`, `emu`, `tests` less `zz_image_test.go`, `docs/manuals`), or
+repository: a grep from the root prints lines from the files above.
+Search only the directories you need (`internal/libps`, `yaroze`, `emu`,
+`tests`, `docs/manuals`), or
 exclude every path above explicitly. If a search does print a line from
 one of them anyway, base nothing on it and report the slip.
 
@@ -120,8 +129,9 @@ one of them anyway, base nothing on it and report the slip.
 
 Each piece has acceptance tests: programs whose pictures, printed output
 or recorded behavior must match a reference. The reference is the same
-program built against `exp/libps` without the `sonydata` tag (so with the
-library's own font, never Sony's), or Sony's resident library observed in
+program built against the decompiled library with that library's own
+font, never Sony's (the `-ref` discs, which `refs.sh` builds in a worktree
+of `sony-reference`), or Sony's resident library observed in
 the emulator. Matching a reference's behavior is the goal; reading how it
 gets there is not allowed.
 
