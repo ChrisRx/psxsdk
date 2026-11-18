@@ -1,4 +1,9 @@
-// Hello: a line of text on the screen.
+// An empty program to start from: the screen, cleared every frame, and a
+// line of text, which is all a program needs to show that it runs.
+//
+// The playground's New project offers it beside jumpcube and quest, for a
+// program written from nothing, and it is the program the guide's Getting
+// started shows.
 package main
 
 import "go.chrisrx.dev/psx/yaroze"

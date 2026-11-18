@@ -1,7 +1,6 @@
 // A box to move around the screen in front of a turning cube, to music, on the
-// yaroze package's Go API: examples/square, the program the tutorial writes,
-// against the Go library's own surface. It draws the same frames, which the
-// tests check.
+// yaroze package's Go API: examples/square, against the Go library's own
+// surface. It draws the same frames, which the tests check.
 //
 // It is the smallest program that has the parts most programs need: the
 // frame loop, the controller, files read off the disc, a model drawn in

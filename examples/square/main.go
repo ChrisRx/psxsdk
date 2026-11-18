@@ -1,5 +1,4 @@
-// A box to move around the screen in front of a turning cube, to music: the
-// program to start from, which the tutorial writes.
+// A box to move around the screen in front of a turning cube, to music.
 //
 // It is the smallest program that has the parts most programs need: the
 // frame loop, the controller, files read off the disc, a model drawn in
