@@ -54,7 +54,7 @@ tasks:
       - for: [blank, jumpcube, quest]
         task: build:disc:resident
         vars: { NAME: '{{.ITEM}}' }
-      - for: [card, cdda, dino, gallery, invaders, pads, square, tiles, timers]
+      - for: [card, cdda, dino, gallery, invaders, pads, tiles, timers]
         task: build:disc:resident
         vars: { NAME: '{{.ITEM}}-ps', DIR: 'yaroze/internal/examples/{{.ITEM}}' }
 

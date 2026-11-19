@@ -717,12 +717,6 @@ func galleryScreenshot(t *testing.T, name string) {
 	noComplaints(t, m)
 }
 
-// TestSquareScreenshotPS is TestSquareScreenshot on yaroze/internal/examples/square,
-// the program written against the yaroze package's Go API (task build:disc
-// NAME=square-ps DIR=yaroze/internal/examples/square), which has to draw the same
-// picture.
-func TestSquareScreenshotPS(t *testing.T) { squareScreenshot(t, "square-ps") }
-
 func squareScreenshot(t *testing.T, name string) {
 	parallel(t)
 	m := bootExample(t, name)

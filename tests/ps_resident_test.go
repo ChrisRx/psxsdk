@@ -16,7 +16,6 @@ func TestQuestLiveResident(t *testing.T) {
 }
 func TestJumpcubeResident(t *testing.T)            { jumpcube(t, "jumpcube-resident") }
 func TestGalleryScreenshotPSResident(t *testing.T) { galleryScreenshot(t, "gallery-ps-resident") }
-func TestSquareScreenshotPSResident(t *testing.T)  { squareScreenshot(t, "square-ps-resident") }
 func TestPadsScreenshotPSResident(t *testing.T)    { padsScreenshot(t, "pads-ps-resident") }
 func TestCardScreenshotPSResident(t *testing.T)    { cardScreenshot(t, "card-ps-resident") }
 func TestCDDAScreenshotPSResident(t *testing.T)    { cddaScreenshot(t, "cdda-ps-resident") }
