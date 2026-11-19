@@ -62,13 +62,7 @@ func openScreen(s *Screen) {
 	if s.impl.ot[0].Org == nil {
 		s.Init(make([]GsOT_TAG, 2<<s.Depth), make([]uint32, 2*s.Packets/4))
 	}
-	if s.OverlayDepth != 0 && s.impl.overlay[0].Org == nil {
-		tags := make([]GsOT_TAG, 2<<s.OverlayDepth)
-		for i := range s.impl.overlay {
-			s.impl.overlay[i].Length = uint32(s.OverlayDepth)
-			s.impl.overlay[i].Org = &tags[i<<s.OverlayDepth]
-		}
-	}
+	s.initOverlay()
 }
 
 func resetGraph() { ResetGraph(3) }
@@ -108,14 +102,16 @@ func endFrame(s *Screen) int {
 	if s.backdrop != nil {
 		// The backdrop goes into the buffer about to be drawn, which
 		// is the other one from the frame's own index: below or beside
-		// the first.
+		// the first. An interlaced picture has both buffers at 0, 0.
 		r := RECT{
 			W: s.backdropW,
 			H: s.backdropH,
 		}
-		if s.Buffers == ScreenBuffersSideBySide {
+		switch {
+		case s.Height > 256:
+		case s.Buffers == ScreenBuffersSideBySide:
 			r.X = int16(1-s.active) * int16(s.Width)
-		} else {
+		default:
 			r.Y = int16(1-s.active) * int16(s.Height)
 		}
 		LoadImage(&r, s.backdrop)
@@ -127,8 +123,8 @@ func endFrame(s *Screen) int {
 	if s.OverlayDepth != 0 {
 		GsDrawOt(&s.impl.overlay[s.active])
 	}
-	if s.text >= 0 {
-		FntFlush(s.text)
+	for _, id := range s.text[:s.ntext] {
+		FntFlush(id)
 	}
 	for _, id := range s.kanji[:s.nkanji] {
 		KanjiFntFlush(id)
@@ -139,8 +135,13 @@ func endFrame(s *Screen) int {
 
 func vsync(n int32) int32 { return VSync(n) }
 
-func fontOpen(x, y, w, h, chars int) int32 {
-	FntLoad(960, 256)
+// fontOpen opens a font stream, after putting the font into video memory
+// if load is set. The load closes every stream open, so it goes before the
+// screen's first window and no other.
+func fontOpen(load bool, x, y, w, h, chars int) int32 {
+	if load {
+		FntLoad(960, 256)
+	}
 	return FntOpen(int32(x), int32(y), int32(w), int32(h), 0, int32(chars))
 }
 

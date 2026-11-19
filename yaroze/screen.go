@@ -86,9 +86,9 @@ type Screen struct {
 	cur    Frame
 	over   Frame
 
-	// text is the window Font opened, flushed at the end of each frame,
-	// or -1.
-	text int32
+	// text is the windows Font opened, flushed at the end of each frame.
+	text  [8]int32
+	ntext int
 
 	// backdrop is the picture SetBackdrop gave, copied under each frame,
 	// or nil.
@@ -226,9 +226,15 @@ func (s *Screen) Open() {
 	if s.Packets == 0 {
 		s.Packets = 16 << 10
 	}
-	s.text = -1
-	s.cur = Frame{s: s, depth: s.Depth}
-	s.over = Frame{s: s, depth: s.OverlayDepth}
+	s.ntext = 0
+	s.cur = Frame{
+		s:     s,
+		depth: s.Depth,
+	}
+	s.over = Frame{
+		s:     s,
+		depth: s.OverlayDepth,
+	}
 	openScreen(s)
 }
 
@@ -239,7 +245,8 @@ func (s *Screen) Open() {
 // commands, split in half the same way, each half large enough for
 // everything one frame sorts. It sets Depth and Packets to match. The
 // packets are words rather than PACKET bytes so that they are aligned as
-// the library's stores need; see Packets.
+// the library's stores need; see Packets. A screen with an OverlayDepth
+// gets the overlay's tables from the heap, here as in Open.
 //
 //	const otLength = 4
 //	var otTags [2 << otLength]yaroze.GsOT_TAG
@@ -261,9 +268,29 @@ func (s *Screen) Init(tags []GsOT_TAG, packets []uint32) {
 		s.impl.ot[i].Org = &tags[i*n]
 		s.impl.packets[i] = packets[i*len(packets)/2 : (i+1)*len(packets)/2]
 	}
-	s.text = -1
-	s.cur = Frame{s: s, depth: s.Depth}
-	s.over = Frame{s: s, depth: s.OverlayDepth}
+	s.ntext = 0
+	s.cur = Frame{
+		s:     s,
+		depth: s.Depth,
+	}
+	s.over = Frame{
+		s:     s,
+		depth: s.OverlayDepth,
+	}
+	s.initOverlay()
+}
+
+// initOverlay gives the overlay its two ordering tables, from the heap,
+// if the screen has an OverlayDepth and they have not been made.
+func (s *Screen) initOverlay() {
+	if s.OverlayDepth == 0 || s.impl.overlay[0].Org != nil {
+		return
+	}
+	tags := make([]GsOT_TAG, 2<<s.OverlayDepth)
+	for i := range s.impl.overlay {
+		s.impl.overlay[i].Length = uint32(s.OverlayDepth)
+		s.impl.overlay[i].Org = &tags[i<<s.OverlayDepth]
+	}
 }
 
 // Close puts the display back as the BIOS had it, for a program that is
@@ -345,11 +372,13 @@ func (s *Screen) Wait(n int) {
 // Font opens a window for text at x, y, w by h, holding up to chars
 // characters at a time, in the console's own font, and returns it. What
 // is printed to it during a frame is drawn at the frame's end, in front
-// of everything else, and the window empties for the next.
+// of everything else, and the window empties for the next. The library
+// has eight such windows and 1024 characters between them.
 func (s *Screen) Font(x, y, w, h, chars int) Text {
-	id := fontOpen(x, y, w, h, chars)
-	if s.text < 0 {
-		s.text = id
+	id := fontOpen(s.ntext == 0, x, y, w, h, chars)
+	if id >= 0 && s.ntext < len(s.text) {
+		s.text[s.ntext] = id
+		s.ntext++
 	}
 	return Text{id}
 }

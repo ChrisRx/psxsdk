@@ -180,3 +180,27 @@ func TestBackgroundStub(t *testing.T) {
 	assert.Panic(t, stub("Background.Init"), func() { bg.Init(&screen, &m) })
 	assert.Panic(t, stub("Line.Draw"), func() { (&Line{}).Draw(nil, 0) })
 }
+
+// TestInitOverlay checks that a screen given its storage by Init, with no
+// Open, has its overlay's ordering tables too, of 1<<OverlayDepth depths
+// each, and that one without an OverlayDepth has none.
+func TestInitOverlay(t *testing.T) {
+	var tags [2 << 4]GsOT_TAG
+	var packets [2 * 64]uint32
+
+	s := Screen{OverlayDepth: 2}
+	s.Init(tags[:], packets[:])
+	assert.Equal(t, 4, s.Depth)
+	assert.Equal(t, 4, s.over.Depths())
+	for i := range s.impl.overlay {
+		assert.Equal(t, uint32(2), s.impl.overlay[i].Length)
+		assert.Equal(t, true, s.impl.overlay[i].Org != nil, "overlay table")
+	}
+	assert.Equal(t, true, s.impl.overlay[0].Org != s.impl.overlay[1].Org, "a table for each buffer")
+	assert.Equal(t, true, s.Overlay() != nil, "the overlay")
+
+	var plain Screen
+	plain.Init(tags[:], packets[:])
+	assert.Equal(t, true, plain.impl.overlay[0].Org == nil, "no overlay without OverlayDepth")
+	assert.Equal(t, true, plain.Overlay() == nil, "no overlay")
+}

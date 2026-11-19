@@ -12,15 +12,15 @@ import (
 // the types are whole, and each call on the library panics through
 // stub, as the library's own functions do.
 
-func openScreen(s *Screen)                       { panic(stub("Screen.Open")) }
-func resetGraph()                                { panic(stub("Screen.Close")) }
-func beginFrame(s *Screen) *Frame                { panic(stub("Screen.Frames")) }
-func endFrame(s *Screen) int                     { panic(stub("Screen.Frames")) }
-func vsync(n int32) int32                        { panic(stub("Screen.Wait")) }
-func fontOpen(x, y, w, h, chars int) int32       { panic(stub("Screen.Font")) }
-func fntWrite(id int32, s string)                { panic(stub("Text.Print")) }
-func fntWriteBytes(id int32, b []byte)           { panic(stub("Text.Int")) }
-func sortSprite(sp *Sprite, f *Frame, depth int) { panic(stub("Sprite.Draw")) }
+func openScreen(s *Screen)                            { panic(stub("Screen.Open")) }
+func resetGraph()                                     { panic(stub("Screen.Close")) }
+func beginFrame(s *Screen) *Frame                     { panic(stub("Screen.Frames")) }
+func endFrame(s *Screen) int                          { panic(stub("Screen.Frames")) }
+func vsync(n int32) int32                             { panic(stub("Screen.Wait")) }
+func fontOpen(load bool, x, y, w, h, chars int) int32 { panic(stub("Screen.Font")) }
+func fntWrite(id int32, s string)                     { panic(stub("Text.Print")) }
+func fntWriteBytes(id int32, b []byte)                { panic(stub("Text.Int")) }
+func sortSprite(sp *Sprite, f *Frame, depth int)      { panic(stub("Sprite.Draw")) }
 func sortFastSprite(sp *Sprite, f *Frame, depth int) {
 	panic(stub("Sprite.DrawFast"))
 }
