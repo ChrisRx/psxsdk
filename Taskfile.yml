@@ -623,7 +623,7 @@ tasks:
       # The tags bring yaroze/libps_clean.go into the copy, which the tool
       # otherwise leaves out as excluded for the target: the file store has
       # to hold what the static target compiles too.
-      - '{{.TREE}}/build/tinygo-sysroot -target=playstation-yaroze -tags cleanlib -o .build/sysroot ./examples/... ./internal/libps/...'
+      - '{{.TREE}}/build/tinygo-sysroot -target=playstation-yaroze -tags cleanlib -o .build/sysroot ./examples/... ./internal/libps ./internal/libps/image'
       # The files built only with the onstore experiment off, which the tool
       # leaves out since it is on by default, for the playground's Onstore
       # box: no tag set selects both these and the files they replace.
@@ -668,6 +668,9 @@ tasks:
       - cp -R .build/sysroot {{.SYSROOT}}
       # The programs again, as playground:sysroot built them, at this level.
       - OPTS=2 web/compiler/mkcache.sh .build/compiler/tinygo-full.wasm .build/compiler/tinygo.wasm {{.SYSROOT}} $(cd {{.SYSROOT}} && ls -d mod/go.chrisrx.dev/psx/examples/*/ | grep -v /internal/ | sed 's,$,@playstation-yaroze-clean,') mod/go.chrisrx.dev/psx/examples/blank/
+      # A first build measured the same with and without the prelink
+      # entries, which are more than half the archive, so they stay out.
+      - rm -f {{.SYSROOT}}/cache/prelink-*
       - mkdir -p cmd/yaroze/wasm
       - gzip -9 -n -c .build/compiler/tinygo.wasm > cmd/yaroze/wasm/tinygo.wasm.gz
       # The archive's directory is sysroot, as the playground's is.
