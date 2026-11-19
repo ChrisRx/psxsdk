@@ -84,7 +84,11 @@ func main() {
 	}
 
 	if f := disc.LoadAll(300); f == nil {
-		sprite = yaroze.TIM(ballTIM.Data()).Load().Sprite()
+		var im yaroze.GsIMAGE
+		yaroze.GsGetTimInfo(&ballTIM.Data()[1], &im)
+		im.Load()
+		yaroze.DrawSync(0)
+		sprite = im.Sprite()
 	}
 	yaroze.Srand(7)
 	for i := range balls {

@@ -172,16 +172,16 @@ func PacketPointer() *PACKET { return gsOUT_PACKET_P }
 // SetPacketPointer sets GsOUT_PACKET_P; see PacketPointer.
 func SetPacketPointer(p *PACKET) { gsOUT_PACKET_P = p }
 
-// NativeVideoMode returns the video mode the console is made for, MODE_PAL
-// for a European one and MODE_NTSC for any other, from the region letter
-// at the end of the version string Sony's BIOS carries: "System ROM
-// Version 3.0 01/06/97 E". A BIOS without one, the first Japanese one or
-// an OpenBIOS, is taken for NTSC.
-func NativeVideoMode() int32 {
+// NativeVideoMode returns the video mode the console is made for, PAL for
+// a European one and NTSC for any other, from the region letter at the end
+// of the version string Sony's BIOS carries: "System ROM Version 3.0
+// 01/06/97 E". A BIOS without one, the first Japanese one or an OpenBIOS,
+// is taken for NTSC.
+func NativeVideoMode() VideoMode {
 	if *(*byte)(Pointer(0xbfc7ff52)) == 'E' {
-		return MODE_PAL
+		return PAL
 	}
-	return MODE_NTSC
+	return NTSC
 }
 
 // The CD-ROM calls the resident library has beyond what libps.h declares,

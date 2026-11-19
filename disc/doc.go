@@ -26,7 +26,7 @@
 //	var model = disc.Register("ASSETS/CUBE.TMD", "assets/CUBE.TMD")
 //
 //	if !model.Load() || !disc.Wait(300) { ... }
-//	cube := yaroze.TMD(model.Data())
+//	cube := yaroze.LoadTMD(model.Data())
 //
 // Or a declaration says where the file goes, with Into, and mkdisc checks
 // at build time that the file fits: memory the program declares itself,

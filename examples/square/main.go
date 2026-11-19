@@ -38,7 +38,7 @@ var (
 
 	box  = yaroze.GsBOXF{W: 40, H: 40, R: 255, G: 160, B: 32}
 	bar  = yaroze.GsBOXF{H: 4, R: 255, G: 255, B: 255}
-	cube yaroze.GsObject
+	cube yaroze.Object
 
 	view  yaroze.GsRVIEW2
 	light yaroze.GsF_LIGHT
@@ -89,9 +89,9 @@ func main() {
 			// The cube turns with the frames, so that where it is is the
 			// same at the same frame however long the disc took.
 			frame := screen.Frame()
-			cube.Rotation.Vx = int16(frame * 8)
-			cube.Rotation.Vy = int16(frame * 20)
-			cube.Draw(ot)
+			cube.Rotation.X = frame * 8
+			cube.Rotation.Y = frame * 20
+			cube.Draw(f)
 		}
 	}
 }
@@ -99,11 +99,9 @@ func main() {
 // setupCube puts the cube's texture into video memory, links the cube to
 // the model, and sets up the camera and the light it is seen by.
 func setupCube() {
-	yaroze.TIM(cubeTIM.Data()).Load()
-	model := yaroze.TMD(cubeTMD.Data())
-	model.Map()
-	cube.Init(yaroze.WORLD)
-	cube.Link(model, 0)
+	yaroze.LoadTIM(cubeTIM.Data())
+	cube.Init(nil)
+	cube.Link(yaroze.LoadTMD(cubeTMD.Data()), 0)
 
 	// The camera looks at the cube from in front, far enough back that it
 	// is a small thing in the middle of the screen.

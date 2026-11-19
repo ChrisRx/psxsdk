@@ -42,7 +42,7 @@ var (
 
 // objects returns the mapped model's object table.
 func objects() *[objectMax]demo.TMD_OBJ {
-	return (*[objectMax]demo.TMD_OBJ)(unsafe.Pointer(md0TMD.Table()))
+	return (*[objectMax]demo.TMD_OBJ)(unsafe.Pointer(&md0TMD[3]))
 }
 
 func vertAt(o *demo.TMD_OBJ, i uint32) *yaroze.SVECTOR {

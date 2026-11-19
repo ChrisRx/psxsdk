@@ -26,7 +26,7 @@ var level = disc.Register("ASSETS/LEVEL.ARC", "assets/LEVEL.ARC")
 a, err := archive.Open(level.Data())
 e, ok := a.Lookup("CUBE.TMD")
 words, err := e.Unpack(buf[:])   // or e.Load()
-model := yaroze.TMD(words)
+model := yaroze.LoadTMD(words)
 ```
 
 A scene draws from an archive through `scene.NewArchive`, as the [scene](../examples/scene.md) example does with its textures and model. The format is `format/archive`'s: a header, a table of entries with a method, the sizes and an offset each, then the entries' bytes, each starting on a word. Deflate is the one packing, chosen on measurements of the examples' data and of the decoders on the console; [Compression](../architecture/compression.md) has them. In the playground, "Pack into an archive" on a data file moves it under `pack/NAME/` and adds the `mkarc` line that makes `assets/NAME.ARC` from that directory, so the archive is remade as its files change.

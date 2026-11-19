@@ -87,8 +87,8 @@ var (
 
 	pictureFile = disc.Register("ASSETS/SB.TIM", "assets/SB.TIM").Into(pictureData[:])
 
-	pictureTIM = yaroze.TIM(pictureData[:])
-	pictureTMD = yaroze.TMD(sheetData[:])
+	pictureTIM = pictureData[:]
+	pictureTMD = sheetData[:]
 )
 
 var (
@@ -142,7 +142,7 @@ func main() {
 		return
 	}
 
-	pictureTIM.Load()
+	loadTIM(pictureTIM)
 
 	makeFlat()
 	pvert := makeBigTMDTexQuad(pictureTMD, pictureTIM)
@@ -216,11 +216,26 @@ func makeFlat() {
 	}
 }
 
+// loadTIM puts a TIM into video memory, where its header says, with its
+// palette if it has one, waits for the transfer, and returns its
+// description.
+func loadTIM(tim []uint32) (image yaroze.GsIMAGE) {
+	yaroze.GsGetTimInfo(&tim[1], &image)
+	rect := yaroze.RECT{X: image.Px, Y: image.Py, W: int16(image.Pw), H: int16(image.Ph)}
+	yaroze.LoadImage(&rect, image.Pixel)
+	if image.Pmode>>3&1 != 0 {
+		rect = yaroze.RECT{X: image.Cx, Y: image.Cy, W: int16(image.Cw), H: int16(image.Ch)}
+		yaroze.LoadImage(&rect, image.Clut)
+	}
+	yaroze.DrawSync(0)
+	return image
+}
+
 // initializeTMD ties a handle to an object of the TMD, giving it a
 // coordinate system of its own.
-func initializeTMD(tmd yaroze.TMD, objNum int32, obj *yaroze.GsDOBJ2) {
-	tmd.Map()
-	tmd.Link(obj, objNum)
+func initializeTMD(tmd []uint32, objNum int32, obj *yaroze.GsDOBJ2) {
+	yaroze.GsMapModelingData(&tmd[1])
+	yaroze.GsLinkObject4(&tmd[3], obj, objNum)
 	pictureCoord.Init(yaroze.WORLD)
 	obj.Coord2 = &pictureCoord
 }
@@ -252,9 +267,10 @@ func put[T any](cursor *uintptr, v T) *T {
 // primitive with its corners the other way round. It starts as the flat
 // sheet, and returns where the vertex table went. The header says its
 // offsets are addresses already, so GsMapModelingData leaves it alone.
-func makeBigTMDTexQuad(tmd yaroze.TMD, tim yaroze.TIM) uintptr {
+func makeBigTMDTexQuad(tmd []uint32, tim []uint32) uintptr {
 	addr := uintptr(unsafe.Pointer(&tmd[0]))
-	image := tim.Image()
+	var image yaroze.GsIMAGE
+	yaroze.GsGetTimInfo(&tim[1], &image)
 
 	pmode := image.Pmode & 3
 	cba := uint16(image.Cy)<<6 + uint16(image.Cx)>>4

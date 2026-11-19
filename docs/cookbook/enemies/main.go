@@ -34,6 +34,7 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/geom"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -101,8 +102,8 @@ var (
 	screen = yaroze.Screen{Background: yaroze.Color{B: 128}, Depth: 1}
 	pad    yaroze.Pad
 
-	player, enemy yaroze.GsSPRITE
-	fly           [numFlies]yaroze.GsSPRITE
+	player, enemy yaroze.Sprite
+	fly           [numFlies]yaroze.Sprite
 
 	// The enemy's speed, its direction in the random pattern, and how far
 	// it is through the set pattern.
@@ -137,7 +138,7 @@ func main() {
 		}
 	}
 	// The sheet holds the three sprites down its left edge.
-	sheet := yaroze.TIM(spritesTIM.Data()).Load().Sprite()
+	sheet := yaroze.LoadTIM(spritesTIM.Data()).Sprite()
 	enemy = cut(sheet, 0, 44, 22)
 	player = cut(sheet, 24, 44, 38)
 	yaroze.Srand(1)
@@ -147,7 +148,6 @@ func main() {
 	start()
 
 	for frame := range screen.Frames() {
-		ot := frame.OT()
 		pad.Update()
 		switch {
 		case pad.Pressed(yaroze.PADR1):
@@ -209,13 +209,13 @@ func main() {
 		switch mode {
 		case flies:
 			for i := range fly {
-				fly[i].Sort(ot, 0)
+				fly[i].Draw(frame, 0)
 			}
 		case attackEvade, randomStates:
-			player.Sort(ot, 0)
-			enemy.Sort(ot, 0)
+			player.Draw(frame, 0)
+			enemy.Draw(frame, 0)
 		default:
-			enemy.Sort(ot, 0)
+			enemy.Draw(frame, 0)
 		}
 	}
 }
@@ -231,13 +231,13 @@ func measure() {
 }
 
 // cut returns the part of the sheet v lines down its left edge, w by h.
-// Its X and Y are its top left corner: GsSortSprite puts the point Mx, My
-// of a sprite there, which Sprite set to the middle of the whole sheet.
-func cut(sheet yaroze.GsSPRITE, v uint8, w, h uint16) yaroze.GsSPRITE {
+// Its X and Y are its top left corner: a sprite is placed by its Pivot,
+// which Sprite set to the middle of the whole sheet.
+func cut(sheet yaroze.Sprite, v uint8, w, h uint16) yaroze.Sprite {
 	s := sheet
-	s.V += v
+	s.Texture.V += v
 	s.W, s.H = w, h
-	s.Mx, s.My = 0, 0
+	s.Pivot = geom.Point{}
 	return s
 }
 
@@ -298,7 +298,7 @@ func sign(v int16) int16 {
 }
 
 // keepOn keeps a sprite on the screen.
-func keepOn(s *yaroze.GsSPRITE) {
+func keepOn(s *yaroze.Sprite) {
 	s.X = max(0, min(s.X, screenW-int16(s.W)))
 	s.Y = max(0, min(s.Y, screenH-int16(s.H)))
 }

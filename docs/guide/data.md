@@ -8,8 +8,8 @@ A program's pictures, sounds, music and models are files on its disc in the cons
 
 | What | From | With | In the program |
 | --- | --- | --- | --- |
-| A sprite, texture or background | PNG, BMP, GIF | [`png2tim`](../tools/png2tim.md) | `yaroze.TIM(f.Data()).Load()`, and `.Sprite()` |
-| A model | OBJ and MTL | [`obj2tmd`](../tools/obj2tmd.md) | `yaroze.TMD`, `Map`, `Object.Link` |
+| A sprite, texture or background | PNG, BMP, GIF | [`png2tim`](../tools/png2tim.md) | `yaroze.LoadTIM(f.Data())`, and `.Sprite()` |
+| A model | OBJ and MTL | [`obj2tmd`](../tools/obj2tmd.md) | `yaroze.LoadTMD(f.Data())`, `Object.Link` |
 | One of Sony's RSD models | RSD, PLY, MAT | [`rsdlink`](../tools/rsdlink.md) | as above |
 | A sound | WAV, AIFF | [`wav2vag`](../tools/wav2vag.md) | in a bank |
 | A bank of sounds | VAGs and a definition | [`mkvab`](../tools/mkvab.md) | `yaroze.OpenBank(vh, vb)` |

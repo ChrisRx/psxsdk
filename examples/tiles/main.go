@@ -107,13 +107,12 @@ func main() {
 			yaroze.Print(f.Name)
 		}
 	}
-	im := yaroze.TIM(bgTIM.Data()).Load()
+	tex := yaroze.LoadTIM(bgTIM.Data()).Texture()
 
 	// Sixteen cells, eight across and two down, from the image's corner.
-	tpage := yaroze.GetTPage(1, 0, int32(im.Px), int32(im.Py))
-	clut := yaroze.GetClut(int32(im.Cx), int32(im.Cy))
+	clut := yaroze.GetClut(int32(tex.CX), int32(tex.CY))
 	for i := range cells {
-		cells[i] = yaroze.GsCELL{U: uint8(i % 8 * tileSize), V: uint8(i / 8 * tileSize), Cba: clut, Tpage: tpage}
+		cells[i] = yaroze.GsCELL{U: uint8(i % 8 * tileSize), V: uint8(i / 8 * tileSize), Cba: clut, Tpage: tex.Page}
 	}
 	tiles = yaroze.GsMAP{
 		Cellw: tileSize, Cellh: tileSize,

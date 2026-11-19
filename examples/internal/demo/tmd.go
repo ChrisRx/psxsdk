@@ -67,8 +67,8 @@ const (
 
 // TMDObject returns the first object of a mapped TMD, the start of its
 // object table.
-func TMDObject(t yaroze.TMD) *TMD_OBJ {
-	return (*TMD_OBJ)(unsafe.Pointer(t.Table()))
+func TMDObject(t []uint32) *TMD_OBJ {
+	return (*TMD_OBJ)(unsafe.Pointer(&t[3]))
 }
 
 // Norm returns the i'th normal of a mapped object.

@@ -16,7 +16,7 @@ Most of what goes wrong in a PlayStation program goes wrong in one of a few ways
 
 Sony's answer to [why a sprite cannot be seen](../manuals/faq.md#why-cant-i-see-my-sprite-on-screen) is the checklist, and with this toolchain:
 
-- **Its image is not in video memory, or something drew over it.** `TIM.Load` has to run before the sprite is drawn. Two TIMs at overlapping places overwrite each other, as does an image under the font or inside the display buffers. `png2tim` prints where each one goes, with `-r` for a TIM already made, and `psxemu --vram` dumps video memory to look at.
+- **Its image is not in video memory, or something drew over it.** `LoadTIM` has to run before the sprite is drawn. Two TIMs at overlapping places overwrite each other, as does an image under the font or inside the display buffers. `png2tim` prints where each one goes, with `-r` for a TIM already made, and `psxemu --vram` dumps video memory to look at.
 - **Its palette was wiped.** A 256-line screen on a PAL console reaches row 511, and its clear each frame wipes palettes kept at row 480. `Screen` uses 240 lines unless asked for more for this reason.
 - **It is somewhere else.** With `GsInit3D` the origin is the middle of the screen for 2D as well, so a sprite at 0, 0 is in the middle and one at 320, 240 is off the screen. Place things from `Screen.Bounds`.
 - **It is black or invisible.** R, G and B of 0 draw nothing. 128 is the image as it is.
@@ -29,7 +29,7 @@ Stray vertical lines in a sprite drawn with `SortFast` mean an odd U or width ([
 
 Sony's [checklist for models](../manuals/faq.md#why-cant-i-see-my-3d-model):
 
-- **The TMD was not mapped,** with `TMD.Map`, once, before `Link`.
+- **The TMD was not mapped,** with `LoadTMD`, or `GsMapModelingData` in a program on the SDK's calls, once, before it is linked.
 - **Its texture is not in video memory,** or not where the TMD says. Load the same TIM the model was converted with.
 - **It is unlit or lit black.** Set a light with `GsF_LIGHT.Set` and some ambient light, or convert it with `obj2tmd --unlit`.
 - **It is too big, too small or behind the camera.** A TMD's coordinates are 16-bit. A model a few hundred units across, a camera a few hundred to a thousand back and `GsSetProjection(320)` is a good start, and `rsdlink -v` prints a model's extent.

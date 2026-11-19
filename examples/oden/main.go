@@ -48,8 +48,8 @@ var (
 	modelFile = disc.Register("ASSETS/ODEN.TMD", "assets/ODEN.TMD").Into(modelData[:])
 	texFile   = disc.Register("ASSETS/ODEN.TIM", "assets/ODEN.TIM").Into(texData[:])
 
-	model   = yaroze.TMD(modelData[:])
-	texture = yaroze.TIM(texData[:])
+	model   = modelData[:]
+	texture = texData[:]
 )
 
 var (
@@ -91,7 +91,7 @@ func main() {
 		fail("could not read ", missing)
 		return
 	}
-	texture.Load()
+	loadTIM(texture)
 	modelingDataRead()
 
 	for {
@@ -256,17 +256,32 @@ func ambientSet(padd yaroze.Buttons) {
 	yaroze.GsSetAmbient(am, am, am)
 }
 
+// loadTIM puts a TIM into video memory, where its header says, with its
+// palette if it has one, waits for the transfer, and returns its
+// description.
+func loadTIM(tim []uint32) (image yaroze.GsIMAGE) {
+	yaroze.GsGetTimInfo(&tim[1], &image)
+	rect := yaroze.RECT{X: image.Px, Y: image.Py, W: int16(image.Pw), H: int16(image.Ph)}
+	yaroze.LoadImage(&rect, image.Pixel)
+	if image.Pmode>>3&1 != 0 {
+		rect = yaroze.RECT{X: image.Cx, Y: image.Cy, W: int16(image.Cw), H: int16(image.Ch)}
+		yaroze.LoadImage(&rect, image.Clut)
+	}
+	yaroze.DrawSync(0)
+	return image
+}
+
 // modelingDataRead links the six objects and places the three shapes,
 // each in a coordinate system of its own under the scene's, scaled by a
 // matrix whose inverse goes into modelScale for the lighting.
 func modelingDataRead() {
-	model.Map()
-	objnum = uint32(model.Objects())
+	yaroze.GsMapModelingData(&model[1])
+	objnum = model[2]
 	if objnum > objectMax {
 		objnum = objectMax
 	}
 	for i := int32(0); i < int32(objnum); i++ {
-		model.Link(&object[i], i)
+		yaroze.GsLinkObject4(&model[3], &object[i], i)
 	}
 
 	yaroze.GsInitCoordinate2(yaroze.WORLD, &dWorld)

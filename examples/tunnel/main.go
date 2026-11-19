@@ -79,14 +79,14 @@ var (
 	vh           = disc.Register("ASSETS/LEWIS.VH", "assets/LEWIS.VH").Into(vhData[:])
 	vb           = disc.Register("ASSETS/LEWIS.VB", "assets/LEWIS.VB").Into(vbData[:])
 
-	squareModel   = yaroze.TMD(squareData[:])
-	shipModel     = yaroze.TMD(shipData[:])
-	multipleModel = yaroze.TMD(multipleData[:])
-	mainTIM       = yaroze.TIM(mainData[:])
-	fireTIM       = yaroze.TIM(fireData[:])
-	multipleTIM   = yaroze.TIM(multiTIMData[:])
-	mascotsTIM    = yaroze.TIM(mascotsData[:])
-	asciiTIM      = yaroze.TIM(asciiData[:])
+	squareModel   = squareData[:]
+	shipModel     = shipData[:]
+	multipleModel = multipleData[:]
+	mainTIM       = mainData[:]
+	fireTIM       = fireData[:]
+	multipleTIM   = multiTIMData[:]
+	mascotsTIM    = mascotsData[:]
+	asciiTIM      = asciiData[:]
 )
 
 var (

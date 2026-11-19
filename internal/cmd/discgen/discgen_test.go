@@ -69,7 +69,6 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/disc"
-	"go.chrisrx.dev/psx/yaroze"
 )
 
 // The files under assets, placed on the disc under ASSETS, each with the memory
@@ -78,11 +77,9 @@ import (
 var (
 	cubeTIMData [1536]uint32 // 4128 bytes
 	cubeTIMFile = disc.Register("ASSETS/CUBE.TIM", "assets/CUBE.TIM").Into(cubeTIMData[:])
-	cubeTIM     = yaroze.TIM(cubeTIMData[:])
 
 	cubeTMDData [512]uint32 // 2048 bytes
 	cubeTMDFile = disc.Register("ASSETS/CUBE.TMD", "assets/CUBE.TMD").Into(cubeTMDData[:])
-	cubeTMD     = yaroze.TMD(cubeTMDData[:])
 
 	soundStd0VHData [512]uint32 // 1 bytes
 	soundStd0VHFile = disc.Register("ASSETS/SOUND/STD0.VH", "assets/sound/STD0.VH").Into(soundStd0VHData[:])

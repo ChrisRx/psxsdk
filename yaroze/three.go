@@ -156,6 +156,13 @@ type (
 	}
 )
 
+// noCopy makes go vet's copylocks check report a copy of the struct it is
+// in, by having the methods it looks for. It takes no space.
+type noCopy struct{}
+
+func (*noCopy) Lock()   {}
+func (*noCopy) Unlock() {}
+
 // A Camera is where the world is seen from: the eye at Eye looking at
 // Target, rolled by Roll about the line of sight, with the screen
 // Distance away from the eye, which is the projection. Set makes it the

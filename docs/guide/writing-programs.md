@@ -70,7 +70,7 @@ A `Screen` is the double-buffered frame: two ordering tables and two packet area
 - A `Camera` is an eye, a target and the projection's distance, and `Set` makes it the one the frames are drawn with.
 - `SetLight` sets one of the three directional `Light`s, `SetAmbient` the light from everywhere, and `SetFog` a `Fog`.
 
-The SDK-style counterparts are here too. A `TMD` is a model file in memory, with `Map` and `Link`. A `TIM` is an image file, with `Load`, whose `GsIMAGE` makes a ready `GsSPRITE`. A `GsObject` is a `GsDOBJ2` with the coordinate system it is drawn in and a `Position`, `Rotation` and `Scale`, drawn into an ordering table. `SetMatrix` places a coordinate system directly, clearing the flag that tells the library it moved.
+The SDK's own calls are here too, for a program written as Sony's samples are: `GsMapModelingData` and `GsLinkObject4` tie a `GsDOBJ2` to a model in a TMD file, `GsGetTimInfo` describes a TIM file in a `GsIMAGE`, which `LoadImage` puts into video memory, and a `GsCOORDINATE2` places a model, with `SetMatrix` setting its matrix and clearing the flag that tells the library it moved.
 
 ### Sound
 

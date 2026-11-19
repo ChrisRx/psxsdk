@@ -15,7 +15,7 @@ import (
 func openScreen(s *Screen)                       { panic(stub("Screen.Open")) }
 func resetGraph()                                { panic(stub("Screen.Close")) }
 func beginFrame(s *Screen) *Frame                { panic(stub("Screen.Frames")) }
-func endFrame(s *Screen) int32                   { panic(stub("Screen.Frames")) }
+func endFrame(s *Screen) int                     { panic(stub("Screen.Frames")) }
 func vsync(n int32) int32                        { panic(stub("Screen.Wait")) }
 func fontOpen(x, y, w, h, chars int) int32       { panic(stub("Screen.Font")) }
 func fntWrite(id int32, s string)                { panic(stub("Text.Print")) }
@@ -49,7 +49,7 @@ func seqStop(id int16)                                     { panic(stub("Sequenc
 func seqPlaying(id int16) bool                             { panic(stub("Sequence.Playing")) }
 func seqClose(id int16)                                    { panic(stub("Sequence.Close")) }
 func randNext() int                                        { panic(stub("Random")) }
-func randSeed(s uint32)                                    { panic(stub("Seed")) }
+func randSeed(s int)                                       { panic(stub("Seed")) }
 func origin() (x, y int)                                   { panic(stub("Screen.Bounds")) }
 func mapModel(words []uint32)                              { panic(stub("LoadTMD")) }
 func initCoord(c, super *coordImpl)                        { panic(stub("Object.Init")) }

@@ -315,7 +315,7 @@ func (s *Screen) Overlay() *GsOT {
 // GPU on the frame, then on the overlay, and then draws the text of the
 // windows Font and KanjiFont opened. It returns what VSync reported, the
 // frame's length in horizontal lines.
-func (s *Screen) End() int32 { return endFrame(s) }
+func (s *Screen) End() int { return endFrame(s) }
 
 // Frames is the frame loop: each time round it starts a frame, the body
 // draws on it, and the frame is finished and shown when the body is

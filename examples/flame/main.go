@@ -54,7 +54,7 @@ const (
 // The memory the sheet's TMD is built in.
 var (
 	sheetData [sheetWords]uint32
-	lightTMD  = yaroze.TMD(sheetData[:])
+	lightTMD  = sheetData[:]
 )
 
 // G_4_NL is the primitive mode of a gouraud quad without lighting, and the
@@ -195,9 +195,9 @@ func makeColorMap() {
 
 // initializeTMD ties a handle to an object of the TMD, giving it a
 // coordinate system of its own.
-func initializeTMD(tmd yaroze.TMD, objNum int32, obj *yaroze.GsDOBJ2) {
-	tmd.Map()
-	tmd.Link(obj, objNum)
+func initializeTMD(tmd []uint32, objNum int32, obj *yaroze.GsDOBJ2) {
+	yaroze.GsMapModelingData(&tmd[1])
+	yaroze.GsLinkObject4(&tmd[3], obj, objNum)
 	lightCoord.Init(yaroze.WORLD)
 	obj.Coord2 = &lightCoord
 }
@@ -296,7 +296,7 @@ func put[T any](cursor *uintptr, v T) *T {
 // flat grid of gouraud quads with lighting off, mapx across and mapy-2
 // down, 16 units a side, with no normals. The header says its offsets are
 // addresses already, so GsMapModelingData leaves it alone.
-func makeBigTMDGouraudQuad(tmd yaroze.TMD) {
+func makeBigTMDGouraudQuad(tmd []uint32) {
 	cursor := uintptr(unsafe.Pointer(&tmd[0]))
 	put(&cursor, demo.TMD_HDR{ID: 0x41, Flag: 1, NObjs: 1})
 	objTable := put(&cursor, demo.TMD_OBJ{})

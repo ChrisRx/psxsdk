@@ -100,8 +100,8 @@ var (
 	batFile   = disc.Register("ASSETS/BREAK3.TIM", "assets/BREAK3.TIM").Into(batData[:])
 	brickFile = disc.Register("ASSETS/ODEN3.TIM", "assets/ODEN3.TIM").Into(brickData[:])
 
-	batTIM   = yaroze.TIM(batData[:])
-	brickTIM = yaroze.TIM(brickData[:])
+	batTIM   = batData[:]
+	brickTIM = brickData[:]
 )
 
 // A movement is where something is, how big it is and how it moves, in
@@ -509,7 +509,7 @@ func initializeTexturesAndSprites() {
 	var image1, image2 yaroze.GsIMAGE
 
 	// The bat.
-	image1 = batTIM.Image()
+	yaroze.GsGetTimInfo(&batTIM[1], &image1)
 	rect := yaroze.RECT{X: 320, Y: 0, W: int16(image1.Pw), H: int16(image1.Ph)}
 	yaroze.LoadImage(&rect, image1.Pixel)
 	yaroze.DrawSync(0)
@@ -525,7 +525,7 @@ func initializeTexturesAndSprites() {
 	playersSprite.Attribute |= eightBitTexture | semiTransparent1 | semiTransparent2
 
 	// The bricks.
-	image2 = brickTIM.Image()
+	yaroze.GsGetTimInfo(&brickTIM[1], &image2)
 	rect = yaroze.RECT{X: 640, Y: 0, W: int16(image2.Pw), H: int16(image2.Ph)}
 	yaroze.LoadImage(&rect, image2.Pixel)
 	yaroze.DrawSync(0)

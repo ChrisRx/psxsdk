@@ -1022,8 +1022,8 @@ func tilesScreenshot(t *testing.T, name string) {
 	m.Golden("tiles-corner.png")
 }
 
-// The layout of yaroze.Object on the console: a GsDOBJ2 of 16 bytes and a
-// GsCOORDINATE2 of 80, then Position, then Rotation and Scale.
+// The layout of the split example's object on the console: a GsDOBJ2 of 16
+// bytes and a GsCOORDINATE2 of 80, then its position, rotation and scale.
 const (
 	objectPosition = 16 + 80
 	objectSize     = objectPosition + 16 + 8 + 16
@@ -1043,7 +1043,7 @@ func splitScreenshot(t *testing.T, name string) {
 	frames := m.Sym("main.frames")
 	m.RunUntil(func() bool { return m.Read32(frames) >= 30 }, frameBudget, "thirty frames")
 	players := m.Sym("main.players")
-	// An Object's Position follows its GsDOBJ2 and coordinate system.
+	// An object's position follows its GsDOBJ2 and coordinate system.
 	pos := func(i int) int32 { return int32(m.Read32(players + uint32(i)*objectSize + objectPosition)) }
 	x0, x1 := pos(0), pos(1)
 	m.Pad(1).Press(emu.ButtonRight | emu.ButtonSquare)

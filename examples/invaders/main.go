@@ -102,9 +102,9 @@ var (
 	shipFile    = disc.Register("ASSETS/SHIP1.TIM", "assets/SHIP1.TIM").Into(shipData[:])
 	shotFile    = disc.Register("ASSETS/FIRE04.TIM", "assets/FIRE04.TIM").Into(shotData[:])
 
-	invaderTIM = yaroze.TIM(invaderData[:])
-	shipTIM    = yaroze.TIM(shipData[:])
-	shotTIM    = yaroze.TIM(shotData[:])
+	invaderTIM = invaderData[:]
+	shipTIM    = shipData[:]
+	shotTIM    = shotData[:]
 )
 
 // A movement is where something is and how it moves: its position and
@@ -524,7 +524,7 @@ func initializeTexturesAndSprites() {
 	var image1, image2, image3 yaroze.GsIMAGE
 
 	// The player's ship.
-	image1 = shipTIM.Image()
+	yaroze.GsGetTimInfo(&shipTIM[1], &image1)
 	loadTexture(&image1, 320, 0)
 	texturePageID1 := yaroze.GetTPage(1, 0, 320, 0)
 	playersSprite.W = image1.Pw * 2
@@ -535,7 +535,7 @@ func initializeTexturesAndSprites() {
 	playersSprite.Attribute |= eightBitTexture | semiTransparent1 | semiTransparent2
 
 	// The invaders.
-	image2 = invaderTIM.Image()
+	yaroze.GsGetTimInfo(&invaderTIM[1], &image2)
 	loadTexture(&image2, 320, 256)
 	texturePageID2 := yaroze.GetTPage(1, 0, 320, 256)
 	for i := range invaders {
@@ -551,7 +551,7 @@ func initializeTexturesAndSprites() {
 	}
 
 	// The shots.
-	image3 = shotTIM.Image()
+	yaroze.GsGetTimInfo(&shotTIM[1], &image3)
 	loadTexture(&image3, 640, 0)
 	texturePageID3 := yaroze.GetTPage(0, 0, 640, 0)
 	for i := range shots {

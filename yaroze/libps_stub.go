@@ -91,12 +91,12 @@ func PacketPointer() *PACKET { panic(stub("PacketPointer")) }
 // SetPacketPointer sets GsOUT_PACKET_P; see PacketPointer.
 func SetPacketPointer(p *PACKET) { panic(stub("SetPacketPointer")) }
 
-// NativeVideoMode returns the video mode the console is made for, MODE_PAL
-// for a European one and MODE_NTSC for any other, from the region letter
-// at the end of the version string Sony's BIOS carries: "System ROM
-// Version 3.0 01/06/97 E". A BIOS without one, the first Japanese one or
-// an OpenBIOS, is taken for NTSC.
-func NativeVideoMode() int32 { panic(stub("NativeVideoMode")) }
+// NativeVideoMode returns the video mode the console is made for, PAL for
+// a European one and NTSC for any other, from the region letter at the end
+// of the version string Sony's BIOS carries: "System ROM Version 3.0
+// 01/06/97 E". A BIOS without one, the first Japanese one or an OpenBIOS,
+// is taken for NTSC.
+func NativeVideoMode() VideoMode { panic(stub("NativeVideoMode")) }
 
 // GsWSMATRIX returns the world-screen matrix GsSetRefView2 and GsSetView2
 // last worked out.

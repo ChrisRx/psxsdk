@@ -114,7 +114,11 @@ func main() {
 	if f := disc.LoadAll(300); f != nil {
 		message = "could not read " + f.Name
 	} else {
-		iconImage = yaroze.TIM(iconTIM.Data()).Load()
+		// The icon's description is kept: a save's icon is made from
+		// the file's own palette and pixels.
+		yaroze.GsGetTimInfo(&iconTIM.Data()[1], &iconImage)
+		iconImage.Load()
+		yaroze.DrawSync(0)
 		icon = iconImage.Sprite()
 		icon.X, icon.Y = 296, 24
 		icon.Scalex, icon.Scaley = 2*yaroze.ONE, 2*yaroze.ONE

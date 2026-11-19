@@ -13,13 +13,10 @@ import (
 // program built for the console. api_stub.go is the same for every other
 // build, where each call panics.
 
-// The library's display modes: GsInitGraph's interlace and origin bits,
-// and SetVideoMode's modes.
+// The library's display modes: GsInitGraph's interlace and origin bits.
 const (
 	interlaced uint16 = 1
 	offsetGPU  uint16 = 4
-	modeNTSC   int32  = 0
-	modePAL    int32  = 1
 )
 
 // The sequencer's play mode and its count for playing without end.
@@ -38,7 +35,7 @@ var (
 )
 
 func openScreen(s *Screen) {
-	SetVideoMode(nativeVideoMode())
+	SetVideoMode(int32(NativeVideoMode()))
 	dither := uint16(1)
 	if s.NoDither {
 		dither = 0
@@ -74,15 +71,6 @@ func openScreen(s *Screen) {
 	}
 }
 
-// nativeVideoMode is the console's video mode by its BIOS's region:
-// PAL for a European console, NTSC otherwise.
-func nativeVideoMode() int32 {
-	if *(*byte)(unsafe.Pointer(uintptr(0xbfc7ff52))) == 'E' {
-		return modePAL
-	}
-	return modeNTSC
-}
-
 func resetGraph() { ResetGraph(3) }
 
 // beginFrame starts a frame: it takes the buffer the frame goes into,
@@ -104,7 +92,7 @@ func beginFrame(s *Screen) *Frame {
 // one and for the display's vertical blank, swaps the buffers, puts the
 // background behind everything, starts the GPU on the frame, and draws
 // the frame's text after it.
-func endFrame(s *Screen) int32 {
+func endFrame(s *Screen) int {
 	ot := &s.impl.ot[s.active]
 	DrawSync(0)
 	var n int32
@@ -146,7 +134,7 @@ func endFrame(s *Screen) int32 {
 		KanjiFntFlush(id)
 	}
 	s.frame++
-	return n
+	return int(n)
 }
 
 func vsync(n int32) int32 { return VSync(n) }
@@ -294,8 +282,8 @@ func seqStop(id int16)                      { SsSeqStop(id) }
 func seqPlaying(id int16) bool              { return SsIsEos(id, 0) != 0 }
 func seqClose(id int16)                     { SsSeqClose(id) }
 
-func randNext() int     { return int(Rand()) }
-func randSeed(s uint32) { Srand(s) }
+func randNext() int  { return int(Rand()) }
+func randSeed(s int) { Srand(uint32(s)) }
 
 // origin is where the frame's origin is on the picture, from its top
 // left corner.

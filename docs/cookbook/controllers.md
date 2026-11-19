@@ -4,9 +4,9 @@ weight: 1
 description: Reading every kind of controller, not only the standard pad: analog sticks and their dead zones, the mouse, the neGcon's twist and the GunCon's aim.
 ---
 
-The library reads both controller ports at every vertical blank, by itself, into two buffers of 34 bytes. `yaroze.Pad` reads the standard controller's buttons out of the first one, which is all most programs need. Everything else that plugs into a port, analog controllers, joysticks, the mouse, the neGcon and the GunCon, sends more, and says what it is so a program can tell how to read the rest. `yaroze.ReadController` reads any of them:
+The library reads both controller ports at every vertical blank, by itself, into two buffers of 34 bytes. Everything that plugs into a port, the standard controller, analog controllers, joysticks, the mouse, the neGcon and the GunCon, sends its buttons, which is all most programs need, and the ones with more say what they are so a program can tell how to read the rest. An `input.Controller` reads any of them, with `Update` once a frame:
 
-```go src=../../yaroze/controller.go#Controller
+```go src=../../input/input.go#Controller
 ```
 
 A buffer starts with a byte that is 0 while something is connected and 0xff while nothing is, then a byte whose high four bits say what kind of controller it is and whose low four the length of what follows, in 16-bit halves. The buttons come first, as on the standard controller, held buttons as 0 bits, and then whatever else the kind sends: an analog controller's four axes, a mouse's movement since the last read, a neGcon's twist and its analog buttons, a GunCon's position.
@@ -15,7 +15,7 @@ A buffer starts with a byte that is 0 while something is connected and 0xff whil
 
 An analog stick reads 0 at one end of its travel and 255 at the other, but at rest it is near 128 rather than on it, and a different near on every controller. A program that moved by the raw value would drift. `Stick` centers an axis on zero and calls anything within a dead zone of the middle no movement:
 
-```go src=../../yaroze/controller.go#Controller.Stick
+```go src=../../input/input.go#Controller.Stick
 ```
 
 The tutorial's analog example had the player calibrate the stick first. Sony's checklist for the DUAL SHOCK ([Sony's requirements](../manuals/requirements.md)) forbids a calibration screen, since its sticks calibrate themselves, so a dead zone is all a program does now.

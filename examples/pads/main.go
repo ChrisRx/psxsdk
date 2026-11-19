@@ -6,8 +6,8 @@
 // example, which names what is in each port and lists the buttons held, and
 // the mouse, analog and GunCon examples after it, which move something with
 // each. The tutorial decoded the library's controller buffers with a header
-// of its own, cntrl.h; yaroze.ReadController does the same here, and the
-// rest is the tester's screen.
+// of its own, cntrl.h; an input.Controller does the same here, and the rest
+// is the tester's screen.
 //
 // The standard controller and the analog controller move the cursor with
 // the direction buttons, and an analog controller or joystick with its left
@@ -41,7 +41,10 @@ var (
 	// coordinates from the top left, kept apart for a test to read by name.
 	cursorX, cursorY int32
 
-	ports [2]yaroze.Controller
+	ports = [2]input.Controller{
+		{Port: 0},
+		{Port: 1},
+	}
 
 	// The cursor: a cross of two bars and a box at its middle.
 	across = yaroze.GsBOXF{W: 17, H: 1, R: 255, G: 220, B: 80}
@@ -83,7 +86,7 @@ func main() {
 	for frame := range screen.Frames() {
 		ot := frame.OT()
 		for i := range ports {
-			ports[i] = yaroze.ReadController(i)
+			ports[i].Update()
 		}
 		text.Reset()
 		for i := range ports {
@@ -105,7 +108,7 @@ func main() {
 }
 
 // describe writes what the controller in a port is and is sending.
-func describe(port int, c *yaroze.Controller) {
+func describe(port int, c *input.Controller) {
 	text.WriteString("PORT ").WriteInt(port + 1).WriteString("  ")
 	if !c.Connected {
 		text.WriteString("~c900NOTHING CONNECTED~c999\n\n\n\n")
@@ -113,22 +116,22 @@ func describe(port int, c *yaroze.Controller) {
 	}
 	var names []buttonName
 	switch c.Kind {
-	case yaroze.KindStandard:
+	case input.ControllerStandard:
 		text.WriteString("~c090STANDARD CONTROLLER")
 		names = padButtons
-	case yaroze.KindAnalog:
+	case input.ControllerAnalog:
 		text.WriteString("~c090ANALOG CONTROLLER")
 		names = padButtons
-	case yaroze.KindAnalogJoystick:
+	case input.ControllerAnalogJoystick:
 		text.WriteString("~c090ANALOG JOYSTICK")
 		names = padButtons
-	case yaroze.KindMouse:
+	case input.ControllerMouse:
 		text.WriteString("~c090MOUSE")
 		names = mouseButtons
-	case yaroze.KindNeGcon:
+	case input.ControllerNeGcon:
 		text.WriteString("~c090NEGCON")
 		names = negconButtons
-	case yaroze.KindGunCon:
+	case input.ControllerGunCon:
 		text.WriteString("~c090GUNCON")
 		names = gunconButtons
 	default:
@@ -137,7 +140,7 @@ func describe(port int, c *yaroze.Controller) {
 	text.WriteString("~c999\n HELD:")
 	held := false
 	for _, n := range names {
-		if c.Buttons&n.b != 0 {
+		if c.Held(n.b) {
 			text.WriteString(" ").WriteString(n.name)
 			held = true
 		}
@@ -147,16 +150,16 @@ func describe(port int, c *yaroze.Controller) {
 	}
 	text.WriteString("\n ")
 	switch c.Kind {
-	case yaroze.KindAnalog, yaroze.KindAnalogJoystick:
+	case input.ControllerAnalog, input.ControllerAnalogJoystick:
 		text.WriteString("LEFT ").WriteInt(c.Axes[2]).WriteString(",").WriteInt(c.Axes[3])
 		text.WriteString("  RIGHT ").WriteInt(c.Axes[0]).WriteString(",").WriteInt(c.Axes[1])
-	case yaroze.KindMouse:
+	case input.ControllerMouse:
 		text.WriteString("MOVED ").WriteInt(c.DX).WriteString(",").WriteInt(c.DY)
-	case yaroze.KindNeGcon:
+	case input.ControllerNeGcon:
 		text.WriteString("TWIST ").WriteInt(c.Axes[0]).WriteString(" I ").WriteInt(c.Axes[1])
 		text.WriteString(" II ").WriteInt(c.Axes[2]).WriteString(" L ").WriteInt(c.Axes[3])
-	case yaroze.KindGunCon:
-		text.WriteString("AIM ").WriteInt(c.X).WriteString(",").WriteInt(c.Y)
+	case input.ControllerGunCon:
+		text.WriteString("AIM ").WriteInt(c.AimX).WriteString(",").WriteInt(c.AimY)
 	}
 	text.WriteString("\n\n")
 }
@@ -170,42 +173,33 @@ const (
 )
 
 // move moves the cursor by what the controller is sending.
-func move(c *yaroze.Controller) {
+func move(c *input.Controller) {
 	if !c.Connected {
 		return
 	}
 	switch c.Kind {
-	case yaroze.KindStandard, yaroze.KindAnalog, yaroze.KindAnalogJoystick:
-		if c.Buttons&yaroze.PADLleft != 0 {
-			cursorX -= 2
-		}
-		if c.Buttons&yaroze.PADLright != 0 {
-			cursorX += 2
-		}
-		if c.Buttons&yaroze.PADLup != 0 {
-			cursorY -= 2
-		}
-		if c.Buttons&yaroze.PADLdown != 0 {
-			cursorY += 2
-		}
-		if c.Kind != yaroze.KindStandard {
+	case input.ControllerStandard, input.ControllerAnalog, input.ControllerAnalogJoystick:
+		dx, dy := c.Dir()
+		cursorX += int32(2 * dx)
+		cursorY += int32(2 * dy)
+		if c.Kind != input.ControllerStandard {
 			x, y := c.Stick(0, 24)
 			cursorX += int32(x / 32)
 			cursorY += int32(y / 32)
 		}
-	case yaroze.KindMouse:
+	case input.ControllerMouse:
 		cursorX += int32(c.DX)
 		cursorY += int32(c.DY)
-	case yaroze.KindNeGcon:
+	case input.ControllerNeGcon:
 		if t := int32(c.Axes[0]) - 128; t > 8 || t < -8 {
 			cursorX += t / 16
 		}
 		cursorY += (int32(c.Axes[2]) - int32(c.Axes[1])) / 64
-	case yaroze.KindGunCon:
-		if c.X < 10 {
+	case input.ControllerGunCon:
+		if c.AimX < 10 {
 			return // pointing off the screen
 		}
-		cursorX = (int32(c.X) - gunLeft) * 320 / (gunRight - gunLeft)
-		cursorY = (int32(c.Y) - gunTop) * 240 / (gunBottom - gunTop)
+		cursorX = (int32(c.AimX) - gunLeft) * 320 / (gunRight - gunLeft)
+		cursorY = (int32(c.AimY) - gunTop) * 240 / (gunBottom - gunTop)
 	}
 }

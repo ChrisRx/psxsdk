@@ -5,4 +5,4 @@ package yaroze
 func Random() int { return randNext() }
 
 // Seed starts the random numbers from s, as Srand does.
-func Seed(s uint32) { randSeed(s) }
+func Seed(s int) { randSeed(s) }

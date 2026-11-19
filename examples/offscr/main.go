@@ -85,13 +85,13 @@ var (
 	sphereFile = disc.Register("ASSETS/16BIT.TMD", "assets/16BIT.TMD").Into(sphereData[:])
 	dongleFile = disc.Register("ASSETS/DONGLE.TIM", "assets/DONGLE.TIM").Into(dongleData[:])
 
-	squareModel = yaroze.TMD(squareData[:])
-	sphereModel = yaroze.TMD(sphereData[:])
-	waveTIM     = yaroze.TIM(waveData[:])
-	fireTIM     = yaroze.TIM(fireData[:])
-	tileTIM     = yaroze.TIM(tileData[:])
-	tile2TIM    = yaroze.TIM(tile2Data[:])
-	dongleTIM   = yaroze.TIM(dongleData[:])
+	squareModel = squareData[:]
+	sphereModel = sphereData[:]
+	waveTIM     = waveData[:]
+	fireTIM     = fireData[:]
+	tileTIM     = tileData[:]
+	tile2TIM    = tile2Data[:]
+	dongleTIM   = dongleData[:]
 )
 
 var (

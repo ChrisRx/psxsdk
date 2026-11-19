@@ -208,8 +208,10 @@ func (im *GsIMAGE) Load() {
 // unscaled, unturned, and about its middle. A 24-bit image cannot be a
 // sprite.
 //
-//	ball := yaroze.TIM(ballFile.Data()).Load().Sprite()
-//	ball.X, ball.Y = 0, 0
+//	var im yaroze.GsIMAGE
+//	im.Read(&ballFile.Data()[1])
+//	im.Load()
+//	ball := im.Sprite()
 //	ball.Sort(ot, 0)
 func (im GsIMAGE) Sprite() GsSPRITE {
 	depth := im.Pmode & 3

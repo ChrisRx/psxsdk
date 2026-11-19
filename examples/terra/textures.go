@@ -47,7 +47,10 @@ func loadTextures(a *archive, g int, scratch []uint32) []texture {
 	table := make([]texture, a.entries(g))
 	for e := range table {
 		words := a.unpackWords(g, e, scratch)
-		im := yaroze.TIM(words).Load()
+		var im yaroze.GsIMAGE
+		yaroze.GsGetTimInfo(&words[1], &im)
+		im.Load()
+		yaroze.DrawSync(0)
 		depth := uint8(im.Pmode & 3)
 		t := &table[e]
 		t.px, t.py = im.Px, im.Py

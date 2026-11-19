@@ -30,16 +30,15 @@ and the program loads everything with one call, and takes each file's memory fro
 if f := disc.LoadAll(300); f != nil {
 	// f.Name is missing or unreadable
 }
-yaroze.TIM(cubeTIM.Data()).Load()
+yaroze.LoadTIM(cubeTIM.Data())
 ```
 
-With `--into` it declares the memory as well, for a program that needs to know its size at build time or keep it out of the heap: an array per file, sized to the whole 2048-byte sectors the drive delivers, given to the file with `Into`, and a `yaroze.TIM` or `yaroze.TMD` over the array for an image or a model.
+With `--into` it declares the memory as well, for a program that needs to know its size at build time or keep it out of the heap: an array per file, sized to the whole 2048-byte sectors the drive delivers, given to the file with `Into`.
 
 ```go
 var (
 	cubeTMDData [512]uint32 // 344 bytes
 	cubeTMDFile = disc.Register("ASSETS/CUBE.TMD", "assets/CUBE.TMD").Into(cubeTMDData[:])
-	cubeTMD     = yaroze.TMD(cubeTMDData[:])
 )
 ```
 

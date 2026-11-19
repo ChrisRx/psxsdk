@@ -43,6 +43,7 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -56,15 +57,15 @@ const (
 var (
 	screen = yaroze.Screen{Background: yaroze.Color{R: 20, G: 30, B: 60}, Depth: depth, Packets: 24 << 10}
 	pad1   yaroze.Pad
-	pad2   yaroze.Controller
+	pad2   = input.Controller{Port: 1}
 
 	// second is the second half's ordering tables, one for each buffer;
 	// the screen keeps the first half's.
 	second     [2]yaroze.GsOT
 	secondTags [2 << depth]yaroze.GsOT_TAG
 
-	players [2]yaroze.GsObject
-	stones  [pillars]yaroze.GsObject
+	players [2]object
+	stones  [pillars]object
 	views   [2]yaroze.GsRVIEW2
 	light   yaroze.GsF_LIGHT
 
@@ -108,17 +109,15 @@ func main() {
 		yaroze.GsClearOt(0, 0, &second[buf])
 
 		pad1.Update()
-		pad2 = yaroze.ReadController(1)
+		pad2.Update()
 		if pad1.Pressed(yaroze.PADselect) {
 			sideBySide = !sideBySide
 		}
 		dx, dz := pad1.Dir()
 		drive(&players[0], dx, -dz)
 		dx, dz = faceDir()
-		if pad2.Connected {
-			if x, z := padDir(pad2.Buttons); x != 0 || z != 0 {
-				dx, dz = x, z
-			}
+		if x, z := pad2.Dir(); x != 0 || z != 0 {
+			dx, dz = x, z
 		}
 		drive(&players[1], dx, -dz)
 
@@ -127,10 +126,10 @@ func main() {
 			follow(&views[i], &players[i])
 			views[i].Set()
 			for j := range players {
-				players[j].Draw(t)
+				players[j].draw(t)
 			}
 			for j := range stones {
-				stones[j].Draw(t)
+				stones[j].draw(t)
 			}
 		}
 
@@ -150,25 +149,23 @@ func main() {
 // setup loads the models and texture, places the cubes, and sets the
 // light.
 func setup() {
-	yaroze.TIM(stone02TIM.Data()).Load()
-	cube := yaroze.TMD(cubeTMD.Data())
-	cube.Map()
-	stone := yaroze.TMD(cubetexTMD.Data())
-	stone.Map()
+	yaroze.LoadTIM(stone02TIM.Data())
+	cube := cubeTMD.Data()
+	yaroze.GsMapModelingData(&cube[1])
+	stone := cubetexTMD.Data()
+	yaroze.GsMapModelingData(&stone[1])
 
 	for i := range players {
 		p := &players[i]
-		p.Init(yaroze.WORLD)
-		p.Link(cube, 0)
-		p.Position = yaroze.VECTOR{Vx: int32(i)*3000 - 1500}
+		p.init(cube)
+		p.position = yaroze.VECTOR{Vx: int32(i)*3000 - 1500}
 	}
 	for i := range stones {
 		s := &stones[i]
-		s.Init(yaroze.WORLD)
-		s.Link(stone, 0)
+		s.init(stone)
 		// Tall and thin, standing on the floor the cubes slide on.
-		s.Scale = yaroze.VECTOR{Vx: yaroze.ONE, Vy: 3 * yaroze.ONE, Vz: yaroze.ONE}
-		s.Position = yaroze.VECTOR{Vx: ring[i][0], Vy: -1000, Vz: ring[i][1]}
+		s.scale = yaroze.VECTOR{Vx: yaroze.ONE, Vy: 3 * yaroze.ONE, Vz: yaroze.ONE}
+		s.position = yaroze.VECTOR{Vx: ring[i][0], Vy: -1000, Vz: ring[i][1]}
 	}
 
 	yaroze.GsSetProjection(256)
@@ -178,23 +175,56 @@ func setup() {
 	yaroze.GsSetLightMode(0)
 }
 
+// An object is a model drawn somewhere: the library's handle on it and
+// the coordinate system it is drawn in, with where it is in the world, how
+// it is turned and its size, which draw makes the system's matrix from. A
+// scale of zero leaves it unscaled.
+type object struct {
+	handle   yaroze.GsDOBJ2
+	coord    yaroze.GsCOORDINATE2
+	position yaroze.VECTOR
+	rotation yaroze.SVECTOR
+	scale    yaroze.VECTOR
+}
+
+// init gives the object a coordinate system in the world and links it to
+// the first model of a mapped TMD.
+func (o *object) init(tmd []uint32) {
+	yaroze.GsInitCoordinate2(yaroze.WORLD, &o.coord)
+	o.handle.Coord2 = &o.coord
+	yaroze.GsLinkObject4(&tmd[3], &o.handle, 0)
+}
+
+// draw makes the object's matrix and sorts it into a table, lit, with the
+// camera last set.
+func (o *object) draw(ot *yaroze.GsOT) {
+	m := &o.coord.Coord
+	yaroze.RotMatrix(&o.rotation, m)
+	if o.scale != (yaroze.VECTOR{}) {
+		yaroze.ScaleMatrix(m, &o.scale)
+	}
+	m.T = [3]int32{o.position.Vx, o.position.Vy, o.position.Vz}
+	o.coord.Flg = 0
+	o.handle.Draw(ot)
+}
+
 // drive moves a cube across the floor, keeps it within the ring, and turns
 // it the way it is going.
-func drive(p *yaroze.GsObject, dx, dz int) {
+func drive(p *object, dx, dz int) {
 	if dx == 0 && dz == 0 {
 		return
 	}
-	p.Position.Vx = max(-arena, min(arena, p.Position.Vx+int32(dx*speed)))
-	p.Position.Vz = max(-arena, min(arena, p.Position.Vz+int32(dz*speed)))
-	p.Rotation.Vy += int16(dx * 32)
-	p.Rotation.Vx += int16(dz * 32)
+	p.position.Vx = max(-arena, min(arena, p.position.Vx+int32(dx*speed)))
+	p.position.Vz = max(-arena, min(arena, p.position.Vz+int32(dz*speed)))
+	p.rotation.Vy += int16(dx * 32)
+	p.rotation.Vx += int16(dz * 32)
 }
 
 // follow puts a camera behind and above a cube, looking at it.
-func follow(v *yaroze.GsRVIEW2, p *yaroze.GsObject) {
+func follow(v *yaroze.GsRVIEW2, p *object) {
 	*v = yaroze.GsRVIEW2{
-		Vpx: p.Position.Vx, Vpy: p.Position.Vy - 3000, Vpz: p.Position.Vz - 6000,
-		Vrx: p.Position.Vx, Vry: p.Position.Vy, Vrz: p.Position.Vz,
+		Vpx: p.position.Vx, Vpy: p.position.Vy - 3000, Vpz: p.position.Vz - 6000,
+		Vrx: p.position.Vx, Vry: p.position.Vy, Vrz: p.position.Vz,
 		Super: yaroze.WORLD,
 	}
 }
@@ -212,23 +242,6 @@ func faceDir() (dx, dz int) {
 		dz--
 	}
 	if pad1.Held(yaroze.PADRdown) {
-		dz++
-	}
-	return dx, dz
-}
-
-// padDir is a controller's directions, as Pad.Dir gives them.
-func padDir(b yaroze.Buttons) (dx, dz int) {
-	if b&yaroze.PADLleft != 0 {
-		dx--
-	}
-	if b&yaroze.PADLright != 0 {
-		dx++
-	}
-	if b&yaroze.PADLup != 0 {
-		dz--
-	}
-	if b&yaroze.PADLdown != 0 {
 		dz++
 	}
 	return dx, dz
