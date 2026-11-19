@@ -53,7 +53,11 @@ type tileMapImpl struct {
 // from ScrollX, ScrollY, a pixel at a time. Init prepares it for a
 // screen, once, and Draw puts it on a frame.
 //
-//	var bg = yaroze.Background{W: 320, H: 240, Color: yaroze.Color{R: 128, G: 128, B: 128}}
+//	var bg = yaroze.Background{
+//		W:     320,
+//		H:     240,
+//		Color: yaroze.Color{R: 128, G: 128, B: 128},
+//	}
 //
 //	bg.Init(&screen, &tiles)
 //	for frame := range screen.Frames() {

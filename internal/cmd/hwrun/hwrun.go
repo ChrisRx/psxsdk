@@ -84,7 +84,11 @@ func ArchiveJobs(path string, names []string) ([]Job, error) {
 		if len(f) != 4 {
 			continue
 		}
-		all[f[0]] = Job{Name: f[0], Path: f[2], Loads: strings.Fields(f[3])}
+		all[f[0]] = Job{
+			Name:  f[0],
+			Path:  f[2],
+			Loads: strings.Fields(f[3]),
+		}
 	}
 	jobs := make([]Job, 0, len(names))
 	for _, name := range names {
@@ -116,7 +120,11 @@ func (j Job) program() (*serial.Program, error) {
 		if err != nil {
 			return nil, err
 		}
-		prog.Segments = append(prog.Segments, serial.Segment{Name: filepath.Base(path), Addr: uint32(addr), Data: data})
+		prog.Segments = append(prog.Segments, serial.Segment{
+			Name: filepath.Base(path),
+			Addr: uint32(addr),
+			Data: data,
+		})
 	}
 	return prog, nil
 }

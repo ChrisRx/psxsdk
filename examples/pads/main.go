@@ -35,7 +35,10 @@ import (
 )
 
 var (
-	screen = yaroze.Screen{Background: yaroze.Color{R: 20, G: 30, B: 50}, Depth: 1}
+	screen = yaroze.Screen{
+		Background: yaroze.Color{R: 20, G: 30, B: 50},
+		Depth:      1,
+	}
 
 	// cursorX and cursorY are where the cursor is, in the screen's
 	// coordinates from the top left, kept apart for a test to read by name.

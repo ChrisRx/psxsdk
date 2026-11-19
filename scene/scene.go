@@ -604,12 +604,21 @@ func (l *Layer) parse(data []uint32, at, nt int) (int, error) {
 	l.tex = t
 	l.Speed = int(r[1] >> 16)
 	l.scroll = [2]int16{int16(r[3]), int16(r[3] >> 16)}
-	l.tileMap = yaroze.TileMap{Width: w, Height: h, Cells: l.cells[:], Layout: l.index[:]}
+	l.tileMap = yaroze.TileMap{
+		Width:  w,
+		Height: h,
+		Cells:  l.cells[:],
+		Layout: l.index[:],
+	}
 	bg := &l.BG
 	*bg = yaroze.Background{
-		ScrollX: l.scroll[0], ScrollY: l.scroll[1],
-		X: int16(r[4]), Y: int16(r[4] >> 16), W: int16(r[5]), H: int16(r[5] >> 16),
-		Color: yaroze.Color{R: uint8(r[6]), G: uint8(r[6] >> 8), B: uint8(r[6] >> 16)},
+		ScrollX: l.scroll[0],
+		ScrollY: l.scroll[1],
+		X:       int16(r[4]),
+		Y:       int16(r[4] >> 16),
+		W:       int16(r[5]),
+		H:       int16(r[5] >> 16),
+		Color:   yaroze.Color{R: uint8(r[6]), G: uint8(r[6] >> 8), B: uint8(r[6] >> 16)},
 	}
 	if bg.W == 0 || bg.H == 0 {
 		bg.X, bg.Y, bg.W, bg.H = -160, -120, 320, 240

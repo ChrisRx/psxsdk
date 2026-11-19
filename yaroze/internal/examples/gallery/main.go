@@ -58,18 +58,33 @@ var (
 		{Color: yaroze.Color{R: 255, G: 220, B: 80}},
 		{Color: yaroze.Color{R: 80, G: 220, B: 255}},
 	}
-	gradient = yaroze.GradientLine{From: yaroze.Color{R: 255, G: 0, B: 0}, To: yaroze.Color{R: 0, G: 0, B: 255}}
+	gradient = yaroze.GradientLine{
+		From: yaroze.Color{R: 255, G: 0, B: 0},
+		To:   yaroze.Color{R: 0, G: 0, B: 255},
+	}
 
 	// The backdrop: a map of the ball and the empty cell beside it in the
 	// ball's texture, which the background tiles across the whole screen.
 	cells  [2]yaroze.Cell
 	layout = [6]uint16{0, 1, 1, 1, 0, 1}
-	tiles  = yaroze.TileMap{Width: 3, Height: 2, Cells: cells[:], Layout: layout[:]}
-	tilebg = yaroze.Background{W: 320, H: 240}
+	tiles  = yaroze.TileMap{
+		Width:  3,
+		Height: 2,
+		Cells:  cells[:],
+		Layout: layout[:],
+	}
+	tilebg = yaroze.Background{
+		W: 320,
+		H: 240,
+	}
 
 	cube yaroze.Object
 
-	panel = yaroze.Box{W: 60, H: 14, Color: yaroze.Color{R: 250, G: 250, B: 250}}
+	panel = yaroze.Box{
+		W:     60,
+		H:     14,
+		Color: yaroze.Color{R: 250, G: 250, B: 250},
+	}
 )
 
 // The Shift-JIS for こんにちは, and the ASCII the font takes as well.
@@ -157,11 +172,21 @@ func setup() {
 	cube.Init(nil)
 	cube.Link(model, 0)
 	cube.Position = geom.Vector{X: -190, Y: 125}
-	camera := yaroze.Camera{Eye: geom.Vector{Z: -1000}, Distance: 320}
+	camera := yaroze.Camera{
+		Eye:      geom.Vector{Z: -1000},
+		Distance: 320,
+	}
 	camera.Set()
-	yaroze.SetLight(0, yaroze.Light{Direction: geom.Vector{X: 1, Y: 1, Z: 1}, Color: yaroze.Color{R: 0xc0, G: 0xc0, B: 0xc0}})
+	yaroze.SetLight(0, yaroze.Light{
+		Direction: geom.Vector{X: 1, Y: 1, Z: 1},
+		Color:     yaroze.Color{R: 0xc0, G: 0xc0, B: 0xc0},
+	})
 	yaroze.SetAmbient(geom.One/4, geom.One/4, geom.One/4)
-	yaroze.SetFog(yaroze.Fog{Near: 600, Far: 1600, Color: yaroze.Color{R: 200, G: 200, B: 255}})
+	yaroze.SetFog(yaroze.Fog{
+		Near:  600,
+		Far:   1600,
+		Color: yaroze.Color{R: 200, G: 200, B: 255},
+	})
 
 	panel.MoveTo(b.X+250, b.Y+220)
 }

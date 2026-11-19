@@ -93,7 +93,11 @@ const (
 var (
 	// The level's sprites are placed from the middle of the screen, as the
 	// editor places them.
-	screen = yaroze.Screen{Background: yaroze.Color{R: 104, G: 172, B: 236}, Depth: 2, Origin: yaroze.ScreenOriginMiddle}
+	screen = yaroze.Screen{
+		Background: yaroze.Color{R: 104, G: 172, B: 236},
+		Depth:      2,
+		Origin:     yaroze.ScreenOriginMiddle,
+	}
 	pad    input.Controller
 	world  scene.Scene
 	failed *disc.File

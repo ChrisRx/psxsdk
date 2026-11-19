@@ -44,7 +44,11 @@ var (
 	}
 
 	// The window is the whole screen, the cells drawn as they are.
-	bg = yaroze.Background{W: 320, H: 240, Color: yaroze.Color{R: 128, G: 128, B: 128}}
+	bg = yaroze.Background{
+		W:     320,
+		H:     240,
+		Color: yaroze.Color{R: 128, G: 128, B: 128},
+	}
 )
 
 // layout is the tutorial's map, a row of forty cells at a time, each an
