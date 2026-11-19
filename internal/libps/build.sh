@@ -12,8 +12,16 @@ set -euo pipefail
 NAME=$1 DIR=$2
 SYS=.build/clean-sysroot
 FULL=.build/compiler/tinygo-full.wasm
-if [ ! -d "$SYS" ]; then
-  cp -R .build/yaroze-sysroot "$SYS"
+# The copy is made again whenever task yaroze has written a newer sysroot, or
+# an old copy would go on building from a stale runtime. The stamp is written
+# after a whole copy, so a copy without one counts as stale too.
+SRC=.build/yaroze-sysroot
+[ -f "$SRC/env.json" ] || { echo "build.sh: no $SRC, run task yaroze first" >&2; exit 1; }
+if [ ! -f "$SYS/.copied" ] || [ "$SRC/env.json" -nt "$SYS/.copied" ]; then
+  echo "build.sh: copying $SRC to $SYS" >&2
+  rm -rf "${SYS:?}"
+  cp -R "$SRC" "$SYS"
+  touch "$SYS/.copied"
 fi
 MOD=$SYS/mod/go.chrisrx.dev/psx
 sync() {

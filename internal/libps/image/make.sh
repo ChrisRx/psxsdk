@@ -20,9 +20,17 @@ if [ "$OPT" != 2 ]; then OUT=.build/cleanimage-opt$OPT; fi
 SYS=.build/cleanimage-sysroot
 FULL=.build/compiler/tinygo-full.wasm
 T=internal/toolchain/_tinygo/targets
-if [ ! -d "$SYS" ]; then
-  cp -R .build/yaroze-sysroot "$SYS"
+# The copy is made again whenever task yaroze has written a newer sysroot, or
+# an old copy would go on building the image from a stale runtime. The stamp is
+# written after a whole copy, so a copy without one counts as stale too.
+SRC=.build/yaroze-sysroot
+[ -f "$SRC/env.json" ] || { echo "make.sh: no $SRC, run task yaroze first" >&2; exit 1; }
+if [ ! -f "$SYS/.copied" ] || [ "$SRC/env.json" -nt "$SYS/.copied" ]; then
+  echo "make.sh: copying $SRC to $SYS" >&2
+  rm -rf "${SYS:?}"
+  cp -R "$SRC" "$SYS"
   cat "$HERE/runtime_hook.go.txt" >> "$SYS/goroot/src/runtime/runtime_yaroze.go"
+  touch "$SYS/.copied"
 fi
 MOD=$SYS/mod/go.chrisrx.dev/psx
 for d in internal/libps "$HERE" internal/volatile; do
@@ -53,7 +61,11 @@ mkdir -p "$WORK/tmp" "$WORK/prog" "$SYS/cache"
 printf 'module play\n\ngo %s\n\n%s' "$(echo "$GOVERSION" | sed -E 's/^go([0-9]+\.[0-9]+).*/\1/')" "$GOMOD" > "$WORK/go.mod"
 cp "$HERE"/*.go "$WORK/prog/"
 CWASM=.build/tgo-full.cwasm
-if [ ! -f "$CWASM" ]; then wasmtime compile -o "$CWASM" "$FULL"; fi
+# Compiled again when the compiler is newer, as in build.sh, which shares it.
+if [ ! -f "$CWASM" ] || [ "$FULL" -nt "$CWASM" ]; then
+  echo "make.sh: compiling $FULL to $CWASM" >&2
+  wasmtime compile -o "$CWASM" "$FULL"
+fi
 
 link() {
   cp "$OUT"/playstation-yaroze-cleanimage* "$SYS/tinygo/targets/"
