@@ -156,6 +156,10 @@ const (
 // Open chose.
 func (s *Screen) SetVideo(mode VideoMode) { setVideo(mode) }
 
+// Video is the video mode the picture is in, NTSC or PAL, as Open chose
+// or SetVideo changed.
+func (s *Screen) Video() VideoMode { return videoMode() }
+
 // Shift moves the picture on the television by dx, dy from where it is,
 // as Offset placed it.
 func (s *Screen) Shift(dx, dy int) { shiftOffset(dx, dy) }

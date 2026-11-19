@@ -15,7 +15,7 @@
 # same in the source.
 #
 # What each keeps is from the clean room library's reading of Sony's
-# (internal/libps on the libps-go branch).
+# (internal/libps).
 
 # The packets each sort builds are written there until the next call.
 GsSetWorkBase       outpacketp

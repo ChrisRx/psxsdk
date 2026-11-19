@@ -3,7 +3,7 @@ package yaroze
 // The CPU's root counters, three timers a program may use: each counts
 // to 65535 and round again, so a span is the difference of two
 // readings. The fourth, the vertical blanks, is the library's, which
-// Fields and Lines read.
+// FieldCount and LinesSinceBlank read.
 
 // A Counter is one of the root counters.
 type Counter int
@@ -40,7 +40,3 @@ func FieldCount() int { return fieldCount() }
 // much of the frame it took: a field is 263 lines on NTSC and 313 on
 // PAL, and work that takes more misses the next blank.
 func LinesSinceBlank() int { return linesSinceBlank() }
-
-// Video is the video mode the picture is in, NTSC or PAL, as Open chose
-// or SetVideo changed.
-func (s *Screen) Video() VideoMode { return videoMode() }

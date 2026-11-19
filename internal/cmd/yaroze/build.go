@@ -248,7 +248,7 @@ needs no boot disc.
 
 The directory may instead hold a C project from the Net Yaroze SDK, with C
 sources and no Go ones, its Makefile and auto file read for how to build it.
-The first such build downloads the compiler with clang, 28MB, once.
+The first such build downloads the compiler with clang, 30.5MB, once.
 
 -o names the file, the package directory's name with .exe if not given.
 With a name ending in .elf it writes the ELF TinyGo linked instead, with
