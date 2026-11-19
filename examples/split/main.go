@@ -55,9 +55,13 @@ const (
 )
 
 var (
-	screen = yaroze.Screen{Background: yaroze.Color{R: 20, G: 30, B: 60}, Depth: depth, Packets: 24 << 10}
-	pad1   yaroze.Pad
-	pad2   = input.Controller{Port: 1}
+	screen = yaroze.Screen{
+		Background: yaroze.Color{R: 20, G: 30, B: 60},
+		Depth:      depth,
+		Packets:    24 << 10,
+	}
+	pad1 input.Controller
+	pad2 = input.Controller{Port: 1}
 
 	// second is the second half's ordering tables, one for each buffer;
 	// the screen keeps the first half's.
@@ -249,7 +253,7 @@ func faceDir() (dx, dz int) {
 
 // draw ends the frame as Screen.End does, but draws each half's table with
 // that half's offset and clip, waiting for the GPU between them.
-func draw(first, second *yaroze.GsOT, font int32) {
+func draw(first, second *yaroze.GsOT, font int) {
 	w, h := int32(screen.Width), int32(screen.Height)
 	yaroze.DrawSync(0)
 	yaroze.VSync(0)
@@ -281,6 +285,6 @@ func draw(first, second *yaroze.GsOT, font int32) {
 	whole := yaroze.RECT{W: int16(w), H: int16(h)}
 	yaroze.GsSetOffset(w/2, h/2)
 	yaroze.GsSetClip(&whole)
-	yaroze.FntFlush(font)
+	yaroze.FntFlush(int32(font))
 	frames++
 }

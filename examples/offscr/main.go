@@ -37,6 +37,7 @@ import (
 	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/examples/internal/demo"
 	"go.chrisrx.dev/psx/examples/internal/lpge"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -239,7 +240,7 @@ func findViewPoint() yaroze.VECTOR {
 // Start that pauses from the frames it stays held; paused is whether it
 // has, until the next press.
 var (
-	controller yaroze.Pad
+	controller input.Controller
 	paused     bool
 )
 

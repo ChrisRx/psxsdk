@@ -16,7 +16,11 @@ import (
 var (
 	screen = yaroze.Screen{Background: yaroze.Color{R: 40, G: 60, B: 100}}
 	pad    input.Controller
-	box    = yaroze.Box{W: 40, H: 40, Color: yaroze.Color{R: 255, G: 160, B: 32}}
+	box    = yaroze.Box{
+		W:     40,
+		H:     40,
+		Color: yaroze.Color{R: 255, G: 160, B: 32},
+	}
 )
 
 func main() {
@@ -81,7 +85,7 @@ The SDK's own calls are here too, for a program written as Sony's samples are: `
 ### Controllers and memory cards
 
 - The [`input`](input) package reads the controllers. An `input.Controller` is one controller frame by frame: `Update` reads it, `Pressed`, `Held` and `Released` tell a press from a hold, `Dir` is the direction buttons as steps across and down, `Duration` is how long a button has been held, and its fields hold the sticks, a mouse's movement and a gun's aim ([controllers](../cookbook/controllers.md)). `input.Read` is a port's buttons with no state kept.
-- `PadRead` reads both controllers as the SDK's samples do, with the `PAD` constants naming the buttons as the SDK's `pad.h` does. `Pad` is another name for `input.Controller`.
+- `PadRead` reads both controllers as the SDK's samples do, with the `PAD` constants naming the buttons as the SDK's `pad.h` does.
 - `CardWrite`, `CardRead`, `CardFiles` and `CardDelete` save to and load from a memory card, with a `SaveHeader` for the title and icon ([memory cards](../cookbook/memory-cards.md)).
 
 ### Time

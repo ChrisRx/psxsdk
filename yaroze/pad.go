@@ -16,8 +16,8 @@ import (
 // button is held.
 //
 // PadRead assembles those into the word the SDK's samples work with, and
-// the PAD constants name its bits, under the names of their pad.h. A Pad,
-// the input package's Controller, reads one controller's half of it once a
+// the PAD constants name its bits, under the names of their pad.h. The
+// input package's Controller reads one controller's half of it once a
 // frame and tells a press from a hold.
 
 // Buttons is what PadRead returns: the buttons held, one bit each, with the
@@ -25,10 +25,6 @@ import (
 // sixteen. It is the input package's Buttons, whose own names for the
 // first controller's bits are the PAD constants' too.
 type Buttons = input.Buttons
-
-// A Pad is one controller frame by frame: the input package's Controller,
-// under the name a program written against the SDK's names knows it by.
-type Pad = input.Controller
 
 // Button bits of what PadRead returns, for the first controller; the
 // second's are the same bits sixteen higher. The L in a name is the left

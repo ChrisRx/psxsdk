@@ -60,6 +60,7 @@ package main
 import (
 	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/gpu"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -108,7 +109,7 @@ var (
 		Interval:     2,
 		Buffers:      yaroze.ScreenBuffersSideBySide,
 	}
-	pad yaroze.Pad
+	pad input.Controller
 
 	arc1, arc2, arc3 *archive
 

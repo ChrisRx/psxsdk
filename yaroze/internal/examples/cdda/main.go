@@ -52,9 +52,9 @@ func main() {
 	screen.Open()
 	text = screen.Font(16, 16, 288, 200, 512)
 	tracks = [3]int{
-		int(track1.TrackNumber()),
-		int(track2.TrackNumber()),
-		int(track3.TrackNumber()),
+		track1.TrackNumber(),
+		track2.TrackNumber(),
+		track3.TrackNumber(),
 	}
 
 	// The disc's audio is mixed into the SPU's output at full volume.

@@ -38,6 +38,7 @@ import (
 	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/examples/internal/demo"
 	"go.chrisrx.dev/psx/examples/internal/lpge"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -239,7 +240,7 @@ const speed = 2
 
 // controller is the pad as the frame sees it, which tells the press of
 // Start that switches modes from the frames it stays held.
-var controller yaroze.Pad
+var controller input.Controller
 
 // dealWithControllerPad acts on the pad, and reports whether to quit.
 func dealWithControllerPad() bool {

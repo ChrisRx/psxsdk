@@ -121,8 +121,7 @@ const TrackName = "#CDDA"
 //
 //	var music = disc.Track("audio/theme.wav")
 //
-//	tracks := [2]int32{music.TrackNumber(), 0}
-//	yaroze.CdPlay(2, &tracks[0], 0)
+//	yaroze.LoopTracks([]int{music.TrackNumber()}, 0)
 //
 // Like Register, the call must initialize a package-level variable with a
 // constant. Tracks are numbered in the order the program declares them.
@@ -134,7 +133,7 @@ func Track(src string) File {
 // first after the data track, as CdPlay takes it, or 0 if it was not
 // recorded. A track's Size is its length in sectors of 2352 bytes, 75 to a
 // second.
-func (f *File) TrackNumber() int32 { return int32(f.Sector()) }
+func (f *File) TrackNumber() int { return int(f.Sector()) }
 
 // Into gives the file the memory it is read into, in place of what Load
 // would allocate, and tells mkdisc where that is, so that a file too
@@ -328,7 +327,7 @@ func LoadAll(frames int, files ...*File) *File {
 // frame, starts each read in turn and sees whether it has finished:
 //
 //	loader.Start(300)
-//	for ot := range screen.Frames() {
+//	for frame := range screen.Frames() {
 //		done, failed := loader.Step()
 //		if failed {
 //			yaroze.Print("could not read ")
@@ -337,7 +336,7 @@ func LoadAll(frames int, files ...*File) *File {
 //		}
 //		if !done {
 //			bar.W = uint16(200 * loader.Loaded() / loader.Total())
-//			bar.Sort(ot, 0)
+//			bar.Draw(frame, 0)
 //			continue
 //		}
 //		...

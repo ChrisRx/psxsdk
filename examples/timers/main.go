@@ -38,6 +38,7 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -48,8 +49,12 @@ type ball struct {
 }
 
 var (
-	screen = yaroze.Screen{Background: yaroze.Color{R: 20, G: 20, B: 40}, Depth: 1, Packets: 32 << 10}
-	pad    yaroze.Pad
+	screen = yaroze.Screen{
+		Background: yaroze.Color{R: 20, G: 20, B: 40},
+		Depth:      1,
+		Packets:    32 << 10,
+	}
+	pad input.Controller
 
 	sprite yaroze.GsSPRITE
 	balls  [maxBalls]ball

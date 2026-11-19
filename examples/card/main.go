@@ -48,6 +48,7 @@ import (
 	"unsafe"
 
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -73,8 +74,11 @@ const (
 var menuNames = [menuItems]string{"SAVE", "LOAD", "LIST", "DELETE", "DUMP", "FORMAT", "TEST"}
 
 var (
-	screen = yaroze.Screen{Background: yaroze.Color{R: 60, G: 40, B: 90}, Depth: 1}
-	pad    yaroze.Pad
+	screen = yaroze.Screen{
+		Background: yaroze.Color{R: 60, G: 40, B: 90},
+		Depth:      1,
+	}
+	pad input.Controller
 
 	icon      yaroze.GsSPRITE
 	iconImage yaroze.GsIMAGE

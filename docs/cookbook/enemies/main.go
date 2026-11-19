@@ -35,6 +35,7 @@ package main
 import (
 	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -100,7 +101,7 @@ var steps = [100]uint8{
 
 var (
 	screen = yaroze.Screen{Background: yaroze.Color{B: 128}, Depth: 1}
-	pad    yaroze.Pad
+	pad    input.Controller
 
 	player, enemy yaroze.Sprite
 	fly           [numFlies]yaroze.Sprite

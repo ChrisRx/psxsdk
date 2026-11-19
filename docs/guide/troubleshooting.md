@@ -68,4 +68,4 @@ A build that stops with "GsSetWorkBase keeps outpacketp, so the variable passed 
 
 ## The controller
 
-`Pad.Pressed` is true on the frame a button goes down and `Held` while it is down, so a menu that moves on `Held` moves every frame. A second controller is a `Pad` with `Port` 1. The library decodes only the standard controller.
+`input.Controller.Pressed` is true on the frame a button goes down and `Held` while it is down, so a menu that moves on `Held` moves every frame. A second controller is an `input.Controller` with `Port` 1. The library decodes only the standard controller.

@@ -31,6 +31,7 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -43,7 +44,7 @@ const (
 
 var (
 	screen = yaroze.Screen{Depth: 1}
-	pad    yaroze.Pad
+	pad    input.Controller
 
 	bg    yaroze.GsBG
 	tiles yaroze.GsMAP

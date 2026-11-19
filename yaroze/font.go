@@ -14,7 +14,7 @@ type Text struct {
 
 // ID is the window's stream, as FntOpen returned it, for the library's
 // own font calls.
-func (t Text) ID() int32 { return t.id }
+func (t Text) ID() int { return int(t.id) }
 
 // Print adds s to the window. Text past what the window holds is
 // dropped.

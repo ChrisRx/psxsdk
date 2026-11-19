@@ -145,7 +145,7 @@ const (
 )
 
 // A VideoMode is the television standard the picture is sent as.
-type VideoMode int32
+type VideoMode int
 
 const (
 	NTSC VideoMode = 0 // sixty fields a second, 240 lines
