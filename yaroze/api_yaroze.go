@@ -338,7 +338,7 @@ func setScreenMatrix(m *geom.Matrix) { GsSetLsMatrix((*MATRIX)(unsafe.Pointer(m)
 // subdivision's work space.
 func sortObject(o *Object, f *Frame) {
 	scratch := (*uint32)(unsafe.Pointer(uintptr(0x1f800000)))
-	GsSortObject4((*GsDOBJ2)(unsafe.Pointer(&o.obj)), f.table, int32(14-f.s.Depth), scratch)
+	GsSortObject4((*GsDOBJ2)(unsafe.Pointer(&o.obj)), f.table, int32(14-f.depth), scratch)
 }
 
 func setVideo(mode VideoMode) { SetVideoMode(int32(mode)) }
