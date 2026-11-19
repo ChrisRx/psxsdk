@@ -57,7 +57,7 @@
  func isDereference(value ssa.Value) bool {
  	unop, ok := value.(*ssa.UnOp)
  	return ok && unop.Op == token.MUL
-@@ -3957,6 +3974,14 @@
+@@ -3958,6 +3975,14 @@
  			if canUseDereferencePointer(unop) {
  				return x, nil
  			}
@@ -81,9 +81,45 @@
 +		// What the frame loop allocates every time round, which is never
 +		// freed (transform/frame.go), and what an interrupt's callback
 +		// allocates or waits for (transform/callback.go).
-+		if errs := append(CheckFrameAllocs(mod), CheckCallbacks(mod)...); len(errs) > 0 {
++		if errs := append(CheckFrameAllocs(mod, config), CheckCallbacks(mod, config)...); len(errs) > 0 {
 +			return errs
 +		}
  
  	} else {
  		// Must be run at any optimization level.
+--- a/compileopts/config.go
++++ b/compileopts/config.go
+@@ -36,6 +36,15 @@
+ 	Target         *TargetSpec
+ 	GoMinorVersion int
+ 	TestConfig     TestConfig
++
++	// ProgramPackages holds the path of each package of the program that
++	// is its own rather than the standard library's: one the loader did
++	// not find in GOROOT, where TinyGo's packages are too. The main
++	// package is in it as "main", with the other packages of its module
++	// and those of the modules it requires. The builder fills it in once
++	// the program is loaded, for the passes that tell the two apart by
++	// the names of functions and variables (transform/frame.go).
++	ProgramPackages map[string]bool
+ }
+ 
+ // Triple returns the LLVM target triple, like armv6m-unknown-unknown-eabi.
+--- a/builder/build.go
++++ b/builder/build.go
+@@ -281,6 +281,15 @@
+ 		}
+ 	}
+ 
++	// The program's own packages, those outside GOROOT, for the passes that
++	// tell them from the standard library's (transform/frame.go).
++	config.ProgramPackages = make(map[string]bool)
++	for _, pkg := range lprogram.Sorted() {
++		if !pkg.Standard {
++			config.ProgramPackages[pkg.Pkg.Path()] = true
++		}
++	}
++
+ 	// Store which filesystem paths map to which package name.
+ 	result.PackagePathMap = make(map[string]string, len(lprogram.Packages))
+ 	for _, pkg := range lprogram.Sorted() {

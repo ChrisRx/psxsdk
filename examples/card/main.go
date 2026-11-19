@@ -48,6 +48,7 @@ import (
 	"unsafe"
 
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -73,8 +74,11 @@ const (
 var menuNames = [menuItems]string{"SAVE", "LOAD", "LIST", "DELETE", "DUMP", "FORMAT", "TEST"}
 
 var (
-	screen = yaroze.Screen{Background: yaroze.CVECTOR{R: 60, G: 40, B: 90}, Depth: 1}
-	pad    yaroze.Pad
+	screen = yaroze.Screen{
+		Background: yaroze.Color{R: 60, G: 40, B: 90},
+		Depth:      1,
+	}
+	pad input.Controller
 
 	icon      yaroze.GsSPRITE
 	iconImage yaroze.GsIMAGE
@@ -87,7 +91,7 @@ var (
 	menu    int32
 	listing bool // in the file list rather than the menu
 	chosen  int32
-	dir     [15]yaroze.DIRENTRY
+	dir     [15]yaroze.CardFile
 	nfiles  int32
 
 	// message is what the last action did.
@@ -111,16 +115,21 @@ func main() {
 	screen.Font(16, 48, 288, 184, 900)
 	text.Init(textBuf[:])
 
-	if f := disc.LoadAll(300, files...); f != nil {
+	if f := disc.LoadAll(300); f != nil {
 		message = "could not read " + f.Name
 	} else {
-		iconImage = yaroze.TIM(iconTIM.Data()).Load()
+		// The icon's description is kept: a save's icon is made from
+		// the file's own palette and pixels.
+		yaroze.GsGetTimInfo(&iconTIM.Data()[1], &iconImage)
+		iconImage.Load()
+		yaroze.DrawSync(0)
 		icon = iconImage.Sprite()
 		icon.X, icon.Y = 296, 24
 		icon.Scalex, icon.Scaley = 2*yaroze.ONE, 2*yaroze.ONE
 	}
 
-	for ot := range screen.Frames() {
+	for frame := range screen.Frames() {
+		ot := frame.OT()
 		pad.Update()
 		if screen.Frame() == 1 {
 			status = yaroze.TestCard(slot)
@@ -193,13 +202,13 @@ func writeSave() bool {
 	clear(data)
 	copy(data, mark)
 	putInt(data[16:], number)
-	return yaroze.CardWrite(slot, saveName, save[:])
+	return yaroze.CardWrite(slot, saveName, save[:]) == nil
 }
 
 // readSave reads the number back, if the save is there and is this
 // program's.
 func readSave() bool {
-	if yaroze.CardRead(slot, saveName, save[:]) != len(save) {
+	if n, err := yaroze.CardRead(slot, saveName, save[:]); err != nil || n != len(save) {
 		return false
 	}
 	data := save[2*yaroze.CardSector:]
@@ -231,7 +240,7 @@ func list() {
 		chosen++
 		dumped = false
 	case pad.Pressed(yaroze.PADRdown) && nfiles > 0:
-		name := dir[chosen].FileName()
+		name := dir[chosen].Name()
 		switch menu {
 		case doDelete:
 			var path [32]byte
@@ -242,7 +251,8 @@ func list() {
 			nfiles = int32(yaroze.CardFiles(slot, dir[:]))
 			chosen = min(chosen, max(nfiles-1, 0))
 		case doDump:
-			dumped = yaroze.CardRead(slot, name, dump[:]) == len(dump)
+			n, err := yaroze.CardRead(slot, name, dump[:])
+			dumped = err == nil && n == len(dump)
 		}
 	}
 }
@@ -283,7 +293,7 @@ func draw() {
 			text.WriteString("~c999  ")
 		}
 		f := &dir[i]
-		text.WriteString(f.FileName()).WriteString(" ").WriteInt(f.Size / yaroze.CardBlock).WriteString("\n")
+		text.WriteString(f.Name()).WriteString(" ").WriteInt(f.Size() / yaroze.CardBlock).WriteString("\n")
 	}
 	text.WriteString("~c999")
 	if dumped {

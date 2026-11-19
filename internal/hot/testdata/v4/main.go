@@ -9,7 +9,7 @@ import (
 	"go.chrisrx.dev/psx/yaroze"
 )
 
-var screen = yaroze.Screen{Background: yaroze.CVECTOR{R: 60, G: 120, B: 120}}
+var screen = yaroze.Screen{Background: yaroze.Color{R: 60, G: 120, B: 120}}
 
 type state struct {
 	count uint32
@@ -30,7 +30,7 @@ func main() {
 	for range screen.Frames() {
 		s.count += 2
 		volatile.StoreUint32(&frames, s.count)
-		screen.Background = yaroze.CVECTOR{R: 200, G: 100, B: 0}
+		screen.Background = yaroze.Color{R: 200, G: 100, B: 0}
 		yaroze.Print("version four")
 	}
 }

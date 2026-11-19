@@ -1,6 +1,9 @@
 package main
 
-import "go.chrisrx.dev/psx/yaroze"
+import (
+	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/yaroze"
+)
 
 // The text box, as Dragon Quest VII's: a box along the bottom of the
 // screen with a white border and the scene darkened behind it, in which
@@ -70,31 +73,52 @@ type textBox struct {
 	// border: white lines two pixels wide, with a dark line along each
 	// side of them, the outer ones stopping short of the corners to round
 	// them.
-	glyph yaroze.GsSPRITE
-	back  yaroze.GsBOXF
-	edges [12]yaroze.GsBOXF
-	x, y  int16
+	glyph yaroze.Sprite
+	back  yaroze.Box
+	edges [12]yaroze.Box
+	x, y  int
 }
 
 var talk textBox
 
 // setup cuts the letter sprite from the sheet and lays out the box at
 // the bottom of the screen.
-func (t *textBox) setup(b yaroze.RECT) {
-	t.glyph = yaroze.TIM(fontTIM.Data()).Load().Sprite()
+func (t *textBox) setup(b geom.Rect) {
+	t.glyph = yaroze.LoadTIM(fontTIM.Data()).Sprite()
 	t.glyph.W, t.glyph.H = cellW, cellH
-	t.glyph.Mx, t.glyph.My = 0, 0
+	t.glyph.Pivot = geom.Point{}
 	t.x, t.y = b.X+(b.W-boxW)/2, b.Y+b.H-8-boxH
 	x, y := t.x, t.y
 	const w, h = boxW, boxH
 	// Semi-transparent, taking its color from what is under it, so the
 	// scene shows through darkly.
-	t.back = yaroze.GsBOXF{Attribute: 1<<30 | 2<<28, X: x, Y: y, W: w, H: h, R: 150, G: 150, B: 150}
-	white := func(n int, x, y int16, w, h uint16) {
-		t.edges[n] = yaroze.GsBOXF{X: x, Y: y, W: w, H: h, R: 255, G: 255, B: 255}
+	t.back = yaroze.Box{
+		Color: yaroze.Color{R: 150, G: 150, B: 150},
+		Blend: yaroze.BlendSubtract,
 	}
-	dark := func(n int, x, y int16, w, h uint16) {
-		t.edges[n] = yaroze.GsBOXF{X: x, Y: y, W: w, H: h, R: 40, G: 40, B: 48}
+	t.back.SetRect(geom.Rect{
+		X: x,
+		Y: y,
+		W: w,
+		H: h,
+	})
+	white := func(n, x, y, w, h int) {
+		t.edges[n] = yaroze.Box{Color: yaroze.Color{R: 255, G: 255, B: 255}}
+		t.edges[n].SetRect(geom.Rect{
+			X: x,
+			Y: y,
+			W: w,
+			H: h,
+		})
+	}
+	dark := func(n, x, y, w, h int) {
+		t.edges[n] = yaroze.Box{Color: yaroze.Color{R: 40, G: 40, B: 48}}
+		t.edges[n].SetRect(geom.Rect{
+			X: x,
+			Y: y,
+			W: w,
+			H: h,
+		})
 	}
 	white(0, x, y, w, 2)
 	white(1, x, y+h-2, w, 2)
@@ -196,8 +220,8 @@ func (t *textBox) letter() {
 
 // draw draws the box when it is up: the letters so far of the lines in
 // it, the arrow when there is more to read, then the border and the
-// darkening under them all, sorted last so that they are drawn first.
-func (t *textBox) draw(ot *yaroze.GsOT) {
+// darkening under them all, drawn last so that they are drawn first.
+func (t *textBox) draw(frame *yaroze.Frame) {
 	if !t.up {
 		return
 	}
@@ -207,29 +231,29 @@ func (t *textBox) draw(ot *yaroze.GsOT) {
 		if l == t.line {
 			e = min(e, s+t.col)
 		}
-		y := y0 + int16(l-t.top)*cellH
+		y := y0 + (l-t.top)*cellH
 		for k := s; k < e; k++ {
-			t.drawGlyph(ot, t.buf[k], x0+int16(k-s)*cellW, y)
+			t.drawGlyph(frame, t.buf[k], x0+(k-s)*cellW, y)
 		}
 	}
 	// The arrow's cell has its point on its eighth row, so it sits just
 	// above the border.
 	if t.wait && t.line < t.count && t.tick&blinkTime == 0 {
-		t.drawGlyph(ot, arrow, t.x+(boxW-cellW)/2, t.y+boxH-12)
+		t.drawGlyph(frame, arrow, t.x+(boxW-cellW)/2, t.y+boxH-12)
 	}
 	for i := range t.edges {
-		t.edges[i].Sort(ot, 0)
+		t.edges[i].Draw(frame, 0)
 	}
-	t.back.Sort(ot, 0)
+	t.back.Draw(frame, 0)
 }
 
 // drawGlyph draws character c with its top left corner at x, y.
-func (t *textBox) drawGlyph(ot *yaroze.GsOT, c byte, x, y int16) {
+func (t *textBox) drawGlyph(frame *yaroze.Frame, c byte, x, y int) {
 	if c < ' ' || c > arrow {
 		c = '?'
 	}
 	n := int(c - ' ')
-	t.glyph.U, t.glyph.V = uint8(n%16*cellW), uint8(n/16*cellH)
-	t.glyph.X, t.glyph.Y = x, y
-	t.glyph.SortFast(ot, 0)
+	t.glyph.Texture.U, t.glyph.Texture.V = uint8(n%16*cellW), uint8(n/16*cellH)
+	t.glyph.MoveTo(x, y)
+	t.glyph.DrawFast(frame, 0)
 }

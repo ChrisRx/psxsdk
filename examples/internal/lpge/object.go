@@ -55,7 +55,7 @@ type Handler struct {
 	ScaleX, ScaleY int32
 
 	Handler    yaroze.GsDOBJ2
-	Model      yaroze.TMD
+	Model      []uint32
 	WhichModel int32
 
 	ScalingFlag   bool
@@ -179,7 +179,7 @@ func LinkAllObjectsToTheirCoordinateSystems() {
 }
 
 // BringToLife makes an object alive, of a type, with a model.
-func (o *Handler) BringToLife(typ int32, model yaroze.TMD, whichModel int32, superCoordinateObjectID int32) {
+func (o *Handler) BringToLife(typ int32, model []uint32, whichModel int32, superCoordinateObjectID int32) {
 	o.Alive = true
 	o.Type = typ
 	o.Model = model
@@ -371,13 +371,20 @@ func linkSprite(s *yaroze.GsSPRITE, img *yaroze.GsIMAGE) {
 
 // LinkObjectHandlerToTmdObject links a GsDOBJ2 to one of the objects in the
 // TMD, mapping its offsets to addresses first.
-func LinkObjectHandlerToTmdObject(h *yaroze.GsDOBJ2, which int32, tmd yaroze.TMD) {
-	tmd.Map()
-	tmd.Link(h, which)
+func LinkObjectHandlerToTmdObject(h *yaroze.GsDOBJ2, which int32, tmd []uint32) {
+	yaroze.GsMapModelingData(&tmd[1])
+	yaroze.GsLinkObject4(&tmd[3], h, which)
 }
 
 // ProperInitializeTexture loads a TIM into VRAM, with its palette if it has
 // one, and describes it in img.
-func ProperInitializeTexture(tim yaroze.TIM, img *yaroze.GsIMAGE) {
-	*img = tim.Load()
+func ProperInitializeTexture(tim []uint32, img *yaroze.GsIMAGE) {
+	yaroze.GsGetTimInfo(&tim[1], img)
+	rect := yaroze.RECT{X: img.Px, Y: img.Py, W: int16(img.Pw), H: int16(img.Ph)}
+	yaroze.LoadImage(&rect, img.Pixel)
+	if img.Pmode>>3&1 != 0 {
+		rect = yaroze.RECT{X: img.Cx, Y: img.Cy, W: int16(img.Cw), H: int16(img.Ch)}
+		yaroze.LoadImage(&rect, img.Clut)
+	}
+	yaroze.DrawSync(0)
 }

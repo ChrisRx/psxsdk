@@ -5,7 +5,7 @@ weight: 1
 
 The `eco2exe` tool takes a Net Yaroze program and creates a working PSX-EXE executable ready to be used in an emulator (if it supports running bare PSX-EXEs), or built into a disc image to be loaded by a real PlayStation (if it can play burned discs). The input may be the ECOFF produced by the SDK's own toolchain or the ELF produced by TinyGo or a current mipsel-none-elf toolchain.
 
-It does this by parsing the compiled program, combining it with the Net Yaroze development library (aka `libps.exe`) and then converting the combined program to the PSX-EXE executable format. The executable is patched with a startup stub that initializes the library before jumping to the program's entry point.
+It does this by parsing the compiled program, combining it with the Net Yaroze library, the clean-room `internal/libps` laid out at the addresses of `libps.exe`, and then converting the combined program to the PSX-EXE executable format. The executable is patched with a startup stub that initializes the library before jumping to the program's entry point.
 
 ```bash
 $ eco2exe prog.elf MAIN.EXE

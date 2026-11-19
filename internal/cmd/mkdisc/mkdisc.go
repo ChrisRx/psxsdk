@@ -197,6 +197,13 @@ func Build(o Options) error {
 		}
 	}
 
+	if prog != nil {
+		root.First = []string{iso9660.FileIdentifier("SYSTEM.CNF")}
+		if e, dirs, err := lookup(root, o.Boot); err == nil && len(dirs) == 0 {
+			root.First = append(root.First, e.Name)
+		}
+	}
+
 	if err := markRaw(root, o.Raw); err != nil {
 		return err
 	}

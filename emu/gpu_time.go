@@ -1,0 +1,173 @@
+package emu
+
+// The GPU in the emulator draws in no time: GPUSTAT always says it is ready
+// for a command, and a DMA to it runs a whole packet list the moment CHCR is
+// written. A program's waits for the GPU never wait. Under SetDrawTime the
+// GPU takes time for what it draws instead, roughly, so that a test can see
+// what a library does while the GPU is still drawing: GPUSTAT's bit 26 (ready
+// for a command) stays clear until the drawing is done, a packet list sent by
+// DMA while the GPU is drawing is held until it is free, and a list's DMA
+// ends when its last command reaches the GPU, which then goes on drawing it.
+// The pixels still land in VRAM as each command arrives.
+//
+// An image sent to the GPU by DMA in request mode (LoadImage's) takes time
+// too: the channel stays busy, and the GPU not ready for a command, for
+// imageCyclesPerWord cycles a word, after whatever the GPU was drawing.
+//
+// The cost is a fixed time per pixel drawn. A console takes about 0.8 cycles
+// a pixel for 320 by 240 semi-transparent boxes (spec 39 of internal/libps), so
+// a cycle a pixel is near enough.
+
+// gpustatReadyCmd is GPUSTAT's bit 26: ready for a command.
+const gpustatReadyCmd = 1 << 26
+
+// gpustatReadyVRAM is GPUSTAT's bit 27: ready to send VRAM to the CPU.
+const gpustatReadyVRAM = 1 << 27
+
+// drawCyclesPerPixel is the CPU cycles a drawn pixel costs under SetDrawTime.
+const drawCyclesPerPixel = 1
+
+// imageCyclesTenths is the cycles, in tenths, a word of an image takes to go
+// to the GPU by DMA under SetDrawTime. A console takes about 1.7: 8192 words
+// in 14,700 cycles and 16,384 in 28,800 from the call (probes/readybusy of
+// internal/libps), and is ready for a command 16 cycles after the channel ends.
+const imageCyclesTenths = 17
+
+// imageFromCyclesHundredths is the cycles, in hundredths, a word of an image
+// takes to come from the GPU by DMA under SetDrawTime. A console takes 2,215
+// cycles for 64 blocks of 16 words and 8,930 for 256 (probes/dmahold of
+// internal/libps, "store alone"): 34.6 a block.
+const imageFromCyclesHundredths = 216
+
+// drawTime is the GPU's clock for SetDrawTime: whether it is on, the CPU's
+// cycle count, when the GPU will have drawn what it has been given, and what
+// the last drawing command cost.
+type drawTime struct {
+	on    bool
+	clock *uint64
+	until uint64
+	last  uint64
+}
+
+// SetDrawTime sets whether the GPU takes time to draw, as described above.
+// It is off unless a test turns it on, and with it off nothing about the
+// emulation changes.
+func (m *Machine) SetDrawTime(on bool) {
+	m.gpu.time.on = on
+	m.gpu.time.until = 0
+}
+
+// GPUDrawing reports whether, under SetDrawTime, the GPU is still drawing.
+func (m *Machine) GPUDrawing() bool { return m.gpu.drawing() }
+
+// drawing reports whether the GPU is still drawing what it has been given.
+func (g *gpu) drawing() bool { return *g.time.clock < g.time.until }
+
+// charge adds the time to draw pixels to the GPU's, after whatever it is
+// drawing already.
+func (g *gpu) charge(pixels int) {
+	if !g.time.on || pixels <= 0 {
+		return
+	}
+	t := &g.time
+	t.last = uint64(pixels) * drawCyclesPerPixel
+	t.until = max(t.until, *t.clock) + t.last
+}
+
+// triangleArea returns the pixels a triangle covers, roughly: its area.
+func triangleArea(v0, v1, v2 vertex) int {
+	a := (int(v1.x)-int(v0.x))*(int(v2.y)-int(v0.y)) - (int(v2.x)-int(v0.x))*(int(v1.y)-int(v0.y))
+	return max(a, -a) / 2
+}
+
+// transferGPUTimed is the linked-list transfer under SetDrawTime: held while
+// the GPU is drawing, and once run, ending when the list's last command
+// reaches the GPU.
+func (d *dma) transferGPUTimed() {
+	g := d.gpu
+	if g.drawing() {
+		d.gpuEnd, d.gpuHeld = g.time.until, true
+		return
+	}
+	g.time.last = 0
+	if !d.transferGPULinked() {
+		return
+	}
+	d.gpuWords, d.pending[dmaGPU] = d.pending[dmaGPU], 0
+	if end := g.time.until - g.time.last; g.drawing() && end > *g.time.clock {
+		d.gpuEnd = end
+		return
+	}
+	d.endGPU()
+}
+
+// timeGPURequest has an image just sent to the GPU by DMA in request mode,
+// or read from it, take its time under SetDrawTime: the channel stays busy
+// until the words have gone, after what the GPU was drawing, and the GPU is
+// not ready for a command until then. It reports whether it did; a transfer
+// of no words ends at once as before.
+func (d *dma) timeGPURequest() bool {
+	n := d.pending[dmaGPU]
+	if n == 0 {
+		return false
+	}
+	// A word's time, in hundredths of a cycle, and how long each block
+	// leaves the bus open, by the transfer's direction.
+	word, open := uint64(imageCyclesTenths*10), uint64(imageOpenTenths)
+	if *d.chcr(dmaGPU)&chcrToDevice == 0 {
+		word, open = imageFromCyclesHundredths, imageFromOpenTenths
+	}
+	t := &d.gpu.time
+	waiting := t.until > *t.clock
+	t.until = max(t.until, *t.clock) + uint64(n)*word/100
+	d.gpuEnd, d.gpuWords, d.pending[dmaGPU] = t.until, n, 0
+	if size := uint64(d.size(dmaGPU)); !waiting && size != 0 {
+		// The blocks start now, and each holds the bus for all but the
+		// end of its time. Behind a drawing they start later, and the
+		// model leaves the bus alone.
+		k := uint64(1)
+		if *d.chcr(dmaGPU)&chcrToDevice == 0 {
+			k = imageFromSplit
+		}
+		d.holdBlocks(uint64(n)/size*k, size*word/10/k, open)
+	}
+	return true
+}
+
+// gpuDue moves a timed GPU transfer on once its time has come: a held list
+// starts, and a running one ends.
+func (d *dma) gpuDue() {
+	if *d.gpu.time.clock < d.gpuEnd {
+		return
+	}
+	d.gpuEnd = 0
+	if d.gpuHeld {
+		d.gpuHeld = false
+		d.transferGPUTimed()
+		return
+	}
+	d.endGPU()
+}
+
+// endGPU ends a timed transfer: the channel stops, and its completion flag
+// comes on the next step, as an untimed transfer's does.
+func (d *dma) endGPU() {
+	*d.chcr(dmaGPU) &^= chcrBusy | chcrTrigger
+	*d.bcr(dmaGPU) = 0
+	d.pending[dmaGPU] = d.gpuWords
+}
+
+// stopGPU drops a timed transfer when the program stops the channel by
+// clearing its busy bit: a held list never starts, and a running one ends
+// without its completion. The words already sent stay sent.
+func (d *dma) stopGPU() {
+	d.gpuEnd, d.gpuHeld = 0, false
+}
+
+// stopDrawing ends, under SetDrawTime, what the GPU is drawing, as GP1(00h)
+// and GP1(01h) do on a console: the GPU is ready for a command at once.
+func (g *gpu) stopDrawing() {
+	if g.time.on {
+		g.time.until = min(g.time.until, *g.time.clock)
+	}
+}

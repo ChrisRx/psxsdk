@@ -68,10 +68,9 @@ var (
 	tex6File  = disc.Register("ASSETS/GIULI_WN.TIM", "assets/GIULI_WN.TIM").Into(tex6Data[:])
 	tex7File  = disc.Register("ASSETS/WHEEL256.TIM", "assets/WHEEL256.TIM").Into(tex7Data[:])
 	modelFile = disc.Register("ASSETS/GIULIETA.TMD", "assets/GIULIETA.TMD").Into(modelData[:])
-	files     = []*disc.File{&tex1File, &tex2File, &tex3File, &tex4File, &tex5File, &tex6File, &tex7File, &modelFile}
 
-	textures = [...]yaroze.TIM{tex1Data[:], tex2Data[:], tex3Data[:], tex4Data[:], tex5Data[:], tex6Data[:], tex7Data[:]}
-	model    = yaroze.TMD(modelData[:])
+	textures = [...][]uint32{tex1Data[:], tex2Data[:], tex3Data[:], tex4Data[:], tex5Data[:], tex6Data[:], tex7Data[:]}
+	model    = modelData[:]
 )
 
 // A DB is one of the two drawing buffers: an ordering table and the GPU
@@ -105,7 +104,7 @@ func main() {
 	text.Init(textBuf[:])
 	initSystem()
 
-	if missing := demo.Load(files, nil); missing != "" {
+	if missing := demo.Load(disc.Registered(), nil); missing != "" {
 		fail("could not read ", missing)
 		return
 	}
@@ -172,13 +171,13 @@ func initLight() {
 // initModel maps the model's addresses and links a handle to each of its
 // objects, all in the car's coordinate system.
 func initModel() {
-	model.Map()
-	objcnt = int32(model.Objects())
+	yaroze.GsMapModelingData(&model[1])
+	objcnt = int32(model[2])
 	if objcnt > objectMax {
 		objcnt = objectMax
 	}
 	for i := range objcnt {
-		model.Link(&object[i], i)
+		yaroze.GsLinkObject4(&model[3], &object[i], i)
 		object[i].Coord2 = &objWorld
 		object[i].Attribute = 0
 	}
@@ -187,8 +186,23 @@ func initModel() {
 // initTexture puts the seven textures into video memory.
 func initTexture() {
 	for _, t := range &textures {
-		t.Load()
+		loadTIM(t)
 	}
+}
+
+// loadTIM puts a TIM into video memory, where its header says, with its
+// palette if it has one, waits for the transfer, and returns its
+// description.
+func loadTIM(tim []uint32) (image yaroze.GsIMAGE) {
+	yaroze.GsGetTimInfo(&tim[1], &image)
+	rect := yaroze.RECT{X: image.Px, Y: image.Py, W: int16(image.Pw), H: int16(image.Ph)}
+	yaroze.LoadImage(&rect, image.Pixel)
+	if image.Pmode>>3&1 != 0 {
+		rect = yaroze.RECT{X: image.Cx, Y: image.Cy, W: int16(image.Cw), H: int16(image.Ch)}
+		yaroze.LoadImage(&rect, image.Clut)
+	}
+	yaroze.DrawSync(0)
+	return image
 }
 
 // padRead applies the controls to the car and returns -1 when Select asks

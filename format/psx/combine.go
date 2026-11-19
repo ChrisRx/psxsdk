@@ -12,7 +12,9 @@ const (
 type memory [size]byte
 
 func (m *memory) read(start, end uint32) []byte {
-	return m[start&mask : end&mask]
+	// By length, since an end at the top of RAM masks to 0.
+	from := start & mask
+	return m[from : from+end-start]
 }
 
 func (m *memory) write(start uint32, data []byte) int {
@@ -47,11 +49,15 @@ func Combine(a, b *File) (*File, error) {
 	return output, nil
 }
 
+// sectorSize is the unit of a text section the BIOS can load from a disc.
+const sectorSize = 2048
+
 // Embed writes data into the image at addr, as a Net Yaroze's siocons put a
 // program's data in memory before the program ran with its "local dload"
 // command: a program that expects its data at a fixed address can then be
 // run from a disc, or in an emulator, without a loader to put it there. The
-// text section grows to cover data outside it, with zeros between.
+// text section grows to cover data outside it, with zeros between, and up to
+// a whole sector, since the BIOS doesn't load a text size that isn't one.
 func Embed(f *File, addr uint32, data []byte) error {
 	// RAM is the same RAM through the uncached mirror a program may name
 	// it by, at 0xa0000000, and the image is loaded through the cached one.
@@ -64,6 +70,7 @@ func Embed(f *File, addr uint32, data []byte) error {
 	}
 	start, end := text.Addr, text.Addr+uint32(len(text.Data))
 	lo, hi := min(start, addr), max(end, addr+uint32(len(data)))
+	hi = lo + (hi-lo+sectorSize-1)&^(sectorSize-1)
 	if hi-lo > size {
 		return fmt.Errorf("%d bytes at %08x do not fit in RAM with the text at %08x", len(data), addr, text.Addr)
 	}

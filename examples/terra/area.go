@@ -244,7 +244,6 @@ func fadeFrame() bool {
 	if playerEnt.frame&entFrameAtEdge == 0 {
 		return false
 	}
-	over := screen.Overlay()
 	cross := false
 	var c int
 	switch {
@@ -268,7 +267,7 @@ func fadeFrame() bool {
 		}
 		c = max((fadeT-0x10)*-0x10+0xff, 0)
 	}
-	fillRect(over.Entry(0), -160, -120, 320, 240, uint8(c), uint8(c), uint8(c), true, 1)
+	fillRect(over, 0, -160, -120, 320, 240, uint8(c), uint8(c), uint8(c), true, 1)
 	fadeT++
 	return cross
 }

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/gpu"
 	"go.chrisrx.dev/psx/stage"
 	"go.chrisrx.dev/psx/yaroze"
 )
@@ -23,69 +25,68 @@ type backdrop struct {
 	// The clouds and the hills, strips of the backdrop that wrap across
 	// the screen, the sun, and the land under the hills, down to the
 	// bottom of the screen, for where the ground stops short of it.
-	clouds, hills, sun yaroze.GsSPRITE
-	land               yaroze.GsBOXF
+	clouds, hills, sun yaroze.Sprite
+	land               yaroze.Box
 }
 
 var sky backdrop
 
 // setup cuts the strips and the sun from their images and sizes the
 // land to the screen.
-func (s *backdrop) setup(b yaroze.RECT) {
-	s.sun = yaroze.TIM(sunTIM.Data()).Load().Sprite()
-	s.clouds = yaroze.TIM(skyTIM.Data()).Load().Sprite()
+func (s *backdrop) setup(b geom.Rect) {
+	s.sun = yaroze.LoadTIM(sunTIM.Data()).Sprite()
+	s.clouds = yaroze.LoadTIM(skyTIM.Data()).Sprite()
 	s.clouds.H = 32
 	s.hills = s.clouds
-	s.hills.V += 32
-	s.land = yaroze.GsBOXF{W: uint16(b.W), H: uint16(b.H - 68), R: 50, G: 110, B: 80}
+	s.hills.Texture.V += 32
+	s.land = yaroze.Box{Color: yaroze.Color{R: 50, G: 110, B: 80}}
+	s.land.SetRect(geom.Rect{
+		W: b.W,
+		H: b.H - 68,
+	})
 }
 
-// draw fills the screen with the room's sky, shaded from its stage.Color at
-// the top to its stage.Color at the bottom, as one shaded quad in the deepest
-// entry of the table, sorted after everything else there so that it is
-// drawn before it all; and over it the sun, the clouds and the hills.
-// The ground covers them where it reaches the top of the screen. A room
-// without sky colors has no sky, and the screen's own background shows.
-func (s *backdrop) draw(ot *yaroze.GsOT, b yaroze.RECT) {
+// draw fills the screen with the room's sky, shaded from its color at
+// the top to its color at the bottom, as one shaded quad at the deepest
+// depth, drawn after everything else there so that it is drawn before
+// it all; and over it the sun, the clouds and the hills. The ground
+// covers them where it reaches the top of the screen. A room without
+// sky colors has no sky, and the screen's own background shows.
+func (s *backdrop) draw(frame *yaroze.Frame, b geom.Rect) {
 	colors := world.Room().Sky
 	if colors == ([2]stage.Color{}) {
 		return
 	}
-	const deepest = 1<<stage.Depth - 1
+	deepest := frame.Depths() - 1
 	scroll := cam.angle >> 2
 	// The sun's place along the turn, from the middle of the screen, as
 	// a signed distance, drawn when it is on the screen.
-	sx := int16((sunAngle-cam.angle+2048)&4095-2048) >> 2
+	sx := ((sunAngle-cam.angle+2048)&4095 - 2048) >> 2
 	if sx > -200 && sx < 200 {
-		s.sun.X, s.sun.Y = sx-16, b.Y+16
-		s.sun.SortFast(ot, deepest-1)
+		s.sun.MoveTo(sx-16, b.Y+16)
+		s.sun.DrawFast(frame, deepest-1)
 	}
-	s.strip(ot, &s.clouds, scroll+screen.Frame()/cloudDrift, b, b.Y, deepest-2)
-	s.strip(ot, &s.hills, scroll, b, b.Y+36, deepest-3)
-	s.land.X, s.land.Y = b.X, b.Y+68
-	s.land.Sort(ot, deepest-3)
+	s.strip(frame, &s.clouds, scroll+frame.Number()/cloudDrift, b, b.Y, deepest-2)
+	s.strip(frame, &s.hills, scroll, b, b.Y+36, deepest-3)
+	s.land.MoveTo(b.X, b.Y+68)
+	s.land.Draw(frame, deepest-3)
 
-	top, bottom := colors[0].Word(0x38), colors[1].Word(0)
-	p := yaroze.AllocPacket(9)
-	p[0] = 8 << 24
-	p[1] = top
-	p[2] = xy(b.X, b.Y)
-	p[3] = top &^ 0xff000000
-	p[4] = xy(b.X+b.W, b.Y)
-	p[5] = bottom
-	p[6] = xy(b.X, b.Y+b.H)
-	p[7] = bottom
-	p[8] = xy(b.X+b.W, b.Y+b.H)
-	ot.Link(deepest, p)
+	top, bottom := colors[0].RGB(), colors[1].RGB()
+	p := frame.Packet[gpu.ShadedQuad](deepest)
+	p.Color0, p.Color1, p.Color2, p.Color3 = top, top, bottom, bottom
+	p.XY0 = gpu.At(b.X, b.Y)
+	p.XY1 = gpu.At(b.X+b.W, b.Y)
+	p.XY2 = gpu.At(b.X, b.Y+b.H)
+	p.XY3 = gpu.At(b.X+b.W, b.Y+b.H)
 }
 
 // strip draws a strip of the backdrop across the screen at y, scrolled
 // left by scroll and wrapped, as many times as it takes to cover the
 // screen's width.
-func (s *backdrop) strip(ot *yaroze.GsOT, sp *yaroze.GsSPRITE, scroll int, b yaroze.RECT, y int16, pri uint16) {
-	x := b.X - int16(scroll&(backdropW-1))
+func (s *backdrop) strip(frame *yaroze.Frame, sp *yaroze.Sprite, scroll int, b geom.Rect, y, depth int) {
+	x := b.X - scroll&(backdropW-1)
 	for ; x < b.X+b.W; x += backdropW {
-		sp.X, sp.Y = x, y
-		sp.SortFast(ot, pri)
+		sp.MoveTo(x, y)
+		sp.DrawFast(frame, depth)
 	}
 }

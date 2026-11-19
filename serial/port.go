@@ -50,9 +50,47 @@ type Port struct {
 	// ErrTimeout. Open and NewPort set it to DefaultTimeout.
 	Timeout time.Duration
 
+	// Pacing is how long a transfer leaves the console between its steps.
+	// Open sets it to DevicePacing, and NewPort leaves it at zero.
+	Pacing Pacing
+
+	// PulseReads pulses RTS after each read, which the monitor's binary read
+	// waits for. ReadMemory sets it for as long as it runs, and anything
+	// else that speaks that protocol by hand must set it too.
+	PulseReads bool
+
 	line    Line
 	closer  io.Closer
 	pending []byte // read from the line and not yet returned
+}
+
+// Pacing is how long a transfer waits at each of its steps. Header and
+// BlockStart aren't pauses: they're how long a transfer waits for the
+// console to lower CTS, which it ends as soon as the console does.
+type Pacing struct {
+	Load       time.Duration // before a program's upload
+	Reply      time.Duration // after the monitor's reply to a command or a block
+	Header     time.Duration // for CTS to drop after a binary transfer's header
+	BlockStart time.Duration // for CTS to drop after the byte that begins a block
+	Run        time.Duration // after the monitor has echoed go
+}
+
+// DevicePacing is the delays a real console needs through a USB serial
+// adapter. The boot disc's monitor stops reading the line for about 170 ms
+// after a write's header and about 2 ms after each block's 02h, and lowers
+// its RTS, the host's CTS, only about 0.6 ms after the byte. The host learns
+// of it later still, through the adapter, so without a pause it goes on
+// sending into the console's 8-byte receive buffer. A ninth byte overruns
+// it, and the monitor ends the write. So after a header and after 02h the
+// host waits for CTS to drop, up to Header and BlockStart: the latest drop
+// measured was 0.83 ms after the write. Measured on a console: a burst of 8
+// bytes into either stretch always went through, and 9 or more always ended
+// the write. The clean monitor keeps reading and never lowers CTS, so there
+// each wait runs its length, and the emulated line needs none. The other
+// delays, of the loader these came from, aren't needed.
+var DevicePacing = Pacing{
+	Header:     3 * time.Millisecond,
+	BlockStart: 3 * time.Millisecond,
 }
 
 // Devices returns the names of the host's serial devices.
@@ -77,6 +115,7 @@ func Open(name string, baud int) (*Port, error) {
 	}
 	p := NewPort(device{d})
 	p.closer = d
+	p.Pacing = DevicePacing
 	return p, nil
 }
 
@@ -91,6 +130,41 @@ func (p *Port) Close() error {
 		return nil
 	}
 	return p.closer.Close()
+}
+
+// pause waits for d, or until ctx is done.
+func (p *Port) pause(ctx context.Context, d time.Duration) error {
+	if d == 0 {
+		return nil
+	}
+	select {
+	case <-time.After(d):
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// awaitBusy waits for the console to lower CTS, up to d, or until ctx is
+// done. A console that doesn't lower it costs the whole of d.
+func (p *Port) awaitBusy(ctx context.Context, d time.Duration) error {
+	if d == 0 {
+		return nil
+	}
+	start := time.Now()
+	for time.Since(start) < d {
+		cts, err := p.line.CTS()
+		if err != nil {
+			return err
+		}
+		if !cts {
+			return nil
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Discard drops what has been read from the console and not yet returned.
@@ -175,8 +249,10 @@ func (p *Port) Poll() error {
 	if n > 0 {
 		p.Output.Write(buf[:n])
 		p.pending = append(p.pending, buf[:n]...)
-		if err := p.pulse(); err != nil {
-			return err
+		if p.PulseReads {
+			if err := p.pulse(); err != nil {
+				return err
+			}
 		}
 	}
 	if err == io.EOF {
@@ -185,9 +261,12 @@ func (p *Port) Poll() error {
 	return err
 }
 
-// pulse turns RTS off and on again, as SIOCONS's receive interrupt does for
-// each byte: the Net Yaroze's monitor waits for that pulse before it sends
-// the next byte of a binary read.
+// pulse turns RTS off and on again: the Net Yaroze's monitor waits for that
+// pulse before it sends the next byte of a binary read. SIOCONS's receive
+// interrupt pulses for every byte it gets, but only a binary read needs it.
+// The loader that worked on a real console never pulsed, and an attempt at
+// handling RTS in it stalled for a reason not found, so a Port pulses only
+// while PulseReads is set.
 func (p *Port) pulse() error {
 	if err := p.line.SetRTS(false); err != nil {
 		return err
@@ -210,7 +289,7 @@ func (p *Port) Stream(ctx context.Context) error {
 
 // fill reads what the console has sent onto pending, copying it to Output.
 // It fails once ctx is done or deadline passes with nothing read. Having
-// read something, it pulses RTS.
+// read something in a binary read, it pulses RTS.
 func (p *Port) fill(ctx context.Context, deadline time.Time) error {
 	var buf [1024]byte
 	for {
@@ -218,7 +297,10 @@ func (p *Port) fill(ctx context.Context, deadline time.Time) error {
 		if n > 0 {
 			p.Output.Write(buf[:n])
 			p.pending = append(p.pending, buf[:n]...)
-			return p.pulse()
+			if p.PulseReads {
+				return p.pulse()
+			}
+			return nil
 		}
 		if err == io.EOF {
 			return io.ErrUnexpectedEOF

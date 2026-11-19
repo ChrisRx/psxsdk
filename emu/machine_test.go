@@ -123,13 +123,32 @@ func TestTimerTargetInterrupt(t *testing.T) {
 	m.Bus.Write16(t2Target, 100)
 	m.Bus.Write16(t2Mode, 0x0058) // reset at target, interrupt at target, repeat
 
-	// psxe advances the timers 2 a step and fires once past the target.
-	for range 50 {
+	// The timer counts cycles, and fires once past the target.
+	for m.CPU.TotalCycles <= 100 {
+		assert.Equal(t, uint32(0), m.ic.stat&irqTimer2, "not yet past the target")
 		m.Step()
 	}
-	assert.Equal(t, uint32(0), m.ic.stat&irqTimer2, "not yet past the target")
-	m.Step()
 	assert.Equal(t, uint32(irqTimer2), m.ic.stat&irqTimer2)
+}
+
+// TestTimersCountCycles checks a timer sees what a step costs, here a wait for the
+// GTE, and not a fixed amount a step.
+func TestTimersCountCycles(t *testing.T) {
+	m := newTestMachine(t)
+	const (
+		t2Count = 0x1f801120
+		code    = 0x80010000
+	)
+	m.Bus.Write32(code, 0x4a180001)   // rtps
+	m.Bus.Write32(code+4, 0x48020000) // mfc2 v0, r0, which waits for it
+	m.CPU.PC, m.CPU.NextPC = code, code+4
+
+	cycles, count := m.CPU.TotalCycles, m.Bus.Read16(t2Count)
+	m.Step()
+	m.Step()
+	spent := m.CPU.TotalCycles - cycles
+	assert.Equal(t, uint64(m.Bus.Read16(t2Count)-count), spent)
+	assert.Equal(t, true, spent > 4, "the wait should cost more than two plain steps")
 }
 
 // TestRunTakesTimerInterrupt checks Run hands back to the timers at the step

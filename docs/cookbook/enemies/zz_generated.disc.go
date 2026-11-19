@@ -10,8 +10,3 @@ import (
 var (
 	spritesTIM = disc.Register("ASSETS/SPRITES.TIM", "assets/SPRITES.TIM")
 )
-
-// files is every file above, in the order disc.LoadAll reads them.
-var files = []*disc.File{
-	&spritesTIM,
-}

@@ -109,25 +109,24 @@ var (
 	efloorFile   = disc.Register("ASSETS/EWAVE01.TIM", "assets/EWAVE01.TIM").Into(efloorData[:])
 	fwallFile    = disc.Register("ASSETS/FSTONE01.TIM", "assets/FSTONE01.TIM").Into(fwallData[:])
 	faceFile     = disc.Register("ASSETS/FACE.TIM", "assets/FACE.TIM").Into(faceData[:])
-	files        = []*disc.File{&vh, &vb, &map1File, &map2File, &map3File, &statusFile, &roofFile, &wallFile, &floorFile, &man1File, &man2File, &bulletFile, &bloodFile, &deadmanFile, &ricochetFile, &healthFile, &bullet2File, &eroofFile, &ewallFile, &efloorFile, &fwallFile, &faceFile}
 
-	statusTIM   = yaroze.TIM(statusData[:])
-	roofTIM     = yaroze.TIM(roofData[:])
-	wallTIM     = yaroze.TIM(wallData[:])
-	floorTIM    = yaroze.TIM(floorData[:])
-	man1TIM     = yaroze.TIM(man1Data[:])
-	man2TIM     = yaroze.TIM(man2Data[:])
-	bulletTIM   = yaroze.TIM(bulletData[:])
-	bloodTIM    = yaroze.TIM(bloodData[:])
-	deadmanTIM  = yaroze.TIM(deadmanData[:])
-	ricochetTIM = yaroze.TIM(ricochetData[:])
-	healthTIM   = yaroze.TIM(healthData[:])
-	bullet2TIM  = yaroze.TIM(bullet2Data[:])
-	eroofTIM    = yaroze.TIM(eroofData[:])
-	ewallTIM    = yaroze.TIM(ewallData[:])
-	efloorTIM   = yaroze.TIM(efloorData[:])
-	fwallTIM    = yaroze.TIM(fwallData[:])
-	faceTIM     = yaroze.TIM(faceData[:])
+	statusTIM   = statusData[:]
+	roofTIM     = roofData[:]
+	wallTIM     = wallData[:]
+	floorTIM    = floorData[:]
+	man1TIM     = man1Data[:]
+	man2TIM     = man2Data[:]
+	bulletTIM   = bulletData[:]
+	bloodTIM    = bloodData[:]
+	deadmanTIM  = deadmanData[:]
+	ricochetTIM = ricochetData[:]
+	healthTIM   = healthData[:]
+	bullet2TIM  = bullet2Data[:]
+	eroofTIM    = eroofData[:]
+	ewallTIM    = ewallData[:]
+	efloorTIM   = efloorData[:]
+	fwallTIM    = fwallData[:]
+	faceTIM     = faceData[:]
 )
 
 // The models the demo builds, each in 4KB of its own, as the demo spaced
@@ -137,21 +136,21 @@ const tmdWords = 4096 / 4
 var (
 	builtData [15 * tmdWords]uint32
 
-	floorTMD    = yaroze.TMD(builtData[0*tmdWords : 1*tmdWords])
-	roofTMD     = yaroze.TMD(builtData[1*tmdWords : 2*tmdWords])
-	wallTMD     = yaroze.TMD(builtData[2*tmdWords : 3*tmdWords])
-	monster1TMD = yaroze.TMD(builtData[3*tmdWords : 4*tmdWords])
-	monster2TMD = yaroze.TMD(builtData[4*tmdWords : 5*tmdWords])
-	bulletTMD   = yaroze.TMD(builtData[5*tmdWords : 6*tmdWords])
-	bloodTMD    = yaroze.TMD(builtData[6*tmdWords : 7*tmdWords])
-	deadTMD     = yaroze.TMD(builtData[7*tmdWords : 8*tmdWords])
-	ricochetTMD = yaroze.TMD(builtData[8*tmdWords : 9*tmdWords])
-	healthTMD   = yaroze.TMD(builtData[9*tmdWords : 10*tmdWords])
-	bullet2TMD  = yaroze.TMD(builtData[10*tmdWords : 11*tmdWords])
-	eroofTMD    = yaroze.TMD(builtData[11*tmdWords : 12*tmdWords])
-	ewallTMD    = yaroze.TMD(builtData[12*tmdWords : 13*tmdWords])
-	efloorTMD   = yaroze.TMD(builtData[13*tmdWords : 14*tmdWords])
-	fwallTMD    = yaroze.TMD(builtData[14*tmdWords : 15*tmdWords])
+	floorTMD    = builtData[0*tmdWords : 1*tmdWords]
+	roofTMD     = builtData[1*tmdWords : 2*tmdWords]
+	wallTMD     = builtData[2*tmdWords : 3*tmdWords]
+	monster1TMD = builtData[3*tmdWords : 4*tmdWords]
+	monster2TMD = builtData[4*tmdWords : 5*tmdWords]
+	bulletTMD   = builtData[5*tmdWords : 6*tmdWords]
+	bloodTMD    = builtData[6*tmdWords : 7*tmdWords]
+	deadTMD     = builtData[7*tmdWords : 8*tmdWords]
+	ricochetTMD = builtData[8*tmdWords : 9*tmdWords]
+	healthTMD   = builtData[9*tmdWords : 10*tmdWords]
+	bullet2TMD  = builtData[10*tmdWords : 11*tmdWords]
+	eroofTMD    = builtData[11*tmdWords : 12*tmdWords]
+	ewallTMD    = builtData[12*tmdWords : 13*tmdWords]
+	efloorTMD   = builtData[13*tmdWords : 14*tmdWords]
+	fwallTMD    = builtData[14*tmdWords : 15*tmdWords]
 )
 
 // Map square flags.
@@ -296,7 +295,7 @@ func main() {
 		ot2[i].Org = &zTable2[i][0]
 	}
 
-	if missing := demo.Load(files, func(string) { message("loading") }); missing != "" {
+	if missing := demo.Load(disc.Registered(), func(string) { message("loading") }); missing != "" {
 		for yaroze.PadRead()&(yaroze.PADstart|yaroze.PADselect) != yaroze.PADstart|yaroze.PADselect {
 			message("missing data")
 		}
@@ -443,16 +442,31 @@ func message(text string) {
 }
 
 // initializeTMD ties a handle to one of a built TMD's objects.
-func initializeTMD(tmd yaroze.TMD, objNum int32, obj *yaroze.GsDOBJ2) {
-	tmd.Link(obj, objNum)
+func initializeTMD(tmd []uint32, objNum int32, obj *yaroze.GsDOBJ2) {
+	yaroze.GsLinkObject4(&tmd[3], obj, objNum)
 	obj.Coord2 = &objectCoord
+}
+
+// loadTIM puts a TIM into video memory, where its header says, with its
+// palette if it has one, waits for the transfer, and returns its
+// description.
+func loadTIM(tim []uint32) (image yaroze.GsIMAGE) {
+	yaroze.GsGetTimInfo(&tim[1], &image)
+	rect := yaroze.RECT{X: image.Px, Y: image.Py, W: int16(image.Pw), H: int16(image.Ph)}
+	yaroze.LoadImage(&rect, image.Pixel)
+	if image.Pmode>>3&1 != 0 {
+		rect = yaroze.RECT{X: image.Cx, Y: image.Cy, W: int16(image.Cw), H: int16(image.Ch)}
+		yaroze.LoadImage(&rect, image.Clut)
+	}
+	yaroze.DrawSync(0)
+	return image
 }
 
 // initializeSprite loads a TIM and sets up a sprite to show it, as the
 // demo does, quirks included: it takes the texture's u from the low five
 // bits of its x.
-func initializeSprite(tim yaroze.TIM, sprite *yaroze.GsSPRITE) {
-	image := tim.Load()
+func initializeSprite(tim []uint32, sprite *yaroze.GsSPRITE) {
+	image := loadTIM(tim)
 	pmode := image.Pmode & 3
 	sprite.Attribute |= pmode << 24
 	sprite.W = image.Pw << (2 - pmode)
@@ -466,12 +480,12 @@ func initializeSprite(tim yaroze.TIM, sprite *yaroze.GsSPRITE) {
 }
 
 func setupTexturesAndTMDs() {
-	for _, tim := range [...]yaroze.TIM{
+	for _, tim := range [...][]uint32{
 		roofTIM, wallTIM, floorTIM, man1TIM, man2TIM, deadmanTIM,
 		bulletTIM, bloodTIM, ricochetTIM, healthTIM, bullet2TIM,
 		eroofTIM, ewallTIM, efloorTIM, fwallTIM,
 	} {
-		tim.Load()
+		loadTIM(tim)
 	}
 	initializeSprite(statusTIM, &status)
 	status.X = int16(-int32(status.W) >> 1)
@@ -550,8 +564,9 @@ func setupTexturesAndTMDs() {
 // The exit's palettes: where they are in video memory, read back every
 // frame, and brightened or darkened a step to make the exit pulse.
 
-func clutRect(tim yaroze.TIM) yaroze.RECT {
-	image := tim.Image()
+func clutRect(tim []uint32) yaroze.RECT {
+	var image yaroze.GsIMAGE
+	yaroze.GsGetTimInfo(&tim[1], &image)
 	return yaroze.RECT{X: image.Cx, Y: image.Cy, W: int16(image.Cw), H: int16(image.Ch)}
 }
 

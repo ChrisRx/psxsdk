@@ -30,6 +30,13 @@ type Machine struct {
 	CPU *cpu.CPU
 	Bus *Bus
 
+	// hookTarget is the handler a call through the B-function table is
+	// about to reach, where the TTY looks at the call, and hookCall the
+	// call's registers at the jump, which must still hold there: the
+	// function number, its first three arguments and the return address.
+	hookTarget uint32
+	hookCall   [5]uint32
+
 	// TTY receives what the BIOS prints through its putchar and puts
 	// functions, which is where the kernel's boot messages and a program's
 	// printf output go.
@@ -39,22 +46,23 @@ type Machine struct {
 	// keeps once it has.
 	shown bool
 
-	ram  *ram
-	ic   *ic
-	exp2 *exp2
-	dma  *dma
-	spu  *spu
-	gpu  *gpu
-	tmr  *timers
-	cd   *cdrom
-	sio  *sio0
-	sio1 *sio1
-	mdec *mdec
+	ram     *ram
+	scratch memory
+	ic      *ic
+	exp2    *exp2
+	dma     *dma
+	spu     *spu
+	gpu     *gpu
+	tmr     *timers
+	cd      *cdrom
+	sio     *sio0
+	sio1    *sio1
+	mdec    *mdec
 
 	// spuCycles counts towards the next SPU sample.
 	spuCycles uint32
 
-	// steps counts the steps run, which is the timers' clock.
+	// steps counts the steps run.
 	steps uint64
 
 	// fail is where the devices report an error.
@@ -64,8 +72,8 @@ type Machine struct {
 	// or fails, so that the CPU hands back to run.
 	wake bool
 
-	// spin is what the machine knows of the loop it skips (see spin.go),
-	// unless noSpin.
+	// spin is what the machine keeps for skipping through a program's waits
+	// (see spin.go), unless noSpin.
 	spin   spin
 	noSpin bool
 
@@ -96,6 +104,7 @@ func New(bios []byte) (*Machine, error) {
 
 	mc2 := newMC2()
 	m.ram = &ram{memory: make(memory, RAMSize), mc2: mc2}
+	m.scratch = make(memory, 0x400)
 	m.ic = &ic{setIRQ: m.CPU.SetIRQ}
 	m.exp2 = &exp2{}
 	// The CD-ROM drive and the pad count CPU cycles towards their events,
@@ -104,8 +113,11 @@ func New(bios []byte) (*Machine, error) {
 	m.dma = newDMA(m.Bus, m.ic, &m.wake, m.fail.report)
 	m.spu = newSPU(m.ic)
 	m.gpu = newGPU(m.ic, m.fail.report)
+	m.gpu.time.clock = cycles
 	m.dma.gpu = m.gpu
-	m.tmr = &timers{gpu: m.gpu, ic: m.ic, steps: &m.steps, wake: &m.wake}
+	m.dma.holdBus = m.CPU.HoldBus
+	m.dma.holdBlocks = m.CPU.HoldBlocks
+	m.tmr = &timers{gpu: m.gpu, ic: m.ic, clock: &m.CPU.TotalCycles, wake: &m.wake}
 	m.gpu.timers = m.tmr
 	m.cd = newCDROM(m.ic, cycles, &m.wake, m.fail.report)
 	m.sio = newSIO0(m.ic, cycles, &m.wake, [2]*Pad{newDigitalPad(), nil})
@@ -125,7 +137,7 @@ func New(bios []byte) (*Machine, error) {
 		{base: 0x1f801060, size: 0x4, dev: mc2},
 		{base: 0xfffe0130, size: 0x4, dev: make(registers, 1)}, // cache control
 		{base: 0x1f801070, size: 0x8, dev: m.ic},
-		{base: 0x1f800000, size: 0x400, dev: make(memory, 0x400)}, // scratchpad
+		{base: 0x1f800000, size: 0x400, dev: m.scratch}, // scratchpad
 		{base: 0x1f801810, size: 0x8, dev: m.gpu},
 		{base: 0x1f801c00, size: 0x400, dev: m.spu},
 		{base: 0x1f801100, size: 0x30, dev: m.tmr},
@@ -451,17 +463,13 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 	// Otherwise it runs steps itself until one leaves the devices
 	// something to do, keeping the clocks below up to date as it goes.
 	k := cpu.Clock{
-		Steps: &m.steps, StepsDue: &tmr.due,
-		Due:   [3]*uint64{&cd.due, &sio.due, &sio1.due},
+		Steps: &m.steps,
+		Due:   [4]*uint64{&cd.due, &sio.due, &sio1.due, &tmr.due},
 		Video: &gpu.cycles, VideoEdge: &gpu.edge, VideoRate: gpuCyclesPerCPU,
 		Sample: &m.spuCycles, SampleCycles: spuSampleCycles,
 		Busy: &dma.active,
 		Hook: 0xb4, HookMask: 0x3fffffff, Hooked: tty,
 		Wake: &m.wake,
-		Spin: spinNone,
-	}
-	if !trace && !m.noSpin && m.spinAt() {
-		k.Spin = vsyncWaitHead
 	}
 	breaking := m.breaks.set.Len() > 0
 	if breaking {
@@ -472,18 +480,44 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 		m.breaks.resuming = false
 	}
 
+	k.Hook, _ = m.bStub()
+
 	// Logging, the CPU stops anywhere in the first 256 bytes, which takes
-	// in 0xb4 as well as the exception vector and the BIOS's tables.
+	// in the stub at 0xb0 as well as the exception vector and the BIOS's tables.
 	if logging {
 		k.Hook, k.HookMask, k.Hooked = 0, 0x3fffff00, true
+	} else if m.hookTarget != 0 {
+		k.Hook = m.hookTarget
 	}
 
 	var i uint64
 	for i < n && gpu.frames < frames {
 		// A call through the B-function table lands at 0xb0 and jumps to
-		// the handler at 0xb4, with the function number in $t1.
-		if tty && c.PC&0x3fffffff == 0xb4 {
-			m.bFunction()
+		// the handler, with the function number in $t1 and the handler's
+		// address in $t0. The call is looked at when the handler is reached
+		// rather than on the way: an interrupt returns to the instruction it
+		// landed on, or to the jump from its delay slot, which then runs
+		// again, and the call would be seen twice.
+		if tty && !logging {
+			if pc := c.PC & 0x3fffffff; pc == 0xb4 || pc == 0xb8 {
+				at, reg := m.bStub()
+				switch {
+				case pc == at && reg != 0:
+					m.hookCall = [5]uint32{c.R[9], c.R[4], c.R[5], c.R[6], c.R[31]}
+					m.hookTarget = c.R[reg] & 0x3fffffff
+					k.Hook = m.hookTarget
+				case pc == at:
+					m.bFunction()
+				case pc < at:
+					k.Hook = at
+				}
+			} else if m.hookTarget != 0 && pc == m.hookTarget {
+				if m.hookCall == [5]uint32{c.R[9], c.R[4], c.R[5], c.R[6], c.R[31]} {
+					m.bFunction()
+				}
+				m.hookTarget = 0
+				k.Hook, _ = m.bStub()
+			}
 		}
 		if logging && c.PC&0x3fffff00 == 0 {
 			m.hooked()
@@ -502,9 +536,10 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 			if err := m.writeTrace(); err != nil {
 				return i, err
 			}
-		} else if c.PC == k.Spin || m.spin.learning {
-			i += m.spinStep(&k, n-i)
 		} else {
+			if !m.noSpin {
+				i += m.skipSpin(&k, n-i)
+			}
 			i += c.Run(n-i, &k)
 		}
 
@@ -522,8 +557,8 @@ func (m *Machine) run(n, frames uint64) (uint64, error) {
 			sio1.update()
 		}
 		m.steps++
-		if m.steps >= tmr.due {
-			tmr.update(m.steps)
+		if c.TotalCycles >= tmr.due {
+			tmr.update(c.TotalCycles)
 		}
 		dma.update()
 
@@ -567,6 +602,19 @@ func (f *failure) take() error {
 	err := f.err
 	f.err = nil
 	return err
+}
+
+// bStub finds the jump in the stub at 0xb0: its address and the register it goes
+// through. The kernels jump at 0xb4 or 0xb8. A test's stand-in may not jump, which
+// is reg 0, and is looked at as it is at 0xb4.
+func (m *Machine) bStub() (at, reg uint32) {
+	for _, at := range []uint32{0xb4, 0xb8} {
+		op := m.Bus.Read32(at)
+		if reg := op >> 21 & 31; op&0xfc1fffff == 0x08 && reg != 31 {
+			return at, reg
+		}
+	}
+	return 0xb4, 0
 }
 
 // bFunction prints what a call to the BIOS's putchar or puts is printing,
@@ -631,3 +679,30 @@ func (m *Machine) writeTrace() error {
 		Writes: m.writes,
 	})
 }
+
+// OnGP0 calls f with every word written to GP0 from now on, or stops
+// calling anything when f is nil. PROTOTYPE: for comparing command streams.
+func (m *Machine) OnGP0(f func(uint32)) { m.gpu.hook = f }
+
+// OnGP1 calls f with every word written to GP1 from now on, or stops
+// calling anything when f is nil. PROTOTYPE: for comparing command streams.
+func (m *Machine) OnGP1(f func(uint32)) { m.gpu.hook1 = f }
+
+// OnBus calls f with each access to a device from now on, as Bus.hook says, or
+// stops calling anything when f is nil. PROTOTYPE: for watching a program from
+// outside.
+func (m *Machine) OnBus(f func(addr uint32, size int, v uint32, write bool)) { m.Bus.hook = f }
+
+// OnGTE calls f with each GTE instruction from now on, as CPU.GTEHook says, or
+// stops calling anything when f is nil. PROTOTYPE: for watching a program from
+// outside.
+func (m *Machine) OnGTE(f func(op uint32, cycle uint64)) { m.CPU.GTEHook = f }
+
+// OnSPU calls f with every SPU register write from now on, as the
+// register's offset from 0x1F801C00 and the halfword written (a word
+// write is two), or stops calling anything when f is nil. PROTOTYPE: for
+// comparing two runs.
+func (m *Machine) OnSPU(f func(off, v uint32)) { m.spu.hook = f }
+
+// SPURAM returns the SPU's sound memory. PROTOTYPE: for comparing runs.
+func (m *Machine) SPURAM() []byte { return m.spu.ram[:] }

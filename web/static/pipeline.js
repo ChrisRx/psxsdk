@@ -13,9 +13,18 @@
 //	eco2exe prog.elf prog.exe
 //	mkdisc -o prog.bin --volume-id prog.exe --boot MAIN.EXE --file MAIN.EXE=prog.exe --src prog
 //
+// A program links the clean library in, as yaroze builds one by default, so
+// the target is playstation-yaroze-clean and elf2exe writes it out as it is.
+// Built for the resident library (yaroze --libps resident) it is compiled for
+// the sysroot's own target, and eco2exe lays it over the image.
+//
 // It runs in a browser worker or in Node, so it takes the module loader and
 // the fetched bytes from its caller rather than fetching itself.
 import { Dir, ExitError, File, FileSystem, WASI } from "./wasi.js";
+
+// STATIC_TARGET is the target that links the library in,
+// toolchain.DefaultTarget.
+export const STATIC_TARGET = "playstation-yaroze-clean";
 
 // readTar adds the files of a tar archive (ustar or GNU, uncompressed) to
 // fs under prefix.
@@ -184,16 +193,27 @@ export class Pipeline {
 	//
 	// With hot, the program is built to take patches (see patch): its main
 	// package's functions are called through slots and memory is reserved
-	// for the patches.
-	async build(project, log, { hot = false } = {}) {
+	// for the patches. libps names the Net Yaroze library: "static", linked
+	// into the program, or "resident", the one laid under it. The cache has
+	// to hold the target's C and assembly (see targets). experiment is the
+	// compiler's -experiment flag, as "noonstore" to build without onstore
+	// (see docs/architecture/compiler.md), or empty for its defaults.
+	async build(project, log, { hot = false, libps = "static", experiment = "" } = {}) {
+		if (libps !== "static" && libps !== "resident") throw new Error(`no ${libps} library: static or resident`);
+		const linked = libps === "static";
+		const target = linked ? STATIC_TARGET : this.env.target;
+		if (!this.targets().includes(target)) throw new Error(`the compiler's cache cannot build for ${target}`);
 		const { fs, env } = this.workspace(project);
 		if (!(await this.generate(project, fs, log))) return { ok: false };
-		const tinygo = ["tinygo", "-target=" + this.env.target];
+		const tinygo = ["tinygo", "-target=" + target];
 		if (hot) tinygo.push("-hot");
+		if (experiment) tinygo.push("-experiment=" + experiment);
 		const steps = [
 			["tinygo", [...tinygo, "-o", "/work/prog.elf", "/work/prog"]],
 			["mips1fix", ["mips1fix", "-q", "/work/prog.elf"]],
-			["eco2exe", ["eco2exe", "/work/prog.elf", "/work/prog.exe"]],
+			linked
+				? ["elf2exe", ["elf2exe", "--stack-addr", "0x801fff00", "/work/prog.elf", "/work/prog.exe"]]
+				: ["eco2exe", ["eco2exe", "/work/prog.elf", "/work/prog.exe"]],
 			["mkdisc", ["mkdisc", "-o", "/work/prog.bin", "--volume-id", "prog.exe", "--boot", "MAIN.EXE", "--file", "MAIN.EXE=/work/prog.exe", "--src", "/work/prog"]],
 		];
 		if (!(await this.steps(steps, env, fs, log))) return { ok: false };
@@ -208,21 +228,30 @@ export class Pipeline {
 	}
 
 	// patch compiles a project as a hot reload patch for the program whose
-	// ELF is base, built with hot and running, linked at the address at
-	// inside the program's region for patches, and returns {ok, elf}, the
-	// patch's ELF for the emulator to load. The compiler says on the log,
-	// in a line starting "hot:", when the program has to be built and
-	// started again instead: a variable that changed size, say.
-	async patch(project, base, at, log) {
+	// ELF is base, built with hot and running, against the library libps
+	// and with the experiments of experiment as the program was, linked at
+	// the address at inside the program's region for patches, and returns
+	// {ok, elf}, the patch's ELF for the
+	// emulator to load. The compiler says on the log, in a line starting
+	// "hot:", when the program has to be built and started again instead:
+	// a variable that changed size, say.
+	async patch(project, base, at, log, { libps = "static", experiment = "" } = {}) {
 		const { fs, env } = this.workspace(project);
 		fs.put("/work/base.elf", base);
 		if (!(await this.generate(project, fs, log))) return { ok: false };
+		const target = libps === "static" ? STATIC_TARGET : this.env.target;
 		const steps = [
-			["tinygo", ["tinygo", "-target=" + this.env.target, "-hot-base=/work/base.elf", "-hot-at=0x" + at.toString(16), "-o", "/work/patch.elf", "/work/prog"]],
+			["tinygo", ["tinygo", "-target=" + target, ...(experiment ? ["-experiment=" + experiment] : []), "-hot-base=/work/base.elf", "-hot-at=0x" + at.toString(16), "-o", "/work/patch.elf", "/work/prog"]],
 			["mips1fix", ["mips1fix", "-q", "/work/patch.elf"]],
 		];
 		if (!(await this.steps(steps, env, fs, log))) return { ok: false };
 		return { ok: true, elf: fs.get("/work/patch.elf") };
+	}
+
+	// targets are the TinyGo targets the compiler's cache holds the C and
+	// assembly of, which are the ones it can build for.
+	targets() {
+		return this.env.targets ?? [this.env.target];
 	}
 
 	// workspace stages a project with the sysroot, the compiler's cache and

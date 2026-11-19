@@ -1,5 +1,4 @@
-// A box to move around the screen in front of a turning cube, to music: the
-// program to start from, which the tutorial writes.
+// A box to move around the screen in front of a turning cube, to music.
 //
 // It is the smallest program that has the parts most programs need: the
 // frame loop, the controller, files read off the disc, a model drawn in
@@ -15,11 +14,13 @@ package main
 
 // The files under assets/ are declared, ready to load, in
 // zz_generated.disc.go, by discgen: cubeTIM, cubeTMD, sample1SEQ, std0VB and
-// std0VH, and files, every one of them.
+// std0VH.
 //go:generate go run go.chrisrx.dev/psx/tools/discgen assets
 
 import (
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -27,22 +28,28 @@ import (
 const speed = 2
 
 var (
-	// The screen, 320 by 240 at the console's own frame rate, with ordering
-	// tables of 1<<4 depths, enough for the cube's faces to be sorted by
-	// distance.
+	// The screen, 320 by 240 at the console's own frame rate, with its
+	// origin in the middle for the cube, and frames of 1<<4 depths,
+	// enough for the cube's faces to be sorted by distance.
 	screen = yaroze.Screen{
-		Background: yaroze.CVECTOR{R: 40, G: 60, B: 100},
+		Background: yaroze.Color{R: 40, G: 60, B: 100},
 		Depth:      4,
+		Origin:     yaroze.ScreenOriginMiddle,
 	}
-	pad    yaroze.Pad
+	text   yaroze.Text
+	pad    input.Controller
 	loader disc.Loader
 
-	box  = yaroze.GsBOXF{W: 40, H: 40, R: 255, G: 160, B: 32}
-	bar  = yaroze.GsBOXF{H: 4, R: 255, G: 255, B: 255}
+	box = yaroze.Box{
+		W:     40,
+		H:     40,
+		Color: yaroze.Color{R: 255, G: 160, B: 32},
+	}
+	bar = yaroze.Box{
+		H:     4,
+		Color: yaroze.Color{R: 255, G: 255, B: 255},
+	}
 	cube yaroze.Object
-
-	view  yaroze.GsRVIEW2
-	light yaroze.GsF_LIGHT
 
 	bank   yaroze.Bank
 	song   yaroze.Sequence
@@ -51,28 +58,27 @@ var (
 
 func main() {
 	screen.Open()
-	// The 3D library puts the origin in the middle of the screen, for 2D
-	// as well, so the text and the box are placed from the corner Bounds
-	// gives.
-	yaroze.GsInit3D()
+	// The origin is in the middle of the screen, so the text and the box
+	// are placed from the corner Bounds gives.
 	b := screen.Bounds()
-	screen.Font(int32(b.X)+16, int32(b.Y)+16, 256, 64, 512)
-	box.X, box.Y = b.X+24, b.Y+b.H-64
-	bar.X, bar.Y = b.X+b.W/2-100, b.Y+b.H/2
+	text = screen.Font(b.X+16, b.Y+16, 256, 64, 512)
+	box.MoveTo(b.X+24, b.Y+b.H-64)
+	bar.MoveTo(b.X+b.W/2-100, b.Y+b.H/2)
 
-	loader.Start(300, files...)
-	for ot := range screen.Frames() {
+	loader.Start(300)
+	for frame := range screen.Frames() {
 		pad.Update()
 		dx, dy := pad.Dir()
-		box.X, box.Y = b.Clamp(box.X+int16(dx*speed), box.Y+int16(dy*speed), box.W, box.H)
-		if pad.Pressed(yaroze.PADstart) {
+		r := box.Rect()
+		box.MoveTo(b.Clamp(r.X+dx*speed, r.Y+dy*speed, r.W, r.H))
+		if pad.Pressed(input.Start) {
 			pauseMusic()
 		}
 
-		// The box is sorted at depth 0, in front of everything, so it
+		// The box is drawn at depth 0, in front of everything, so it
 		// passes over the cube.
-		box.Sort(ot, 0)
-		yaroze.Print("the directions move the box\nstart pauses the music\n")
+		box.Draw(frame, 0)
+		text.Print("the directions move the box\nstart pauses the music\n")
 
 		switch {
 		case !loader.Done():
@@ -80,18 +86,18 @@ func main() {
 				setupCube()
 				startMusic()
 			}
-			bar.W = uint16(200 * loader.Loaded() / len(files))
-			bar.Sort(ot, 0)
+			bar.W = uint16(200 * loader.Loaded() / loader.Total())
+			bar.Draw(frame, 0)
 		case loader.Failed() != nil:
-			yaroze.Print("could not read ")
-			yaroze.Print(loader.Failed().Name)
+			text.Print("could not read ").Print(loader.Failed().Name)
 		default:
-			// The cube turns with the frames, so that where it is is the
-			// same at the same frame however long the disc took.
-			frame := screen.Frame()
-			cube.Rotation.Vx = int16(frame * 8)
-			cube.Rotation.Vy = int16(frame * 20)
-			cube.Draw(ot)
+			// The cube turns with the frames, so that where it is
+			// is the same at the same frame however long the disc
+			// took.
+			n := frame.Number()
+			cube.Rotation.X = n * 8
+			cube.Rotation.Y = n * 20
+			cube.Draw(frame)
 		}
 	}
 }
@@ -99,34 +105,37 @@ func main() {
 // setupCube puts the cube's texture into video memory, links the cube to
 // the model, and sets up the camera and the light it is seen by.
 func setupCube() {
-	yaroze.TIM(cubeTIM.Data()).Load()
-	model := yaroze.TMD(cubeTMD.Data())
-	model.Map()
-	cube.Init(yaroze.WORLD)
+	yaroze.LoadTIM(cubeTIM.Data())
+	model := yaroze.LoadTMD(cubeTMD.Data())
+	cube.Init(nil)
 	cube.Link(model, 0)
 
 	// The camera looks at the cube from in front, far enough back that it
 	// is a small thing in the middle of the screen.
-	view = yaroze.GsRVIEW2{Vpz: -1000}
-	yaroze.GsSetProjection(320)
-	view.Set()
+	camera := yaroze.Camera{
+		Eye:      geom.Vector{Z: -1000},
+		Distance: 320,
+	}
+	camera.Set()
 
 	// One light from over the camera's shoulder, and some ambient light,
 	// so that the faces turned away from it are not black.
-	light = yaroze.GsF_LIGHT{Vx: 1, Vy: 1, Vz: 1, R: 0xc0, G: 0xc0, B: 0xc0}
-	light.Set(0)
-	yaroze.GsSetAmbient(yaroze.ONE/4, yaroze.ONE/4, yaroze.ONE/4)
-	yaroze.GsSetLightMode(0)
+	yaroze.SetLight(0, yaroze.Light{
+		Direction: geom.Vector{X: 1, Y: 1, Z: 1},
+		Color:     yaroze.Color{R: 0xc0, G: 0xc0, B: 0xc0},
+	})
+	yaroze.SetAmbient(geom.One/4, geom.One/4, geom.One/4)
 }
 
-// startMusic sends the sound bank to the SPU and plays the sequence on it
-// for ever. Sound that does not load leaves the program silent rather than
-// stopped.
+// startMusic sends the sound bank to the sound processor and plays the
+// sequence on it for ever. Sound that does not load leaves the program
+// silent rather than stopped.
 func startMusic() {
+	yaroze.SetVolume(127, 127)
 	bank, _ = yaroze.OpenBank(std0VH.Data(), std0VB.Data())
 	song, _ = bank.Sequence(sample1SEQ.Data())
 	song.SetVolume(127, 127)
-	song.Play(yaroze.SSPLAY_INFINITY)
+	song.Loop()
 }
 
 // pauseMusic pauses the music, or starts it again where it was paused.

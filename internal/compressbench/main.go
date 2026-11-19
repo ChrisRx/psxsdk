@@ -24,7 +24,7 @@ import (
 const rounds = 3
 
 var (
-	screen = yaroze.Screen{Background: yaroze.CVECTOR{R: 20, G: 20, B: 40}, Depth: 1}
+	screen = yaroze.Screen{Background: yaroze.Color{R: 20, G: 20, B: 40}, Depth: 1}
 	loader disc.Loader
 
 	// The test reads these: the round finished so far, the bytes the last
@@ -42,7 +42,7 @@ var packed = []*disc.File{&castleDFL, &castleLZ4, &dogDFL, &dogLZ4, &md0DFL, &md
 
 func main() {
 	screen.Open()
-	loader.Start(300, files...)
+	loader.Start(300)
 	done := false
 	for range screen.Frames() {
 		if done {

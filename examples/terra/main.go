@@ -59,6 +59,8 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/gpu"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -97,7 +99,7 @@ var (
 	// The screen as the original set it up: 320 by 240 at thirty frames a
 	// second, the two buffers side by side, an ordering table of 4096
 	// depths for the world and one of four for what goes over it, and
-	// 104000 bytes of packets a frame.
+	// 104000 bytes of packets a frame, dithered.
 	screen = yaroze.Screen{
 		Width:        320,
 		Height:       240,
@@ -105,9 +107,9 @@ var (
 		OverlayDepth: 2,
 		Packets:      0x19640,
 		Interval:     2,
-		SideBySide:   true,
+		Buffers:      yaroze.ScreenBuffersSideBySide,
 	}
-	pad yaroze.Pad
+	pad input.Controller
 
 	arc1, arc2, arc3 *archive
 
@@ -169,12 +171,14 @@ func main() {
 	flags[flagStart] = 1
 	soundInit()
 
-	for ot := range screen.Frames() {
+	for f := range screen.Frames() {
+		frame, over = f, f.Overlay()
+		ot := f.OT()
 		padUpdate()
 		pad.Update()
 		gameFrame(ot)
 		soundFrame()
-		probeFrame(ot)
+		probeFrame()
 		if padHeldRaw()&0x900 == 0x900 {
 			break
 		}
@@ -192,10 +196,10 @@ func gameFrame(ot *yaroze.GsOT) {
 	if introOn {
 		introFrame(ot)
 	} else {
-		drawSky(ot)
+		drawSky()
 		cameraFrame()
 		if probeOn && areaStyle != areaIndoor {
-			drawSun(ot, screen.Overlay())
+			drawSun()
 		}
 		drawWorld(ot)
 		animateTextures()
@@ -236,19 +240,23 @@ var skyColors = [3][2][3]uint8{
 }
 
 // drawSky sorts the gradient behind everything.
-func drawSky(ot *yaroze.GsOT) {
-	top, bottom := &skyColors[areaStyle][0], &skyColors[areaStyle][1]
-	p := yaroze.AllocPacket(9)
-	p[0] = 8 << 24
-	p[1] = 0x38<<24 | uint32(top[2])<<16 | uint32(top[1])<<8 | uint32(top[0])
-	p[2] = xy(-160, -120)
-	p[3] = uint32(top[2])<<16 | uint32(top[1])<<8 | uint32(top[0])
-	p[4] = xy(160, -120)
-	p[5] = uint32(bottom[2])<<16 | uint32(bottom[1])<<8 | uint32(bottom[0])
-	p[6] = xy(-160, 120)
-	p[7] = uint32(bottom[2])<<16 | uint32(bottom[1])<<8 | uint32(bottom[0])
-	p[8] = xy(160, 120)
-	ot.Link(4095, p)
+func drawSky() {
+	sky := &skyColors[areaStyle]
+	top := gpu.Color{
+		R: sky[0][0],
+		G: sky[0][1],
+		B: sky[0][2],
+	}
+	bottom := gpu.Color{
+		R: sky[1][0],
+		G: sky[1][1],
+		B: sky[1][2],
+	}
+	p := frame.Packet[gpu.ShadedQuad](4095)
+	p.Color0, p.XY0 = top, gpu.At(-160, -120)
+	p.Color1, p.XY1 = top, gpu.At(160, -120)
+	p.Color2, p.XY2 = bottom, gpu.At(-160, 120)
+	p.Color3, p.XY3 = bottom, gpu.At(160, 120)
 }
 
 // clearVRAM blacks out all of video memory, as the original did at the
@@ -310,13 +318,12 @@ func introFrame(ot *yaroze.GsOT) {
 	sceneT++
 	introShip.animate(true)
 	introShip.drawActor(ot, 0)
-	over := screen.Overlay()
 	if t-0x100 >= 0 && t-0x100 < 0x20 {
 		c := uint8((t - 0x100) * 8)
-		fillRect(over.Entry(0), -160, -120, 320, 240, c, c, c, true, 1)
+		fillRect(over, 0, -160, -120, 320, 240, c, c, c, true, 1)
 	}
 	if t == 0x11f {
-		fillRect(over.Entry(0), -160, -120, 320, 240, 255, 255, 255, true, 1)
+		fillRect(over, 0, -160, -120, 320, 240, 255, 255, 255, true, 1)
 		freeActor(introShip)
 		introShip = nil
 		introOn = false
@@ -327,26 +334,38 @@ func introFrame(ot *yaroze.GsOT) {
 	}
 }
 
-// xy packs a screen point as the GPU takes it.
-func xy(x, y int16) uint32 { return uint32(uint16(x)) | uint32(uint16(y))<<16 }
+// The frame being drawn and its overlay, which the game links the
+// packets it builds itself into. At one depth the packet linked last is
+// drawn first, so a drawing mode is linked after the packets it is for.
+var frame, over *yaroze.Frame
 
-// fillRect links a filled rectangle at tag: opaque, or semi-transparent at
-// the rate abr, 0 to 3, with a texture page packet setting the rate.
-func fillRect(tag *uint32, x, y, w, h int16, r, g, b uint8, semi bool, abr uint32) {
-	p := yaroze.AllocPacket(4)
-	p[0] = 3 << 24
-	code := uint32(0x60)
-	if semi {
-		code = 0x62
+// modeDither is a drawing mode's command with dithering on, as the
+// original's all had it, for the texture page and the blend to go under.
+const modeDither = 0xe1000200
+
+// gray returns the color with every component c.
+func gray(c uint8) gpu.Color {
+	return gpu.Color{
+		R: c,
+		G: c,
+		B: c,
 	}
-	p[1] = code<<24 | uint32(b)<<16 | uint32(g)<<8 | uint32(r)
-	p[2] = xy(x, y)
-	p[3] = uint32(uint16(w)) | uint32(uint16(h))<<16
-	yaroze.LinkTag(tag, p)
+}
+
+// fillRect links a filled rectangle into f at depth: opaque, or
+// semi-transparent at the rate abr, 0 to 3, with a drawing mode setting
+// the rate.
+func fillRect(f *yaroze.Frame, depth int, x, y, w, h int16, r, g, b uint8, semi bool, abr uint32) {
+	p := f.Packet[gpu.Tile](depth)
+	p.Color = gpu.Color{
+		R: r,
+		G: g,
+		B: b,
+	}
+	p.XY = gpu.XY{X: x, Y: y}
+	p.W, p.H = uint16(w), uint16(h)
 	if semi {
-		q := yaroze.AllocPacket(2)
-		q[0] = 1 << 24
-		q[1] = 0xe1000200 | abr&3<<5
-		yaroze.LinkTag(tag, q)
+		p.Code |= gpu.CodeTranslucent
+		f.Packet[gpu.DrawMode](depth).Page = modeDither | abr&3<<5
 	}
 }

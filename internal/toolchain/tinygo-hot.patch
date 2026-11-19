@@ -39,7 +39,7 @@
  // Verify performs a validation on the given options, raising an error if options are not valid.
 --- a/builder/build.go
 +++ b/builder/build.go
-@@ -772,6 +772,40 @@
+@@ -772,6 +772,41 @@
  	}
  	result.Binary = result.Executable // final file
  	ldflags := append(config.LDFlags(), "-o", result.Executable)
@@ -52,7 +52,8 @@
 +		// scripts have been evaluated.
 +		var hotScript string
 +		if config.Options.Hot {
-+			hotScript += "__hot_size = 0x40000;\n"
++			hotScript += "__hot_size = 0x40000;\n" + transform.HotExperiments(config)
++			ldflags = append(ldflags, "-u", "__hot_keep")
 +		}
 +		if config.Options.HotBase != "" {
 +			if config.Options.HotAt == "" {

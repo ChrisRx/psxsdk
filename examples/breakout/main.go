@@ -99,10 +99,9 @@ var (
 	seqFile   = disc.Register("ASSETS/SOUND/GOGO.SEQ", "assets/GOGO.SEQ").Into(seqData[:])
 	batFile   = disc.Register("ASSETS/BREAK3.TIM", "assets/BREAK3.TIM").Into(batData[:])
 	brickFile = disc.Register("ASSETS/ODEN3.TIM", "assets/ODEN3.TIM").Into(brickData[:])
-	files     = []*disc.File{&vh, &vb, &seqFile, &batFile, &brickFile}
 
-	batTIM   = yaroze.TIM(batData[:])
-	brickTIM = yaroze.TIM(brickData[:])
+	batTIM   = batData[:]
+	brickTIM = brickData[:]
 )
 
 // A movement is where something is, how big it is and how it moves, in
@@ -376,7 +375,7 @@ func initializeAll() bool {
 	yaroze.FntLoad(960, 256)
 	yaroze.FntOpen(16, 16, 256, 200, 0, 512)
 
-	if missing := demo.Load(files, nil); missing != "" {
+	if missing := demo.Load(disc.Registered(), nil); missing != "" {
 		fail("could not read ", missing)
 		return false
 	}
@@ -510,7 +509,7 @@ func initializeTexturesAndSprites() {
 	var image1, image2 yaroze.GsIMAGE
 
 	// The bat.
-	image1 = batTIM.Image()
+	yaroze.GsGetTimInfo(&batTIM[1], &image1)
 	rect := yaroze.RECT{X: 320, Y: 0, W: int16(image1.Pw), H: int16(image1.Ph)}
 	yaroze.LoadImage(&rect, image1.Pixel)
 	yaroze.DrawSync(0)
@@ -526,7 +525,7 @@ func initializeTexturesAndSprites() {
 	playersSprite.Attribute |= eightBitTexture | semiTransparent1 | semiTransparent2
 
 	// The bricks.
-	image2 = brickTIM.Image()
+	yaroze.GsGetTimInfo(&brickTIM[1], &image2)
 	rect = yaroze.RECT{X: 640, Y: 0, W: int16(image2.Pw), H: int16(image2.Ph)}
 	yaroze.LoadImage(&rect, image2.Pixel)
 	yaroze.DrawSync(0)
@@ -882,12 +881,13 @@ func findWhereRectanglesTouch(first, second *yaroze.RECT) int32 {
 // remembering whether both worked so that nothing is played or closed
 // otherwise.
 func initSound() {
-	var ok bool
-	if bank, ok = yaroze.OpenBank(vh.Data(), vb.Data()); !ok {
+	var err error
+	if bank, err = yaroze.OpenBank(vh.Data(), vb.Data()); err != nil {
 		soundSuccess = false
 		return
 	}
-	song, soundSuccess = bank.Sequence(seqData[:])
+	song, err = bank.Sequence(seqData[:])
+	soundSuccess = err == nil
 }
 
 func playSound() {

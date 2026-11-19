@@ -18,6 +18,7 @@ package transform
 import (
 	"fmt"
 
+	"github.com/tinygo-org/tinygo/compileopts"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -27,7 +28,7 @@ var blocking = []string{"VSync", "DrawSync", "CdSync", "CdReadSync"}
 
 // CheckCallbacks returns an error at each allocation, and each wait, in a
 // function the library calls from an interrupt.
-func CheckCallbacks(mod llvm.Module) []error {
+func CheckCallbacks(mod llvm.Module, config *compileopts.Config) []error {
 	install := mod.NamedFunction("VSyncCallback")
 	if install.IsNil() {
 		return nil
@@ -78,7 +79,7 @@ func CheckCallbacks(mod llvm.Module) []error {
 		}
 	}
 	for fn := range via {
-		if isStandard(fn.Name()) {
+		if isStandard(config, fn.Name()) {
 			continue // reported where the program's code calls it
 		}
 		for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
@@ -90,7 +91,7 @@ func CheckCallbacks(mod llvm.Module) []error {
 				switch {
 				case callee == alloc:
 					report(call, fmt.Sprintf("this allocates in %s, which the vertical blank interrupt runs: the allocator is not to be entered from an interrupt, so allocate before installing it", funcName(fn)))
-				case allocates[callee] && isStandard(callee.Name()):
+				case allocates[callee] && isStandard(config, callee.Name()):
 					report(call, fmt.Sprintf("%s allocates in %s, which the vertical blank interrupt runs: the allocator is not to be entered from an interrupt, so allocate before installing it", allocName(callee.Name()), funcName(fn)))
 				case callee.IsDeclaration() && waits(call):
 					report(call, fmt.Sprintf("%s waits, in %s, which the vertical blank interrupt runs with interrupts off, so what it waits for never comes: wait in the frame loop instead", callee.Name(), funcName(fn)))

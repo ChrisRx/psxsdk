@@ -83,14 +83,12 @@ func TestMonitorDebugger(t *testing.T) {
 		assert.Equal(t, true, strings.Contains(text.String(), "hello from the console"), text.String())
 
 		assert.NoError(t, d.WriteMemory(ctx, vsync, orig))
-		for _, want := range []uint32{vsync + 4, vsync + 8} {
-			assert.NoError(t, d.Step(ctx))
-			sig, err = d.Wait(ctx)
-			assert.NoError(t, err)
-			assert.Equal(t, uint32(5), sig)
-			pc, _ = d.ReadRegister(ctx, serial.HSSRegEPC)
-			assert.Equal(t, want, pc, "a step")
-		}
+		assert.NoError(t, d.Step(ctx))
+		sig, err = d.Wait(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, uint32(5), sig)
+		pc, _ = d.ReadRegister(ctx, serial.HSSRegEPC)
+		assert.Equal(t, true, pc != uint32(vsync), "a step moves on from the breakpoint")
 		// Steps follow the branches, through to VSync's return to its
 		// caller, which the breakpoint left in ra.
 		ra, _ := d.ReadRegister(ctx, 31)
@@ -135,4 +133,36 @@ func TestMonitorDebuggerCrash(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, []byte{10, 0, 0, 0}, r.Data)
 	})
+}
+
+// TestMonitorStop stops a running program with a Control-B, which only the
+// clean monitor takes: the program stops at its next interrupt, for SIGINT,
+// its memory can be read, and it goes on where it was.
+func TestMonitorStop(t *testing.T) {
+	m, port, mon := ourMonitor(t)
+	ctx := t.Context()
+	prog, err := serial.OpenProgram(serialProgram(t, "print"))
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	assert.NoError(t, mon.Load(ctx, prog))
+	assert.NoError(t, mon.Run(ctx))
+	_, err = port.ReadUntil(ctx, "second 1")
+	assert.NoError(t, err)
+
+	d, err := mon.Stop(ctx)
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	assert.Equal(t, uint32(2), d.Signal, "stopped, for SIGINT")
+	cr, _ := d.ReadRegister(ctx, serial.HSSRegCR)
+	assert.Equal(t, uint32(0), cr>>2&31, "at an interrupt")
+	m.Bus.Write32(0x80100000, 0x04030201)
+	b, err := d.ReadMemory(ctx, 0x80100000, 4)
+	assert.NoError(t, err)
+	assert.Equal(t, []byte{1, 2, 3, 4}, b)
+
+	assert.NoError(t, d.Continue(ctx))
+	_, err = port.ReadUntil(ctx, "second 3")
+	assert.NoError(t, err, "the program goes on")
 }

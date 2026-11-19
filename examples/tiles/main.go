@@ -31,6 +31,7 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -43,7 +44,7 @@ const (
 
 var (
 	screen = yaroze.Screen{Depth: 1}
-	pad    yaroze.Pad
+	pad    input.Controller
 
 	bg    yaroze.GsBG
 	tiles yaroze.GsMAP
@@ -101,19 +102,18 @@ func main() {
 	screen.Font(8, 8, 304, 40, 200)
 	text.Init(textBuf[:])
 
-	if f := disc.LoadAll(300, files...); f != nil {
+	if f := disc.LoadAll(300); f != nil {
 		for range screen.Frames() {
 			yaroze.Print("could not read ")
 			yaroze.Print(f.Name)
 		}
 	}
-	im := yaroze.TIM(bgTIM.Data()).Load()
+	tex := yaroze.LoadTIM(bgTIM.Data()).Texture()
 
 	// Sixteen cells, eight across and two down, from the image's corner.
-	tpage := yaroze.GetTPage(1, 0, int32(im.Px), int32(im.Py))
-	clut := yaroze.GetClut(int32(im.Cx), int32(im.Cy))
+	clut := yaroze.GetClut(int32(tex.CX), int32(tex.CY))
 	for i := range cells {
-		cells[i] = yaroze.GsCELL{U: uint8(i % 8 * tileSize), V: uint8(i / 8 * tileSize), Cba: clut, Tpage: tpage}
+		cells[i] = yaroze.GsCELL{U: uint8(i % 8 * tileSize), V: uint8(i / 8 * tileSize), Cba: clut, Tpage: tex.Page}
 	}
 	tiles = yaroze.GsMAP{
 		Cellw: tileSize, Cellh: tileSize,
@@ -123,7 +123,7 @@ func main() {
 	}
 	// The window is the whole screen, the cells 8-bit and drawn as they
 	// are.
-	b := screen.Bounds()
+	b := yaroze.ToRECT(screen.Bounds())
 	bg = yaroze.GsBG{
 		Attribute: 1 << 24,
 		X:         b.X, Y: b.Y, W: b.W, H: b.H,
@@ -133,7 +133,8 @@ func main() {
 	}
 	yaroze.GsInitFixBg16(&bg, &work[0])
 
-	for ot := range screen.Frames() {
+	for frame := range screen.Frames() {
+		ot := frame.OT()
 		pad.Update()
 		dx, dy := pad.Dir()
 		bg.Scrollx = max(0, min(bg.Scrollx+int16(dx*speed), mapW*tileSize-bg.W))

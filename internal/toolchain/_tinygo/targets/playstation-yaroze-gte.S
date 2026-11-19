@@ -47,3 +47,22 @@ ReadFlag:
 	.word 0x4842F800                      # cfc2 $v0, $31
 	jr $ra
 	nop
+
+# FntPrint with its optional stream number first, which Go can't declare beside
+# the form without it, for one symbol has one signature there.
+	.section .text.libps_FntPrintStream,"ax",@progbits
+	.globl libps_FntPrintStream
+	.ent libps_FntPrintStream
+libps_FntPrintStream:
+#ifdef LIBPS_CLEAN
+	# Linked in, the C form is an entry of its own that takes its arguments from
+	# the home area, as the image's table of entries leads to it.
+	sw $a0, 0($sp)
+	sw $a1, 4($sp)
+	j libps_va_FntPrint
+	move $a0, $sp
+#else
+	j FntPrint
+	nop
+#endif
+	.end libps_FntPrintStream

@@ -19,7 +19,7 @@ mkpsxiso
 
   Commits before the one that added this file carried the translations
   without their notices, under internal/mkpsxiso, tools/mkpsxiso and
-  tools/dumpsxiso, in a repository labelled MIT alone; that was a
+  tools/dumpsxiso, in a repository labeled MIT alone; that was a
   mistake, and those files were GPL-2.0 then as now.
 
 A Dog Tale

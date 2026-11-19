@@ -78,6 +78,19 @@ type sysrootEnv struct {
 	// having no clang, can build at. A sysroot written before they were
 	// recorded leaves it empty.
 	Opts []string `json:"opts"`
+	// Targets are the targets the cache holds C and assembly for: the
+	// sysroot's own and, when mkcache.sh built programs for it, the Go
+	// library's. A sysroot written before they were recorded leaves it
+	// empty, which is taken as the sysroot's own target alone.
+	Targets []string `json:"targets"`
+}
+
+// targets is what the cache can build for: see sysrootEnv.Targets.
+func (w *Wasm) targets() []string {
+	if len(w.env.Targets) == 0 {
+		return []string{w.env.Target}
+	}
+	return w.env.Targets
 }
 
 // Where the compiler sees its own directories. The sysroot has to be at
@@ -150,8 +163,8 @@ func New(runtime string) (*Wasm, error) {
 	if err := json.Unmarshal(data, &w.env); err != nil {
 		return nil, fmt.Errorf("%s: %w", filepath.Join(w.sysroot, "env.json"), err)
 	}
-	if w.env.Target != Target {
-		return nil, fmt.Errorf("the compiler's sysroot is for %s, not %s", w.env.Target, Target)
+	if w.env.Target != ResidentTarget {
+		return nil, fmt.Errorf("the compiler's sysroot is for %s, not %s", w.env.Target, ResidentTarget)
 	}
 	markUsed(w.dir)
 	trimCache(cache, w.dir, time.Now())
@@ -244,7 +257,13 @@ func (w *Wasm) Compile(ctx context.Context, b *Build) error {
 	}
 	w.builds++
 	out := fmt.Sprintf("%s/prog%d.elf", guestTmp, w.builds)
-	target := Target
+	target := b.TargetName
+	if target == "" {
+		target = DefaultTarget
+	}
+	if !slices.Contains(w.targets(), target) {
+		return fmt.Errorf("the compiler's cache holds the C and assembly of %s only, so it cannot build for %s", strings.Join(w.targets(), " and "), target)
+	}
 	if b.Target != "" {
 		abs, err := filepath.Abs(b.Target)
 		if err != nil {
@@ -257,6 +276,9 @@ func (w *Wasm) Compile(ctx context.Context, b *Build) error {
 		args = append(args, "-tags="+strings.Join(b.Tags, " "))
 	}
 	args = append(args, b.hotArgs()...)
+	if b.Experiment != "" {
+		args = append(args, "-experiment="+b.Experiment)
+	}
 	args = append(args, filepath.ToSlash(pkg))
 
 	start := time.Now()

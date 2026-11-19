@@ -32,8 +32,9 @@ type quad [4][2]uint16
 // texture works out a TIM's CBA and TSB, and moves the coordinates in q
 // from the TIM's own to its texture page's. trans, if positive, is the
 // semi-transparency mode.
-func texture(tim yaroze.TIM, q *quad, trans int8) (cba, tsb uint16) {
-	image := tim.Image()
+func texture(tim []uint32, q *quad, trans int8) (cba, tsb uint16) {
+	var image yaroze.GsIMAGE
+	yaroze.GsGetTimInfo(&tim[1], &image)
 
 	pmode := uint16(image.Pmode & 3)
 	cba = uint16(image.Cy)<<6 + uint16(image.Cx)>>4
@@ -90,7 +91,7 @@ func g4t(cba, tsb uint16, uv [4][2]uint8, v [4]uint16) demo.TMD_G_4T {
 // makeSplitTMD_G_4T builds a TMD in tmd of one quad with corners v and
 // texture coordinates q, divided into four quads, which the demo does
 // because it clips less near the eye than the library's own subdivision.
-func makeSplitTMD_G_4T(tmd yaroze.TMD, tim yaroze.TIM, q quad, norm demo.TMD_NORM, v [4]demo.TMD_VERT, trans int8) {
+func makeSplitTMD_G_4T(tmd []uint32, tim []uint32, q quad, norm demo.TMD_NORM, v [4]demo.TMD_VERT, trans int8) {
 	addr := uintptr(unsafe.Pointer(&tmd[0]))
 	cba, tsb := texture(tim, &q, trans)
 	u := func(i int) uint8 { return uint8(q[i][0]) }
@@ -136,7 +137,7 @@ func makeSplitTMD_G_4T(tmd yaroze.TMD, tim yaroze.TIM, q quad, norm demo.TMD_NOR
 }
 
 // makeTMD_G_4T builds a TMD in tmd of one quad, undivided.
-func makeTMD_G_4T(tmd yaroze.TMD, tim yaroze.TIM, q quad, norm demo.TMD_NORM, v [4]demo.TMD_VERT, trans int8) {
+func makeTMD_G_4T(tmd []uint32, tim []uint32, q quad, norm demo.TMD_NORM, v [4]demo.TMD_VERT, trans int8) {
 	addr := uintptr(unsafe.Pointer(&tmd[0]))
 	cba, tsb := texture(tim, &q, trans)
 

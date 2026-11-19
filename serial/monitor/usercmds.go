@@ -217,7 +217,7 @@ func changeBaud(b uint32) {
 		return
 	}
 	// The file is kept whole, with only the speed changed in it.
-	if yaroze.CardRead(0, cipFile, cipFull[:]) < 0 {
+	if _, err := yaroze.CardRead(0, cipFile, cipFull[:]); err != nil {
 		cipFull = [len(cipFull)]byte{}
 	}
 	cipFull[cipBaudAt], cipFull[cipBaudAt+1], cipFull[cipBaudAt+2], cipFull[cipBaudAt+3] = byte(b), byte(b>>8), byte(b>>16), byte(b>>24)

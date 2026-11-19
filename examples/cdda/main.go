@@ -32,6 +32,7 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -45,8 +46,11 @@ var (
 var trackNames = [3]string{"RISING", "FALLING", "BEAT"}
 
 var (
-	screen = yaroze.Screen{Background: yaroze.CVECTOR{R: 10, G: 40, B: 40}, Depth: 1}
-	pad    yaroze.Pad
+	screen = yaroze.Screen{
+		Background: yaroze.Color{R: 10, G: 40, B: 40},
+		Depth:      1,
+	}
+	pad input.Controller
 
 	// tracks is the list CdPlay plays from, the tracks' numbers ending
 	// with a 0, as it takes them.
@@ -67,7 +71,12 @@ func main() {
 	screen.Open()
 	screen.Font(16, 16, 288, 200, 512)
 	text.Init(textBuf[:])
-	tracks = [4]int32{track1.TrackNumber(), track2.TrackNumber(), track3.TrackNumber(), 0}
+	tracks = [4]int32{
+		int32(track1.TrackNumber()),
+		int32(track2.TrackNumber()),
+		int32(track3.TrackNumber()),
+		0,
+	}
 
 	// The disc's audio is mixed into the SPU's output at full volume.
 	yaroze.SsSetMVol(127, 127)
@@ -78,7 +87,8 @@ func main() {
 		bars[i] = yaroze.GsBOXF{X: 40 + int16(i)*90, Y: 200, W: 60, H: 8, R: 60, G: 120, B: 120}
 	}
 
-	for ot := range screen.Frames() {
+	for frame := range screen.Frames() {
+		ot := frame.OT()
 		pad.Update()
 		switch {
 		case pad.Pressed(yaroze.PADLleft) && chosen > 0:

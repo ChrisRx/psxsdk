@@ -3,10 +3,11 @@
  * the compiler emits calls to on its own.
  *
  * This target has no libc. Setting one would mean building picolibc for
- * mipsel to get three functions, when what is actually needed is only what
+ * mipsel to get a few functions, when what is actually needed is only what
  * LLVM reaches for while compiling ordinary Go: zeroing a struct becomes a
- * memset, copying a slice becomes a memcpy, and copying one that might
- * overlap becomes a memmove.
+ * memset, copying a slice becomes a memcpy, copying one that might overlap
+ * becomes a memmove, and a loop that counts bytes up to a NUL, as
+ * internal/reflectlite's reading of a type's name does, becomes a strlen.
  *
  * The target compiles this with -fno-builtin, without which clang
  * recognises each loop below as the very function it is defining and
@@ -41,6 +42,20 @@ memcpy(void *dst, const void *src, size_t n)
 	return dst;
 }
 
+/*
+ * Under LIBPS_GO this file stands in for the Net Yaroze library's C
+ * routines, and a program's timing against that library matters there
+ * (psxsdk's exp/cleanlib/spec/08-timing.md). The resident library's
+ * memmove takes 14 cycles a byte where this loop takes 12, so one nop an
+ * iteration keeps the two in step; its memset (8) and memcpy (12) already
+ * match.
+ */
+#ifdef LIBPS_GO
+#define MEMMOVE_PACE() __asm__ volatile("nop")
+#else
+#define MEMMOVE_PACE()
+#endif
+
 void *
 memmove(void *dst, const void *src, size_t n)
 {
@@ -50,15 +65,19 @@ memmove(void *dst, const void *src, size_t n)
 	if (d == s || n == 0)
 		return dst;
 	if (d < s) {
-		while (n-- > 0)
+		while (n-- > 0) {
 			*d++ = *s++;
+			MEMMOVE_PACE();
+		}
 	} else {
 		/* Backwards, so a forward overlap is read before it is
 		 * overwritten. */
 		d += n;
 		s += n;
-		while (n-- > 0)
+		while (n-- > 0) {
 			*--d = *--s;
+			MEMMOVE_PACE();
+		}
 	}
 	return dst;
 }
@@ -78,3 +97,12 @@ memcmp(const void *a, const void *b, size_t n)
 	return 0;
 }
 
+size_t
+strlen(const char *s)
+{
+	const char *p = s;
+
+	while (*p != '\0')
+		p++;
+	return (size_t)(p - s);
+}

@@ -112,7 +112,7 @@ func (b *Buffer) Print() {
 // string and keeps only what it has copied out by the time it returns, so a
 // literal needs no buffer of the program's. s must contain no percent
 // directives, as with FntPrint, and is cut at 255 bytes.
-func Print(s string) int32 { return FntPrint(CString(printBuf[:], s)) }
+func Print(s string) int { return int(FntPrint(CString(printBuf[:], s))) }
 
 var printBuf [256]byte
 

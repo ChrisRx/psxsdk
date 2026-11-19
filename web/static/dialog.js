@@ -37,7 +37,7 @@ const dialogs = (() => {
   }
 
   // open shows the dialog laid out for one question, answering a question
-  // still showing as cancelled.
+  // still showing as canceled.
   function open({ title, text = "", label = null, value = "", ok = "OK", cancel = "Cancel", danger = false, extra = null }) {
     if (!el) make();
     if (settle) finish(null);

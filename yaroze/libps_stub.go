@@ -8,12 +8,12 @@ package yaroze
 
 // stub is what every function of the library panics with when called in a
 // build that is not for the console: the library is only there in a program
-// built with the playstation-yaroze TinyGo target.
+// the yaroze command built.
 func stub(name string) string {
-	return "yaroze." + name + ": the Net Yaroze library is only present in a program built with tinygo -target=playstation-yaroze"
+	return "yaroze." + name + ": the Net Yaroze library is only present in a program built for the console, with yaroze build"
 }
 
-// FntPrint writes s to the current print stream, for FntFlush to draw.
+// FntPrint writes s to print stream 0, for FntFlush to draw.
 //
 // In C it is printf-style. Formatting happens in Go instead, so it takes a
 // finished C string, which Buffer builds without allocating and CString
@@ -58,6 +58,12 @@ func Rand() int32 { panic(stub("Rand")) }
 // that Go can see it.
 func Srand(seed uint32) { panic(stub("Srand")) }
 
+// FlushCache empties the instruction cache, after code in memory has been
+// changed, so that the CPU fetches the new code. The header declares it as
+// FlushCashe, but the library exports it as FlushCache, so it is bound by
+// hand under the library's name (hdr2go skips the header's).
+func FlushCache() { panic(stub("FlushCache")) }
+
 // GsLinkObject4 ties the object objp to the nth model in the TMD whose
 // object table is at tmd, after GsMapModelingData has turned the file's
 // offsets into addresses, so that GsSortObject4 can draw it. The object
@@ -78,19 +84,19 @@ func POSITION() *GsPOSITION { panic(stub("POSITION")) }
 
 // PacketPointer returns GsOUT_PACKET_P, where the library builds the next
 // GPU packet in the space GsSetWorkBase gave it, and SetPacketPointer moves
-// it, for a program that builds packets of its own there; AllocPacket does
-// both.
+// it, for a program that builds packets of its own there. Frame.Packet
+// does both for one of the gpu package's packet types.
 func PacketPointer() *PACKET { panic(stub("PacketPointer")) }
 
 // SetPacketPointer sets GsOUT_PACKET_P; see PacketPointer.
 func SetPacketPointer(p *PACKET) { panic(stub("SetPacketPointer")) }
 
-// NativeVideoMode returns the video mode the console is made for, MODE_PAL
-// for a European one and MODE_NTSC for any other, from the region letter
-// at the end of the version string Sony's BIOS carries: "System ROM
-// Version 3.0 01/06/97 E". A BIOS without one, the first Japanese one or
-// an OpenBIOS, is taken for NTSC.
-func NativeVideoMode() int32 { panic(stub("NativeVideoMode")) }
+// NativeVideoMode returns the video mode the console is made for, PAL for
+// a European one and NTSC for any other, from the region letter at the end
+// of the version string Sony's BIOS carries: "System ROM Version 3.0
+// 01/06/97 E". A BIOS without one, the first Japanese one or an OpenBIOS,
+// is taken for NTSC.
+func NativeVideoMode() VideoMode { panic(stub("NativeVideoMode")) }
 
 // GsWSMATRIX returns the world-screen matrix GsSetRefView2 and GsSetView2
 // last worked out.

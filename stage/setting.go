@@ -1,6 +1,10 @@
 package stage
 
-import "go.chrisrx.dev/psx/yaroze"
+import (
+	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/gpu"
+	"go.chrisrx.dev/psx/yaroze"
+)
 
 // The room the hero is in, drawn from its map every frame: a textured
 // quad for each floor cell, lit by its slope, for each side of a wall
@@ -67,9 +71,9 @@ type Setting struct {
 	// sprite, with feet and fsxy the point a prop is placed by.
 	view  View
 	frame int
-	prop  yaroze.GsSPRITE
-	feet  yaroze.SVECTOR
-	fsxy  uint32
+	prop  yaroze.Sprite
+	feet  yaroze.Vertex
+	fsxy  gpu.XY
 
 	// cells holds each cell's shape, ready to draw.
 	cells [MaxCells][MaxCells]cellShape
@@ -136,7 +140,7 @@ func (s *Setting) Load(r *Map) {
 	s.m = r
 	s.prop = s.Art.Props
 	s.prop.W, s.prop.H = PropSize, PropSize
-	s.prop.Mx, s.prop.My = PropSize/2, PropFeet
+	s.prop.Pivot = geom.Point{X: PropSize / 2, Y: PropFeet}
 	for j := range r.Rows() {
 		for i := range r.Cols() {
 			s.blocks[j][i] = 0
@@ -173,10 +177,11 @@ func (s *Setting) Load(r *Map) {
 	}
 	for cj := 0; cj <= r.Rows(); cj++ {
 		for ci := 0; ci <= r.Cols(); ci++ {
-			// The cells round the corner: corner k of each, the far
-			// right corner of the cell before and above, and so on.
-			// Outside the room the ground is at nothing, so that a
-			// room's edge that stands high has a face down to it.
+			// The cells round the corner: corner k of each, the
+			// far right corner of the cell before and above, and
+			// so on. Outside the room the ground is at nothing, so
+			// that a room's edge that stands high has a face down
+			// to it.
 			lowest := int16(32767)
 			for k := range 4 {
 				i, j := ci-1+k&1, cj-1+k>>1
@@ -344,10 +349,10 @@ func (s *Setting) inRing(ci, cj int) bool {
 func (s *Setting) smooth(at *[MaxCells + 1][MaxCells + 1]Vec, which *[MaxCells + 1][MaxCells + 1]bool, passes int) {
 	r := s.m
 	for range passes {
-		// The moved corners are worked out from the corners as they are
-		// and put in place after, in the scratch table, which is only
-		// read and written at the outline's corners: copying the whole
-		// table would be a byte at a time on this target.
+		// The moved corners are worked out from the corners as they
+		// are and put in place after, in the scratch table, which is
+		// only read and written at the outline's corners: copying the
+		// whole table would be a byte at a time on this target.
 		for cj := 0; cj <= r.Rows(); cj++ {
 			for ci := 0; ci <= r.Cols(); ci++ {
 				if !which[cj][ci] {
@@ -421,13 +426,13 @@ func (s *Setting) leaned(ci, cj int) Vec {
 // ground with nothing on it, which is most of a room, and is drawn by
 // the shortest way.
 type cellShape struct {
-	v     [4]yaroze.SVECTOR
+	v     [4]yaroze.Vertex
 	top   [4]Vec
 	cell  byte
 	plain bool
 	open  bool
-	rgb   uint32
-	skin  *skin
+	rgb   yaroze.Color
+	skin  *Surface
 }
 
 // Open opens the chest on cell i, j, which is drawn open from then on,
@@ -438,13 +443,13 @@ func (s *Setting) Open(i, j int) { s.cells[j][i].open = true }
 // high.
 //
 //go:inline
-func (c *cellShape) x(n int) int { return int(c.v[n].Vx) }
+func (c *cellShape) x(n int) int { return int(c.v[n].X) }
 
 //go:inline
-func (c *cellShape) z(n int) int { return int(c.v[n].Vz) }
+func (c *cellShape) z(n int) int { return int(c.v[n].Z) }
 
 //go:inline
-func (c *cellShape) h(n int) int { return -int(c.v[n].Vy) }
+func (c *cellShape) h(n int) int { return -int(c.v[n].Y) }
 
 // shapes fills in the cells' shapes from the corners' heights and
 // places, once the outlines are smoothed and the tops leaned, and lights
@@ -465,7 +470,7 @@ func (s *Setting) shapes() {
 			for k := range 4 {
 				ci, cj := i+k&1, j+k>>1
 				at := s.at[cj][ci]
-				sh.v[k] = yaroze.SVECTOR{Vx: int16(at.X), Vy: -heights[k], Vz: int16(at.Z)}
+				sh.v[k] = yaroze.Vertex{X: int16(at.X), Y: -heights[k], Z: int16(at.Z)}
 				sh.top[k] = at
 				if c == 'r' || door(c) {
 					sh.top[k] = s.top[cj][ci]
@@ -473,16 +478,16 @@ func (s *Setting) shapes() {
 			}
 			tl, tr, bl, br := int(heights[0]), int(heights[1]), int(heights[2]), int(heights[3])
 			bright := min(max(128+(tr+br-tl-bl)/2+(tl+tr-bl-br)/2, 64), 200)
-			tint, sk := r.Tint, &s.Art.Floors[r.Floor].full
+			tint, sk := r.Tint, &s.Art.Floors[r.Floor]
 			switch {
 			case door(c):
 				tint = Color{48, 48, 56}
 			case c == '~':
 				bright = bright * 2 / 3
 			case steep(tl, tr, bl, br):
-				tint, sk = Gray(120), &s.Art.Walls[r.Wall].full
+				tint, sk = Gray(120), &s.Art.Walls[r.Wall]
 			}
-			sh.rgb = tint.Shade(bright).Word(quadCode)
+			sh.rgb = tint.Shade(bright).RGB()
 			sh.skin = sk
 		}
 	}
@@ -499,7 +504,7 @@ var across = [4][2][2]int{{{2, 0}, {3, 1}}, {{1, 3}, {0, 2}}, {{3, 2}, {1, 0}}, 
 // seen from the neighbor, so its corners run as a wall's side does, and
 // it goes down to the lowest ground at each corner, so that faces
 // meeting at a corner meet.
-func (s *Setting) drops(ot *yaroze.GsOT, i, j int, c *cellShape) {
+func (s *Setting) drops(f *yaroze.Frame, i, j int, c *cellShape) {
 	mask := s.dropMask[j][i]
 	if mask == 0 {
 		return
@@ -514,7 +519,7 @@ func (s *Setting) drops(ot *yaroze.GsOT, i, j int, c *cellShape) {
 		poly.v[0], poly.v[1] = c.v[a[0]], c.v[b[0]]
 		poly.corner(2, c.x(a[0]), -ha, c.z(a[0]))
 		poly.corner(3, c.x(b[0]), -hb, c.z(b[0]))
-		poly.quad(ot, &s.Art.Walls[r.Wall], Gray(104), false, 0)
+		poly.quad(f, &s.Art.Walls[r.Wall], Gray(104), false, 0)
 	}
 }
 
@@ -523,7 +528,7 @@ func (s *Setting) drops(ot *yaroze.GsOT, i, j int, c *cellShape) {
 func (c *cellShape) set(raise int) {
 	for n := range 4 {
 		v := c.v[n]
-		v.Vy -= int16(raise)
+		v.Y -= int16(raise)
 		poly.v[n] = v
 	}
 }
@@ -555,12 +560,12 @@ func (s *Setting) covers(p *polygon, n, otz int) {
 // Draw draws the map from the view, cell by cell, those near enough to
 // its center to be on the screen, into the ordering table, through the
 // world-to-screen matrix the library has from the camera the game set.
-func (s *Setting) Draw(ot *yaroze.GsOT, v *View) {
+func (s *Setting) Draw(f *yaroze.Frame, v *View) {
 	r := s.m
 	cur = s
 	s.view = *v
 	s.frame++
-	yaroze.GsSetLsMatrix(yaroze.GsWSMATRIX())
+	yaroze.UseCamera()
 	// A cabin is see-through as a whole when any piece of it nearer the
 	// camera than the figure covers the figure on the screen, which the
 	// pieces report as they are drawn, for the next frame.
@@ -577,7 +582,7 @@ func (s *Setting) Draw(ot *yaroze.GsOT, v *View) {
 		d, lat := d0+j*dRow, lat0+j*latRow
 		for i := range r.Cols() {
 			if d <= viewAhead*Tile<<12 && d >= -viewBehind*Tile<<12 && abs(lat) <= viewAside*Tile<<12 {
-				s.drawCell(ot, i, j, d>>12, lat>>12)
+				s.drawCell(f, i, j, d>>12, lat>>12)
 			}
 			d += dCol
 			lat += latCol
@@ -589,31 +594,31 @@ func (s *Setting) Draw(ot *yaroze.GsOT, v *View) {
 // ground, with what stands on it, or a wall or cabin cell. Plain ground
 // is the shortest way through: its quad's corners, Color and skin were
 // worked out when the room was entered.
-func (s *Setting) drawCell(ot *yaroze.GsOT, i, j int, d, lat int) {
+func (s *Setting) drawCell(f *yaroze.Frame, i, j int, d, lat int) {
 	r := s.m
 	shape := &s.cells[j][i]
-	s.drops(ot, i, j, shape)
+	s.drops(f, i, j, shape)
 	if shape.plain {
-		poly.place(ot, &shape.v, shape.skin, shape.rgb, floorBack, false)
+		poly.place(f, &shape.v, &shape.skin.full, &shape.skin.Texture, shape.rgb, false, floorBack, false)
 		return
 	}
 	c := shape.cell
 	p := r.Middle(i, j)
 	x0, x1, z0, z1 := p.X-Tile/2, p.X+Tile/2, p.Z-Tile/2, p.Z+Tile/2
 	if ground(c) {
-		s.drawGround(ot, i, j, shape)
+		s.drawGround(f, i, j, shape)
 		switch {
 		case c == 't':
-			s.drawChest(ot, p, shape.open)
+			s.drawChest(f, p, shape.open)
 		case c == 'o':
-			s.drawProp(ot, p, s.HeightAt(p.Sixteenths())>>4, 0)
+			s.drawProp(f, p, s.HeightAt(p.Sixteenths())>>4, 0)
 		case door(c):
-			s.mouth(ot, i, j, shape)
+			s.mouth(f, i, j, shape)
 		}
 		return
 	}
 	if bed(c) {
-		s.drawBed(ot, i, j, x0, x1, z0, z1, c == 'p')
+		s.drawBed(f, i, j, x0, x1, z0, z1, c == 'p')
 		return
 	}
 	near := d < -Tile/2
@@ -644,11 +649,11 @@ func (s *Setting) drawCell(ot *yaroze.GsOT, i, j int, d, lat int) {
 			}
 			a, b, sh := wallSide(k)
 			if door(n) && c == 'r' {
-				// The inside of a cave's mouth, dark, so that the
-				// opening reads as a hole.
+				// The inside of a cave's mouth, dark, so that
+				// the opening reads as a hole.
 				sh = 36
 			}
-			seen = s.face(ot, tex, shape, a, b, height, sh, ghost) || seen
+			seen = s.face(f, tex, shape, a, b, height, sh, ghost) || seen
 		}
 	}
 	// A wall's top goes with the wall, when none of its sides faces the
@@ -665,12 +670,12 @@ func (s *Setting) drawCell(ot *yaroze.GsOT, i, j int, d, lat int) {
 	// see-through instead when it is in the way.
 	switch {
 	case cabin:
-		s.roof(ot, i, j, x0, x1, z0, z1, ghost)
+		s.roof(f, i, j, x0, x1, z0, z1, ghost)
 	case c != 'r' && (near || !seen):
 	case c == 'r' && r.Black && !s.borders(i, j):
 	default:
 		shape.setTop(height)
-		poly.quad(ot, tex, top, ghost, 0)
+		poly.quad(f, tex, top, ghost, 0)
 	}
 	s.block = 0
 }
@@ -681,18 +686,18 @@ func (s *Setting) drawCell(ot *yaroze.GsOT, i, j int, d, lat int) {
 // see-through, its brightness swelling and fading. A doorway under a
 // cabin's roof, in its far row or its near one, gets its share of the
 // roof.
-func (s *Setting) drawGround(ot *yaroze.GsOT, i, j int, shape *cellShape) {
+func (s *Setting) drawGround(f *yaroze.Frame, i, j int, shape *cellShape) {
 	r := s.m
 	c := shape.cell
 	if c == '~' {
 		shape.set(-2 * PoolDepth)
-		poly.place(ot, &poly.v, shape.skin, shape.rgb, floorBack, false)
+		poly.place(f, &poly.v, &shape.skin.full, &shape.skin.Texture, shape.rgb, false, floorBack, false)
 		shape.set(-PoolDepth)
 		wave := 100 + abs((s.frame>>2)&31-16)
-		poly.ground(ot, &s.Art.Water, Gray(uint8(wave)), true, floorBack-1)
+		poly.ground(f, &s.Art.Water, Gray(uint8(wave)), true, floorBack-1)
 		return
 	}
-	poly.place(ot, &shape.v, shape.skin, shape.rgb, floorBack, false)
+	poly.place(f, &shape.v, &shape.skin.full, &shape.skin.Texture, shape.rgb, false, floorBack, false)
 	if !door(c) {
 		return
 	}
@@ -703,7 +708,7 @@ func (s *Setting) drawGround(ot *yaroze.GsOT, i, j int, shape *cellShape) {
 		}
 		k, n := j-s.blockRows[b][0], s.blockRows[b][1]-s.blockRows[b][0]+1
 		s.block = b
-		s.roofSlope(ot, rise(k, n), rise(k+1, n), x0, x1, z0, z1, s.ghost[b])
+		s.roofSlope(f, rise(k, n), rise(k+1, n), x0, x1, z0, z1, s.ghost[b])
 		s.block = 0
 	}
 }
@@ -721,7 +726,7 @@ const mouthHeight = Tile * 3 / 4
 // over the opening: the top of the rock across the cell, and on each open
 // side a lintel from the top down to mouthHeight, so that the doorway is
 // a hole in a rock face, the mouth of a cave.
-func (s *Setting) mouth(ot *yaroze.GsOT, i, j int, c *cellShape) {
+func (s *Setting) mouth(f *yaroze.Frame, i, j int, c *cellShape) {
 	r := s.m
 	var open [2]int // the sides the opening faces, in sides' order
 	switch {
@@ -735,7 +740,7 @@ func (s *Setting) mouth(ot *yaroze.GsOT, i, j int, c *cellShape) {
 	height := r.rockHeight()
 	if !r.Black {
 		c.setTop(height)
-		poly.quad(ot, &s.Art.Rock, Gray(100), false, 0)
+		poly.quad(f, &s.Art.Rock, Gray(100), false, 0)
 	}
 	for _, k := range open {
 		a, b, sh := wallSide(k)
@@ -745,7 +750,7 @@ func (s *Setting) mouth(ot *yaroze.GsOT, i, j int, c *cellShape) {
 		poly.corner(1, tb.X, -c.h(b)-height, tb.Z)
 		poly.corner(2, ba.X, -c.h(a)-mouthHeight, ba.Z)
 		poly.corner(3, bb.X, -c.h(b)-mouthHeight, bb.Z)
-		poly.quad(ot, &s.Art.Rock, Gray(sh), false, 0)
+		poly.quad(f, &s.Art.Rock, Gray(sh), false, 0)
 	}
 }
 
@@ -776,18 +781,19 @@ func wallSide(k int) (a, b int, shade uint8) {
 // height, a quad a tile, between the corners a and b of the cell's
 // shape, its left and right seen from in front of it, and reports whether
 // any of it was drawn: whether the side faces the camera.
-func (s *Setting) face(ot *yaroze.GsOT, tex *Surface, c *cellShape, a, b, height int, shade uint8, ghost bool) bool {
+func (s *Setting) face(f *yaroze.Frame, tex *Surface, c *cellShape, a, b, height int, shade uint8, ghost bool) bool {
 	seen := false
 	for top := height; top > 0; top -= Tile {
 		// The corners lean back in proportion to their height up the
-		// face, from the ground's at the bottom to the top's at the top.
+		// face, from the ground's at the bottom to the top's at the
+		// top.
 		ta, tb := c.lerp(a, top, height), c.lerp(b, top, height)
 		ba, bb := c.lerp(a, top-Tile, height), c.lerp(b, top-Tile, height)
 		poly.corner(0, ta.X, -c.h(a)-top, ta.Z)
 		poly.corner(1, tb.X, -c.h(b)-top, tb.Z)
 		poly.corner(2, ba.X, -c.h(a)-top+Tile, ba.Z)
 		poly.corner(3, bb.X, -c.h(b)-top+Tile, bb.Z)
-		seen = poly.quad(ot, tex, Gray(shade), ghost, 0) || seen
+		seen = poly.quad(f, tex, Gray(shade), ghost, 0) || seen
 	}
 	return seen
 }
@@ -821,33 +827,33 @@ func rectSide(k int, x0, x1, z0, z1 int) (ax, az, bx, bz int) {
 // high: a billboard sorted at its feet's depth, as a game's figures
 // are. The depth is the GTE's average of the point three times over, so
 // that it is on the same scale as the polygons'.
-func (s *Setting) drawProp(ot *yaroze.GsOT, p Vec, y, which int) {
-	s.feet = yaroze.SVECTOR{Vx: int16(p.X), Vy: int16(-y), Vz: int16(p.Z)}
-	if yaroze.RotTransPers(&s.feet, &s.fsxy) < 0 {
+func (s *Setting) drawProp(f *yaroze.Frame, p Vec, y, which int) {
+	s.feet = yaroze.Vertex{X: int16(p.X), Y: int16(-y), Z: int16(p.Z)}
+	if !yaroze.Project(&s.feet, &s.fsxy) {
 		return
 	}
-	yaroze.RotTransPers(&s.feet, &s.fsxy)
-	yaroze.RotTransPers(&s.feet, &s.fsxy)
-	otz := int(yaroze.AverageZ3())
-	s.prop.X, s.prop.Y = int16(s.fsxy), int16(s.fsxy>>16)
-	s.prop.U = s.Art.Props.U + uint8(PropSize*which)
-	s.prop.Sort(ot, Standing(otz))
+	yaroze.Project(&s.feet, &s.fsxy)
+	yaroze.Project(&s.feet, &s.fsxy)
+	otz := yaroze.AverageDepth3()
+	s.prop.X, s.prop.Y = s.fsxy.X, s.fsxy.Y
+	s.prop.Texture.U = s.Art.Props.Texture.U + uint8(PropSize*which)
+	s.prop.Draw(f, Standing(otz))
 }
 
 // roof draws a cabin cell's share of its roof: the slope over it, from
 // the roof's height at the cell's far edge to its height at the near
 // edge, and at an end of the block its piece of the gable there,
 // see-through when ghost.
-func (s *Setting) roof(ot *yaroze.GsOT, i, j int, x0, x1, z0, z1 int, ghost bool) {
+func (s *Setting) roof(f *yaroze.Frame, i, j int, x0, x1, z0, z1 int, ghost bool) {
 	b := s.blocks[j][i]
 	k, n := j-s.blockRows[b][0], s.blockRows[b][1]-s.blockRows[b][0]+1
 	far, near := rise(k, n), rise(k+1, n)
-	s.roofSlope(ot, far, near, x0, x1, z0, z1, ghost)
+	s.roofSlope(f, far, near, x0, x1, z0, z1, ghost)
 	if s.m.Cell(i-1, j) != 'c' {
-		s.gable(ot, far, near, x0, z0, z1, -1, ghost)
+		s.gable(f, far, near, x0, z0, z1, -1, ghost)
 	}
 	if s.m.Cell(i+1, j) != 'c' {
-		s.gable(ot, far, near, x1, z0, z1, 1, ghost)
+		s.gable(f, far, near, x1, z0, z1, 1, ghost)
 	}
 }
 
@@ -861,7 +867,7 @@ func rise(k, n int) int { return min(k, n-k) * 2 * ridge / n }
 // roofSlope draws the roof over one cell, from far above the walls at
 // its far edge to near at its near edge; a slope that faces the far side
 // faces away from the sun, so it is darker.
-func (s *Setting) roofSlope(ot *yaroze.GsOT, far, near, x0, x1, z0, z1 int, ghost bool) {
+func (s *Setting) roofSlope(f *yaroze.Frame, far, near, x0, x1, z0, z1 int, ghost bool) {
 	poly.corner(0, x0, -wallHeight-far, z1)
 	poly.corner(1, x1, -wallHeight-far, z1)
 	poly.corner(2, x0, -wallHeight-near, z0)
@@ -870,7 +876,7 @@ func (s *Setting) roofSlope(ot *yaroze.GsOT, far, near, x0, x1, z0, z1 int, ghos
 	if near > far {
 		shade = 96
 	}
-	poly.quad(ot, &s.Art.Roof, Gray(shade), ghost, 0)
+	poly.quad(f, &s.Art.Roof, Gray(shade), ghost, 0)
 }
 
 // gableUV and gableUV4 are the texture corners of the gable piece being
@@ -885,7 +891,7 @@ var (
 // top up to the roof, far above the walls at the row's far edge and near
 // at its near edge, its corners clockwise seen from outside; where the
 // roof meets the wall's top at one edge, a triangle.
-func (s *Setting) gable(ot *yaroze.GsOT, far, near, x, z0, z1 int, side int, ghost bool) {
+func (s *Setting) gable(f *yaroze.Frame, far, near, x, z0, z1 int, side int, ghost bool) {
 	// Left and right seen from outside: from -X, left is the far edge.
 	tl, tr, zl, zr := far, near, z1, z0
 	if side > 0 {
@@ -901,20 +907,20 @@ func (s *Setting) gable(ot *yaroze.GsOT, far, near, x, z0, z1 int, side int, gho
 		top(1, 0, zr)
 		top(2, 0, zl)
 		gableUV = [3][2]uint8{{63, vOf(tr)}, {63, ridge - 1}, {0, ridge - 1}}
-		poly.tri(ot, logs, &gableUV, Gray(100), ghost)
+		poly.tri(f, logs, &gableUV, Gray(100), ghost)
 	case tr == 0:
 		top(0, tl, zl)
 		top(1, 0, zr)
 		top(2, 0, zl)
 		gableUV = [3][2]uint8{{0, vOf(tl)}, {63, ridge - 1}, {0, ridge - 1}}
-		poly.tri(ot, logs, &gableUV, Gray(100), ghost)
+		poly.tri(f, logs, &gableUV, Gray(100), ghost)
 	default:
 		top(0, tl, zl)
 		top(1, tr, zr)
 		top(2, 0, zl)
 		top(3, 0, zr)
 		gableUV4 = [4][2]uint8{{0, vOf(tl)}, {63, vOf(tr)}, {0, ridge - 1}, {63, ridge - 1}}
-		poly.quadUV(ot, logs, &gableUV4, Gray(100), ghost, 0)
+		poly.quadUV(f, logs, &gableUV4, Gray(100), ghost, 0)
 	}
 }
 
@@ -928,7 +934,7 @@ var (
 // drawBed draws a bed's cell: a box bedHeight high with the quilt on
 // top, or the pillow at the pillow's end, and planks on the sides that
 // are not against the rest of the bed.
-func (s *Setting) drawBed(ot *yaroze.GsOT, i, j int, x0, x1, z0, z1 int, pillow bool) {
+func (s *Setting) drawBed(f *yaroze.Frame, i, j int, x0, x1, z0, z1 int, pillow bool) {
 	poly.corner(0, x0, -bedHeight, z1)
 	poly.corner(1, x1, -bedHeight, z1)
 	poly.corner(2, x0, -bedHeight, z0)
@@ -937,7 +943,7 @@ func (s *Setting) drawBed(ot *yaroze.GsOT, i, j int, x0, x1, z0, z1 int, pillow 
 	if pillow {
 		uv = &pillowUV
 	}
-	poly.quadUV(ot, &s.Art.Bed, uv, Gray(128), false, 0)
+	poly.quadUV(f, &s.Art.Bed, uv, Gray(128), false, 0)
 	for k, side := range &Sides {
 		if bed(s.m.Cell(i+side.DI, j+side.DJ)) {
 			continue
@@ -947,7 +953,7 @@ func (s *Setting) drawBed(ot *yaroze.GsOT, i, j int, x0, x1, z0, z1 int, pillow 
 		poly.corner(1, bx, -bedHeight, bz)
 		poly.corner(2, ax, 0, az)
 		poly.corner(3, bx, 0, bz)
-		poly.quadUV(ot, &s.Art.Bed, &plankUV, Gray(110), false, 0)
+		poly.quadUV(f, &s.Art.Bed, &plankUV, Gray(110), false, 0)
 	}
 }
 
@@ -964,7 +970,7 @@ var (
 // -Z: a box with the lid on top, closed, or, once opened, open to the
 // inside with the lid standing up along its back edge, leaning back, its
 // top towards the front and its underside behind.
-func (s *Setting) drawChest(ot *yaroze.GsOT, p Vec, opened bool) {
+func (s *Setting) drawChest(f *yaroze.Frame, p Vec, opened bool) {
 	x0, x1, z0, z1 := p.X-ChestHalfW, p.X+ChestHalfW, p.Z-ChestHalfD, p.Z+ChestHalfD
 	h := chestBox + chestLid
 	top := &lidUV
@@ -975,7 +981,7 @@ func (s *Setting) drawChest(ot *yaroze.GsOT, p Vec, opened bool) {
 	poly.corner(1, x1, -h, z1)
 	poly.corner(2, x0, -h, z0)
 	poly.corner(3, x1, -h, z0)
-	poly.quadUV(ot, &s.Art.Chest, top, Gray(128), false, 0)
+	poly.quadUV(f, &s.Art.Chest, top, Gray(128), false, 0)
 	// The sides, as a wall's: towards -Z, +Z, +X and -X.
 	for k := range 4 {
 		ax, az, bx, bz := rectSide(k, x0, x1, z0, z1)
@@ -987,7 +993,7 @@ func (s *Setting) drawChest(ot *yaroze.GsOT, p Vec, opened bool) {
 		poly.corner(1, bx, -h, bz)
 		poly.corner(2, ax, 0, az)
 		poly.corner(3, bx, 0, bz)
-		poly.quadUV(ot, &s.Art.Chest, uv, Gray(shade), false, 0)
+		poly.quadUV(f, &s.Art.Chest, uv, Gray(shade), false, 0)
 	}
 	if !opened {
 		return
@@ -999,10 +1005,10 @@ func (s *Setting) drawChest(ot *yaroze.GsOT, p Vec, opened bool) {
 	poly.corner(1, x1, lidTop, lidBack)
 	poly.corner(2, x0, -chestBox, z1)
 	poly.corner(3, x1, -chestBox, z1)
-	poly.quadUV(ot, &s.Art.Chest, &lidUV, Gray(128), false, 0)
+	poly.quadUV(f, &s.Art.Chest, &lidUV, Gray(128), false, 0)
 	poly.corner(0, x1, lidTop, lidBack)
 	poly.corner(1, x0, lidTop, lidBack)
 	poly.corner(2, x1, -chestBox, z1)
 	poly.corner(3, x0, -chestBox, z1)
-	poly.quadUV(ot, &s.Art.Chest, &sideUV, Gray(100), false, 0)
+	poly.quadUV(f, &s.Art.Chest, &sideUV, Gray(100), false, 0)
 }

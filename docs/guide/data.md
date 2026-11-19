@@ -8,8 +8,8 @@ A program's pictures, sounds, music and models are files on its disc in the cons
 
 | What | From | With | In the program |
 | --- | --- | --- | --- |
-| A sprite, texture or background | PNG, BMP, GIF | [`png2tim`](../tools/png2tim.md) | `yaroze.TIM(f.Data()).Load()`, and `.Sprite()` |
-| A model | OBJ and MTL | [`obj2tmd`](../tools/obj2tmd.md) | `yaroze.TMD`, `Map`, `Object.Link` |
+| A sprite, texture or background | PNG, BMP, GIF | [`png2tim`](../tools/png2tim.md) | `yaroze.LoadTIM(f.Data())`, and `.Sprite()` |
+| A model | OBJ and MTL | [`obj2tmd`](../tools/obj2tmd.md) | `yaroze.LoadTMD(f.Data())`, `Object.Link` |
 | One of Sony's RSD models | RSD, PLY, MAT | [`rsdlink`](../tools/rsdlink.md) | as above |
 | A sound | WAV, AIFF | [`wav2vag`](../tools/wav2vag.md) | in a bank |
 | A bank of sounds | VAGs and a definition | [`mkvab`](../tools/mkvab.md) | `yaroze.OpenBank(vh, vb)` |
@@ -69,7 +69,7 @@ text "480" rjust at (-0.06, -480*$sy)
 text "511" rjust at (-0.06, -512*$sy)
 ```
 
-That is the default `Screen`, 320 by 240 with its two buffers one above the other. `SideBySide` puts them both at the top, which frees the rows below for images. A texture lies inside one texture page, 64 units wide and 256 lines tall, which is 256 pixels of a 4-bit image, 128 of an 8-bit one and 64 of a 16-bit one, and several small images can share a page. `Screen.Font` puts the font at the corner it is given, with its palette 128 lines below. Two images must not overlap, and `png2tim` prints where each one goes, with `-r` for a TIM already made.
+That is the default `Screen`, 320 by 240 with its two buffers one above the other. `Buffers: yaroze.ScreenBuffersSideBySide` puts them both at the top, which frees the rows below for images. A texture lies inside one texture page, 64 units wide and 256 lines tall, which is 256 pixels of a 4-bit image, 128 of an 8-bit one and 64 of a 16-bit one, and several small images can share a page. `Screen.Font` puts the font at the corner it is given, with its palette 128 lines below. Two images must not overlap, and `png2tim` prints where each one goes, with `-r` for a TIM already made.
 
 A model's TMD names its textures by where they are, so the TIM a model's material names is converted first, and the program loads that same TIM before it draws the model.
 

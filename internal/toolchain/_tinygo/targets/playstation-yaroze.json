@@ -4,9 +4,12 @@
 	"build-tags": ["yaroze"],
 	"linkerscript": "targets/playstation-yaroze.ld",
 	"extra-files": [
-		"targets/playstation-yaroze.S",
+		"targets/playstation-yaroze-start.S",
 		"targets/playstation-yaroze-symusr.S",
-		"targets/playstation-yaroze-libps.S",
+		"targets/playstation-yaroze-symusr-orig.S",
+		"targets/playstation-yaroze-cd.S",
+		"targets/playstation-yaroze-bios.S",
+		"targets/playstation-yaroze-members.S",
 		"targets/playstation-yaroze-gte.S",
 		"targets/r3000-builtins.c"
 	]

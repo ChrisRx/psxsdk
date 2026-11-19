@@ -70,16 +70,16 @@ var (
 
 var rooms = [...]room{
 	{
-		// The hall: a big room of stone, with the chest in its far right
-		// corner and the way out in its near wall.
+		// The hall: a big room of stone, with the chest in its far
+		// right corner and the way out in its near wall.
 		name:   "hall",
 		file:   &hallDAT,
 		chests: []chest{{name: "chest", text: "{Player Name} opens the chest.\nInside she found a Copper Sword. She puts it away in her bag."}},
 	},
 	{
 		// The meadow: open grass, flat all over, with the way back to
-		// the hall in its far edge and a house of logs whose doorway is
-		// in its far side.
+		// the hall in its far edge and a house of logs whose doorway
+		// is in its far side.
 		name: "meadow",
 		file: &meadowDAT,
 	},
@@ -96,7 +96,7 @@ var rooms = [...]room{
 // given so that the scene knows its name, which the playground's live
 // view goes by.
 func (r *room) load() {
-	if err := world.LoadFiles(r.file.Data(), files); err != nil {
+	if err := world.LoadFiles(&screen, r.file.Data(), disc.Registered()); err != nil {
 		failed = r.file
 		return
 	}
@@ -112,7 +112,7 @@ func (r *room) place() {
 	for k := range r.npcs {
 		n := &r.npcs[k]
 		if m := world.Marker(n.name); m != nil {
-			n.i, n.j, n.facing = m.I, m.J, int(m.Fields[0])
+			n.i, n.j, n.facing = m.I, m.J, m.Fields[0]
 		}
 	}
 	for k := range r.chests {
@@ -127,10 +127,10 @@ func (r *room) place() {
 }
 
 // background is the color the screen clears to in the room.
-func (r *room) background() yaroze.CVECTOR {
+func (r *room) background() yaroze.Color {
 	bg := world.Room().Background
 	if bg == (stage.Color{}) {
-		return yaroze.CVECTOR{R: 8, G: 8, B: 16}
+		return yaroze.Color{R: 8, G: 8, B: 16}
 	}
-	return yaroze.CVECTOR{R: bg[0], G: bg[1], B: bg[2]}
+	return bg.RGB()
 }

@@ -38,6 +38,7 @@ import (
 	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/examples/internal/demo"
 	"go.chrisrx.dev/psx/examples/internal/lpge"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -68,10 +69,9 @@ var (
 	yukaFile  = disc.Register("ASSETS/YUKA.TMD", "assets/YUKA.TMD").Into(yukaData[:])
 	shipFile  = disc.Register("ASSETS/THESHIP.TMD", "assets/THESHIP.TMD").Into(shipData[:])
 	stoneFile = disc.Register("ASSETS/STONE.TIM", "assets/STONE.TIM").Into(stoneData[:])
-	files     = []*disc.File{&wall0File, &wall1File, &wall2File, &wall3File, &tenFile, &yukaFile, &shipFile, &stoneFile}
 
-	shipTMD  = yaroze.TMD(shipData[:])
-	stoneTIM = yaroze.TIM(stoneData[:])
+	shipTMD  = shipData[:]
+	stoneTIM = stoneData[:]
 )
 
 // The maze: cells fact across, in a grid worldX by worldZ, each a wall or
@@ -113,7 +113,7 @@ var (
 	nModels int
 
 	// faces holds each face's model, mapped.
-	faces [6]yaroze.TMD
+	faces [6][]uint32
 
 	// pvect is the view's angles: vy round the vertical, vx up and down.
 	pvect      yaroze.SVECTOR
@@ -240,7 +240,7 @@ const speed = 2
 
 // controller is the pad as the frame sees it, which tells the press of
 // Start that switches modes from the frames it stays held.
-var controller yaroze.Pad
+var controller input.Controller
 
 // dealWithControllerPad acts on the pad, and reports whether to quit.
 func dealWithControllerPad() bool {
@@ -460,7 +460,7 @@ func addFace(n int, px, py int32, face int, y int32, attribute uint32) int {
 	}
 	yaroze.GsInitCoordinate2(&world[px][py], &dworld[n])
 	dworld[n].Coord.T = [3]int32{0, y, 0}
-	faces[face].Link(&models[n], 0)
+	yaroze.GsLinkObject4(&faces[face][3], &models[n], 0)
 	models[n].Coord2 = &dworld[n]
 	models[n].Attribute = attribute
 	return n + 1
@@ -484,7 +484,7 @@ func initializeAll() bool {
 	yaroze.FntLoad(960, 256)
 	yaroze.FntOpen(0, 0, 256, 200, 0, 512)
 
-	if missing := demo.Load(files, nil); missing != "" {
+	if missing := demo.Load(disc.Registered(), nil); missing != "" {
 		fail("could not read\n", missing)
 		return false
 	}
@@ -492,7 +492,7 @@ func initializeAll() bool {
 	initializeView()
 	initializeLighting()
 
-	stoneTIM.Load()
+	loadTIM(stoneTIM)
 	faces[backWall] = modelInit(wall0Data[:])
 	faces[frontWall] = modelInit(wall1Data[:])
 	faces[rightWall] = modelInit(wall2Data[:])
@@ -610,9 +610,24 @@ func initializeLighting() {
 }
 
 // modelInit maps a TMD's offsets to addresses and returns it, for linking.
-func modelInit(tmd yaroze.TMD) yaroze.TMD {
-	tmd.Map()
+func modelInit(tmd []uint32) []uint32 {
+	yaroze.GsMapModelingData(&tmd[1])
 	return tmd
+}
+
+// loadTIM puts a TIM into video memory, where its header says, with its
+// palette if it has one, waits for the transfer, and returns its
+// description.
+func loadTIM(tim []uint32) (image yaroze.GsIMAGE) {
+	yaroze.GsGetTimInfo(&tim[1], &image)
+	rect := yaroze.RECT{X: image.Px, Y: image.Py, W: int16(image.Pw), H: int16(image.Ph)}
+	yaroze.LoadImage(&rect, image.Pixel)
+	if image.Pmode>>3&1 != 0 {
+		rect = yaroze.RECT{X: image.Cx, Y: image.Cy, W: int16(image.Cw), H: int16(image.Ch)}
+		yaroze.LoadImage(&rect, image.Clut)
+	}
+	yaroze.DrawSync(0)
+	return image
 }
 
 // makeWorldMaps lays the maze out: blocks of three cells by three, a wall

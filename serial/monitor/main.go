@@ -60,6 +60,7 @@ func main() {
 	line.puts("\r\nConnected CIP ver2.0\r\nCommunication baud rate ")
 	line.putDecimal(savedBaud)
 	line.puts(" bps\r\nOK\r\n")
+	showScreen()
 	for {
 		prompt()
 		command(readLine(commandPrompt))
@@ -70,7 +71,7 @@ func main() {
 // returns defaultBaud.
 func cardBaud() uint32 {
 	for slot := range 2 {
-		if yaroze.CardRead(slot, cipFile, cip[:]) >= cipBaudAt+4 {
+		if n, _ := yaroze.CardRead(slot, cipFile, cip[:]); n >= cipBaudAt+4 {
 			b := uint32(cip[cipBaudAt]) | uint32(cip[cipBaudAt+1])<<8 | uint32(cip[cipBaudAt+2])<<16 | uint32(cip[cipBaudAt+3])<<24
 			if b != 0 {
 				return b

@@ -1,27 +1,62 @@
-// Package yaroze binds the Net Yaroze library, the one the boot disc leaves
-// resident in the console's RAM, for programs written in Go.
+// Package yaroze is the Net Yaroze library for programs written in Go: a
+// clean-room reimplementation of the one the boot disc leaves resident in
+// the console's RAM, linked into the program.
+//
+// It has two surfaces over the one library, and a program uses either or
+// both. The library's own functions keep their C names and signatures, so
+// a program can be written as it would be in C, from Sony's manuals and
+// samples. Beside them is a Go API: a screen drawn frame by frame, sprites
+// and boxes on it, text, music from a sound bank, the memory card and 3D,
+// as types with methods, strings, ints and errors, with the controllers in
+// package input, the geometry in package geom, and the GPU's packets, for
+// a program that builds its own, in package gpu:
+//
+//	var screen = yaroze.Screen{Background: yaroze.Color{R: 60, G: 120, B: 120}}
+//
+//	func main() {
+//		screen.Open()
+//		text := screen.Font(16, 16, 256, 16, 64)
+//		ship := yaroze.LoadTIM(shipFile.Data()).Sprite()
+//		for frame := range screen.Frames() {
+//			if input.Read(0).Has(input.Right) {
+//				ship.X++
+//			}
+//			ship.Draw(frame, 0)
+//			text.Print("frame ").Int(frame.Number())
+//		}
+//	}
+//
+// A frame's ordering table, Frame.OT, takes the library's own sorts, so a
+// program can draw with both. A program builds with the library linked
+// in, or with --libps resident laid over the image a Net Yaroze leaves in
+// memory, from the same source. Nothing in the Go API allocates after
+// Screen.Open, and nothing may: the collector on this target frees
+// nothing, so a program allocates at startup and keeps what it made.
 //
 // Most of the package is generated from the SDK's libps.h by hdr2go: the
 // struct layouts come from clang's record layout dump for the target, so a
 // Go struct that disagrees with the C one by a byte is a compile error
 // rather than a disc that draws nothing. Names are the C ones, so the SDK
-// documentation reads across directly, and the comments are condensed from
+// documentation applies as it is, and the comments are condensed from
 // it. What cannot be generated is bound by hand in libps_yaroze.go, and what
 // the library leaves to the program, reading the controllers and reaching
 // data at fixed addresses, is in pad.go and memory.go.
 //
 // The library is only there on the console, so the package has two
-// builds. Under the yaroze tag, which the playstation-yaroze TinyGo target
-// sets, each function is a bodyless declaration carrying //export, which in
-// TinyGo imports a C symbol rather than exporting a Go one, and the linker
-// resolves it against the fixed addresses in the target's symusr.S exactly
-// as it does for a C program. In every other build, which is what an editor,
-// go vet and go build see, each function is a stub that panics, naming
-// itself and saying where the real one is: a program compiles and
-// type-checks on a host, and fails at its first call into the library
-// rather than at the build. The host side of the toolchain, which combines
-// a program with the library's image and loads one over the serial cable,
-// is in the same package under the !yaroze tag.
+// builds. Under the yaroze tag, which the PlayStation TinyGo targets set,
+// each function is a bodyless declaration carrying //export, which in
+// TinyGo imports a C symbol rather than exporting a Go one. The yaroze
+// command builds for the playstation-yaroze-clean target by default, where
+// the linker resolves each against the clean library, internal/libps,
+// linked into the program. With --libps resident it builds for
+// playstation-yaroze, where the linker resolves each against the fixed
+// addresses in the target's symusr.S, exactly as it does for a C program.
+// In every other build, which is what an editor, go vet and go build see,
+// each function is a stub that panics, naming itself and saying where the
+// real one is: a program compiles and type-checks on a host, and fails at
+// its first call into the library rather than at the build. The host side
+// of the toolchain, which makes a linked program an executable, is in
+// package link.
 //
 // Types follow the o32 ABI the console uses: C int and long are both 32
 // bits, and pointers are 32 bits. On a 64-bit host the structs that hold

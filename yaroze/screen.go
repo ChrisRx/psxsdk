@@ -3,276 +3,386 @@ package yaroze
 import (
 	"iter"
 	"math/bits"
+
+	"go.chrisrx.dev/psx/geom"
 )
 
-// A Screen is the double-buffered frame: two ordering tables, one per
-// display buffer, and the packet space the library builds each frame's GPU
-// commands in. Every frame has the same shape, which it carries out so that
-// a program does not have to: Begin clears the table for the buffer being
-// drawn and returns it for the frame's sorts, and End waits for the GPU and
-// the display, swaps the buffers, clears the frame to Background, and
-// starts the GPU on the table. Frames puts the two around the body of a
-// loop:
+// A Screen is the double-buffered picture and the frames drawn into it.
+// The fields are its settings, read by Open; from then on Frames gives
+// out the frames, each of which draws what the loop's body puts on it:
 //
-//	var screen = yaroze.Screen{Background: yaroze.CVECTOR{R: 60, G: 120, B: 120}}
+//	var screen = yaroze.Screen{Background: yaroze.Color{R: 60, G: 120, B: 120}}
 //
 //	screen.Open()
-//	for ot := range screen.Frames() {
-//		sprite.SortFast(ot, 0)
+//	for frame := range screen.Frames() {
+//		ship.Draw(frame, 0)
 //	}
 //
-// The fields are the screen's settings, read by Open, and its storage is
-// allocated there, once, unless Init gave it some first.
+// Behind each frame is an ordering table, which sorts what is drawn by
+// depth, and the space the GPU's commands are built in; the screen has
+// two of each, one a display buffer, and allocates them in Open unless
+// Init gave it some first.
+//
+// A program that sorts with the library's own calls takes the frame's
+// ordering table from Frame.OT, or drives the frame itself with Begin
+// and End:
+//
+//	for frame := range screen.Frames() {
+//		sprite.SortFast(frame.OT(), 0)
+//	}
 type Screen struct {
-	// frame counts the frames End has finished. It is the first field so
-	// that a test can read it at the screen's own address.
+	// frame counts the frames finished. It is the first field so that a
+	// test can read it at the screen's own address.
 	frame uint32
 
 	// Width and Height are the picture's size in pixels, 320 by 240 if
-	// they are zero, on a European console too. A picture taller than 256
-	// lines is interlaced. A European console can show 256 lines, but the
-	// second buffer then reaches the bottom of video memory, rows 256 to
-	// 511, where images often keep their palettes, at row 480 say, and the
-	// clear each frame wipes them; a program that keeps its images clear of
-	// there can ask for 256.
-	Width, Height uint16
+	// they are zero. A picture taller than 256 lines is interlaced.
+	Width, Height int
 
-	// Depth is the ordering tables' depth as a power of two, 8 if it is
-	// zero: each table holds 1<<Depth entries, the depths a frame's
-	// primitives are sorted into.
+	// Depth is how finely the frame sorts what it draws: 1<<Depth depths,
+	// 8 if it is zero, 256 of them. A frame that draws at one depth, a
+	// 2D game whose order of drawing is its order of depth, can have 1.
 	Depth int
 
-	// Packets is the GPU commands a frame has room for, in bytes, 16KB if
-	// it is zero. Each buffer has its own.
+	// Packets is the space a frame's GPU commands have, in bytes, 16KB
+	// if it is zero: a sprite takes about 24 bytes, a rotated or scaled
+	// one 40.
 	Packets int
 
-	// Background is the color End clears each frame to.
-	Background CVECTOR
+	// Background is the color each frame starts from.
+	Background Color
 
 	// Interval is the vertical blanks a frame lasts: 1, or 0, for sixty
 	// frames a second on an NTSC console, 2 for thirty.
 	Interval int
 
-	// SideBySide puts the two display buffers next to each other at the
-	// top of video memory, at 0, 0 and Width, 0, rather than one above the
-	// other, leaving the rows below Height whole for textures. It is for a
-	// picture no wider than 512.
-	SideBySide bool
+	// Offset moves the picture on the television, for one that sits too
+	// high or too far left.
+	Offset geom.Point
 
-	// OverlayDepth, when it is not zero, gives the screen a second ordering
-	// table per buffer, of 1<<OverlayDepth depths, which End draws after
-	// the frame's: for what goes in front of everything the frame sorted,
-	// a game's panels and text, sorted among themselves. Overlay returns
-	// it.
+	// NoDither turns dithering off. Shaded colors are dithered unless it
+	// is set, which smooths a gouraud polygon's bands and leaves a sprite
+	// alone.
+	NoDither bool
+
+	// Buffers is where the two display buffers lie in video memory:
+	// one above the other, the default, or side by side.
+	Buffers ScreenBuffers
+
+	// Origin is where a frame's coordinates start on the picture: its
+	// top left corner, the default, or its middle, which is where 3D
+	// drawing wants it.
+	Origin ScreenOrigin
+
+	// OverlayDepth, when it is not zero, gives each frame an overlay of
+	// 1<<OverlayDepth depths, drawn after the frame: for what goes in
+	// front of everything the frame sorted, a game's panels and text,
+	// sorted among themselves. Frame.Overlay returns it.
 	OverlayDepth int
 
-	ot      [2]GsOT
-	overlay [2]GsOT
-	packets [2][]uint32
-	active  int
+	// impl is the screen's tables and packet space.
+	impl   screenImpl
+	active int
+	cur    Frame
+	over   Frame
 
-	// font is the stream Font opened, and text whether it has, so that End
-	// flushes it.
-	font int32
-	text bool
+	// text is the windows Font opened, flushed at the end of each frame.
+	text  [8]int32
+	ntext int
 
-	// fields is how many fields the last frame took, and lastField the
-	// count of fields at its end, from VSync(-1).
+	// backdrop is the picture SetBackdrop gave, copied under each frame,
+	// or nil.
+	backdrop             *uint32
+	backdropW, backdropH int16
+
+	// kanji is the Kanji windows KanjiFont opened, flushed at the end of
+	// each frame after the font's window.
+	kanji  [4]int32
+	nkanji int
+
 	fields    int
 	lastField int32
 }
 
-// Fields is how many fields, vertical blanks, the last frame took: 1 when
-// it was drawn within one, 2 when its work ran past the blank and End
-// waited for the next, which halves the frame rate while it lasts. A
-// game that moves things a fixed amount a frame can move them that many
-// times, so that the game's speed holds whatever is on the screen:
-//
-//	for range min(screen.Fields(), 2) {
-//		player.step()
-//	}
-func (s *Screen) Fields() int { return max(s.fields, 1) }
+// A screenImpl is the screen's storage: the two ordering tables, the
+// overlay's two, and the two frames' packet space.
+type screenImpl struct {
+	ot      [2]GsOT
+	overlay [2]GsOT
+	packets [2][]uint32
+}
 
-// Open sets up the display and the screen. It puts the console in its own
-// video mode, NativeVideoMode, sixty frames a second or fifty, and fills in
-// the settings left zero; then
-// GsInitGraph at Width by Height, interlaced for a picture taller than 256
-// lines, with the GsOFSGPU origin, dithered and in 16-bit color; then
-// GsDefDispBuff with the two buffers one above the other, or both at the
-// top of video memory for an interlaced picture, which has no room for two;
-// and then, unless Init gave it storage, it allocates the ordering tables
-// and the packet space from the heap. A program that wants another
-// arrangement calls those itself, and Init.
+// A frameTable is the ordering table a frame sorts into.
+type frameTable = *GsOT
+
+// A ScreenBuffers is where a screen's two display buffers lie in video
+// memory.
+type ScreenBuffers uint8
+
+const (
+	// ScreenBuffersStacked puts the buffers one above the other, at 0, 0
+	// and 0, Height.
+	ScreenBuffersStacked ScreenBuffers = iota
+
+	// ScreenBuffersSideBySide puts them next to each other at the top of
+	// video memory, at 0, 0 and Width, 0, leaving the rows below Height
+	// whole for textures. It is for a picture no wider than 512.
+	ScreenBuffersSideBySide
+)
+
+// A ScreenOrigin is where a frame's coordinates start on the picture.
+type ScreenOrigin uint8
+
+const (
+	// ScreenOriginTopLeft puts 0, 0 at the picture's top left corner.
+	ScreenOriginTopLeft ScreenOrigin = iota
+
+	// ScreenOriginMiddle puts 0, 0 in the middle of the picture, which is
+	// where 3D drawing wants it: a camera looks through the middle.
+	// Sprites and text are then placed from the middle too, or from the
+	// corner Bounds gives.
+	ScreenOriginMiddle
+)
+
+// A VideoMode is the television standard the picture is sent as.
+type VideoMode int
+
+const (
+	NTSC VideoMode = 0 // sixty fields a second, 240 lines
+	PAL  VideoMode = 1 // fifty, 256
+)
+
+// SetVideo switches the picture to mode, from the console's own that
+// Open chose.
+func (s *Screen) SetVideo(mode VideoMode) { setVideo(mode) }
+
+// Video is the video mode the picture is in, NTSC or PAL, as Open chose
+// or SetVideo changed.
+func (s *Screen) Video() VideoMode { return videoMode() }
+
+// Shift moves the picture on the television by dx, dy from where it is,
+// as Offset placed it.
+func (s *Screen) Shift(dx, dy int) { shiftOffset(dx, dy) }
+
+// SetBackdrop puts the picture in the TIM file tim, a 16-bit image of
+// the screen's size, under every frame from now on: it is copied into
+// the buffer the frame is drawn into before the frame is, in place of
+// the clear to Background, so a frame starts from it. The file's words
+// stay in use. A nil tim takes the backdrop away.
+func (s *Screen) SetBackdrop(tim []uint32) {
+	if tim == nil {
+		s.backdrop = nil
+		return
+	}
+	s.backdrop, s.backdropW, s.backdropH = backdropOf(tim)
+}
+
+// A Frame is one picture being drawn: what is drawn on it is sorted by
+// depth, 0 in front, and drawn when the loop that gave it comes round.
+type Frame struct {
+	s     *Screen
+	table frameTable
+	depth int
+}
+
+// Number is which frame this is, counting from the first Frames gave.
+func (f *Frame) Number() int { return int(f.s.frame) }
+
+// Screen is the screen the frame is drawn on.
+func (f *Frame) Screen() *Screen { return f.s }
+
+// OT is the frame's ordering table, for sorting into it with the
+// library's own calls.
+func (f *Frame) OT() *GsOT { return f.table }
+
+// Depths is how many depths the frame sorts into: 1<<Screen.Depth, or
+// 1<<Screen.OverlayDepth for the overlay.
+func (f *Frame) Depths() int { return 1 << f.depth }
+
+// Overlay is the frame's overlay, drawn after the frame in front of
+// everything on it, with its own depths, or nil when the screen has no
+// OverlayDepth. It is drawn on as the frame is:
+//
+//	panel.Draw(frame.Overlay(), 0)
+func (f *Frame) Overlay() *Frame {
+	if f.s.OverlayDepth == 0 {
+		return nil
+	}
+	return &f.s.over
+}
+
+// Open sets the display up and gives the screen its storage: the
+// console's own video mode, sixty frames a second or fifty, the picture
+// at Width by Height with its origin where Origin puts it, the two display
+// buffers, and, unless Init gave it some, the ordering tables and packet
+// space from the heap.
 func (s *Screen) Open() {
-	SetVideoMode(NativeVideoMode())
 	if s.Width == 0 {
 		s.Width = 320
 	}
 	if s.Height == 0 {
 		s.Height = 240
 	}
+	// A screen Init gave its tables keeps their depth, 0 included.
+	if s.Depth == 0 && s.impl.ot[0].Org == nil {
+		s.Depth = 8
+	}
 	if s.Packets == 0 {
 		s.Packets = 16 << 10
 	}
-	if s.Height > 256 {
-		GsInitGraph(s.Width, s.Height, GsINTER|GsOFSGPU, 1, 0)
-		GsDefDispBuff(0, 0, 0, 0)
-	} else {
-		GsInitGraph(s.Width, s.Height, GsNONINTER|GsOFSGPU, 1, 0)
-		if s.SideBySide {
-			GsDefDispBuff(0, 0, s.Width, 0)
-		} else {
-			GsDefDispBuff(0, 0, 0, s.Height)
-		}
+	s.ntext = 0
+	s.cur = Frame{
+		s:     s,
+		depth: s.Depth,
 	}
-	if s.ot[0].Org == nil {
-		if s.Depth == 0 {
-			s.Depth = 8
-		}
-		s.Init(make([]GsOT_TAG, 2<<s.Depth), make([]uint32, 2*s.Packets/4))
+	s.over = Frame{
+		s:     s,
+		depth: s.OverlayDepth,
 	}
-	if s.OverlayDepth != 0 && s.overlay[0].Org == nil {
-		tags := make([]GsOT_TAG, 2<<s.OverlayDepth)
-		for i := range s.overlay {
-			s.overlay[i].Length = uint32(s.OverlayDepth)
-			s.overlay[i].Org = &tags[i<<s.OverlayDepth]
-		}
-	}
+	openScreen(s)
 }
 
-// Init gives the screen storage of the program's own, in place of what Open
-// would allocate: tags for both ordering tables, which it splits in half,
-// so the array has 2<<n entries for tables of 1<<n depths; and packets for
-// both frames' GPU commands, split in half the same way, each half large
-// enough for everything one frame sorts. It sets Depth and Packets to
-// match. The packets are words rather than PACKET bytes so that they are
-// aligned as the library's stores need; see Packets.
+// Init gives the screen storage of the program's own, in place of what
+// Open would allocate: tags for both ordering tables, which it splits in
+// half, so the array has 2<<n entries for tables of 1<<n depths, and
+// panics given any other count; and packets for both frames' GPU
+// commands, split in half the same way, each half large enough for
+// everything one frame sorts. It sets Depth and Packets to match. The
+// packets are words rather than PACKET bytes so that they are aligned as
+// the library's stores need; see Packets. A screen with an OverlayDepth
+// gets the overlay's tables from the heap, here as in Open.
 //
 //	const otLength = 4
 //	var otTags [2 << otLength]yaroze.GsOT_TAG
 //	var packets [2 * 4096 / 4]uint32
 //	screen.Init(otTags[:], packets[:])
+//
+// A program that sets the display up itself, with GsInitGraph and
+// GsDefDispBuff, calls Init and not Open, and drives each frame with
+// Begin and End.
 func (s *Screen) Init(tags []GsOT_TAG, packets []uint32) {
 	n := len(tags) / 2
+	if n == 0 || len(tags) != 2*n || n&(n-1) != 0 {
+		panic("yaroze: Screen.Init takes 2<<n tags, two tables of 1<<n")
+	}
 	s.Depth = bits.Len(uint(n)) - 1
 	s.Packets = len(packets) / 2 * 4
-	for i := range s.ot {
-		s.ot[i].Length = uint32(s.Depth)
-		s.ot[i].Org = &tags[i*n]
-		s.packets[i] = packets[i*len(packets)/2 : (i+1)*len(packets)/2]
+	for i := range s.impl.ot {
+		s.impl.ot[i].Length = uint32(s.Depth)
+		s.impl.ot[i].Org = &tags[i*n]
+		s.impl.packets[i] = packets[i*len(packets)/2 : (i+1)*len(packets)/2]
+	}
+	s.ntext = 0
+	s.cur = Frame{
+		s:     s,
+		depth: s.Depth,
+	}
+	s.over = Frame{
+		s:     s,
+		depth: s.OverlayDepth,
+	}
+	s.initOverlay()
+}
+
+// initOverlay gives the overlay its two ordering tables, from the heap,
+// if the screen has an OverlayDepth and they have not been made.
+func (s *Screen) initOverlay() {
+	if s.OverlayDepth == 0 || s.impl.overlay[0].Org != nil {
+		return
+	}
+	tags := make([]GsOT_TAG, 2<<s.OverlayDepth)
+	for i := range s.impl.overlay {
+		s.impl.overlay[i].Length = uint32(s.OverlayDepth)
+		s.impl.overlay[i].Org = &tags[i<<s.OverlayDepth]
 	}
 }
 
-// Font opens the on-screen font for the screen's frames: FntLoad puts the
-// font into video memory at 960, 256, and FntOpen opens a window for text at
-// x, y, w by h, holding up to chars characters, without a background. The
-// window is placed from the origin Bounds gives. From then on End flushes
-// what the frame printed, after the frame's table, which is when text has
-// to be drawn. It returns the stream FntOpen opened.
-func (s *Screen) Font(x, y, w, h, chars int32) int32 {
-	FntLoad(960, 256)
-	s.font = FntOpen(x, y, w, h, 0, chars)
-	s.text = true
-	return s.font
-}
+// Close puts the display back as the BIOS had it, for a program that is
+// done drawing.
+func (s *Screen) Close() { resetGraph() }
 
-// Bounds is the screen as the frame's coordinates see it: the top left
-// corner and the size. Where the corner is depends on the origin, which
-// GsInitGraph puts at the top left, so that the corner is 0, 0, and
-// GsInit3D in the middle, for 3D's sake, so that it is minus half the
-// size.
+// Bounds is the picture as a frame's coordinates see it: its top left
+// corner, which is 0, 0 unless Origin moved the origin, and its size.
 //
 //	b := screen.Bounds()
-//	box.X, box.Y = b.Clamp(box.X+dx, box.Y+dy, box.W, box.H)
-func (s *Screen) Bounds() RECT {
-	o := POSITION()
-	return RECT{X: -o.Offx, Y: -o.Offy, W: int16(s.Width), H: int16(s.Height)}
+//	box.MoveTo(b.X+24, b.Y+b.H-64)
+func (s *Screen) Bounds() geom.Rect {
+	x, y := origin()
+	return geom.Rect{
+		X: -x,
+		Y: -y,
+		W: s.Width,
+		H: s.Height,
+	}
 }
 
-// Frame returns how many frames End has finished, for animation that keeps
-// time by the frame.
+// Frame returns how many frames have been finished, for animation that
+// keeps time by the frame.
 func (s *Screen) Frame() int { return int(s.frame) }
 
-// Begin starts a frame: it finds the buffer the frame is drawn into, points
-// the library at the frame's packet space, clears the frame's ordering
-// table, and returns it for the frame's sorts.
-func (s *Screen) Begin() *GsOT {
-	s.active = int(GsGetActiveBuff())
-	GsSetWorkBase(Packets(&s.packets[s.active][0]))
-	GsClearOt(0, 0, &s.ot[s.active])
-	if s.OverlayDepth != 0 {
-		GsClearOt(0, 0, &s.overlay[s.active])
-	}
-	return &s.ot[s.active]
-}
+// Begin starts a frame: it finds the buffer the frame is drawn into,
+// points the library at the frame's packet space, clears the frame's
+// ordering table, and returns it for the frame's sorts. Frames calls it
+// each time round; a program that keeps its own loop calls it and End.
+func (s *Screen) Begin() *GsOT { return beginFrame(s).table }
 
-// Overlay returns the frame's second ordering table, which End draws after
-// the one Begin returned, or nil without OverlayDepth.
+// OT returns the ordering table of the frame Begin started, for code
+// that did not keep what Begin returned.
+func (s *Screen) OT() *GsOT { return &s.impl.ot[s.active] }
+
+// Overlay returns the overlay's ordering table for the frame Begin
+// started, which End draws after the frame's, or nil without
+// OverlayDepth.
 func (s *Screen) Overlay() *GsOT {
 	if s.OverlayDepth == 0 {
 		return nil
 	}
-	return &s.overlay[s.active]
+	return &s.impl.overlay[s.active]
 }
 
-// End finishes the frame: it waits for the GPU to finish the last one and
-// for the display to reach the vertical blank, or the Interval'th, swaps the
-// buffers, sorts a clear of the screen to Background in front of
-// everything, starts the GPU on the frame's table, then on the overlay's
-// if there is one, and then draws the frame's text if Font opened the
-// font. It returns what VSync reported,
-// the frame's length in horizontal lines. Without Font, text goes after
-// it, since FntFlush draws into the buffer the swap has just made current.
-func (s *Screen) End() int32 {
-	ot := &s.ot[s.active]
-	DrawSync(0)
-	var n int32
-	if s.Interval > 1 {
-		n = VSync(int32(s.Interval))
-	} else {
-		n = VSync(0)
-	}
-	f := VSync(-1)
-	s.fields = int(f - s.lastField)
-	s.lastField = f
-	GsSwapDispBuff()
-	GsSortClear(s.Background.R, s.Background.G, s.Background.B, ot)
-	GsDrawOt(ot)
-	if s.OverlayDepth != 0 {
-		GsDrawOt(&s.overlay[s.active])
-	}
-	if s.text {
-		FntFlush(s.font)
-	}
-	s.frame++
-	return n
-}
+// End finishes the frame: it waits for the GPU to finish the last one
+// and for the display to reach the vertical blank, or the Interval'th,
+// swaps the buffers, puts the background behind everything, starts the
+// GPU on the frame, then on the overlay, and then draws the text of the
+// windows Font and KanjiFont opened. It returns what VSync reported, the
+// frame's length in horizontal lines.
+func (s *Screen) End() int { return endFrame(s) }
 
-// Frames is the frame loop: each time round, Begin starts a frame, the
-// loop's body sorts into the table it gives, and End finishes the frame. A
-// break leaves before the frame it is in is drawn.
-//
-//	for ot := range screen.Frames() {
-//		pad.Update()
-//		if pad.Pressed(yaroze.PADselect) {
-//			break
-//		}
-//		box.Sort(ot, 0)
-//	}
-func (s *Screen) Frames() iter.Seq[*GsOT] {
-	return func(yield func(*GsOT) bool) {
-		for yield(s.Begin()) {
-			s.End()
+// Frames is the frame loop: each time round it starts a frame, the body
+// draws on it, and the frame is finished and shown when the body is
+// done. A break leaves before the frame it is in is drawn.
+func (s *Screen) Frames() iter.Seq[*Frame] {
+	return func(yield func(*Frame) bool) {
+		for yield(beginFrame(s)) {
+			endFrame(s)
 		}
 	}
 }
 
-// OT returns the ordering table of the frame Begin started, for code that
-// did not keep what Begin returned.
-func (s *Screen) OT() *GsOT { return &s.ot[s.active] }
+// Fields is how many vertical blanks the last frame took: 1 when it was
+// drawn within one, 2 when its work ran past the blank and the frame
+// waited for the next, which halves the frame rate while it lasts. A
+// game that moves things a fixed amount a frame can move them that many
+// times, so that its speed holds whatever is on the screen.
+func (s *Screen) Fields() int { return max(s.fields, 1) }
 
-// Clamp returns x and y moved as little as they need to be for a w by h box
-// at them to lie inside the rectangle.
-func (r RECT) Clamp(x, y int16, w, h uint16) (int16, int16) {
-	return min(max(x, r.X), r.X+r.W-int16(w)), min(max(y, r.Y), r.Y+r.H-int16(h))
+// Wait lets n vertical blanks go by without drawing, for a pause.
+func (s *Screen) Wait(n int) {
+	for range n {
+		vsync(0)
+	}
+}
+
+// Font opens a window for text at x, y, w by h, holding up to chars
+// characters at a time, in the console's own font, and returns it. What
+// is printed to it during a frame is drawn at the frame's end, in front
+// of everything else, and the window empties for the next. The library
+// has eight such windows and 1024 characters between them.
+func (s *Screen) Font(x, y, w, h, chars int) Text {
+	id := fontOpen(s.ntext == 0, x, y, w, h, chars)
+	if id >= 0 && s.ntext < len(s.text) {
+		s.text[s.ntext] = id
+		s.ntext++
+	}
+	return Text{id}
 }

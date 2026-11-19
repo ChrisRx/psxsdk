@@ -76,7 +76,7 @@ var (
 // display buffer, which the screen takes in halves. The packet area has to
 // be large enough for every primitive in a frame.
 var (
-	screen     = yaroze.Screen{Background: yaroze.CVECTOR{R: 60, G: 120, B: 120}}
+	screen     = yaroze.Screen{Background: yaroze.Color{R: 60, G: 120, B: 120}}
 	otTags     [2 << otLength]yaroze.GsOT_TAG
 	packetArea [2 * maxObj * 24 / 4]uint32
 

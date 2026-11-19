@@ -101,11 +101,10 @@ var (
 	invaderFile = disc.Register("ASSETS/INVADER1.TIM", "assets/INVADER1.TIM").Into(invaderData[:])
 	shipFile    = disc.Register("ASSETS/SHIP1.TIM", "assets/SHIP1.TIM").Into(shipData[:])
 	shotFile    = disc.Register("ASSETS/FIRE04.TIM", "assets/FIRE04.TIM").Into(shotData[:])
-	files       = []*disc.File{&vh, &vb, &seqFile, &invaderFile, &shipFile, &shotFile}
 
-	invaderTIM = yaroze.TIM(invaderData[:])
-	shipTIM    = yaroze.TIM(shipData[:])
-	shotTIM    = yaroze.TIM(shotData[:])
+	invaderTIM = invaderData[:]
+	shipTIM    = shipData[:]
+	shotTIM    = shotData[:]
 )
 
 // A movement is where something is and how it moves: its position and
@@ -380,7 +379,7 @@ func initializeAll() bool {
 	yaroze.FntLoad(960, 256)
 	yaroze.FntOpen(16, 16, 256, 200, 0, 512)
 
-	if missing := demo.Load(files, nil); missing != "" {
+	if missing := demo.Load(disc.Registered(), nil); missing != "" {
 		fail("could not read ", missing)
 		return false
 	}
@@ -525,7 +524,7 @@ func initializeTexturesAndSprites() {
 	var image1, image2, image3 yaroze.GsIMAGE
 
 	// The player's ship.
-	image1 = shipTIM.Image()
+	yaroze.GsGetTimInfo(&shipTIM[1], &image1)
 	loadTexture(&image1, 320, 0)
 	texturePageID1 := yaroze.GetTPage(1, 0, 320, 0)
 	playersSprite.W = image1.Pw * 2
@@ -536,7 +535,7 @@ func initializeTexturesAndSprites() {
 	playersSprite.Attribute |= eightBitTexture | semiTransparent1 | semiTransparent2
 
 	// The invaders.
-	image2 = invaderTIM.Image()
+	yaroze.GsGetTimInfo(&invaderTIM[1], &image2)
 	loadTexture(&image2, 320, 256)
 	texturePageID2 := yaroze.GetTPage(1, 0, 320, 256)
 	for i := range invaders {
@@ -552,7 +551,7 @@ func initializeTexturesAndSprites() {
 	}
 
 	// The shots.
-	image3 = shotTIM.Image()
+	yaroze.GsGetTimInfo(&shotTIM[1], &image3)
 	loadTexture(&image3, 640, 0)
 	texturePageID3 := yaroze.GetTPage(0, 0, 640, 0)
 	for i := range shots {
@@ -797,12 +796,13 @@ func yOverlap(first, second *yaroze.RECT) bool {
 // remembering whether both worked so that nothing is played or closed
 // otherwise.
 func initSound() {
-	var ok bool
-	if bank, ok = yaroze.OpenBank(vh.Data(), vb.Data()); !ok {
+	var err error
+	if bank, err = yaroze.OpenBank(vh.Data(), vb.Data()); err != nil {
 		soundSuccess = false
 		return
 	}
-	song, soundSuccess = bank.Sequence(seqData[:])
+	song, err = bank.Sequence(seqData[:])
+	soundSuccess = err == nil
 }
 
 func playSound() {

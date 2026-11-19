@@ -24,22 +24,3 @@ var (
 	sunTIM    = disc.Register("ASSETS/SUN.TIM", "assets/SUN.TIM")
 	wallTIM   = disc.Register("ASSETS/WALL.TIM", "assets/WALL.TIM")
 )
-
-// files is every file above, in the order disc.LoadAll reads them.
-var files = []*disc.File{
-	&bedTIM,
-	&chestTIM,
-	&floorTIM,
-	&fontTIM,
-	&grassTIM,
-	&hallDAT,
-	&heroTIM,
-	&houseDAT,
-	&logTIM,
-	&meadowDAT,
-	&npcTIM,
-	&roofTIM,
-	&skyTIM,
-	&sunTIM,
-	&wallTIM,
-}

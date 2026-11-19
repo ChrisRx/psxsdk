@@ -1,5 +1,5 @@
 // The program of v1 after an edit: the frame loop's body prints something
-// else and a new function gives the colour, speed starts at 5, which turns
+// else and a new function gives the color, speed starts at 5, which turns
 // the background orange, and frames keeps counting from where v1 left it,
 // since a patch keeps a variable the program has written.
 package main
@@ -9,7 +9,7 @@ import (
 	"go.chrisrx.dev/psx/yaroze"
 )
 
-var screen = yaroze.Screen{Background: yaroze.CVECTOR{R: 60, G: 120, B: 120}}
+var screen = yaroze.Screen{Background: yaroze.Color{R: 60, G: 120, B: 120}}
 
 var frames int
 
@@ -27,4 +27,4 @@ func main() {
 	}
 }
 
-func orange() yaroze.CVECTOR { return yaroze.CVECTOR{R: 200, G: 100, B: 0} }
+func orange() yaroze.Color { return yaroze.Color{R: 200, G: 100, B: 0} }

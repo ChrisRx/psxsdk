@@ -18,8 +18,14 @@ import (
 	"time"
 )
 
-// Target is the TinyGo target yaroze builds for.
-const Target = "playstation-yaroze"
+// DefaultTarget is the TinyGo target yaroze builds for unless a Build names
+// another: the program with the clean library, internal/libps, linked in.
+const DefaultTarget = "playstation-yaroze-clean"
+
+// ResidentTarget is the target of a program laid over the resident library,
+// as a Net Yaroze runs one: the boot disc's library on real hardware, and the
+// image link.Libps holds otherwise.
+const ResidentTarget = "playstation-yaroze"
 
 // DefaultOpt is the optimization level a build has when it names none: for
 // speed, since a game's frame has a budget. TinyGo's own default is z, for
@@ -40,7 +46,16 @@ type Build struct {
 	HotBase string
 	HotAt   uint32
 
-	// Target is a TinyGo target file to build for instead of Target: JSON
+	// Experiment turns the compiler's experiments on or off, as
+	// GOEXPERIMENT does: names separated by commas, each after "no" to
+	// turn it off, such as noonstore (see docs/architecture/compiler.md).
+	Experiment string
+
+	// TargetName is the TinyGo target, one the compiler's cache holds,
+	// DefaultTarget if empty.
+	TargetName string
+
+	// Target is a TinyGo target file to build for instead of TargetName: JSON
 	// that inherits it and changes what a program needs changed, such as
 	// the address it is linked at, which ldflags of --defsym=__load=ADDR
 	// set (the serial monitor's is one).

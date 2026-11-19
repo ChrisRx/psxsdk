@@ -1,0 +1,357 @@
+package emu
+
+import (
+	"testing"
+
+	"go.chrisrx.dev/x/assert"
+)
+
+// stepCosts runs the machine n steps and returns what each cost.
+func stepCosts(t *testing.T, m *Machine, n int) []uint32 {
+	t.Helper()
+	costs := make([]uint32, n)
+	for i := range costs {
+		if !assert.NoError(t, m.Step()) {
+			t.FailNow()
+		}
+		costs[i] = m.CPU.LastCycles
+	}
+	return costs
+}
+
+// TestCPUCostCache runs a line of code cold and then from the cache, and
+// through KSEG1, where it is never cached.
+func TestCPUCostCache(t *testing.T) {
+	const at = 0x80010000 // the start of a cache line
+	m := newTestMachine(t)
+	m.SetCPUCost(true)
+	write(m, at, nop, nop, nop, nop, nop)
+
+	// Jumped into, the line fills from the first word: 3 cycles, 1.5 a
+	// word, 2 for the jump, and its other words come with it.
+	startAt(m, at)
+	assert.Equal(t, []uint32{3 + 6 + 2, 0, 0, 0}, stepCosts(t, m, 4))
+	// Run into, the next line costs no jump, and only the words from the
+	// one entered.
+	assert.Equal(t, []uint32{3 + 6}, stepCosts(t, m, 1))
+
+	startAt(m, at)
+	assert.Equal(t, []uint32{1, 1, 1, 1}, stepCosts(t, m, 4), "from the cache")
+
+	startAt(m, at+8)
+	m.SetCPUCost(true) // an empty cache
+	assert.Equal(t, []uint32{3 + 3 + 2, 0}, stepCosts(t, m, 2), "entered halfway")
+
+	startAt(m, at|0x20000000)
+	assert.Equal(t, []uint32{6, 6, 6}, stepCosts(t, m, 3), "uncached")
+
+	m.SetCPUCost(false)
+	startAt(m, at)
+	assert.Equal(t, []uint32{2, 2, 2}, stepCosts(t, m, 3), "with the model off")
+}
+
+// TestCPUCostLoads runs loads and stores from the cache.
+func TestCPUCostLoads(t *testing.T) {
+	const (
+		at   = 0x80010000
+		data = 0x80020000
+		r5   = uint32(5)
+	)
+	m := newTestMachine(t)
+	m.SetCPUCost(true)
+	code := []uint32{
+		lw(r1, 0, r4), lw(r2, 4, r4), nop, // a run of loads, then one used
+		lw(r1, 0, r5), lw(r2, 4, r5), // the scratchpad
+		lw(r1, 0x1814, r5),          // GPUSTAT
+		sw(0, 0, r4), lw(r1, 8, r4), // a store, then a load waiting for it
+		mult, mflo(r1),
+	}
+	write(m, at, code...)
+	m.CPU.R[r4], m.CPU.R[r5] = data, 0x1f800000
+	m.CPU.R[r2], m.CPU.R[r3] = 1000, 7
+	startAt(m, at)
+	stepCosts(t, m, len(code)) // into the cache
+
+	startAt(m, at)
+	assert.Equal(t, []uint32{
+		6, 6, 1 + 1,
+		1, 1,
+		5,
+		1, 2 + 1 + 5 + 3,
+		1 + 1, 6 + 1,
+	}, stepCosts(t, m, len(code)))
+}
+
+func mflo(rd uint32) uint32 { return rType(0x12, 0, 0, rd) }
+
+// TestCPUCostOTC clears an ordering table: the step after the one starting
+// it runs, and the next to reach the bus waits for the transfer.
+func TestCPUCostOTC(t *testing.T) {
+	const (
+		at = 0x80010000
+		r5 = uint32(5)
+	)
+	m := newTestMachine(t)
+	m.SetCPUCost(true)
+	m.Bus.Write32(0x1f8010f0, 0x08000000) // enable channel 6
+	code := []uint32{
+		nop,                                    // 2 after the warm-up's load
+		sw(r2, 0x10e0, r5), sw(r3, 0x10e4, r5), // MADR and BCR
+		sw(r1, 0x10e8, r5), // CHCR: start
+		nop,                // the transfer starts after this one
+		nop,
+		nop, // by when the write buffer has drained
+		lw(r2, 0, r4),
+	}
+	write(m, at, code...)
+	m.CPU.R[r1], m.CPU.R[r2], m.CPU.R[r3] = 0x11000002, 0x00060ffc, 1024
+	m.CPU.R[r4], m.CPU.R[r5] = 0x80020000, 0x1f800000
+	startAt(m, at)
+	stepCosts(t, m, len(code)) // into the cache
+
+	m.CPU.R[r2] = 0x00060ffc
+	startAt(m, at)
+	costs := stepCosts(t, m, len(code))
+	assert.Equal(t, []uint32{2, 1, 1, 1, 1, 1, 1}, costs[:7], "the cached steps run on")
+	assert.Equal(t, uint32(1024*otcHoldPerMille/1000-2+1+5), costs[7], "the load waits out the transfer")
+}
+
+// TestCPUCostSkip checks that skipping through a wait under the cost model
+// comes to what stepping through it does.
+func TestCPUCostSkip(t *testing.T) {
+	for _, at := range []uint32{0x80012340, 0xa0123450} {
+		skipped := compareRuns(t, 3_000_000, func(m *Machine) {
+			m.SetCPUCost(true)
+			countBlanks(m, irqVBlank)
+			loop := []uint32{lw(r1, 0, r4), nop, subu(r1, r3, r1), bgez(r1, -4), nop}
+			write(m, at, loop...)
+			write(m, at+4*uint32(len(loop)), waitAgain(at)...)
+			m.CPU.R[r4] = waitCount
+			startAt(m, at)
+		})
+		assert.Equal(t, true, skipped > 2_000_000, "at %08x, skipped %d of 3000000 steps", at, skipped)
+	}
+}
+
+// TestCPUCostAfterStores runs a load after a store with three instructions
+// between, which don't hide the wait, and then lwc2 from RAM, after which the
+// next instruction costs a cycle more whatever it is.
+func TestCPUCostAfterStores(t *testing.T) {
+	const (
+		at   = 0x80010000
+		data = 0x80020000
+	)
+	m := newTestMachine(t)
+	m.SetCPUCost(true)
+	m.CPU.COP0[12] |= 1 << 30 // the GTE on
+	code := []uint32{
+		nop,
+		lw(r1, 0, r4), sw(0, 4, r4), nop, nop, nop,
+		lw(r2, 8, r4), lwc2(0, 12, r4), lwc2(1, 16, r4), nop,
+	}
+	write(m, at, code...)
+	m.CPU.R[r4] = data
+	startAt(m, at)
+	stepCosts(t, m, len(code)) // into the cache
+
+	startAt(m, at)
+	assert.Equal(t, []uint32{
+		1,
+		6, 1 + 1, 1, 1, 1,
+		2 + 6, 1 + 6, 1 + 6, 1 + 1,
+	}, stepCosts(t, m, len(code)))
+}
+
+func lwc2(rt uint32, off int, base uint32) uint32 { return iType(0x32, base, rt, off) }
+
+// TestCPUCostPorts runs loads from and stores to the SPU and I_STAT, which
+// cost more and drain more slowly than the other ports, and a load from RAM
+// after a store to the SPU, which doesn't wait for it.
+func TestCPUCostPorts(t *testing.T) {
+	const (
+		at   = 0x80010000
+		data = 0x80020000
+		spu  = 0x1f801d80 // the main volume
+		irq  = 0x1f801070
+		r5   = uint32(5)
+		r6   = uint32(6)
+	)
+	m := newTestMachine(t)
+	m.SetCPUCost(true)
+	code := []uint32{
+		nop,
+		lw(r1, 0, r4), lw(r2, 0, r6),
+		sw(0, 0, r4), lw(r3, 0, r5),
+		sw(0, 0, r4), sw(0, 0, r4), lw(r1, 0, r4),
+		lw(r2, 0, r4), nop, lw(r1, 0, r4),
+	}
+	write(m, at, code...)
+	m.CPU.R[r4], m.CPU.R[r5], m.CPU.R[r6] = spu, data, irq
+	startAt(m, at)
+	stepCosts(t, m, len(code)) // into the cache
+
+	startAt(m, at)
+	assert.Equal(t, []uint32{
+		1,
+		1 + 19, 1 + 3,
+		1, 1 + 5,
+		1 + 1, 1, 14 + 1 + 19, // the load waits for both stores, 7.5 each
+		1 + 1 + 19, 1, 1 + 19, // a load straight after another costs 1 more
+	}, stepCosts(t, m, len(code)))
+}
+
+// TestCPUCostRows runs stores to RAM that change DRAM rows: each starts to
+// leave the write buffer no sooner than 3.5 cycles after the store before it
+// left, which the next store waits for, and a load from a port after them
+// waits for all but the last store's change. Stores to one row don't wait.
+func TestCPUCostRows(t *testing.T) {
+	const (
+		at   = 0x80010000
+		data = 0x80020000
+		irq  = 0x1f801070
+		r5   = uint32(5)
+		r6   = uint32(6)
+	)
+	m := newTestMachine(t)
+	m.SetCPUCost(true)
+	code := []uint32{
+		nop,
+		sw(0, 0, r4), sw(0, 4, r4), sw(0, 0, r4), lw(r1, 0, r6), // one row
+		sw(0, 0, r4), sw(0, 0, r5), sw(0, 0, r4), lw(r1, 0, r6), // two changes
+		sw(0, 0, r5), lw(r1, 0, r6), // another row, the buffer empty
+	}
+	write(m, at, code...)
+	m.CPU.R[r4], m.CPU.R[r5], m.CPU.R[r6] = data, data+0x1000, irq
+	startAt(m, at)
+	stepCosts(t, m, len(code)) // into the cache
+
+	startAt(m, at)
+	assert.Equal(t, []uint32{
+		1,
+		1, 1, 1, 4 + 1 + 3, // the load waits for the three stores, 2 each
+		1, 1, 1, 8 + 1 + 3, // and for the first change of row, 3.5
+		1, 2 + 1 + 3, // another row again, but the load does not wait for the change
+	}, stepCosts(t, m, len(code)))
+}
+
+// TestCPUCostMult times mult and multu with mflo straight after, by the
+// width of rs (padcost48, spec 48): rt does not count.
+func TestCPUCostMult(t *testing.T) {
+	const at = 0x80010000
+	multu := uint32(0x00430019) // multu $2, $3
+	for _, c := range []struct {
+		op     uint32
+		rs, rt uint32
+		want   uint32
+	}{
+		{mult, 7, 7, 7},
+		{mult, 0x7ff, 7, 7},
+		{mult, 0x800, 7, 7 + 3},
+		{mult, 0xfffff, 7, 7 + 3},
+		{mult, 0x100000, 7, 7 + 7},
+		{mult, 0x7fffffff, 7, 7 + 7},
+		{mult, 0xfffff800, 7, 7},
+		{mult, 0xfffff7ff, 7, 7 + 3},
+		{mult, 0xfff00000, 7, 7 + 3},
+		{mult, 0xffefffff, 7, 7 + 7},
+		{mult, 7, 0x7fffffff, 7},
+		{multu, 0x7ff, 7, 7},
+		{multu, 0x800, 7, 7 + 3},
+		{multu, 0x100000, 7, 7 + 7},
+		{multu, 0xffffffff, 7, 7 + 7},
+	} {
+		m := newTestMachine(t)
+		m.SetCPUCost(true)
+		code := []uint32{c.op, mflo(r1)}
+		write(m, at, code...)
+		startAt(m, at)
+		stepCosts(t, m, len(code)) // into the cache
+		m.CPU.R[r2], m.CPU.R[r3] = c.rs, c.rt
+		startAt(m, at)
+		assert.Equal(t, []uint32{1, c.want}, stepCosts(t, m, len(code)), "%08x rs %x rt %x", c.op, c.rs, c.rt)
+	}
+}
+
+// TestCPUCostLoadsZero runs loads into $zero back to back, which cost a
+// console what loads into registers in turn do, and loads into one other
+// register, which cost a cycle more each (padcost48, "lw zero" and "lw run").
+func TestCPUCostLoadsZero(t *testing.T) {
+	const (
+		at   = 0x80010000
+		data = 0x80020000
+	)
+	m := newTestMachine(t)
+	m.SetCPUCost(true)
+	code := []uint32{lw(0, 0, r4), lw(0, 0, r4), lw(0, 0, r4), lw(r1, 0, r4), lw(r1, 0, r4), nop}
+	write(m, at, code...)
+	m.CPU.R[r4] = data
+	startAt(m, at)
+	stepCosts(t, m, len(code))
+	startAt(m, at)
+	assert.Equal(t, []uint32{6, 6, 6, 6, 6 + 1, 1 + 1}, stepCosts(t, m, len(code)))
+}
+
+// TestCPUCostBlocks sends an image to the GPU in blocks of 16 words, with
+// the drawing time on: cached code runs on, loads from RAM go one to a
+// block, reads of a port two to a block, and stores leave the write buffer
+// two or three to a block, wherever in RAM they go (probes/dmahold, spec 50
+// of internal/libps).
+func TestCPUCostBlocks(t *testing.T) {
+	const (
+		at     = 0x80010000
+		r5     = uint32(5)
+		r6     = uint32(6)
+		blocks = 32
+		block  = 16 * imageCyclesTenths // tenths of a cycle
+	)
+	run := func(body ...uint32) []uint32 {
+		m := newTestMachine(t)
+		m.SetCPUCost(true)
+		m.SetDrawTime(true)
+		m.Bus.Write32(0x1f8010f0, 0x00000800) // enable channel 2
+		code := append([]uint32{
+			nop,
+			sw(r2, 0x10a0, r5), sw(r3, 0x10a4, r5), // MADR and BCR
+			sw(r1, 0x10a8, r5), // CHCR: start
+			nop,                // the blocks start after this one
+		}, body...)
+		write(m, at, code...)
+		m.CPU.R[r4], m.CPU.R[r5], m.CPU.R[r6] = 0x80020000, 0x1f800000, 0x80100000
+		var costs []uint32
+		for _, timed := range []bool{false, true} { // the first into the cache
+			m.SetDrawTime(timed)
+			m.Bus.Write32(0x1f801814, 0x04000000)
+			m.Bus.Write32(0x1f801810, 0xa0000000)
+			m.Bus.Write32(0x1f801810, 0<<16|640)
+			m.Bus.Write32(0x1f801810, blocks<<16|32)
+			m.Bus.Write32(0x1f801814, 0x04000002)
+			m.CPU.R[r1], m.CPU.R[r2], m.CPU.R[r3] = 0x01000201, 0x00020400, blocks<<16|16
+			startAt(m, at)
+			costs = stepCosts(t, m, len(code))[5:]
+		}
+		return costs
+	}
+	sum := func(costs []uint32) (n uint32) {
+		for _, c := range costs {
+			n += c
+		}
+		return n
+	}
+	repeat := func(n int, ops ...uint32) (code []uint32) {
+		for range n {
+			code = append(code, ops...)
+		}
+		return code
+	}
+	// blocksOf is how many blocks' time the steps took, to the nearest.
+	blocksOf := func(costs []uint32) uint32 { return (sum(costs)*10 + block/2) / block }
+
+	assert.Equal(t, uint32(64), sum(run(repeat(64, nop)...)), "cached code runs on")
+	assert.Equal(t, 16, blocksOf(run(repeat(16, lw(r2, 0, r4))...)), "a load from RAM a block")
+	assert.Equal(t, 16, blocksOf(run(repeat(16, lw(r2, 0, r4), nop, nop, nop, nop, nop, nop, nop)...)), "a load from RAM a block, seven nops apart")
+	assert.Equal(t, 8, blocksOf(run(repeat(16, lw(r2, 0x1814, r5))...)), "two reads of a port a block")
+	assert.Equal(t, 10, blocksOf(run(repeat(30, sw(0, 4, r4))...)), "two or three stores a block, after the four the write buffer holds")
+	assert.Equal(t, 10, blocksOf(run(repeat(30, sw(0, 4, r6))...)), "wherever in RAM they go")
+	after := run(append(repeat(blocks+2, lw(r2, 0, r4)), lw(r1, 0, r4), lw(r2, 0, r4))...)
+	assert.Equal(t, []uint32{6, 6}, after[blocks+2:], "and the bus is free once the blocks are done")
+}

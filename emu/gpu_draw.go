@@ -390,7 +390,7 @@ func (g *gpu) triangle(v0, v1, v2 vertex, d polyData) {
 			ea.next(lo)
 			eb.next(lo)
 			ec.next(lo)
-			if lo <= hi {
+			if lo <= hi && !g.skipsRow(y) {
 				row := g.vramIndex(0, y)
 				fill16(g.vram[row+r.x0+lo:row+r.x0+hi+1], color)
 			}
@@ -398,7 +398,7 @@ func (g *gpu) triangle(v0, v1, v2 vertex, d polyData) {
 		return
 	}
 	// With SIMD, four pixels at a time where that draws the same.
-	if g.triangleVec(&r) {
+	if !g.fieldSkip && g.triangleVec(&r) {
 		return
 	}
 
@@ -412,6 +412,9 @@ func (g *gpu) triangle(v0, v1, v2 vertex, d polyData) {
 	for y := r.y0; y <= r.y1; y++ {
 		lo, hi := ec.clip(eb.clip(ea.clip(0, r.x1-r.x0)))
 		e0, e1, e2 := ea.next(lo), eb.next(lo), ec.next(lo)
+		if g.skipsRow(y) {
+			continue
+		}
 		for x := r.x0 + lo; x <= r.x0+hi; x, e0, e1, e2 = x+1, e0+ea.dx, e1+eb.dx, e2+ec.dx {
 			z0, z1, z2 := float32(e0), float32(e1), float32(e2)
 
@@ -503,7 +506,7 @@ func (g *gpu) drawRect(d rectData) {
 		color := bgr555(d.v0.c)
 		xl, xr := max(int(x0), int(g.drawX1)), min(xmax-1, int(g.drawX2))
 		for y := max(int(y0), int(g.drawY1)); y <= min(ymax-1, int(g.drawY2)); y++ {
-			if xl <= xr {
+			if xl <= xr && !g.skipsRow(y) {
 				row := g.vramIndex(0, y)
 				fill16(g.vram[row+xl:row+xr+1], color)
 			}
@@ -511,7 +514,7 @@ func (g *gpu) drawRect(d rectData) {
 		return
 	}
 	// With SIMD, four pixels at a time where that draws the same.
-	if g.rectVec(d, int(x0), int(y0), xmax, ymax) {
+	if !g.fieldSkip && g.rectVec(d, int(x0), int(y0), xmax, ymax) {
 		return
 	}
 
@@ -519,7 +522,7 @@ func (g *gpu) drawRect(d rectData) {
 	for y := y0; int(y) < ymax; y++ {
 		xc := 0
 		for x := x0; int(x) < xmax; x, xc = x+1, xc+1 {
-			if !g.inDrawArea(int(x), int(y)) {
+			if !g.inDrawArea(int(x), int(y)) || g.skipsRow(int(y)) {
 				continue
 			}
 			var color uint16
@@ -560,7 +563,7 @@ func (g *gpu) drawLine(v0, v1 vertex, color uint16) {
 		return v
 	}
 	plot := func(x, y int) {
-		if x < vramWidth && y < vramHeight && x >= 0 && y >= 0 && g.inDrawArea(x, y) {
+		if x < vramWidth && y < vramHeight && x >= 0 && y >= 0 && g.inDrawArea(x, y) && !g.skipsRow(y) {
 			g.vram[x+y*vramWidth] = color
 		}
 	}

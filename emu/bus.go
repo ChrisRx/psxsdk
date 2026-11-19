@@ -60,6 +60,10 @@ type Bus struct {
 
 	// log is the machine's, for accesses to nothing.
 	log *logger
+
+	// hook, if set, sees each access to a device: the address, the size in
+	// bytes, the value, and whether it writes. RAM goes around it.
+	hook func(addr uint32, size int, v uint32, write bool)
 }
 
 // unmapped logs an access to an address nothing is mapped at.
@@ -215,7 +219,11 @@ func (b *Bus) Read32(addr uint32) uint32 {
 	}
 	if m, off, ok := b.find(addr); ok {
 		b.cycles = m.delay
-		return m.dev.Read32(off)
+		v := m.dev.Read32(off)
+		if b.hook != nil {
+			b.hook(addr, 4, uint32(v), false)
+		}
+		return v
 	}
 	// An unmapped 32-bit read leaves the cycle count as it was.
 	b.unmapped("32-bit read", addr)
@@ -231,7 +239,11 @@ func (b *Bus) Read16(addr uint32) uint16 {
 	b.cycles = 2
 	if m, off, ok := b.find(addr); ok {
 		b.cycles = m.delay
-		return m.dev.Read16(off)
+		v := m.dev.Read16(off)
+		if b.hook != nil {
+			b.hook(addr, 2, uint32(v), false)
+		}
+		return v
 	}
 	switch addr {
 	case 0x1f400004:
@@ -252,7 +264,11 @@ func (b *Bus) Read8(addr uint32) uint8 {
 	b.cycles = 2
 	if m, off, ok := b.find(addr); ok {
 		b.cycles = m.delay
-		return m.dev.Read8(off)
+		v := m.dev.Read8(off)
+		if b.hook != nil {
+			b.hook(addr, 1, uint32(v), false)
+		}
+		return v
 	}
 	b.unmapped("8-bit read", addr)
 	return 0
@@ -268,6 +284,9 @@ func (b *Bus) Write32(addr, v uint32) {
 	b.cycles = 0
 	if m, off, ok := b.find(addr); ok {
 		b.cycles = m.delay
+		if b.hook != nil {
+			b.hook(addr, 4, v, true)
+		}
 		m.dev.Write32(off, v)
 		return
 	}
@@ -284,6 +303,9 @@ func (b *Bus) Write16(addr uint32, v uint16) {
 	b.cycles = 0
 	if m, off, ok := b.find(addr); ok {
 		b.cycles = m.delay
+		if b.hook != nil {
+			b.hook(addr, 2, uint32(v), true)
+		}
 		m.dev.Write16(off, v)
 		return
 	}
@@ -300,6 +322,9 @@ func (b *Bus) Write8(addr uint32, v uint8) {
 	b.cycles = 0
 	if m, off, ok := b.find(addr); ok {
 		b.cycles = m.delay
+		if b.hook != nil {
+			b.hook(addr, 1, uint32(v), true)
+		}
 		m.dev.Write8(off, v)
 		return
 	}

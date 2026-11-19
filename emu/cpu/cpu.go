@@ -6,6 +6,8 @@
 // they disagree. That includes psxe's cycle accounting and the places where
 // psxe departs from the hardware; those are marked where they occur, so they
 // can be revisited once something better than psxe is the reference.
+// SetCost swaps psxe's cycle accounting for a model of what a console's
+// instructions cost (cost.go).
 package cpu
 
 import "encoding/binary"
@@ -44,6 +46,7 @@ const (
 	srIEc = 1 << 0  // interrupts enabled
 	srIM2 = 1 << 10 // the interrupt controller's line, in SR and Cause
 	srIsc = 1 << 16 // cache isolated: stores do not reach memory
+	srSwC = 1 << 17 // caches swapped: the instruction cache takes the stores
 	srBEV = 1 << 22 // exception vectors in ROM
 )
 
@@ -93,6 +96,19 @@ type CPU struct {
 	LastCycles  uint32
 	TotalCycles uint64
 
+	// gteDone is when the GTE command in flight finishes, in TotalCycles.
+	// The GTE runs a command while the CPU goes on, and holds the CPU at
+	// its next GTE instruction until the command is done, so a command
+	// costs nothing when issued and the wait is charged to that
+	// instruction, which is what makes work placed between a command
+	// and its result read free.
+	gteDone uint64
+
+	// GTEHook, if set, sees each GTE instruction as it is reached, before any
+	// wait, at the cycle it is reached: a command whole, and for a move, load or
+	// store only the GTE's side of it, not the CPU register or address.
+	GTEHook func(op uint32, cycle uint64)
+
 	// Excode is the exception the last step took, or NoException.
 	Excode uint8
 
@@ -105,6 +121,12 @@ type CPU struct {
 
 	bus    Bus
 	window Window
+
+	// cost is the cost model's state while SetCost has it on, or nil, and
+	// base what an instruction costs beyond its fetch: 2, or 0 with the
+	// model, which charges the whole step itself (see cost.go).
+	cost *cost
+	base uint32
 }
 
 // Window is memory the CPU fetches instructions from directly, rather than
@@ -145,7 +167,9 @@ func New(bus Bus) *CPU {
 
 // Reset puts the CPU in its reset state.
 func (c *CPU) Reset() {
+	model := c.cost != nil
 	*c = CPU{bus: c.bus, window: c.window}
+	c.SetCost(model)
 	c.PC = 0xbfc00000
 	c.NextPC = c.PC + 4
 	c.COP0[SR] = 0x10900000
@@ -204,11 +228,11 @@ func (c *CPU) exception(code uint32) {
 // that it only hands back to the machine when one does. The pointers are
 // into the devices' own state, so Run sees any change a step makes to them.
 type Clock struct {
-	// Steps counts the steps. Run stops at StepsDue.
-	Steps, StepsDue *uint64
+	// Steps counts the steps.
+	Steps *uint64
 
 	// Run stops when TotalCycles reaches any of Due.
-	Due [3]*uint64
+	Due [4]*uint64
 
 	// Video advances by VideoRate for each cycle, rounded to a float32 at
 	// every step. Run stops at the step that would take it to VideoEdge.
@@ -232,10 +256,6 @@ type Clock struct {
 	// not nil.
 	Breaks *Breaks
 
-	// Run stops before the instruction at Spin, the head of a loop the
-	// machine can skip through.
-	Spin uint32
-
 	// Run reads the rest once, when it starts. A device that changes any
 	// of it, or fails, sets Wake, and Run stops after that step so the
 	// machine can read it again.
@@ -256,21 +276,20 @@ func (c *CPU) Step() { c.Run(1, nil) }
 // costs a good deal under wasm.
 func (c *CPU) Run(n uint64, k *Clock) uint64 {
 	// The step at which the devices next have something to do: due in
-	// cycles, for the drive, the pad, the serial port and the SPU's sample,
-	// and stepsDue in steps, for the timers, or straight away while DMA is
-	// busy.
+	// cycles, for the drive, the pad, the serial port, the timers and the
+	// SPU's sample, and stepsDue in steps, straight away while DMA is busy.
 	var total0, due, stepsDue uint64
 	if n > 1 {
 		total0 = c.TotalCycles
-		due = min(*k.Due[0], *k.Due[1], *k.Due[2])
+		due = min(*k.Due[0], *k.Due[1], *k.Due[2], *k.Due[3])
 		if *k.Sample < k.SampleCycles {
 			due = min(due, total0+uint64(k.SampleCycles-*k.Sample))
 		} else {
 			due = total0
 		}
-		stepsDue = 1
-		if !*k.Busy && *k.StepsDue > *k.Steps {
-			stepsDue = *k.StepsDue - *k.Steps
+		stepsDue = ^uint64(0)
+		if *k.Busy {
+			stepsDue = 1
 		}
 		*k.Wake = false
 	}
@@ -302,6 +321,15 @@ func (c *CPU) Run(n uint64, k *Clock) uint64 {
 			c.Opcode, c.LastCycles = c.bus.Fetch(c.PC)
 		}
 
+		// The cost model charges the step before it runs, so that what it
+		// reads from a device is read after any wait (see cost.go).
+		var early uint32
+		if c.cost != nil {
+			early = c.cost.step(c)
+			c.TotalCycles += uint64(early)
+			c.LastCycles = 0
+		}
+
 		c.PC = c.NextPC
 		c.NextPC += 4
 
@@ -312,7 +340,8 @@ func (c *CPU) Run(n uint64, k *Clock) uint64 {
 			// exception.
 			if c.Opcode&0xfe000000 == 0x4a000000 {
 				c.pendingLoad()
-				c.LastCycles += c.GTE.Command(c.Opcode)
+				c.LastCycles += c.gteWait() + c.GTE.Command(c.Opcode)
+				c.gteDone = 0
 			}
 			c.TotalCycles += uint64(c.LastCycles)
 			c.R[0] = 0
@@ -323,7 +352,7 @@ func (c *CPU) Run(n uint64, k *Clock) uint64 {
 			// then lets a pending load land, then writes its result, so
 			// an instruction in a load's delay slot sees the old value
 			// and its own result wins over the load's.
-			cycles, ok := uint32(2), true
+			cycles, ok := c.base, true
 			switch op := c.Opcode >> 26; op {
 			case 0x00:
 				switch funct := c.Opcode & 0x3f; funct {
@@ -453,13 +482,14 @@ func (c *CPU) Run(n uint64, k *Clock) uint64 {
 			c.TotalCycles += uint64(c.LastCycles)
 			c.R[0] = 0
 		}
+		c.LastCycles += early
 
 		if i >= n {
 			break
 		}
 		video := float32(*k.Video + float32(float32(c.LastCycles)*k.VideoRate))
 		if c.TotalCycles >= due || video >= *k.VideoEdge || i >= stepsDue || *k.Wake ||
-			k.Hooked && c.PC&k.HookMask == k.Hook || c.PC == k.Spin ||
+			k.Hooked && c.PC&k.HookMask == k.Hook ||
 			k.Breaks != nil && k.Breaks.Has(c.PC) {
 			break
 		}

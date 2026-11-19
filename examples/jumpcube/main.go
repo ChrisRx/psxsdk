@@ -3,25 +3,23 @@
 // taking coins on the way to a flag, with hills far off scrolling at half
 // the speed behind.
 //
-// The level is scenes/level.json, cooked by mkscene into LEVEL.DAT and
-// read with package scene. It has two tile layers: "far", the hills and
-// clouds, which moves at half the speed of the scroll, and "ground", the
-// level itself, whose cells carry the flags the editor sets on its cell
-// palette. Grass, dirt and blocks are solid. The planks are one
-// way, stood on from above and jumped up through from below. The spikes
-// hurt, the coins are picked up, and the flag has the first of the four
-// flags the editor leaves to the program, which this program takes to
-// mean the end of the level. The program never looks at which picture a
-// cell has, only at its flags: it moves the hero a pixel at a time and
-// asks the ground layer with FlagsAt whether the hero's box would go into
-// anything solid, takes a coin by emptying its cell with SetCell, and
+// The level is scenes/level.json, cooked by mkscene into LEVEL.DAT and read
+// with package scene. It has two tile layers: "far", the hills and clouds,
+// which moves at half the speed of the scroll, and "ground", the level itself,
+// whose cells carry the flags the editor sets on its cell palette. Grass, dirt
+// and blocks are solid. The planks are one way, stood on from above and jumped
+// up through from below. The spikes hurt, the coins are picked up, and the
+// flag has the first of the four flags the editor leaves to the program, which
+// this program takes to mean the end of the level. The program never looks at
+// which picture a cell has, only at its flags: it moves the hero a pixel at a
+// time and asks the ground layer with FlagsAt whether the hero's box would go
+// into anything solid, takes a coin by emptying its cell with SetCell, and
 // scrolls both layers with Scroll, each at its own speed. The hero is the
-// scene's sprite named so, the cube, so the hero starts where the editor
-// put that sprite; the program draws it itself, turned about its middle
-// with GsSortSprite while it turns, which the scene's own drawing of its
-// sprites does not do, and has the scene leave its copy undrawn. Since the level is a
-// scene, a change made in the editor while the program runs is in the
-// level at the next frame.
+// scene's sprite named so, the cube, so the hero starts where the editor put
+// that sprite; the program draws it itself, turned about its middle while it
+// turns, which the scene's own drawing of its sprites does not do, and has the
+// scene leave its copy undrawn. Since the level is a scene, a change made in
+// the editor while the program runs is in the level at the next frame.
 //
 // The hero runs at up to two pixels a frame and falls faster by six
 // sixteenths of a pixel every frame, everything in sixteenths of a pixel,
@@ -51,6 +49,8 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/scene"
 	"go.chrisrx.dev/psx/yaroze"
 )
@@ -67,9 +67,6 @@ const (
 	spinRate = quarter / 32
 	settle   = quarter / 6
 )
-
-// doff is the attribute bit that leaves a sprite undrawn.
-const doff = 1 << 31
 
 // How the hero moves, in sixteenths of a pixel and frames.
 const (
@@ -94,11 +91,18 @@ const (
 )
 
 var (
-	screen = yaroze.Screen{Background: yaroze.CVECTOR{R: 104, G: 172, B: 236}, Depth: 2}
-	pad    yaroze.Pad
+	// The level's sprites are placed from the middle of the screen, as the
+	// editor places them.
+	screen = yaroze.Screen{
+		Background: yaroze.Color{R: 104, G: 172, B: 236},
+		Depth:      2,
+		Origin:     yaroze.ScreenOriginMiddle,
+	}
+	pad    input.Controller
 	world  scene.Scene
 	failed *disc.File
 	err    error
+	text   yaroze.Text
 
 	// The level is read into memory with room to spare, so that the
 	// playground can write a larger level over it while the program runs.
@@ -123,52 +127,59 @@ var (
 	won            bool // the flag reached
 
 	// cube is the hero's sprite as the program draws it, turned.
-	cube yaroze.GsSPRITE
+	cube yaroze.Sprite
 
-	// The text, and dark panels under it, so that it reads over a cloud:
+	// Dark panels under the text, so that it reads over a cloud:
 	// see-through, subtracting from what is under them, as the quest
 	// example's talk box does.
-	text    = yaroze.NewBuffer(160)
-	hudBack = yaroze.GsBOXF{Attribute: 1<<30 | 2<<28, W: 120, H: 16, R: 150, G: 150, B: 150}
-	wonBack = yaroze.GsBOXF{Attribute: 1<<30 | 2<<28, W: 176, H: 60, R: 150, G: 150, B: 150}
+	hudBack = yaroze.Box{
+		W:     120,
+		H:     16,
+		Color: yaroze.Color{R: 150, G: 150, B: 150},
+		Blend: yaroze.BlendSubtract,
+	}
+	wonBack = yaroze.Box{
+		W:     176,
+		H:     60,
+		Color: yaroze.Color{R: 150, G: 150, B: 150},
+		Blend: yaroze.BlendSubtract,
+	}
 )
 
 func main() {
 	screen.Open()
-	yaroze.GsInit3D()
 	b := screen.Bounds()
-	screen.Font(int32(b.X)+12, int32(b.Y)+10, 296, 120, 256)
-	hudBack.X, hudBack.Y = b.X+8, b.Y+6
-	wonBack.X, wonBack.Y = b.X+72, b.Y+72
+	text = screen.Font(b.X+12, b.Y+10, 296, 120, 256)
+	hudBack.MoveTo(b.X+8, b.Y+6)
+	wonBack.MoveTo(b.X+72, b.Y+72)
 
 	levelDAT = levelDAT.Into(levelData[:])
-	if failed = disc.LoadAll(300, files...); failed == nil {
+	if failed = disc.LoadAll(300); failed == nil {
 		start(b)
 	}
-	for ot := range screen.Frames() {
+	for frame := range screen.Frames() {
 		if failed != nil {
-			yaroze.Print("could not read ")
-			yaroze.Print(failed.Name)
+			text.Print("could not read ").Print(failed.Name)
 			continue
 		}
 		if err != nil {
-			yaroze.Print(err.Error())
+			text.Print(err.Error())
 			continue
 		}
 		pad.Update()
-		// A level changed in the editor: the coins are all back, and the
-		// hero may have been moved.
+		// A level changed in the editor: the coins are all back, and
+		// the hero may have been moved.
 		if world.Reload() {
 			coins = 0
 			read(b)
 		}
 		ground, sp := world.Layer("ground"), world.Sprite("hero")
 		if ground == nil || sp == nil {
-			yaroze.Print("the level needs a layer named ground\nand a sprite named hero\n")
+			text.Print("the level needs a layer named ground\nand a sprite named hero\n")
 			continue
 		}
 		if won {
-			if pad.Pressed(yaroze.PADstart) {
+			if pad.Pressed(input.Start) {
 				start(b)
 				continue
 			}
@@ -178,32 +189,31 @@ func main() {
 		follow(ground, b)
 		world.Scroll(camX, 0)
 		show(sp, b)
-		world.Draw(ot, ot)
+		world.Draw(frame, frame)
 		if spin%quarter == 0 {
-			cube.SortFast(ot, 0)
+			cube.DrawFast(frame, 0)
 		} else {
-			cube.Sort(ot, 0)
+			cube.Draw(frame, 0)
 		}
 
-		// The panels go in after the cube, at the same depth, so that they
-		// are drawn before it, under the cube. The text goes over everything.
-		hudBack.Sort(ot, 0)
-		text.Reset()
-		text.WriteString("coins ").WriteInt(coins).WriteString(" of ").WriteInt(total)
+		// The panels go in after the cube, at the same depth, so that
+		// they are drawn before it, under the cube. The text goes over
+		// everything.
+		hudBack.Draw(frame, 0)
+		text.Print("coins ").Int(coins).Print(" of ").Int(total)
 		if won {
-			wonBack.Sort(ot, 0)
-			text.WriteString("\n\n\n\n\n\n\n\n\n            you made it!\n\n           ").
-				WriteInt(coins).WriteString(" coins of ").WriteInt(total).
-				WriteString("\n\n          start plays again")
+			wonBack.Draw(frame, 0)
+			text.Print("\n\n\n\n\n\n\n\n\n            you made it!\n\n           ").
+				Int(coins).Print(" coins of ").Int(total).
+				Print("\n\n          start plays again")
 		}
-		text.Print()
 	}
 }
 
 // start loads the level, which puts back the coins taken, and puts the
 // hero where it starts.
-func start(b yaroze.RECT) {
-	if err = world.LoadFiles(levelDAT.Data(), files); err != nil {
+func start(b geom.Rect) {
+	if err = world.LoadFiles(&screen, levelDAT.Data(), disc.Registered()); err != nil {
 		return
 	}
 	read(b)
@@ -217,13 +227,15 @@ func start(b yaroze.RECT) {
 // read takes what the program needs from the level as the file has it:
 // where the hero's sprite is, before the program moves it, and how many
 // coins the ground has.
-func read(b yaroze.RECT) {
+func read(b geom.Rect) {
 	sp, ground := world.Sprite("hero"), world.Layer("ground")
 	if sp == nil || ground == nil {
 		return
 	}
-	startX = int(sp.X) - int(b.X) + int(sp.W)/2
-	startY = int(sp.Y) - int(b.Y) + int(sp.H)
+	x, y := sp.Position()
+	w, h := sp.Size()
+	startX = x - b.X + w/2
+	startY = y - b.Y + h
 	total = 0
 	for y := range ground.Height() {
 		for x := range ground.Width() {
@@ -254,7 +266,7 @@ func play(l *scene.Layer) {
 
 	// A press of Cross waits a few frames for the ground, and the ground
 	// stays under the hero for a few after they run off it.
-	if pad.Pressed(yaroze.PADRdown) {
+	if pad.Pressed(input.Cross) {
 		jumpWait = buffered
 	} else if jumpWait > 0 {
 		jumpWait--
@@ -264,7 +276,7 @@ func play(l *scene.Layer) {
 		jumpWait = 0
 		airTime = coyote + 1
 	}
-	if !pad.Held(yaroze.PADRdown) && speedY < -jumpCut {
+	if !pad.Held(input.Cross) && speedY < -jumpCut {
 		speedY = -jumpCut
 	}
 	speedY = min(fallSpeed, speedY+gravity)
@@ -284,12 +296,13 @@ func play(l *scene.Layer) {
 	turn()
 	switch {
 	case touch(l), heroY > l.Height()*scene.CellSize+2*tall:
-		// Spikes, or a fall out of the level: back to the last safe place.
+		// Spikes, or a fall out of the level: back to the last safe
+		// place.
 		heroX, heroY = safeX, safeY
 		subX, subY, speedX, speedY = 0, 0, 0, 0
 	case standing && l.FlagsAt(heroX-halfW, heroY)&l.FlagsAt(heroX+halfW-1, heroY)&scene.Solid != 0:
-		// Solid ground under both feet, and nothing hurting, is somewhere
-		// safe to come back to.
+		// Solid ground under both feet, and nothing hurting, is
+		// somewhere safe to come back to.
 		safeX, safeY = heroX, heroY
 	}
 }
@@ -379,16 +392,15 @@ func touch(l *scene.Layer) bool {
 
 // follow scrolls the level to keep the hero within the middle fifth of the
 // screen, never past the level's ends.
-func follow(l *scene.Layer, b yaroze.RECT) {
-	w := int(b.W)
-	lo, hi := w*2/5, w*3/5
+func follow(l *scene.Layer, b geom.Rect) {
+	lo, hi := b.W*2/5, b.W*3/5
 	if heroX-camX > hi {
 		camX = heroX - hi
 	}
 	if heroX-camX < lo {
 		camX = heroX - lo
 	}
-	camX = max(0, min(camX, l.Width()*scene.CellSize-w))
+	camX = max(0, min(camX, l.Width()*scene.CellSize-b.W))
 }
 
 // turn spins the cube: off the ground it turns towards the next quarter
@@ -422,21 +434,21 @@ func turn() {
 // show puts the cube where the hero is on the screen, with the box's
 // fourteen rows over their feet, and leaves the scene's own copy of the
 // sprite undrawn. Turning, the cube is a sprite turned about its middle,
-// which GsSortSprite draws as a textured quad. At rest on a side it looks
-// as it does unturned, and is a plain sprite placed by its top left
-// corner, which GsSortFastSprite draws texel for texel, so its border is
-// exact.
-func show(sp *yaroze.GsSPRITE, b yaroze.RECT) {
+// which Draw draws as a textured quad. At rest on a side it looks as it
+// does unturned, and is a plain sprite placed by its top left corner,
+// which DrawFast draws texel for texel, so its border is exact.
+func show(sp *yaroze.Sprite, b geom.Rect) {
 	cube = *sp
-	cube.Attribute &^= doff
-	x, y := heroX-camX+int(b.X), heroY-tall+int(sp.H)/2-1+int(b.Y) // the middle
+	cube.Hidden = false
+	w, h := sp.Size()
+	x, y := heroX-camX+b.X, heroY-tall+h/2-1+b.Y // the middle
 	if spin%quarter == 0 {
-		cube.X, cube.Y = int16(x-int(sp.W)/2), int16(y-int(sp.H)/2)
+		cube.MoveTo(x-w/2, y-h/2)
 	} else {
-		cube.Mx, cube.My = int16(sp.W/2), int16(sp.H/2)
-		cube.Scalex, cube.Scaley = 4096, 4096
-		cube.Rotate = int32(spin)
-		cube.X, cube.Y = int16(x), int16(y)
+		cube.Pivot = geom.Point{X: int16(sp.W / 2), Y: int16(sp.H / 2)}
+		cube.ScaleX, cube.ScaleY = geom.One, geom.One
+		cube.Rotate = geom.Angle(spin)
+		cube.MoveTo(x, y)
 	}
-	sp.Attribute |= doff
+	sp.Hidden = true
 }

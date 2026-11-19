@@ -25,12 +25,21 @@ package transform
 // function does is reported. The compiler keeps it out of line, so that
 // what it allocates is still found inside it after the optimizer is done.
 //
+// A panic is not an allocation of the frame loop's. The runtime may
+// allocate to print a panic's value, an error's message say, and then it
+// stops the program: that is made once, on the way out. So what the
+// runtime's functions that do not return allocate does not count for their
+// callers. What the program allocates for the value it panics with is its
+// own code's, and is reported as any other.
+//
 // It is reported at the program's line, from the tinygo.pos metadata the
 // compiler gives calls when there is no DWARF: the allocation itself in the
 // program's code, or the call into the standard library that makes it, such
 // as strconv.Itoa or a string concatenation. One in a package that is not
 // the standard library's, such as archive.Entry.Load, is reported where the
-// frame loop's code in package main calls it.
+// frame loop's code in package main calls it. The standard library's
+// packages are those in GOROOT, and every other is the program's
+// (isStandard).
 
 import (
 	"fmt"
@@ -39,12 +48,13 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compileopts"
 	"tinygo.org/x/go-llvm"
 )
 
 // CheckFrameAllocs returns an error at each allocation the frame loop
 // makes, as described above.
-func CheckFrameAllocs(mod llvm.Module) []error {
+func CheckFrameAllocs(mod llvm.Module, config *compileopts.Config) []error {
 	vsync := mod.NamedFunction("VSync")
 	alloc := mod.NamedFunction("runtime.alloc")
 	if vsync.IsNil() || alloc.IsNil() {
@@ -54,7 +64,7 @@ func CheckFrameAllocs(mod llvm.Module) []error {
 	// The functions that wait for the screen, and those that allocate, by
 	// way of direct calls.
 	waits := callersOf(vsync, nil)
-	allocates := callersOf(alloc, allocatesOnPurpose)
+	allocates := callersOf(alloc, func(fn llvm.Value) bool { return allocatesOnPurpose(fn) || stops(fn) })
 
 	// Function values, by type, for the calls through one.
 	values := make(map[llvm.Type][]llvm.Value)
@@ -63,6 +73,9 @@ func CheckFrameAllocs(mod llvm.Module) []error {
 			continue
 		}
 		for _, use := range getUses(fn) {
+			if isHotSlot(use) {
+				continue // a call through the slot is a call of fn, below
+			}
 			if use.IsACallInst().IsNil() || use.CalledValue() != fn {
 				values[fn.GlobalValueType()] = append(values[fn.GlobalValueType()], fn)
 				break
@@ -91,6 +104,8 @@ func CheckFrameAllocs(mod llvm.Module) []error {
 		var callees []llvm.Value
 		if callee := call.CalledValue(); !callee.IsAFunction().IsNil() {
 			callees = []llvm.Value{callee}
+		} else if body := hotSlotBody(callee); !body.IsNil() {
+			callees = []llvm.Value{body}
 		} else {
 			callees = values[call.CalledFunctionType()]
 		}
@@ -124,7 +139,7 @@ func CheckFrameAllocs(mod llvm.Module) []error {
 			return
 		}
 		fn := call.InstructionParent().Parent()
-		if isStandard(fn.Name()) || !isStandard(callee.Name()) && callee != alloc {
+		if isStandard(config, fn.Name()) || !isStandard(config, callee.Name()) && callee != alloc {
 			return // reported where the program's code calls it, or inside
 		}
 		if guarded(call) {
@@ -181,6 +196,30 @@ func CheckFrameAllocs(mod llvm.Module) []error {
 	return errs
 }
 
+// isHotSlot reports whether v is a hot build's slot for a function of
+// package main, the global its stub calls the function's body through (see
+// HotStubs). The body's address in a slot is not a function value the
+// program made: only the stub calls it.
+func isHotSlot(v llvm.Value) bool {
+	return !v.IsAGlobalVariable().IsNil() && strings.HasSuffix(v.Name(), "$slot")
+}
+
+// hotSlotBody returns the function a hot build's stub calls when callee is
+// the stub's load of its slot, and a nil value otherwise.
+func hotSlotBody(callee llvm.Value) llvm.Value {
+	if callee.IsALoadInst().IsNil() {
+		return llvm.Value{}
+	}
+	slot := callee.Operand(0)
+	if !isHotSlot(slot) {
+		return llvm.Value{}
+	}
+	if body := slot.Initializer(); !body.IsNil() && !body.IsAFunction().IsNil() {
+		return body
+	}
+	return llvm.Value{}
+}
+
 // sortErrors sorts errors, each a scanner.Error, by file and line.
 func sortErrors(errs []error) {
 	slices.SortStableFunc(errs, func(a, b error) int {
@@ -199,6 +238,15 @@ func sortErrors(errs []error) {
 // says it allocates as a load does, and that the frame loop may call it.
 func allocatesOnPurpose(fn llvm.Value) bool {
 	return !fn.GetStringAttributeAtIndex(-1, "tinygo-allocates").IsNil()
+}
+
+// stops reports whether fn is one of the runtime's functions that do not
+// return, a panic or a fatal error. What one allocates is for the message
+// it prints before it stops the program: a panic that is recovered leaves
+// by a jump before that.
+func stops(fn llvm.Value) bool {
+	noreturn := llvm.AttributeKindID("noreturn")
+	return packageOf(fn.Name()) == "runtime" && !fn.GetEnumAttributeAtIndex(-1, noreturn).IsNil()
 }
 
 // callersOf returns fn and the functions that call it, directly or through
@@ -558,13 +606,26 @@ func packageOf(name string) string {
 	return dir + name
 }
 
-// isStandard reports whether a function is the runtime's or the standard
-// library's, whose code has no positions and is reported where the
-// program calls it.
-func isStandard(name string) bool {
-	pkg := packageOf(name)
-	first, _, _ := strings.Cut(pkg, "/")
-	return pkg != "main" && !strings.Contains(first, ".")
+// isStandard reports whether a function or a variable is the runtime's,
+// the standard library's or the compiler's own, and not one of the
+// program's packages, which are those the loader found outside GOROOT
+// (config.ProgramPackages): package main, the rest of its module and the
+// modules it requires. What a path looks like does not say: level, of a
+// module named play, is play/level, the program's, and
+// internal/reflectlite is the standard library's. The standard library's
+// code has no positions, and is reported where the program calls it.
+func isStandard(config *compileopts.Config, name string) bool {
+	name = strings.TrimLeft(name, "(*")
+	name, _, _ = strings.Cut(name, "[")
+	// The package's path ends at a dot after its last slash: the first,
+	// unless the last element has dots of its own, as gopkg.in/yaml.v3
+	// has. A name with nothing after the path is tried whole.
+	for i := strings.LastIndexByte(name, '/') + 1; i <= len(name); i++ {
+		if (i == len(name) || name[i] == '.') && config.ProgramPackages[name[:i]] {
+			return false
+		}
+	}
+	return true
 }
 
 // allocName names what a call into the runtime or the standard library

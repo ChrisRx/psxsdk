@@ -78,6 +78,7 @@ func rdb() {
 	dbgRegs[dbgCause] = 9 << 2 // a break
 	dbgRegs[dbgEPC] = regs[regEPC]
 	dbgSignal = 5
+	setWatching(0)
 	installVector()
 	debugging = true
 	debugLoop()
@@ -95,6 +96,8 @@ func debugStopped() {
 	}
 	flushCache()
 	switch dbgRegs[dbgCause] >> 2 & 31 {
+	case 0: // an interrupt, stopped by the host's Control-B (installVector)
+		dbgSignal = 2
 	case 4, 5, 6, 7: // address and bus errors
 		dbgSignal = 10
 	case 10, 11: // a reserved instruction, or a coprocessor's

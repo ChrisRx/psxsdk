@@ -52,6 +52,13 @@ type gpu struct {
 	polygons     uint64
 	polygonKinds [8]uint64
 
+	// hook, when set, sees every word written to GP0 (PROTOTYPE: for
+	// comparing the command streams of two runs).
+	hook func(uint32)
+
+	// hook1, when set, sees every word written to GP1 (PROTOTYPE).
+	hook1 func(uint32)
+
 	state         int
 	buf           [16]uint32
 	bufIndex      int
@@ -96,6 +103,12 @@ type gpu struct {
 	ic     *ic
 	timers *timers
 	stop   func(error)
+
+	// time is the GPU's drawing time, under SetDrawTime (gpu_time.go).
+	time drawTime
+
+	// fieldSkip has the GPU skip the shown field's lines (gpu_field.go).
+	fieldSkip bool
 }
 
 // newGPU returns a GPU with its display off, reporting an error that stops
@@ -118,10 +131,26 @@ func newGPU(ic *ic, stop func(error)) *gpu {
 // which only works because its BIOS sets them before any program runs.
 func (g *gpu) resetDisplay() {
 	g.gpustat = gpustatDisplayOff
+	// psxe's mode after a reset, which GPUSTAT doesn't show: a console's
+	// reads 14802000h then, with none of the mode's bits (setDisplayMode).
 	g.displayMode = 1
 	g.dispX, g.dispY = 0, 0
 	g.dispX1, g.dispX2 = 0x200, 0xc00
 	g.dispY1, g.dispY2 = 0x10, 0x100
+}
+
+// gpustatDisplayMode are GPUSTAT's bits that show the display mode: 14,
+// and 16 to 22.
+const gpustatDisplayMode = 1<<14 | 0x7f<<16
+
+// setDisplayMode takes a GP1(08h) display mode, and shows it in GPUSTAT as
+// a console does: bits 0 to 5 of the mode at bits 17 to 22, bit 6 at 16 and
+// bit 7 at 14. A library reads them back: Sony's VSync looks at bit 19, 480
+// lines, to wait for the field (internal/libps/spec/probes/vsyncphase).
+func (g *gpu) setDisplayMode(mode uint32) {
+	g.displayMode = mode
+	bits := (mode&0x3f)<<17 | (mode>>6&1)<<16 | (mode>>7&1)<<14
+	g.gpustat = g.gpustat&^gpustatDisplayMode | bits
 }
 
 func (g *gpu) Read32(off uint32) uint32 {
@@ -129,6 +158,16 @@ func (g *gpu) Read32(off uint32) uint32 {
 	case 0:
 		return g.gpuread()
 	case 4:
+		// A console shows the GPU not ready for a command, nor for a VRAM
+		// read, while a command's parameters are still owed: after a fill's
+		// first word GPUSTAT reads 90822400h until the rest come
+		// (internal/libps/spec/35-hardware-session.md, the monitor's screen).
+		if g.state == gpuRecvArgs {
+			return (g.gpustat | gpustatReadyBits) &^ (gpustatReadyCmd | gpustatReadyVRAM)
+		}
+		if g.drawing() {
+			return (g.gpustat | gpustatReadyBits) &^ gpustatReadyCmd
+		}
 		return g.gpustat | gpustatReadyBits
 	}
 	return 0
@@ -196,11 +235,17 @@ func (g *gpu) Write32(off, v uint32) {
 	case 0:
 		g.gp0(v)
 	case 4:
+		if g.hook1 != nil {
+			g.hook1(v)
+		}
 		g.gp1(v)
 	}
 }
 
 func (g *gpu) gp0(v uint32) {
+	if g.hook != nil {
+		g.hook(v)
+	}
 	switch g.state {
 	case gpuRecvCmd:
 		g.bufIndex = 0
@@ -231,6 +276,9 @@ func (g *gpu) gp1(v uint32) {
 	switch v >> 24 {
 	case 0x00: // reset
 		g.resetDisplay()
+		g.stopDrawing()
+	case 0x01: // command buffer reset
+		g.stopDrawing()
 	case 0x03: // display enable
 		was := g.gpustat & gpustatDisplayOff
 		g.gpustat = g.gpustat&^gpustatDisplayOff | (v<<23)&gpustatDisplayOff
@@ -251,13 +299,14 @@ func (g *gpu) gp1(v uint32) {
 		if v&0xffffff != g.displayMode && g.log.on(slog.LevelInfo) {
 			g.log.log(slog.LevelInfo, "display mode "+describeDisplayMode(v))
 		}
-		g.displayMode = v & 0xffffff
+		g.setDisplayMode(v & 0xffffff)
 	case 0x10: // information request
 		g.gp1InfoReq = v & 0xf
 	}
 	// psxe does not implement the rest, including the command buffer reset
 	// (01h) and the interrupt acknowledge (02h), nor 00h beyond what
-	// resetDisplay does.
+	// resetDisplay does. Under SetDrawTime, 00h and 01h end the drawing in
+	// progress (stopDrawing).
 }
 
 // command acts on the command buffer, as psxe's psx_gpu_update_cmd does
@@ -378,6 +427,13 @@ func (g *gpu) polygon() {
 	if quad {
 		g.triangle(d.v[1], d.v[2], d.v[3], d)
 	}
+	if g.time.on {
+		n := triangleArea(d.v[0], d.v[1], d.v[2])
+		if quad {
+			n += triangleArea(d.v[1], d.v[2], d.v[3])
+		}
+		g.charge(n)
+	}
 	g.state = gpuRecvCmd
 }
 
@@ -422,6 +478,10 @@ func (g *gpu) line() {
 		vertex{x: int16(p1), y: int16(p1 >> 16)},
 		bgr555(g.buf[0]&0xffffff),
 	)
+	if g.time.on {
+		dx, dy := int(int16(p1))-int(int16(p0)), int(int16(p1>>16))-int(int16(p0>>16))
+		g.charge(max(dx, -dx, dy, -dy))
+	}
 	g.state = gpuRecvCmd
 }
 
@@ -450,6 +510,14 @@ func (g *gpu) rectangle() {
 		d.v0.c = 0x808080
 	}
 	g.drawRect(d)
+	if g.time.on {
+		w, h := int(d.width), int(d.height)
+		if size != 0 {
+			w = [4]int{0, 1, 8, 16}[size]
+			h = w
+		}
+		g.charge(w * h)
+	}
 	g.state = gpuRecvCmd
 }
 
@@ -467,10 +535,11 @@ func (g *gpu) fill() {
 	// What falls outside VRAM is not drawn.
 	x1 := min(x0+w, vramWidth)
 	for y := y0; y < min(y0+h, vramHeight); y++ {
-		if x0 < x1 {
+		if x0 < x1 && !g.skipsRow(y) {
 			fill16(g.vram[y*vramWidth+x0:y*vramWidth+x1], color)
 		}
 	}
+	g.charge(w * h)
 	g.state = gpuRecvCmd
 }
 
@@ -490,6 +559,7 @@ func (g *gpu) copyVRAM() {
 			}
 		}
 	}
+	g.charge(int(w * h))
 	g.state = gpuRecvCmd
 }
 
@@ -598,19 +668,24 @@ func b2i(b bool) int {
 // the line, and the line ends when the clock passes it. The float
 // arithmetic is reproduced exactly, conversion by conversion, since the
 // point an interrupt is raised depends on it.
+//
+// A step under SetCPUCost can take longer than horizontal blanking, as one
+// waiting out a DMA does, and cross several edges, which are fired in turn.
+// A step at psxe's costs crosses one at most.
 func (g *gpu) update(cpuCycles uint32) {
 	g.cycles = float32(g.cycles + float32(float32(cpuCycles)*gpuCyclesPerCPU))
-	if g.cycles >= g.edge {
+	for g.cycles >= g.edge {
 		g.crossEdge()
 	}
 }
 
 // crossEdge fires the blanking event the clock has crossed, if any. Short of
-// the line's end, the clock only moves into blanking, at gpuHDrawCycles;
-// once in it, only out of it, past gpuScanlineCycles.
+// the line's end, the clock only moves into blanking, at gpuHDrawCycles,
+// even when it has gone past the line's end as well; once in it, only out
+// of it, past gpuScanlineCycles.
 func (g *gpu) crossEdge() {
 	prev := g.hblanking
-	curr := g.inHBlank()
+	curr := g.inHBlank() || !prev && g.cycles >= gpuHDrawCycles
 
 	switch {
 	case curr && !prev:
@@ -619,9 +694,10 @@ func (g *gpu) crossEdge() {
 	case prev && !curr:
 		g.timers.hblankEnd()
 		g.cycles = float32(g.cycles - gpuScanlineCycles)
+		curr = g.inHBlank()
 	}
 
-	g.hblanking = g.inHBlank()
+	g.hblanking = curr
 	g.edge = gpuHDrawCycles
 	if g.hblanking {
 		g.edge = math.Nextafter32(gpuScanlineCycles, math.MaxFloat32)
@@ -635,7 +711,8 @@ func (g *gpu) inHBlank() bool {
 // hblank moves to the next scanline, raising the vertical blanking
 // interrupt as the visible lines end.
 func (g *gpu) hblank() {
-	if g.scanline < gpuVDrawLines && g.scanline&1 != 0 {
+	interlaced := g.interlaced480()
+	if !interlaced && g.scanline < gpuVDrawLines && g.scanline&1 != 0 {
 		g.gpustat |= gpustatOddLine
 	} else {
 		g.gpustat &^= gpustatOddLine
@@ -649,16 +726,37 @@ func (g *gpu) hblank() {
 		g.ic.raise(irqVBlank)
 	case gpuFrameLines:
 		g.timers.vblankEnd()
-		// The interlace field alternates every field while interlaced
-		// output is selected, and reads as 1 otherwise. psxe does not do
-		// this; nix/psxe-interlace-field.patch adds it, since the OpenBIOS
-		// shell waits on the field rather than the vertical blank.
-		if g.displayMode&0x20 != 0 {
-			g.gpustat ^= gpustatField
-		} else {
-			g.gpustat |= gpustatField
+		if !interlaced {
+			g.nextField()
 		}
 		g.scanline = 0
+	}
+	if interlaced {
+		// The field changes as the picture ends, which on a console is
+		// after the vertical blank interrupt: the display range GP1(07h)
+		// sets runs to line 256 by default, the interrupt comes at 240
+		// (internal/libps/spec/probes/statlines).
+		if g.scanline == int(g.pictureEnd()) {
+			g.nextField()
+		}
+		// Bit 31 doesn't follow the line either: it says which field's
+		// lines the GPU draws into, for the whole picture, and reads 0
+		// outside it (drawnRows).
+		if g.drawnRows() == 1 {
+			g.gpustat |= gpustatOddLine
+		}
+	}
+}
+
+// nextField moves on the interlace field, which alternates every field
+// while interlaced output is selected, and reads as 1 otherwise. psxe does
+// not do this; nix/psxe-interlace-field.patch adds it, since the OpenBIOS
+// shell waits on the field rather than the vertical blank.
+func (g *gpu) nextField() {
+	if g.displayMode&0x20 != 0 {
+		g.gpustat ^= gpustatField
+	} else {
+		g.gpustat |= gpustatField
 	}
 }
 

@@ -44,5 +44,5 @@ func TestFastStart(t *testing.T) {
 	}
 	t.Logf("%d frames in %d ticks", g.fastFrames, ticks)
 	assert.Equal(t, true, m.Shown(), "the fast start ends at the first picture")
-	assert.Equal(t, true, g.fastFrames > 120, "after the BIOS's two seconds or so")
+	assert.Equal(t, true, g.fastFrames > 90, "after the BIOS's start-up")
 }

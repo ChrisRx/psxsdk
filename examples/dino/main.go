@@ -81,7 +81,7 @@ var (
 	soundFiles = []*disc.File{&seqFile, &vh, &vb}
 	dataFiles  = []*disc.File{&dinonewFile, &md0File, &vdfFile, &castleFile}
 
-	md0TMD = yaroze.TMD(md0Data[:])
+	md0TMD = md0Data[:]
 )
 
 var (
@@ -420,9 +420,24 @@ func timSize(im *yaroze.GsIMAGE) uintptr {
 func initTexture1() {
 	data := vbData[:dinonewFile.Size()/4]
 	for len(data) > 0 && data[0] == 0x10 {
-		im := yaroze.TIM(data).Load()
+		im := loadTIM(data)
 		data = data[timSize(&im)/4:]
 	}
+}
+
+// loadTIM puts a TIM into video memory, where its header says, with its
+// palette if it has one, waits for the transfer, and returns its
+// description.
+func loadTIM(tim []uint32) (image yaroze.GsIMAGE) {
+	yaroze.GsGetTimInfo(&tim[1], &image)
+	rect := yaroze.RECT{X: image.Px, Y: image.Py, W: int16(image.Pw), H: int16(image.Ph)}
+	yaroze.LoadImage(&rect, image.Pixel)
+	if image.Pmode>>3&1 != 0 {
+		rect = yaroze.RECT{X: image.Cx, Y: image.Cy, W: int16(image.Cw), H: int16(image.Ch)}
+		yaroze.LoadImage(&rect, image.Clut)
+	}
+	yaroze.DrawSync(0)
+	return image
 }
 
 // initTexture2 puts the castle up once, so that the first frame has it,
@@ -441,10 +456,10 @@ func initTexture2() {
 // modelInit maps the model's offsets to addresses and links a handle to
 // each of its objects, all in the dinosaur's coordinate system.
 func modelInit() {
-	md0TMD.Map()
-	objnum = min(uint32(md0TMD.Objects()), objectMax)
+	yaroze.GsMapModelingData(&md0TMD[1])
+	objnum = min(md0TMD[2], objectMax)
 	for i := range objnum {
-		md0TMD.Link(&object[i], int32(i))
+		yaroze.GsLinkObject4(&md0TMD[3], &object[i], int32(i))
 		object[i].Coord2 = &dWorld
 		object[i].Attribute = 0
 	}
@@ -490,9 +505,6 @@ func sndSet(seq, vh, vb []uint32) {
 }
 
 func sndPlay() {
-	if !song.Valid() {
-		return
-	}
 	yaroze.SsSetMVol(mvol, mvol)
 	song.SetVolume(svol, svol)
 	yaroze.SsUtReverbOn()
@@ -501,11 +513,9 @@ func sndPlay() {
 }
 
 func sndStop() {
-	if song.Valid() {
-		song.Stop()
-		yaroze.VSync(0)
-		yaroze.VSync(0)
-		song.Close()
-	}
+	song.Stop()
+	yaroze.VSync(0)
+	yaroze.VSync(0)
+	song.Close()
 	bank.Close()
 }

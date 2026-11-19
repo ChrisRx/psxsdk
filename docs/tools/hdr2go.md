@@ -27,7 +27,7 @@ Three files come out of it, because the library is only there on the
 console and a program should still compile everywhere else.
 `zz_generated.go` holds the structs, which every build shares.
 `zz_generated_yaroze.go`, built only under the `yaroze` tag that the
-`playstation-yaroze` target sets, holds the functions as bodyless
+PlayStation targets set, holds the functions as bodyless
 declarations carrying `//export`, which in TinyGo imports a C symbol rather
 than exporting a Go one, and the size assertions. `zz_generated_stub.go`,
 built everywhere else, holds the same functions with bodies that panic,

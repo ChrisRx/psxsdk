@@ -14,12 +14,3 @@ var (
 	std0VB     = disc.Register("ASSETS/STD0.VB", "assets/STD0.VB")
 	std0VH     = disc.Register("ASSETS/STD0.VH", "assets/STD0.VH")
 )
-
-// files is every file above, in the order disc.LoadAll reads them.
-var files = []*disc.File{
-	&cubeTIM,
-	&cubeTMD,
-	&sample1SEQ,
-	&std0VB,
-	&std0VH,
-}

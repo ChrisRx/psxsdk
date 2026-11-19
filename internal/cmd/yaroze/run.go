@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.chrisrx.dev/psx/internal/hot"
+	"go.chrisrx.dev/psx/internal/project"
 	"go.chrisrx.dev/psx/internal/psxplay"
 	"go.chrisrx.dev/psx/internal/toolchain"
 )
@@ -19,17 +20,37 @@ import (
 func runCommand() *cobra.Command {
 	var f discFlags
 	var play psxplay.Options
+	var autoPath string
 	cmd := &cobra.Command{
-		Use:   "run [flags] [package | disc.cue | disc.zip]",
-		Short: "build a program onto a disc and run it in a window",
+		Use:   "run [flags] [package | project | executable | disc.cue | disc.zip]",
+		Short: "build a program onto a disc and run it in a window, or run one built already",
 		Long: `run builds the main package in the directory given, the current one if
 none is, onto a disc as disc does, in a temporary directory, and runs it in
 a window, booting OpenBIOS, or the BIOS given with --bios. Given a cue
 sheet instead, or a .zip holding one and its files, it runs that disc as
-it is, and with --exe it runs a PSX-EXE
-loaded when the BIOS reaches its shell, with the files --load names put in
-memory beside it, as siocons' local dload did. What the program prints goes
-to standard output.
+it is. What the program prints goes to standard output.
+
+It also runs a Net Yaroze program as it was handed around, built, with its
+data and the auto file that told siocons what to load where. Given a
+directory with no Go package or C project in it, or a .zip with no cue
+sheet, such as one from the showcase, the auto file in it is the project:
+the program it loads, with the Net Yaroze library laid under it, and the
+files its dload lines put in memory put there. With more than one auto
+file, --auto names the one, as a path inside; with none, a lone executable
+is the project. Given an executable, a PSX-EXE, an ECOFF or an ELF, an auto
+file beside it that loads it says what goes with it. --auto names an auto
+file to run directly. A project runs from a disc that holds its directory,
+for a program that reads its files from the CD.
+
+  yaroze run gasgar.zip
+  yaroze run --auto showcase/gasgar/auto
+  yaroze run showcase/gasgar/GASGAR
+
+With --exe, it runs an executable, a PSX-EXE, an ECOFF or an ELF, loaded
+when the BIOS reaches its shell, with the files --load names put in memory
+beside it, as siocons' local dload did. An ECOFF or an ELF gets the Net
+Yaroze library laid under it, as eco2exe does, unless it brought its own.
+The library is the clean one built in, or the image PSX_LIBPS_IMAGE names.
 
 With --hot, the program is built to take patches, and each change to the
 package's Go files while it runs builds one, as patch does, and loads it
@@ -48,22 +69,45 @@ built and started again, which run says when it cannot build a patch.
 			}
 			// A disc or an executable as it is: nothing to build.
 			ext := filepath.Ext(pkg)
-			if image := strings.EqualFold(ext, ".cue") || strings.EqualFold(ext, ".zip"); image || play.EXE != "" {
+			image := strings.EqualFold(ext, ".cue")
+			if strings.EqualFold(ext, ".zip") {
+				var err error
+				if image, err = project.ZipHasCue(pkg); err != nil {
+					return err
+				}
+			}
+			if (image || play.EXE != "" || autoPath != "") && f.hot {
+				return errors.New("--hot needs a package to build")
+			}
+			if image {
+				if autoPath != "" {
+					return errors.New("--auto runs a project, not a disc")
+				}
+				play.Disc = pkg
+				play.Title = "yaroze - " + filepath.Base(pkg)
+				if play.EXE != "" {
+					return runEXE(&f, play)
+				}
+				return psxplay.Run(play)
+			}
+			if play.EXE != "" && autoPath == "" && len(args) == 0 {
+				return runEXE(&f, play)
+			}
+			// A program built already, from its auto file or alone.
+			arg := ""
+			if len(args) == 1 {
+				arg = args[0]
+			}
+			p, err := openProject(arg, autoPath, play.EXE)
+			if err != nil {
+				return err
+			}
+			if p != nil {
+				defer p.Close()
 				if f.hot {
 					return errors.New("--hot needs a package to build")
 				}
-				switch {
-				case image:
-					play.Disc = pkg
-					play.Title = "yaroze - " + filepath.Base(pkg)
-				case len(args) == 1:
-					return errors.New("--exe runs an executable in place of a package; give a disc or nothing with it")
-				}
-				if play.EXE != "" {
-					play.Loads = f.loads
-					play.Title = "yaroze - " + filepath.Base(play.EXE)
-				}
-				return psxplay.Run(play)
+				return runProject(p, &f, play)
 			}
 			name, err := pkgName(pkg)
 			if err != nil {
@@ -94,6 +138,7 @@ built and started again, which run says when it cannot build a patch.
 	}
 	f.register(cmd)
 	play.AddFlags(cmd.Flags())
+	cmd.Flags().StringVar(&autoPath, "auto", "", "an auto file, the batch siocons ran, to run the program it loads with the files it loads; with a directory or a .zip, the one in it to run")
 	return cmd
 }
 

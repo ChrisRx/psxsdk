@@ -104,6 +104,8 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/geom"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/stage"
 	"go.chrisrx.dev/psx/yaroze"
 )
@@ -118,20 +120,22 @@ const (
 )
 
 var (
-	screen = yaroze.Screen{Background: yaroze.CVECTOR{R: 8, G: 8, B: 16}}
-	pad    yaroze.Pad
+	// The screen sorts as deep as package stage sorts a room, with more
+	// packet space than the screen's own for a room's polygons.
+	screen = yaroze.Screen{
+		Background: yaroze.Color{R: 8, G: 8, B: 16},
+		Depth:      stage.Depth,
+		Packets:    32 << 10,
+		Origin:     yaroze.ScreenOriginMiddle,
+	}
+	pad    input.Controller
 	failed *disc.File
-
-	// otTags are the two ordering tables, as deep as package stage sorts
-	// a room into, and packets both frames' GPU packets, more than the
-	// screen's own for a room's polygons.
-	otTags  [2 << stage.Depth]yaroze.GsOT_TAG
-	packets [32 << 10]uint32
+	text   yaroze.Text
 
 	// blank is the frames the screen has still to stay black, and black
 	// the box that blacks it.
 	blank int
-	black yaroze.GsBOXF
+	black yaroze.Box
 
 	// set is the room the hero is in, as package stage draws it, and
 	// view where it is drawn from this frame.
@@ -144,26 +148,23 @@ var (
 )
 
 func main() {
-	screen.Init(otTags[:], packets[:])
 	screen.Open()
-	yaroze.GsInit3D()
 	b := screen.Bounds()
-	screen.Font(int32(b.X)+8, int32(b.Y)+8, 200, 32, 64)
-	black = yaroze.GsBOXF{X: b.X, Y: b.Y, W: uint16(b.W), H: uint16(b.H)}
+	text = screen.Font(b.X+8, b.Y+8, 200, 32, 64)
+	black.SetRect(b)
 
 	for k := range rooms {
 		*rooms[k].file = rooms[k].file.Into(roomData[k][:])
 	}
-	if failed = disc.LoadAll(300, files...); failed == nil {
+	if failed = disc.LoadAll(300); failed == nil {
 		setup(b)
 		hero.here().load()
 		screen.Background = hero.here().background()
 		cam.slant(world.Room())
 	}
-	for ot := range screen.Frames() {
+	for frame := range screen.Frames() {
 		if failed != nil {
-			yaroze.Print("could not read ")
-			yaroze.Print(failed.Name)
+			text.Print("could not read ").Print(failed.Name)
 			continue
 		}
 		pad.Update()
@@ -177,18 +178,19 @@ func main() {
 			hero.visit(scene, i, j)
 		}
 		// A frame that took two fields moves everything twice, so that
-		// the hero's speed holds whatever is on the screen. Through the
-		// black frames after a doorway nothing moves: the frame that
-		// loaded the room took longer, and the hero sets off from just
-		// inside the doorway when the room appears.
+		// the hero's speed holds whatever is on the screen. Through
+		// the black frames after a doorway nothing moves: the frame
+		// that loaded the room took longer, and the hero sets off from
+		// just inside the doorway when the room appears.
 		steps := min(screen.Fields(), 2)
 		if blank > 0 {
 			steps = 0
 		}
 		for k := range steps {
-			// A press counts once, on the first step. While the text box
-			// is up, Cross reads on and nothing else moves.
-			cross := k == 0 && pad.Pressed(yaroze.PADRdown)
+			// A press counts once, on the first step. While the
+			// text box is up, Cross reads on and nothing else
+			// moves.
+			cross := k == 0 && pad.Pressed(input.Cross)
 			if talk.up {
 				talk.update(cross)
 			} else {
@@ -202,39 +204,37 @@ func main() {
 		cam.place(hero.at(), hero.height)
 		hero.project()
 		view = stage.View{At: hero.at(), Ahead: cam.ahead, Right: cam.right, X: hero.sx, Y: hero.sy, Depth: hero.otz}
-		set.Draw(ot, &view)
-		hero.draw(ot)
-		drawNPCs(ot)
-		sky.draw(ot, b)
+		set.Draw(frame, &view)
+		hero.draw(frame)
+		drawNPCs(frame)
+		sky.draw(frame, b)
 		if blank > 0 {
 			blank--
-			black.Sort(ot, 0)
+			black.Draw(frame, 0)
 		}
-		talk.draw(ot)
+		talk.draw(frame)
 	}
 }
 
 // setup loads the textures and the sprite sheets into video memory,
 // keeps what the polygons name the textures by, cuts the sprites, sets up
-// the sky and the text box, and sets the projection.
-func setup(b yaroze.RECT) {
-	floors[floorStone] = stage.NewSurface(yaroze.TIM(floorTIM.Data()).Load().Texture())
-	floors[floorGrass] = stage.NewSurface(yaroze.TIM(grassTIM.Data()).Load().Texture())
-	walls[wallStone] = stage.NewSurface(yaroze.TIM(wallTIM.Data()).Load().Texture())
-	walls[wallLog] = stage.NewSurface(yaroze.TIM(logTIM.Data()).Load().Texture())
+// the sky and the text box, and places the camera.
+func setup(b geom.Rect) {
+	floors[floorStone] = stage.NewSurface(yaroze.LoadTIM(floorTIM.Data()).Texture())
+	floors[floorGrass] = stage.NewSurface(yaroze.LoadTIM(grassTIM.Data()).Texture())
+	walls[wallStone] = stage.NewSurface(yaroze.LoadTIM(wallTIM.Data()).Texture())
+	walls[wallLog] = stage.NewSurface(yaroze.LoadTIM(logTIM.Data()).Texture())
 	set.Art = stage.Art{
 		Floors: floors[:],
 		Walls:  walls[:],
 		Logs:   walls[wallLog],
-		Roof:   stage.NewSurface(yaroze.TIM(roofTIM.Data()).Load().Texture()),
-		Bed:    yaroze.TIM(bedTIM.Data()).Load().Texture(),
-		Chest:  yaroze.TIM(chestTIM.Data()).Load().Texture(),
+		Roof:   stage.NewSurface(yaroze.LoadTIM(roofTIM.Data()).Texture()),
+		Bed:    yaroze.LoadTIM(bedTIM.Data()).Texture(),
+		Chest:  yaroze.LoadTIM(chestTIM.Data()).Texture(),
 	}
-	people.cut(yaroze.TIM(npcTIM.Data()).Load())
-	hero.cut(yaroze.TIM(heroTIM.Data()).Load())
+	people.cut(yaroze.LoadTIM(npcTIM.Data()))
+	hero.cut(yaroze.LoadTIM(heroTIM.Data()))
 	sky.setup(b)
 	talk.setup(b)
-
-	yaroze.GsSetProjection(projection)
 	cam.place(hero.at(), hero.height)
 }

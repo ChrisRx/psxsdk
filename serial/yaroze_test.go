@@ -48,6 +48,7 @@ type fakeMonitor struct {
 	gated    []byte
 	released int
 	rts      bool
+	pulses   int // RTS turned back on, in all
 }
 
 func newFakeMonitor() *fakeMonitor {
@@ -59,6 +60,7 @@ func (f *fakeMonitor) CTS() (bool, error) { return f.cts, nil }
 func (f *fakeMonitor) SetRTS(on bool) error {
 	if on && !f.rts {
 		f.released++
+		f.pulses++
 	}
 	f.rts = on
 	return nil
@@ -191,7 +193,7 @@ func setup(t *testing.T) (*fakeMonitor, *Port, *Monitor) {
 
 func TestLoad(t *testing.T) {
 	f, _, m := setup(t)
-	exe, err := ecoff.Open("../format/ecoff/testdata/main-ecoff")
+	exe, err := ecoff.Open(sonyFixture(t, "main-ecoff"))
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -219,6 +221,57 @@ func TestLoad(t *testing.T) {
 	assert.Equal(t, n, len(f.mem), "only the sections' bytes should be written, not the last block's padding")
 }
 
+// Only a binary read pulses RTS: a loader that worked on a real console never
+// did, and an attempt at it stalled for a reason not found.
+func TestPulsesOnlyInBinaryRead(t *testing.T) {
+	f, _, m := setup(t)
+	data := bytes.Repeat([]byte{1, 2, 3, 4}, 1024)
+	_, err := m.Command(t.Context(), "cls")
+	assert.NoError(t, err)
+	assert.NoError(t, m.WriteMemory(t.Context(), 0x80100000, data))
+	assert.NoError(t, m.Run(t.Context()))
+	assert.Equal(t, 0, f.pulses)
+
+	f, _, m = setup(t)
+	assert.NoError(t, m.WriteMemory(t.Context(), 0x80100000, data))
+	got, err := m.ReadMemory(t.Context(), 0x80100000, len(data))
+	assert.NoError(t, err)
+	assert.Equal(t, data, got)
+	assert.Equal(t, true, f.pulses > 0)
+
+	before := f.pulses
+	_, err = m.Command(t.Context(), "cls")
+	assert.NoError(t, err)
+	assert.Equal(t, before, f.pulses, "a command after a binary read shouldn't pulse")
+}
+
+func TestPacing(t *testing.T) {
+	_, p, m := setup(t)
+	p.Pacing = Pacing{
+		Load:       20 * time.Millisecond,
+		Reply:      time.Millisecond,
+		Header:     20 * time.Millisecond,
+		BlockStart: 10 * time.Millisecond,
+	}
+	start := time.Now()
+	prog := &Program{Segments: []Segment{{Addr: 0x80100000, Data: make([]byte, 2*blockSize)}}, PC: 0x80100000, SP: defaultStack}
+	assert.NoError(t, m.Load(t.Context(), prog))
+	assert.Equal(t, true, time.Since(start) >= 60*time.Millisecond, "the load, header and two blocks should each pause")
+}
+
+func TestAwaitBusy(t *testing.T) {
+	f, p, _ := setup(t)
+	f.cts = false
+	start := time.Now()
+	assert.NoError(t, p.awaitBusy(t.Context(), time.Second))
+	assert.Equal(t, true, time.Since(start) < 100*time.Millisecond, "a console that has lowered CTS ends the wait")
+
+	f.cts = true
+	start = time.Now()
+	assert.NoError(t, p.awaitBusy(t.Context(), 20*time.Millisecond))
+	assert.Equal(t, true, time.Since(start) >= 20*time.Millisecond, "one that keeps CTS up costs the whole wait")
+}
+
 func TestOpenProgram(t *testing.T) {
 	dir := t.TempDir()
 
@@ -241,10 +294,12 @@ func TestOpenProgram(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(0x801f8000), p.SP, "the stack's end, from the header")
 
-	p, err = OpenProgram("../format/ecoff/testdata/main-ecoff")
-	assert.NoError(t, err)
-	assert.Equal(t, uint32(defaultStack), p.SP)
-	assert.Equal(t, 4, len(p.Segments), ".text, .rdata, .data and .sdata")
+	t.Run("ecoff", func(t *testing.T) {
+		p, err := OpenProgram(sonyFixture(t, "main-ecoff"))
+		assert.NoError(t, err)
+		assert.Equal(t, uint32(defaultStack), p.SP)
+		assert.Equal(t, 4, len(p.Segments), ".text, .rdata, .data and .sdata")
+	})
 
 	srec := filepath.Join(dir, "main.mot")
 	assert.NoError(t, os.WriteFile(srec, []byte("S00600004844521B\n"), 0o644))
@@ -348,4 +403,15 @@ func TestReadUntilKeepsTheRest(t *testing.T) {
 	s, err = p.ReadUntil(t.Context(), ">>")
 	assert.NoError(t, err)
 	assert.Equal(t, "two>>", s)
+}
+
+// sonyFixture is the path of a file built from Sony's SDK, which is not in this
+// repository: PSX_SONY_TESTDATA names a private copy, and the test skips without it.
+func sonyFixture(t *testing.T, name string) string {
+	t.Helper()
+	dir := os.Getenv("PSX_SONY_TESTDATA")
+	if dir == "" {
+		t.Skip("PSX_SONY_TESTDATA is not set")
+	}
+	return filepath.Join(dir, name)
 }

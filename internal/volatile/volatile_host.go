@@ -29,6 +29,28 @@ func LoadUint16(p *uint16) uint16 { return *p }
 // StoreUint16 writes the half-word at p, every time it is called.
 func StoreUint16(p *uint16, v uint16) { *p = v }
 
+// A Register16 is a halfword of memory-mapped hardware.
+type Register16 struct {
+	Reg uint16
+}
+
+// Get reads the register.
+func (r *Register16) Get() uint16 { return r.Reg }
+
+// Set writes the register.
+func (r *Register16) Set(v uint16) { r.Reg = v }
+
+// A Register8 is a byte of memory-mapped hardware.
+type Register8 struct {
+	Reg uint8
+}
+
+// Get reads the register.
+func (r *Register8) Get() uint8 { return r.Reg }
+
+// Set writes the register.
+func (r *Register8) Set(v uint8) { r.Reg = v }
+
 // LoadUint8 reads the byte at p, every time it is called.
 func LoadUint8(p *uint8) uint8 { return *p }
 

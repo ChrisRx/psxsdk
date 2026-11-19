@@ -9,6 +9,8 @@ func flushCache()              {}
 func run(pc, gp, sp uint32)    {}
 func installHook()             {}
 func installVector()           {}
+func setWatching(uint32)       {}
+func showScreen()              {}
 func resume()                  {}
 func currentSR() uint32        { return 0 }
 func funcAddr[F any](F) uint32 { return 0 }

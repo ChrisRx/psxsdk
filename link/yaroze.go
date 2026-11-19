@@ -5,13 +5,14 @@ import (
 	"compress/gzip"
 	_ "embed"
 	"encoding/binary"
+	"os"
 	"sync"
 
 	"go.chrisrx.dev/psx/format/psx"
 )
 
-// libpsGz is the Net Yaroze library as the boot disc leaves it resident in
-// RAM, a PSX-EXE, gzipped.
+// libpsGz is the clean library, internal/libps, laid out as a Net Yaroze's boot disc
+// leaves its library resident in RAM, a PSX-EXE, gzipped. task image builds it.
 //
 //go:embed libps.exe.gz
 var libpsGz []byte
@@ -19,6 +20,10 @@ var libpsGz []byte
 // Libps returns the Net Yaroze library as a PSX-EXE, read the first time it
 // is asked for.
 var Libps = sync.OnceValues(func() (*psx.File, error) {
+	// Another image in its place, for comparing programs on two of them.
+	if p := os.Getenv("PSX_LIBPS_IMAGE"); p != "" {
+		return psx.Open(p)
+	}
 	r, err := gzip.NewReader(bytes.NewReader(libpsGz))
 	if err != nil {
 		return nil, err
@@ -55,6 +60,22 @@ func Executable(img *Image, patch bool, loads ...Load) (*psx.File, error) {
 	if err != nil {
 		return nil, err
 	}
+	for _, l := range loads {
+		if err := psx.Embed(exe, l.Addr, l.Data); err != nil {
+			return nil, err
+		}
+	}
+	return exe, nil
+}
+
+// Standalone makes a PSX-EXE of a program that brings its own library, as
+// one built for the playstation-yaroze-clean target does: the image as it is,
+// entered at its own entry point, with no library combined in and no
+// startup stub, and each of loads put into it at its address.
+func Standalone(img *Image, loads ...Load) (*psx.File, error) {
+	exe := psx.New(img.Addr, img.Entry, img.Data)
+	exe.StackAddr = 0x801fff00
+	psx.AlignTextData(exe, 2048)
 	for _, l := range loads {
 		if err := psx.Embed(exe, l.Addr, l.Data); err != nil {
 			return nil, err

@@ -52,6 +52,13 @@ type dma struct {
 	// pending counts the steps until a channel's completion flag is set.
 	pending [7]int
 
+	// Under SetDrawTime, gpuEnd is when the GPU's transfer is next due to
+	// move on: a held list to start (gpuHeld), or a running one to end,
+	// with gpuWords the words it sent. It is 0 otherwise.
+	gpuEnd   uint64
+	gpuHeld  bool
+	gpuWords int
+
 	// settled is DICR as the last update left it.
 	settled uint32
 
@@ -67,12 +74,26 @@ type dma struct {
 	ic   *ic
 	gpu  *gpu // where the GPU channel's words go, without the bus
 	stop func(error)
+
+	// holdBus has the CPU wait out a transfer under SetCPUCost
+	// (cpucost.go), and does nothing otherwise. holdBlocks is the same
+	// for a transfer in blocks, which holds the bus for part of each.
+	holdBus    func(cycles uint64)
+	holdBlocks func(blocks, period, open uint64)
 }
 
 // newDMA returns a DMA controller with every channel idle, setting wake
 // when it becomes active and reporting an error that stops the run to stop.
 func newDMA(bus *Bus, ic *ic, wake *bool, stop func(error)) *dma {
-	return &dma{bus: bus, ic: ic, wake: wake, stop: stop, dpcr: 0x07654321}
+	return &dma{
+		bus:        bus,
+		ic:         ic,
+		wake:       wake,
+		stop:       stop,
+		dpcr:       0x07654321,
+		holdBus:    func(uint64) {},
+		holdBlocks: func(uint64, uint64, uint64) {},
+	}
 }
 
 func (d *dma) madr(ch int) *uint32 { return &d.regs[ch*3] }
@@ -194,6 +215,9 @@ func (d *dma) Write8(off uint32, v uint8) {
 func (d *dma) start(ch int) {
 	chcr := *d.chcr(ch)
 	if chcr&chcrBusy == 0 {
+		if ch == dmaGPU {
+			d.stopGPU()
+		}
 		return
 	}
 	if d.log.on(LevelTrace) {
@@ -250,8 +274,17 @@ func (d *dma) transferGPU() {
 		return
 	case 1:
 		d.transferGPURequest()
+		if d.gpu.time.on && d.timeGPURequest() {
+			return
+		}
 	case 2:
-		d.transferGPULinked()
+		if d.gpu.time.on {
+			d.transferGPUTimed()
+			return
+		}
+		if !d.transferGPULinked() {
+			return
+		}
 	}
 	*chcr &^= chcrBusy | chcrTrigger
 	*d.bcr(dmaGPU) = 0
@@ -295,15 +328,25 @@ func (d *dma) transferGPURequest() {
 	d.pending[dmaGPU] = int(n)
 }
 
+// linkedNodesMax is more nodes than a list in RAM can have without visiting
+// one twice: 2 MB of RAM holds 512 Ki words. A list longer than that loops.
+const linkedNodesMax = 1 << 19
+
 // transferGPULinked walks a linked list of GPU packets: each node's header
 // holds its length in words in the top byte and the next node's address in
-// the rest, with 0xffffff ending the list. psxe gives up after 16384 nodes.
-func (d *dma) transferGPULinked() {
+// the rest, with 0xffffff ending the list. It reports whether the list
+// ended. One that loops never ends on a console: the channel stays busy, and
+// a library's DrawSync times out, as Sony's does on a list linked into
+// address 0, whose word the BIOS leaves linking to itself
+// (internal/libps/spec/35-hardware-session.md, the Kanji stall). Here the walk
+// stops after linkedNodesMax nodes and leaves the channel busy for good.
+func (d *dma) transferGPULinked() bool {
 	addr := *d.madr(dmaGPU)
 	hdr := d.bus.Read32(addr)
 	size := hdr >> 24
 	toGPU := false // whether the last access was a word to the GPU
-	for range 16384 {
+	ended := false
+	for range linkedNodesMax {
 		for ; size > 0; size-- {
 			addr = (addr + d.step(dmaGPU)) & 0x1ffffc
 			d.gpu.gp0(d.bus.Read32(addr))
@@ -312,6 +355,7 @@ func (d *dma) transferGPULinked() {
 		}
 		addr = hdr & 0xffffff
 		if addr == 0xffffff {
+			ended = true
 			break
 		}
 		hdr = d.bus.Read32(addr)
@@ -321,6 +365,11 @@ func (d *dma) transferGPULinked() {
 	if toGPU {
 		d.chargeGPU()
 	}
+	if !ended {
+		*d.madr(dmaGPU) = addr
+		d.pending[dmaGPU] = 0
+	}
+	return ended
 }
 
 // chargeGPU leaves the bus charged as a write to GP0 through it would.
@@ -397,6 +446,7 @@ func (d *dma) transferOTC() {
 	}
 	d.pending[dmaOTC] = int(n)
 	*d.chcr(dmaOTC), *d.bcr(dmaOTC) = 0, 0
+	d.holdBus(uint64(n) * otcHoldPerMille / 1000)
 }
 
 // update raises the completion flags that are due, and the DMA interrupt on
@@ -410,8 +460,11 @@ func (d *dma) update() {
 func (d *dma) settle() {
 	// With nothing pending and DICR as the last update left it, an update
 	// would recompute the same signal and change nothing.
+	if d.gpuEnd != 0 {
+		d.gpuDue()
+	}
 	p := &d.pending
-	if p[0]|p[1]|p[2]|p[3]|p[4]|p[5]|p[6] == 0 && d.dicr == d.settled {
+	if p[0]|p[1]|p[2]|p[3]|p[4]|p[5]|p[6] == 0 && d.dicr == d.settled && d.gpuEnd == 0 {
 		d.active = false
 		return
 	}

@@ -2,10 +2,10 @@ package yaroze
 
 import "unsafe"
 
-// Reaching memory by address. A Net Yaroze program loads its data at fixed
-// addresses, between the resident library and itself, as the demos' batch
-// files sent it there and as package disc reads it there now, and the
-// library hands back pointers into memory it owns. Go has no type for
+// Reaching memory by address. An original Net Yaroze program loaded its
+// data at fixed addresses, between the resident library and itself, where
+// the demos' batch files sent it, and a port of one may still. The library
+// also hands back pointers into memory it owns. Go has no type for
 // either, so these turn an address into a pointer in one place, rather
 // than in every program with a conversion go vet rightly suspects.
 
@@ -24,12 +24,12 @@ func Pointer(addr uintptr) unsafe.Pointer {
 	return unsafe.Pointer(uintptr(unsafe.Pointer(nil)) + addr)
 }
 
-// At returns the memory at addr as words, which is how the library takes
+// Word returns the memory at addr as words, which is how the library takes
 // the data a program loads: a model for GsMapModelingData, a sequence for
 // SsSeqOpen, a buffer for CdReadFile.
 //
 //go:inline
-func At(addr uintptr) *uint32 { return (*uint32)(Pointer(addr)) }
+func Word(addr uintptr) *uint32 { return (*uint32)(Pointer(addr)) }
 
 // BytesAt returns the memory at addr as bytes, which is how SsVabTransfer
 // takes a sound bank.
@@ -41,4 +41,4 @@ func BytesAt(addr uintptr) *uint8 { return (*uint8)(Pointer(addr)) }
 // is as fast as a register, which GsSortObject4 takes as its work space.
 //
 //go:inline
-func Scratch() *uint32 { return At(0x1f800000) }
+func Scratch() *uint32 { return Word(0x1f800000) }

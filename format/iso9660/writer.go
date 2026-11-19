@@ -143,6 +143,9 @@ func NewWriter(root *Dir, opts Options) (*Writer, error) {
 		w.sysUse = xaSysUseLen
 	}
 	w.dirs = root.walk()
+	for _, d := range w.dirs {
+		d.moveFirst(w.sysUse)
+	}
 
 	// A raw file is a sequence of whole sectors, so a length that is not a
 	// multiple of one is not a short final sector but a sign that the file

@@ -21,5 +21,5 @@ func TestStubPanics(t *testing.T) {
 	} {
 		assert.Panic(t, stub(name), call, name)
 	}
-	assert.Equal(t, true, strings.Contains(stub("X"), "yaroze.X: ") && strings.Contains(stub("X"), "playstation-yaroze"), stub("X"))
+	assert.Equal(t, true, strings.Contains(stub("X"), "yaroze.X: ") && strings.Contains(stub("X"), "yaroze build"), stub("X"))
 }

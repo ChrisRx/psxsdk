@@ -38,6 +38,7 @@ package main
 
 import (
 	"go.chrisrx.dev/psx/disc"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -48,8 +49,12 @@ type ball struct {
 }
 
 var (
-	screen = yaroze.Screen{Background: yaroze.CVECTOR{R: 20, G: 20, B: 40}, Depth: 1, Packets: 32 << 10}
-	pad    yaroze.Pad
+	screen = yaroze.Screen{
+		Background: yaroze.Color{R: 20, G: 20, B: 40},
+		Depth:      1,
+		Packets:    32 << 10,
+	}
+	pad input.Controller
 
 	sprite yaroze.GsSPRITE
 	balls  [maxBalls]ball
@@ -83,8 +88,12 @@ func main() {
 		frameLines, rate = 313, 50
 	}
 
-	if f := disc.LoadAll(300, files...); f == nil {
-		sprite = yaroze.TIM(ballTIM.Data()).Load().Sprite()
+	if f := disc.LoadAll(300); f == nil {
+		var im yaroze.GsIMAGE
+		yaroze.GsGetTimInfo(&ballTIM.Data()[1], &im)
+		im.Load()
+		yaroze.DrawSync(0)
+		sprite = im.Sprite()
 	}
 	yaroze.Srand(7)
 	for i := range balls {
@@ -103,7 +112,8 @@ func main() {
 	frameBar = yaroze.GsBOXF{X: 16, Y: 92, W: 288, H: 6, R: 60, G: 60, B: 90}
 	loadBar = yaroze.GsBOXF{X: 16, Y: 92, H: 6}
 
-	for ot := range screen.Frames() {
+	for frame := range screen.Frames() {
+		ot := frame.OT()
 		pad.Update()
 		if n := pad.Duration(yaroze.PADLup); n == 1 || n > 15 {
 			count = min(count+10, maxBalls)

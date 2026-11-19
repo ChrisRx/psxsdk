@@ -24,7 +24,7 @@ func TestCheckCallbacks(t *testing.T) {
 	defer mod.Dispose()
 
 	var got []string
-	for _, err := range transform.CheckCallbacks(mod) {
+	for _, err := range transform.CheckCallbacks(mod, program("go.x/yaroze")) {
 		got = append(got, err.Error())
 	}
 	const alloc = ", which the vertical blank interrupt runs: the allocator is not to be entered from an interrupt, so allocate before installing it"

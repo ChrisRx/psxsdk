@@ -1,0 +1,8 @@
+{
+	"comment": "A Net Yaroze program with its library linked in: psxsdk's exp/cleanlib, a clean-room reimplementation in Go, loaded where the resident library sits on a Net Yaroze, so only what the program calls is linked.",
+	"inherits": ["playstation-yaroze"],
+	"build-tags": ["cleanlib"],
+	"cflags": ["-DLIBPS_GO", "-DLIBPS_CLEAN"],
+	"ldflags": ["--defsym=__load=0x80010000", "--defsym=__libps_heap_size=0"],
+	"extra-files": ["targets/playstation-libc.c", "targets/playstation-yaroze-libps-data.c"]
+}

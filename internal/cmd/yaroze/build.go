@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.chrisrx.dev/psx/format/psx"
 	"go.chrisrx.dev/psx/internal/cmd/mkdisc"
 	"go.chrisrx.dev/psx/internal/cproject"
 	"go.chrisrx.dev/psx/internal/flags"
@@ -29,6 +30,10 @@ type buildFlags struct {
 	verbose bool
 	hot     bool
 	target  string
+	libps   string
+
+	// experiment is the compiler's -experiment flag.
+	experiment string
 
 	// c is the compiler, found once and kept for every build of the
 	// command: under wazero it stays loaded between builds.
@@ -64,6 +69,29 @@ func (f *buildFlags) register(cmd *cobra.Command) {
 	fl.BoolVarP(&f.verbose, "verbose", "v", false, "say which compiler runs, and how long each step takes")
 	fl.StringVar(&f.target, "target", "", "a TinyGo target file, JSON that inherits playstation-yaroze and changes what the program needs, such as where it is linked")
 	fl.BoolVar(&f.hot, "hot", false, "build a program that can take patches from the patch command while it runs: its main package's functions are called through slots, which costs a little speed, and 256KB is reserved for the patches")
+	fl.StringVar(&f.libps, "libps", "static", "the Net Yaroze library: static, linked into the program, or resident, the program laid over the image a Net Yaroze leaves in memory")
+	fl.StringVar(&f.experiment, "experiment", "", "turn the compiler's experiments on, or off with no before the name, comma separated: noonstore turns off onstore, which keeps the library's words in sprites and shapes up to date as their fields are set")
+}
+
+// targetName is the TinyGo target the --libps flag chooses.
+func (f *buildFlags) targetName() string {
+	if f.overImage() {
+		return toolchain.ResidentTarget
+	}
+	return toolchain.DefaultTarget
+}
+
+// overImage reports whether the program is laid over the resident library. A
+// target file inherits the resident target and says for itself what it links.
+func (f *buildFlags) overImage() bool { return f.libps == "resident" || f.target != "" }
+
+// check rejects a --libps value that names no library.
+func (f *buildFlags) check() error {
+	switch f.libps {
+	case "static", "resident":
+		return nil
+	}
+	return fmt.Errorf("--libps %q names no library: static or resident", f.libps)
 }
 
 // logf prints a step's progress with -v.
@@ -86,6 +114,9 @@ func pkgName(pkg string) (string, error) {
 // build compiles pkg and writes the PSX-EXE to exe and, if elf is not empty,
 // the ELF, with its traps removed, to elf. Either may be empty.
 func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
+	if err := f.check(); err != nil {
+		return err
+	}
 	start := time.Now()
 	c, err := f.find()
 	if err != nil {
@@ -105,14 +136,16 @@ func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
 		return err
 	}
 	b := &toolchain.Build{
-		Package: pkg,
-		Opt:     f.opt,
-		Tags:    f.tags,
-		Hot:     f.hot,
-		Target:  f.target,
-		Output:  filepath.Join(tmp, "prog.elf"),
-		Stderr:  os.Stderr,
-		Log:     f.logf,
+		Package:    pkg,
+		TargetName: f.targetName(),
+		Opt:        f.opt,
+		Tags:       f.tags,
+		Hot:        f.hot,
+		Experiment: f.experiment,
+		Target:     f.target,
+		Output:     filepath.Join(tmp, "prog.elf"),
+		Stderr:     os.Stderr,
+		Log:        f.logf,
 	}
 	return f.finish(ctx, func(ctx context.Context) error { return c.Compile(ctx, b) }, b.Output, exe, elf)
 }
@@ -121,9 +154,11 @@ func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
 // sources as Prepare leaves them, linked where the Makefile says, with what
 // auto loads put in the executable.
 func (f *buildFlags) buildC(ctx context.Context, c *toolchain.Wasm, dir, tmp, exe, elf string) error {
-	if f.hot || f.target != "" || len(f.tags) > 0 {
-		return errors.New("--hot, --target and --tags are for Go packages, and this is a C project")
+	if f.hot || f.target != "" || len(f.tags) > 0 || f.experiment != "" {
+		return errors.New("--hot, --target, --tags and --experiment are for Go packages, and this is a C project")
 	}
+	// A C project calls the library it was written for, at its addresses.
+	f.libps = "resident"
 	p, err := cproject.Read(dir)
 	if err != nil {
 		return err
@@ -181,7 +216,14 @@ func (f *buildFlags) finish(ctx context.Context, compile func(context.Context) e
 		if err != nil {
 			return err
 		}
-		x, err := link.Executable(img, true, f.loads...)
+		var x *psx.File
+		if f.overImage() {
+			x, err = link.Executable(img, true, f.loads...)
+		} else {
+			// The program brought its own library: nothing to lay it
+			// over, nothing to start first.
+			x, err = link.Standalone(img, f.loads...)
+		}
 		if err != nil {
 			return err
 		}
@@ -201,12 +243,12 @@ func buildCommand() *cobra.Command {
 		Short: "compile a program into a PSX-EXE",
 		Long: `build compiles the main package in the directory given, the current one
 if none is, into a PSX-EXE, which the BIOS of a console or an emulator
-loads and runs: the program with the Net Yaroze library combined in, so it
+loads and runs: the program with the Net Yaroze library linked in, so it
 needs no boot disc.
 
 The directory may instead hold a C project from the Net Yaroze SDK, with C
 sources and no Go ones, its Makefile and auto file read for how to build it.
-The first such build downloads the compiler with clang, 28MB, once.
+The first such build downloads the compiler with clang, 30.5MB, once.
 
 -o names the file, the package directory's name with .exe if not given.
 With a name ending in .elf it writes the ELF TinyGo linked instead, with

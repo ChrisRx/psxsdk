@@ -11,7 +11,10 @@ These are what a PlayStation program imports. Each builds on the host too, with 
 
 | Package | Purpose |
 | --- | --- |
-| [`yaroze`](https://pkg.go.dev/go.chrisrx.dev/psx/yaroze) | The Net Yaroze library, `libps`, with Sony's names |
+| [`yaroze`](https://pkg.go.dev/go.chrisrx.dev/psx/yaroze) | The Net Yaroze library, `libps`, with Sony's names, and a Go API over it: screens, frames, sprites, backgrounds, sound, cards and 3D |
+| [`input`](https://pkg.go.dev/go.chrisrx.dev/psx/input) | Reading the controllers: buttons held and pressed, sticks, a mouse, a gun |
+| [`geom`](https://pkg.go.dev/go.chrisrx.dev/psx/geom) | Points, rectangles, vectors, rotations, matrices and the GTE's fixed point numbers |
+| [`gpu`](https://pkg.go.dev/go.chrisrx.dev/psx/gpu) | The GPU's packets, for a program that builds its own primitives |
 | [`disc`](https://pkg.go.dev/go.chrisrx.dev/psx/disc) | Declaring the files a program reads off its disc, which the build puts there |
 | [`archive`](https://pkg.go.dev/go.chrisrx.dev/psx/archive) | Reading archives: many files in one, unpacked piece by piece |
 | [`scene`](https://pkg.go.dev/go.chrisrx.dev/psx/scene) | Drawing a scene made in the playground's scene editor |
@@ -21,7 +24,7 @@ These are what a PlayStation program imports. Each builds on the host too, with 
 
 | Package | Purpose |
 | --- | --- |
-| [`link`](https://pkg.go.dev/go.chrisrx.dev/psx/link) | A linked program made a PSX-EXE, with `libps` combined in |
+| [`link`](https://pkg.go.dev/go.chrisrx.dev/psx/link) | A linked program made a PSX-EXE: as it is when the library is linked in, or combined with the resident image |
 | [`emu`](https://pkg.go.dev/go.chrisrx.dev/psx/emu), [`emu/cpu`](https://pkg.go.dev/go.chrisrx.dev/psx/emu/cpu) | The emulator, and its R3000A and GTE |
 | [`emu/emutest`](https://pkg.go.dev/go.chrisrx.dev/psx/emu/emutest) | Running programs in the emulator from Go tests |
 | [`emu/openbios`](https://pkg.go.dev/go.chrisrx.dev/psx/emu/openbios) | The open source BIOS everything here boots |

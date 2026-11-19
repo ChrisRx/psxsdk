@@ -37,6 +37,7 @@ import (
 	"go.chrisrx.dev/psx/disc"
 	"go.chrisrx.dev/psx/examples/internal/demo"
 	"go.chrisrx.dev/psx/examples/internal/lpge"
+	"go.chrisrx.dev/psx/input"
 	"go.chrisrx.dev/psx/yaroze"
 )
 
@@ -84,15 +85,14 @@ var (
 	tile2File  = disc.Register("ASSETS/TILE3.TIM", "assets/TILE3.TIM").Into(tile2Data[:])
 	sphereFile = disc.Register("ASSETS/16BIT.TMD", "assets/16BIT.TMD").Into(sphereData[:])
 	dongleFile = disc.Register("ASSETS/DONGLE.TIM", "assets/DONGLE.TIM").Into(dongleData[:])
-	files      = []*disc.File{&squareFile, &shipFile, &waveFile, &fireFile, &tileFile, &tile2File, &sphereFile, &dongleFile}
 
-	squareModel = yaroze.TMD(squareData[:])
-	sphereModel = yaroze.TMD(sphereData[:])
-	waveTIM     = yaroze.TIM(waveData[:])
-	fireTIM     = yaroze.TIM(fireData[:])
-	tileTIM     = yaroze.TIM(tileData[:])
-	tile2TIM    = yaroze.TIM(tile2Data[:])
-	dongleTIM   = yaroze.TIM(dongleData[:])
+	squareModel = squareData[:]
+	sphereModel = sphereData[:]
+	waveTIM     = waveData[:]
+	fireTIM     = fireData[:]
+	tileTIM     = tileData[:]
+	tile2TIM    = tile2Data[:]
+	dongleTIM   = dongleData[:]
 )
 
 var (
@@ -240,7 +240,7 @@ func findViewPoint() yaroze.VECTOR {
 // Start that pauses from the frames it stays held; paused is whether it
 // has, until the next press.
 var (
-	controller yaroze.Pad
+	controller input.Controller
 	paused     bool
 )
 
@@ -304,7 +304,7 @@ func initializeAll() bool {
 
 	yaroze.FntLoad(960, 256)
 	yaroze.FntOpen(-120, 40, 256, 200, 0, 512)
-	if missing := demo.Load(files, nil); missing != "" {
+	if missing := demo.Load(disc.Registered(), nil); missing != "" {
 		for {
 			pad := yaroze.PadRead()
 			if pad&yaroze.PADstart != 0 && pad&yaroze.PADselect != 0 {

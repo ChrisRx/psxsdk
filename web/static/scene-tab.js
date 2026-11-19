@@ -328,7 +328,8 @@ const sceneTab = (() => {
   // says where the file is and takes the flag). A scene grown past the
   // memory the program loaded it into needs a Run.
   const liveStatus = $("scene-live");
-  const LIVE = "go.chrisrx.dev/psx/scene.live";
+  // The record is the scene package's.
+  const LIVES = ["go.chrisrx.dev/psx/scene.live"];
   async function poke() {
     const p = project();
     if (!p || !state.running || state.current?.id !== p.id) {
@@ -337,7 +338,11 @@ const sceneTab = (() => {
     }
     const dat = p.get(datPath());
     if (!dat) return;
-    const { address } = await call("symbol", { name: LIVE });
+    let address = -1;
+    for (const name of LIVES) {
+      ({ address } = await call("symbol", { name }));
+      if (address >= 0) break;
+    }
     if (!(address >= 0)) {
       liveStatus.textContent = "The running program does not read a scene.";
       return;
@@ -383,7 +388,11 @@ const sceneTab = (() => {
       liveStatus.textContent = "Run the project to play from here.";
       return;
     }
-    const { address } = await call("symbol", { name: LIVE });
+    let address = -1;
+    for (const name of LIVES) {
+      ({ address } = await call("symbol", { name }));
+      if (address >= 0) break;
+    }
     if (!(address >= 0)) {
       liveStatus.textContent = "The running program does not read a scene.";
       return;
@@ -2366,7 +2375,7 @@ const sceneTab = (() => {
   }
 
   // The inspector: the selection's fields, in the console's units.
-  // field makes a labelled input. A number's label scrubs: dragging on it
+  // field makes a labeled input. A number's label scrubs: dragging on it
   // changes the value by step for every few pixels. With unit "deg" the
   // field shows degrees for a value kept in 4096ths of a turn.
   function field(label, value, onChange, { type = "number", title = "", options = null, step = 1, unit = "" } = {}) {

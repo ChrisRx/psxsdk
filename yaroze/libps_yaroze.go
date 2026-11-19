@@ -13,7 +13,7 @@ import "unsafe"
 // pointer typed as an integer, and gets a Go signature instead. The stubs
 // for every function here are in libps_stub.go, with the same comments.
 
-// FntPrint writes s to the current print stream, for FntFlush to draw.
+// FntPrint writes s to print stream 0, for FntFlush to draw.
 //
 // In C it is printf-style. Formatting happens in Go instead, so it takes a
 // finished C string, which Buffer builds without allocating and CString
@@ -23,6 +23,13 @@ import "unsafe"
 //
 //export FntPrint
 func FntPrint(s *byte) int32
+
+// FntPrintStream writes s to print stream id, for FntFlush to draw, with the same
+// caution about percent directives as FntPrint: in C it is FntPrint with its
+// optional first argument. It returns the number of characters in the stream.
+//
+//export libps_FntPrintStream
+func FntPrintStream(id int32, s *byte) int32
 
 // KanjiFntPrint writes the Shift JIS string s to the current Kanji print
 // stream, for KanjiFntFlush to draw, with the same caution about percent
@@ -94,6 +101,14 @@ func Rand() int32
 //export srand
 func Srand(seed uint32)
 
+// FlushCache empties the instruction cache, after code in memory has been
+// changed, so that the CPU fetches the new code. The header declares it as
+// FlushCashe, but the library exports it as FlushCache, so it is bound by
+// hand under the library's name (hdr2go skips the header's).
+//
+//export FlushCache
+func FlushCache()
+
 //export GsLinkObject4
 func gsLinkObject4(tmd_base uint32, objp *GsDOBJ2, n int32)
 
@@ -150,23 +165,23 @@ func POSITION() *GsPOSITION { return &position }
 
 // PacketPointer returns GsOUT_PACKET_P, where the library builds the next
 // GPU packet in the space GsSetWorkBase gave it, and SetPacketPointer moves
-// it, for a program that builds packets of its own there; AllocPacket does
-// both.
+// it, for a program that builds packets of its own there. Frame.Packet
+// does both for one of the gpu package's packet types.
 func PacketPointer() *PACKET { return gsOUT_PACKET_P }
 
 // SetPacketPointer sets GsOUT_PACKET_P; see PacketPointer.
 func SetPacketPointer(p *PACKET) { gsOUT_PACKET_P = p }
 
-// NativeVideoMode returns the video mode the console is made for, MODE_PAL
-// for a European one and MODE_NTSC for any other, from the region letter
-// at the end of the version string Sony's BIOS carries: "System ROM
-// Version 3.0 01/06/97 E". A BIOS without one, the first Japanese one or
-// an OpenBIOS, is taken for NTSC.
-func NativeVideoMode() int32 {
+// NativeVideoMode returns the video mode the console is made for, PAL for
+// a European one and NTSC for any other, from the region letter at the end
+// of the version string Sony's BIOS carries: "System ROM Version 3.0
+// 01/06/97 E". A BIOS without one, the first Japanese one or an OpenBIOS,
+// is taken for NTSC.
+func NativeVideoMode() VideoMode {
 	if *(*byte)(Pointer(0xbfc7ff52)) == 'E' {
-		return MODE_PAL
+		return PAL
 	}
-	return MODE_NTSC
+	return NTSC
 }
 
 // The CD-ROM calls the resident library has beyond what libps.h declares,

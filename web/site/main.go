@@ -28,8 +28,8 @@
 // A fenced block in the pikchr language is drawn as a diagram when the page
 // is built (diagram.go), in the page's color so that it follows the theme.
 //
-// The playground starts a project from one of the examples, jumpcube or
-// quest, whose sources are copied under play/starters and listed in
+// The playground starts a project from one of the examples, blank, jumpcube
+// or quest, whose sources are copied under play/starters and listed in
 // play/starters.json, so that the program a newcomer first sees is one
 // that builds as an example does and cannot drift from the package; the
 // list names each example, for the playground to add its data files from
@@ -97,9 +97,9 @@ var opts = struct {
 	Docs:     "docs",
 	Examples: "examples",
 	Static:   "web/static",
-	Starters: "jumpcube,quest",
+	Starters: "blank,jumpcube,quest",
 	Goldens:  "tests/testdata",
-	API:      "yaroze,scene,stage,disc,archive",
+	API:      "yaroze,input,geom,gpu,scene,stage,disc,archive",
 	Out:      ".build/site",
 	Repo:     "https://github.com/ChrisRx/psxsdk",
 	Name:     "psxsdk",

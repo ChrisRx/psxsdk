@@ -137,7 +137,12 @@ func decimal(word []byte) uint32 {
 	return v
 }
 
-// command carries out a line the host typed.
+// command carries out a line the host typed. Some commands allocate, a
+// little each time one runs, and play waits a frame at a time, which makes
+// the monitor's loop look like a frame loop to the build's check: the
+// pragma says the allocations are a command's, not a frame's.
+//
+//go:allocates
 func command(l []byte) {
 	args := split(l)
 	if len(args) == 0 {
@@ -162,9 +167,8 @@ func command(l []byte) {
 			regs[regEPC] = hex(args[0])
 		}
 		start()
-	// The host says it has a byte of a binary read by turning its RTS off
-	// for a few microseconds, which an interrupt handler running then would
-	// hide, so a binary session runs with interrupts off.
+	// A binary session runs with interrupts off, so that a handler can't
+	// take the bytes the session is waiting for.
 	case is(name, "bwr"):
 		yaroze.EnterCriticalSection()
 		binaryWrite()
@@ -332,13 +336,33 @@ func setRegister(args [][]byte) {
 	line.puts("\r\n")
 }
 
+// stackClear is how much of a program's stack go zeroes before starting it.
+const stackClear = 0x4000
+
+// clearStack zeroes the stackClear bytes below a program's stack pointer. Some
+// programs read their stack before they set it, and what was left there
+// otherwise is what the boot disc's monitor and TakeOver's loader left, which
+// sends showcase-gasgar down its quit path at once. The monitor's own stack
+// is below 80090000h, so this is clear of it.
+func clearStack(sp uint32) {
+	from := (sp - stackClear) &^ 3
+	words := unsafe.Slice((*uint32)(yaroze.Pointer(uintptr(from))), stackClear/4)
+	for i := range words {
+		words[i] = 0
+	}
+}
+
 // start is go: it starts the program at the stored epc, with the stored
-// gp and sp, and starts the monitor again if the program returns.
+// gp and sp, and starts the monitor again if the program returns. A Control-C
+// from the host while it runs resets the console (installVector).
 func start() {
 	sp := regs[regSP]
 	if sp == 0 {
 		sp = defaultStack
 	}
+	clearStack(sp)
+	setWatching(1)
+	installVector()
 	flushCache()
 	run(regs[regEPC], regs[regGP], sp)
 }
@@ -400,9 +424,15 @@ func binaryWrite() {
 }
 
 // binaryRead is brd, which goes as bwr does the other way: for each 02h
-// the host sends, a block of RAM and its sum, each byte waiting for the
-// host to say it has it, then the host's Y, or N to have it again. A short
-// block is made up with what is in RAM after it.
+// the host sends, a block of RAM and its sum, then the host's Y, or N to
+// have it again. A short block is made up with what is in RAM after it.
+//
+// The boot disc's monitor waits for the host to pulse its RTS off and on
+// after each byte. This one only holds a byte while the host's RTS is off,
+// as putc does for any byte, which a host that pulses works with all the
+// same. On a USB adapter each change of RTS takes about 2 ms, so a pulse a
+// byte made a block take 8.5 s; a host that pulses once for each read it
+// makes, as Port does, gets a block in a fraction of a second.
 func binaryRead() {
 	line.puts("binary\r")
 	for line.getc() == transferStart {
@@ -415,7 +445,7 @@ func binaryRead() {
 			var sum byte
 			for _, b := range memory(addr, blockSize) {
 				sum += b
-				line.putAcked(b)
+				line.putc(b)
 			}
 			line.putc(sum)
 			if line.getc() == 'Y' {

@@ -17,6 +17,5 @@ The Net Yaroze was Sony's 1990s kit for making PlayStation games at home. psxsdk
 
 - [Getting started](guide/index.md): a program of your own, built onto a disc and played, with nothing but Go.
 - [Writing programs in Go](guide/writing-programs.md): what the packages give a program.
-- [The tutorial](tutorial/index.md) writes a program from nothing and puts it on a disc.
 - [The cookbook](cookbook/index.md): how games did what most games do, with controllers, memory cards, CD audio, timing, scrolling, enemies and split screens.
 - [History](about/index.md): the Net Yaroze, why psxsdk exists, and [how it was made](about/index.md#how-it-was-made).

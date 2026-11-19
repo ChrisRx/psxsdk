@@ -45,10 +45,22 @@ package transform
 // context, in the base as a variable F$captures, and HotBind refuses a
 // patch whose body unpacks it otherwise. A literal in any other function is
 // made again by that function's new code, and may change as it likes.
+//
+// A patch holds the main package's code alone, and the rest is the running
+// program's, so the two have to be compiled with the same experiments of
+// the compiler (compileopts.Experiments). With onstore, the main package's
+// stores to a sprite's fields pack its words and the library's drawing
+// code does not, and without it the drawing code does, so a patch built
+// without it for a program built with it would leave the words stale. The
+// link of a program built with -hot defines a symbol for each experiment,
+// __hot_experiment_onstore say, an absolute one that takes no memory, whose
+// value is 1 if the experiment is on and 0 if it is off (HotExperiments),
+// and HotBind refuses a patch whose experiments differ.
 
 import (
 	"debug/elf"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -57,6 +69,85 @@ import (
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
+
+// hotKeepName is the function that keeps every variable as declared.
+const hotKeepName = "__hot_keep"
+
+// isHotVariable reports whether name is a variable the keeper holds as
+// declared: one of the program's own packages, which are those outside
+// GOROOT, main and the packages it imports from its own module, whatever
+// the module is named, and from the modules that one requires, such as
+// go.chrisrx.dev/psx/yaroze. The runtime's and the standard library's,
+// which are in GOROOT, and the compiler's own are not (isStandard).
+func isHotVariable(config *compileopts.Config, name string) bool {
+	// A name the compiler made has the package before a $, as main$pack
+	// has, and a variable made of an allocation its position after an @.
+	if i := strings.IndexAny(name, "$@"); i >= 0 {
+		name = name[:i]
+	}
+	return name != "" && !isStandard(config, name)
+}
+
+// hotExperimentPrefix starts the name of the symbol a program built with
+// -hot has for each of the compiler's experiments, the experiment's name
+// after it: an absolute symbol, 1 if the experiment is on and 0 if off.
+const hotExperimentPrefix = "__hot_experiment_"
+
+// HotExperiments returns the lines of a link script that define, in a
+// program built with -hot, the symbols that say which of the compiler's
+// experiments it was built with, for HotBind to compare a patch's with.
+func HotExperiments(config *compileopts.Config) string {
+	var script strings.Builder
+	for _, name := range compileopts.Experiments() {
+		on := 0
+		if config.Experiment(name) {
+			on = 1
+		}
+		fmt.Fprintf(&script, "%s%s = %d;\n", hotExperimentPrefix, name, on)
+	}
+	return script.String()
+}
+
+// experimentList writes experiments as -experiment takes them: the names
+// in order, each after "no" if it is off.
+func experimentList(experiments map[string]bool) string {
+	var list []string
+	for name, on := range experiments {
+		if !on {
+			name = "no" + name
+		}
+		list = append(list, name)
+	}
+	slices.SortFunc(list, func(a, b string) int {
+		return strings.Compare(strings.TrimPrefix(a, "no"), strings.TrimPrefix(b, "no"))
+	})
+	return strings.Join(list, ",")
+}
+
+// checkHotExperiments reports an error if the patch being built does not
+// have the experiments on that the base has. A base that does not say was
+// built by a compiler from before it did, and is refused: nothing tells
+// which experiments its library code was compiled with, and a patch that
+// guessed wrong would run and draw wrong with nothing said.
+func checkHotExperiments(base map[string]hotSymbol, config *compileopts.Config) error {
+	theirs := map[string]bool{}
+	for name, s := range base {
+		if experiment, ok := strings.CutPrefix(name, hotExperimentPrefix); ok {
+			theirs[experiment] = s.addr != 0
+		}
+	}
+	if len(theirs) == 0 {
+		return fmt.Errorf("hot: the running program does not say which of the compiler's experiments it was built with, so an older compiler built it: the program has to be built and started again")
+	}
+	ours := map[string]bool{}
+	for _, name := range compileopts.Experiments() {
+		ours[name] = config.Experiment(name)
+	}
+	if !maps.Equal(ours, theirs) {
+		return fmt.Errorf("hot: the patch is built with the experiments %s and the running program was built with %s: the program has to be built and started again", experimentList(ours), experimentList(theirs))
+	}
+	return nil
+}
 
 // typeLayout describes a type as far as its layout goes.
 func typeLayout(t llvm.Type) string {
@@ -111,11 +202,48 @@ func isHotFunction(name string) bool {
 }
 
 // HotStubs gives every function of the main package a slot and a stub, as
-// described above.
+// described above, and keeps every variable as it was declared.
 func HotStubs(mod llvm.Module, config *compileopts.Config) {
 	ctx := mod.Context()
 	ptrType := llvm.PointerType(ctx.Int8Type(), 0)
 	noinline := ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0)
+
+	// The optimizer narrows a variable to what the program stores in it,
+	// a halfword stored 0 or 4 to a byte say, and folds one stored once
+	// into its readers. A patch is built from a program that has changed,
+	// so its view of what is stored, and so the width it would choose,
+	// can differ from the base's, and a variable has to be the same size
+	// in both for the patch to use the running program's. A volatile load
+	// of a variable puts it beyond the optimizer's analysis, so a function
+	// that is never called, kept through the link, loads a byte of every
+	// one. In a patch build the function is in the base already, and is
+	// bound away with the rest. The variables of the runtime and the
+	// standard library are left to the optimizer. It links what it does
+	// by proving some of them never set: the main task's defer frame,
+	// without which the panic unwinding it never does would need a
+	// longjmp the target has not, and the type errors.Is and errors.As
+	// compare with, which kept would keep internal/reflectlite, and with
+	// it the code that prints a panic's value of any type, whose errors'
+	// messages allocate, and a loop the compiler makes a call of strlen,
+	// which the target has not either. A patch that changes what the
+	// program stores in one of them, the first defer of a program say,
+	// is refused for the size where the variable is in both, and the
+	// program started again. Where the base's optimizer folded the
+	// variable away, the patch has one of its own, which the base's code
+	// does not read.
+	keeper := llvm.AddFunction(mod, hotKeepName, llvm.FunctionType(ctx.VoidType(), nil, false))
+	keeper.SetLinkage(llvm.ExternalLinkage)
+	keep := ctx.NewBuilder()
+	defer keep.Dispose()
+	keep.SetInsertPointAtEnd(ctx.AddBasicBlock(keeper, "entry"))
+	for g := mod.FirstGlobal(); !g.IsNil(); g = llvm.NextGlobal(g) {
+		if g.IsDeclaration() || g.IsGlobalConstant() || !isHotVariable(config, g.Name()) {
+			continue
+		}
+		keep.CreateLoad(ctx.Int8Type(), g, "").SetVolatile(true)
+	}
+	keep.CreateRetVoid()
+	llvmutil.AppendToGlobal(mod, "llvm.used", keeper)
 
 	var bodies []llvm.Value
 	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
@@ -257,6 +385,9 @@ func HotBind(mod llvm.Module, config *compileopts.Config) error {
 	safe, ok := base["VSync"]
 	if !ok {
 		return fmt.Errorf("hot: the base has no VSync: it is not a Net Yaroze program")
+	}
+	if err := checkHotExperiments(base, config); err != nil {
+		return err
 	}
 	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
 		attr := fn.GetStringAttributeAtIndex(-1, "tinygo-captures")

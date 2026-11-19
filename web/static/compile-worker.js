@@ -2,10 +2,15 @@
 // the sysroot the first time it is asked to build, keeps them, and builds
 // each project it is sent with pipeline.js.
 //
-// The page sends {type: "build", id, files, hot}, the project's files as
-// {path, data}, its Go files at the root and its data files under assets/, or
-// {type: "load", id} to fetch the compiler ahead of the first build,
-// answered by {id, ok} or {id, ok: false, error}. While loading or
+// The page sends {type: "build", id, files, hot, libps, experiment}, the
+// project's files as {path, data}, its Go files at the root and its data
+// files under assets/, with libps "static" or "resident" naming the Net
+// Yaroze library to build against and experiment the compiler's
+// experiments to turn off, as "noonstore", or empty for its defaults (see
+// pipeline.js), or {type: "load", id} to fetch the
+// compiler ahead of the first build, answered by {id, ok, targets}, the
+// targets the compiler's cache can build for, or {id, ok: false, error}.
+// While loading or
 // building, the worker sends {id, event: "log", text} for each line of
 // output, and when done {id, ok, files, elf} with prog.cue and prog.bin and
 // the executable, or {id, ok: false, error}.
@@ -15,9 +20,10 @@
 // {id, ok, files} with those that changed, or {id, ok: false, error} with
 // gofmt's complaints, which name the files as they were sent.
 //
-// {type: "patch", id, files, base, at} compiles the project as a hot reload
-// patch for the running program whose ELF is base, built with hot, linked
-// at address at, and replies {ok, elf}.
+// {type: "patch", id, files, base, at, libps, experiment} compiles the
+// project as a hot reload patch for the running program whose ELF is base,
+// built with hot against the library libps and with the experiments of
+// experiment, linked at address at, and replies {ok, elf}.
 //
 // {type: "convert", id, files} runs the project's go:generate lines other
 // than discgen's, the converters that make assets/ from assets/, which needs
@@ -85,11 +91,12 @@ async function fetchTar(url) {
 
 async function load(log) {
 	log("Loading the compiler…\n");
-	const [tinygo, discgen, mips1fix, eco2exe, mkdisc, tar] = await Promise.all([
+	const [tinygo, discgen, mips1fix, eco2exe, elf2exe, mkdisc, tar] = await Promise.all([
 		fetchCompiler(),
 		fetchModule(versioned("tools/discgen.wasm")),
 		fetchModule(versioned("tools/mips1fix.wasm")),
 		fetchModule(versioned("tools/eco2exe.wasm")),
+		fetchModule(versioned("tools/elf2exe.wasm")),
 		fetchModule(versioned("tools/mkdisc.wasm")),
 		fetchTar(versioned("sysroot.tar.gz")),
 	]);
@@ -97,7 +104,7 @@ async function load(log) {
 	readTar(fs, tar, "/");
 	const sysroot = fs.lookup([], "/sysroot").node;
 	const env = JSON.parse(new TextDecoder().decode(fs.get("/sysroot/env.json")));
-	return new Pipeline({ tinygo, discgen, mips1fix, eco2exe, mkdisc }, sysroot, env, loadTool);
+	return new Pipeline({ tinygo, discgen, mips1fix, eco2exe, elf2exe, mkdisc }, sysroot, env, loadTool);
 }
 
 let gofmt = null; // a promise of the compiled gofmt.wasm
@@ -161,11 +168,11 @@ self.onmessage = async (e) => {
 		pipeline ??= load(log);
 		const loaded = await pipeline;
 		if (msg.type === "load") {
-			self.postMessage({ id: msg.id, ok: true });
+			self.postMessage({ id: msg.id, ok: true, targets: loaded.targets() });
 			return;
 		}
 		if (msg.type === "patch") {
-			const result = await loaded.patch(msg.files, msg.base, msg.at, log);
+			const result = await loaded.patch(msg.files, msg.base, msg.at, log, { libps: msg.libps, experiment: msg.experiment });
 			if (!result.ok) {
 				self.postMessage({ id: msg.id, ok: false, error: "the patch failed" });
 				return;
@@ -173,7 +180,7 @@ self.onmessage = async (e) => {
 			self.postMessage({ id: msg.id, ok: true, elf: result.elf }, [result.elf.buffer]);
 			return;
 		}
-		const result = await loaded.build(msg.files, log, { hot: !!msg.hot });
+		const result = await loaded.build(msg.files, log, { hot: !!msg.hot, libps: msg.libps, experiment: msg.experiment });
 		if (!result.ok) {
 			self.postMessage({ id: msg.id, ok: false, error: "the build failed" });
 			return;

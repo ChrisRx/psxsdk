@@ -34,7 +34,6 @@ import (
 var (
 	movieData [(647180 + 2047) / 2048 * 512]uint32
 	movieFile = disc.Register("ASSETS/MOVIE.MDC", "assets/MOVIE.MDC").Into(movieData[:])
-	files     = []*disc.File{&movieFile}
 )
 
 // The movie's layout; see format/mdec.
@@ -110,7 +109,7 @@ func openMovie() bool {
 	}
 	p := uintptr(unsafe.Pointer(&movieData[headerWords]))
 	for i := range movieFrames {
-		frameAt[i] = yaroze.At(p)
+		frameAt[i] = yaroze.Word(p)
 		p += 4 * uintptr(1+*frameAt[i])
 	}
 
@@ -198,7 +197,7 @@ func main() {
 	yaroze.FntLoad(960, 256)
 	yaroze.FntOpen(16, 16, 288, 200, 0, 256)
 
-	if missing := demo.Load(files, func(string) { say("loading\n", "") }); missing != "" {
+	if missing := demo.Load(disc.Registered(), func(string) { say("loading\n", "") }); missing != "" {
 		fail("could not read\n", missing)
 		return
 	}

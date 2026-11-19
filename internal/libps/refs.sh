@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# refs.sh: rebuilds the reference discs (.build/NAME-ref) of regress.sh's
+# list against exp/libps, four at a time. exp/libps left the tree, so run it in a
+# worktree of the branch sony-reference (spec 15), and copy .build/NAME-ref back,
+# and never alongside regress.sh. A disc
+# that fails to build is named with the end of its log, and the script exits
+# nonzero once the others are done.
+set -euo pipefail
+NAMES="blank pads isbg isbg1 flush split jumpcube quest car scene cdda timers flame morph offscr oden dungeon tunnel clone breakout invaders square dogtale check dino terra card"
+dir() {
+  case $1 in
+    isbg|isbg1|flush) echo internal/libps/spec/probes/$1 ;;
+    # sony-reference keeps blank at its old path, the tutorial's hello.
+    blank) echo docs/tutorial/hello ;;
+    *) echo examples/$1 ;;
+  esac
+}
+build() {
+  local n=$1 d
+  d=$(dir "$n")
+  mkdir -p ".build/$n-ref"
+  # exp/libps and --libps go exist only in a sony-reference worktree, not in this tree.
+  if go run ./cmd/yaroze disc --libps go --elf ".build/$n-ref/prog.elf" -o ".build/$n-ref/$n-ref.bin" "$d" >".build/$n-ref/build.log" 2>&1; then
+    echo "built $n-ref"
+  else
+    echo "FAILED $n-ref"; tail -3 ".build/$n-ref/build.log"
+    return 1
+  fi
+}
+export -f build dir
+printf '%s\n' $NAMES | xargs -P 4 -I{} bash -c 'build {}'

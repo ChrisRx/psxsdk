@@ -153,6 +153,8 @@ function warm() {
     buildStatus.textContent = "Loading the compiler…";
     const reply = await request("load", {}, appendLog);
     if (!building) buildStatus.textContent = reply.ok ? "Ready." : `Could not load the compiler: ${reply.error}`;
+    if (reply.ok) offerLibrary(reply.targets ?? []);
+    if (reply.ok) onstoreLabel.hidden = false;
     if (!reply.ok) warming = null;
     else prebuild();
   })();
@@ -163,7 +165,7 @@ function warm() {
 // to speed, since the browser compiles its code as it first runs and the
 // first build is the slowest, and when the program is the same by the time
 // Run is pressed, it is the build Run uses.
-let prebuilt = null; // {projectId, sig, hot, result, took} of the last one
+let prebuilt = null; // {projectId, sig, hot, libps, experiment, result, took} of the last one
 let prebuilding = null; // a promise while one is being made
 const encoder = new TextEncoder();
 
@@ -190,10 +192,12 @@ function prebuild() {
       if (!reply.ok) return;
       const formatted = new Map(reply.files.map((f) => [f.path, encoder.encode(f.text)]));
       const list = project.list().map((f) => (formatted.has(f.path) ? { path: f.path, data: formatted.get(f.path) } : f));
-      const hot = hotBox.checked;
+      const hot = hotChosen();
+      const libps = library();
+      const experiment = experiments();
       const t0 = performance.now();
-      const result = await request("build", { files: list, hot }, () => {});
-      if (result.ok) prebuilt = { projectId: project.id, sig: signature(list), hot, result, took: performance.now() - t0 };
+      const result = await request("build", { files: list, hot, libps, experiment }, () => {});
+      if (result.ok) prebuilt = { projectId: project.id, sig: signature(list), hot, libps, experiment, result, took: performance.now() - t0 };
     } catch {
       // Nothing is lost: Run builds for itself.
     } finally {
@@ -304,6 +308,46 @@ hotBox.addEventListener("change", () => {
   try { localStorage.setItem("hot", hotBox.checked ? "on" : "off"); } catch { /* no storage */ }
 });
 
+// The resident library: a project links the library into the program, unless
+// this box is ticked, when it is laid over the image a Net Yaroze leaves in
+// memory (yaroze --libps resident). The box is offered once the compiler has
+// loaded and said its cache can build for that target, and the choice is
+// remembered.
+const residentLabel = $("resident-label");
+const residentBox = $("resident");
+try { residentBox.checked = localStorage.getItem("libps") === "resident"; } catch { /* no storage */ }
+residentBox.addEventListener("change", () => {
+  try { localStorage.setItem("libps", residentBox.checked ? "resident" : "static"); } catch { /* no storage */ }
+});
+function offerLibrary(targets) {
+  residentLabel.hidden = !targets.includes("playstation-yaroze");
+}
+// library is the library the next build is for.
+function library() {
+  return !residentLabel.hidden && residentBox.checked ? "resident" : "static";
+}
+
+// The compiler's onstore experiment (see docs/architecture/compiler.md),
+// which is on unless this box is unticked, as yaroze build
+// --experiment=noonstore turns it off, so that a program can be compared
+// with and without it. The box is offered once the compiler has loaded,
+// and the choice is remembered.
+const onstoreLabel = $("onstore-label");
+const onstoreBox = $("onstore");
+try { onstoreBox.checked = localStorage.getItem("onstore") !== "off"; } catch { /* no storage */ }
+onstoreBox.addEventListener("change", () => {
+  try { localStorage.setItem("onstore", onstoreBox.checked ? "on" : "off"); } catch { /* no storage */ }
+});
+// experiments is the compiler's -experiment setting for the next build:
+// empty, its default, or what turns off the experiments unticked.
+function experiments() {
+  return !onstoreLabel.hidden && !onstoreBox.checked ? "noonstore" : "";
+}
+// hotChosen says whether the next build is for hot reload: the Hot box.
+function hotChosen() {
+  return hotBox.checked;
+}
+
 // patchRunning builds a patch of project for its program, which is
 // running, and loads it. It returns whether that settled the run: it did
 // when the patch was loaded, or the program does not compile; it did not
@@ -328,7 +372,7 @@ async function patchRunning(project) {
     buildStatus.textContent = "Building a patch…";
     const t0 = performance.now();
     let log = "";
-    const result = await request("patch", { files: project.list(), base: state.hot.base, at: region.at }, (text) => {
+    const result = await request("patch", { files: project.list(), base: state.hot.base, at: region.at, libps: state.hot.libps, experiment: state.hot.experiment }, (text) => {
       log += text;
       appendLog(text);
     });
@@ -361,7 +405,9 @@ async function patchRunning(project) {
 async function buildAndRun() {
   if (building || !projects.current) return;
   const project = projects.current;
-  if (hotBox.checked && state.hot?.projectId === project.id && state.current?.id === project.id && state.hot.base) {
+  // A patch is compiled against the library and with the experiments its
+  // program was, so a change of either since starts the program over.
+  if (hotChosen() && state.hot?.projectId === project.id && state.current?.id === project.id && state.hot.base && state.hot.libps === library() && state.hot.experiment === experiments()) {
     if (await patchRunning(project)) return;
   }
   building = true;
@@ -386,12 +432,16 @@ async function buildAndRun() {
   // A build made ahead of this one, of these very files, is this one.
   if (prebuilding) await prebuilding;
   const list = project.list();
-  const ahead = prebuilt && prebuilt.projectId === project.id && prebuilt.hot === hotBox.checked && prebuilt.sig === signature(list) ? prebuilt : null;
+  // The settings are taken once, since the boxes may change while it builds.
+  const hot = hotChosen();
+  const libps = library();
+  const experiment = experiments();
+  const ahead = prebuilt && prebuilt.projectId === project.id && prebuilt.hot === hot && prebuilt.libps === libps && prebuilt.experiment === experiment && prebuilt.sig === signature(list) ? prebuilt : null;
   prebuilt = null;
   let result = ahead?.result;
   let log = "";
   if (!ahead) {
-    result = await request("build", { files: list, hot: hotBox.checked }, (text) => {
+    result = await request("build", { files: list, hot, libps, experiment }, (text) => {
       log += text;
       appendLog(text);
     });
@@ -411,7 +461,7 @@ async function buildAndRun() {
   buildStatus.textContent = ahead ? `Built ahead of time, in ${(ahead.took / 1000).toFixed(1)}s` : `Built in ${((performance.now() - t0) / 1000).toFixed(1)}s`;
   state.current = { name: project.name, id: project.id };
   state.disc = { cue: "prog.cue", files: result.files, elf: result.elf };
-  state.hot = hotBox.checked ? { projectId: project.id, base: result.elf } : null;
+  state.hot = hot ? { projectId: project.id, base: result.elf, libps, experiment } : null;
   ttyLog.textContent = "";
   showTab("tty");
   try {

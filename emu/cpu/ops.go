@@ -16,8 +16,11 @@ func (c *CPU) simm() uint32  { return uint32(int32(int16(c.Opcode))) }
 //
 // Step runs the frequent instructions, shifts, ALU operations, branches,
 // immediates, lui, loads and stores, in its own switch, so that they cost
-// no calls; this is everything else. Every instruction costs 2 cycles
-// beyond the fetch, except the GTE commands, which cost what Command says.
+// no calls; this is everything else. Every instruction costs base cycles
+// beyond the fetch, 2 unless the cost model is on, and a GTE instruction
+// its wait for the command in flight on top, except the GTE commands, which
+// cost only that wait: Command's time is charged to the next GTE
+// instruction.
 func (c *CPU) execute() (cycles uint32, ok bool) {
 	switch c.Opcode >> 26 {
 	case 0x00:
@@ -86,6 +89,11 @@ func (c *CPU) execute() (cycles uint32, ok bool) {
 			return 0, false
 		}
 	case 0x12:
+		// Every GTE instruction waits for the command in flight first.
+		if c.GTEHook != nil {
+			c.GTEHook(gteSide(c.Opcode), c.TotalCycles+uint64(c.LastCycles))
+		}
+		wait := c.gteWait()
 		switch c.rs() {
 		case 0x00: // mfc2
 			c.pendingLoad()
@@ -109,8 +117,12 @@ func (c *CPU) execute() (cycles uint32, ok bool) {
 			if n == 0 {
 				return 0, false
 			}
-			return n, true
+			// The command runs from here: its cost is charged to the next
+			// GTE instruction that comes before it is done.
+			c.gteDone = c.TotalCycles + uint64(c.LastCycles) + uint64(wait) + uint64(n)
+			return wait, true
 		}
+		return c.base + wait, true
 	case 0x22:
 		c.opLWL()
 	case 0x26:
@@ -124,13 +136,46 @@ func (c *CPU) execute() (cycles uint32, ok bool) {
 		// pending load first.
 		c.exception(ExcCpU)
 	case 0x32:
+		if c.GTEHook != nil {
+			c.GTEHook(gteSide(c.Opcode), c.TotalCycles+uint64(c.LastCycles))
+		}
+		wait := c.gteWait()
 		c.opLWC2()
+		return c.base + wait, true
 	case 0x3a:
+		if c.GTEHook != nil {
+			c.GTEHook(gteSide(c.Opcode), c.TotalCycles+uint64(c.LastCycles))
+		}
+		wait := c.gteWait()
 		c.opSWC2()
+		return c.base + wait, true
 	default:
 		return 0, false
 	}
-	return 2, true
+	return c.base, true
+}
+
+// gteSide keeps what of a GTE instruction is the GTE's: all of a command, the
+// operation and GTE register of a move, and the operation and GTE register of a load
+// or store.
+func gteSide(op uint32) uint32 {
+	switch {
+	case op>>26 != 0x12:
+		return op & 0xfc1f0000
+	case op&(1<<25) != 0:
+		return op
+	}
+	return op &^ 0x001f0000
+}
+
+// gteWait is how long the CPU waits for the GTE command in flight at a
+// GTE instruction: what is left of the command, or nothing.
+func (c *CPU) gteWait() uint32 {
+	now := c.TotalCycles + uint64(c.LastCycles)
+	if c.gteDone > now {
+		return uint32(c.gteDone - now)
+	}
+	return 0
 }
 
 func b2u(b bool) uint32 {

@@ -127,7 +127,6 @@ var (
 	seqFile = disc.Register("ASSETS/SOUND/SAMPLE1.SEQ", "assets/SAMPLE1.SEQ").Into(seqData[:])
 	vh      = disc.Register("ASSETS/SOUND/STD0.VH", "assets/STD0.VH").Into(vhData[:])
 	vb      = disc.Register("ASSETS/SOUND/STD0.VB", "assets/STD0.VB").Into(vbData[:])
-	files   = []*disc.File{&dogFile, &seqFile, &vh, &vb}
 )
 
 // The pictures, as addresses within the file, since the sprites are set
@@ -264,7 +263,7 @@ func main() {
 		worldOT[i].Org = &otTags[i][0]
 	}
 
-	if missing := demo.Load(files, nil); missing != "" {
+	if missing := demo.Load(disc.Registered(), nil); missing != "" {
 		fail("could not read ", missing)
 		return
 	}
@@ -388,7 +387,7 @@ func checkPad() int32 {
 // backgrounds use to reach their second page.
 func createObject(obj *object, timAdd uintptr, extra int32) {
 	im := &obj.image
-	yaroze.GsGetTimInfo(yaroze.At(timAdd+4), im)
+	yaroze.GsGetTimInfo(yaroze.Word(timAdd+4), im)
 
 	rect := yaroze.RECT{X: im.Px, Y: im.Py, W: int16(im.Pw), H: int16(im.Ph)}
 	yaroze.LoadImage(&rect, im.Pixel)
@@ -1565,21 +1564,16 @@ func initSound() {
 }
 
 func playSEQ() {
-	if !song.Valid() {
-		return
-	}
 	yaroze.SsSetMVol(mvol, mvol)
 	song.SetVolume(svol, svol)
 	song.Play(yaroze.SSPLAY_INFINITY)
 }
 
 func stopSound() {
-	if song.Valid() {
-		song.Stop()
-		yaroze.VSync(0)
-		yaroze.VSync(0)
-		song.Close()
-	}
+	song.Stop()
+	yaroze.VSync(0)
+	yaroze.VSync(0)
+	song.Close()
 	bank.Close()
 }
 

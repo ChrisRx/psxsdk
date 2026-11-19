@@ -13,7 +13,10 @@ package main
 // its height is half its box's height above and below that, and halfW
 // half its width.
 
-import "go.chrisrx.dev/psx/yaroze"
+import (
+	"go.chrisrx.dev/psx/gpu"
+	"go.chrisrx.dev/psx/yaroze"
+)
 
 const maxEntities = 196
 
@@ -363,22 +366,30 @@ func entDraw(e *entity) {
 	if yaroze.RotTransPers3(&shadowXYZ[0], &shadowXYZ[1], &shadowXYZ[2], &shadowSXY) < 0 {
 		return
 	}
-	p := yaroze.AllocPacket(10)
-	p[2], p[4], p[6] = shadowSXY[0], shadowSXY[1], shadowSXY[2]
 	yaroze.RotTransPers(&shadowXYZ[3], &shadowSXY3)
-	p[8] = shadowSXY3
 	otz := yaroze.AverageZ4()
-	c := uint32(uint8(0x60 - int(h>>5)))
-	p[0] = 9 << 24
-	p[1] = 0x2e<<24 | c<<16 | c<<8 | c
-	u0, v0 := uint32(tex.u), uint32(tex.v)
-	u1, v1 := uint32(uint8(int(tex.u)+int(tex.w)-1)), uint32(uint8(int(tex.v)+int(tex.h)-1))
-	p[3] = u0 | v0<<8 | uint32(tex.clut())<<16
-	p[5] = u1 | v0<<8 | uint32(tex.tpageY>>4&0x10|(tex.tpageX&0x3ff)>>6|0x40|(tex.tpageY&0x200)<<2)<<16
-	p[7] = u0 | v1<<8
-	p[9] = u1 | v1<<8
-	ot.Link(int(max((otz-2)>>2, 0)), p)
+	c := uint8(0x60 - int(h>>5))
+	texQuad(int(max((otz-2)>>2, 0)), &shadowSXY, shadowSXY3, tex, gray(c), 2)
 }
+
+// texQuad links a semi-transparent quad of the whole texture, tinted c
+// and blended at the rate abr, on the four screen points the GTE gave,
+// into the frame at depth.
+func texQuad(depth int, sxy *[3]uint32, sxy3 uint32, tex *texture, c gpu.Color, abr uint16) {
+	p := frame.Packet[gpu.TexturedQuad](depth)
+	p.Color = c
+	p.Code |= gpu.CodeTranslucent
+	p.XY0, p.XY1, p.XY2, p.XY3 = point(sxy[0]), point(sxy[1]), point(sxy[2]), point(sxy3)
+	u0, v0 := tex.u, tex.v
+	u1, v1 := uint8(int(tex.u)+int(tex.w)-1), uint8(int(tex.v)+int(tex.h)-1)
+	p.UV0, p.UV1 = gpu.UV{U: u0, V: v0}, gpu.UV{U: u1, V: v0}
+	p.UV2, p.UV3 = gpu.UV{U: u0, V: v1}, gpu.UV{U: u1, V: v1}
+	p.Clut, p.Page = tex.clut(), tex.page()|abr<<5
+}
+
+// point returns a screen point as the GTE gives one, a word, as a packet
+// takes it.
+func point(w uint32) gpu.XY { return gpu.XY{X: int16(w), Y: int16(w >> 16)} }
 
 // entSpawn makes an entity of a type at x, y, z, facing dir quarters from
 // the first, with the animation and the parameter the area's table gives

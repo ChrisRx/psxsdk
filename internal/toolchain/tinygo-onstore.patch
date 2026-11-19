@@ -1,0 +1,176 @@
+--- a/main.go
++++ b/main.go
+@@ -1814,6 +1814,7 @@
+ 	hot := flag.Bool("hot", false, "PlayStation targets: build a program that can take hot reload patches")
+ 	hotBase := flag.String("hot-base", "", "PlayStation targets: build a hot reload patch for the program whose ELF is given, built with -hot")
+ 	hotAt := flag.String("hot-at", "", "the address, hexadecimal, to link the patch of -hot-base at")
++	experiment := flag.String("experiment", "", "the compiler's experiments to turn on, comma separated, or off with no before the name: onstore")
+ 	llvmFeatures := flag.String("llvm-features", "", "comma separated LLVM features to enable")
+ 	cpuprofile := flag.String("cpuprofile", "", "cpuprofile output")
+ 	monitor := flag.Bool("monitor", false, "enable serial monitor")
+@@ -1965,6 +1966,7 @@
+ 		Hot:                     *hot,
+ 		HotBase:                 *hotBase,
+ 		HotAt:                   *hotAt,
++		Experiment:              *experiment,
+ 	}
+ 	if *printCommands {
+ 		options.PrintCommands = printCommand
+--- a/compileopts/options.go
++++ b/compileopts/options.go
+@@ -76,10 +76,42 @@
+ 	Hot     bool   // -hot flag
+ 	HotBase string // -hot-base flag
+ 	HotAt   string // -hot-at flag
++
++	// Experiment turns the compiler's experiments on or off, as
++	// GOEXPERIMENT does: a comma separated list of their names, each
++	// after "no" to turn it off (see Config.Experiment).
++	Experiment string // -experiment flag
++}
++
++// experiments are the compiler's experiments, and whether each is on when
++// -experiment does not name it.
++var experiments = map[string]bool{
++	// onstore: a method marked //go:onstore runs after each store to the
++	// fields it names (compiler/onstore.go). Its packages are built with
++	// the psx.onstore tag.
++	"onstore": true,
++}
++
++// Experiments returns the names of the compiler's experiments, in order.
++// A program built with -hot records which are on, and a patch for it has
++// to be built with the same (transform.HotExperiments).
++func Experiments() []string {
++	names := make([]string, 0, len(experiments))
++	for name := range experiments {
++		names = append(names, name)
++	}
++	slices.Sort(names)
++	return names
+ }
+ 
+ // Verify performs a validation on the given options, raising an error if options are not valid.
+ func (o *Options) Verify() error {
++	for _, name := range strings.Split(o.Experiment, ",") {
++		name = strings.TrimSpace(name)
++		if _, ok := experiments[strings.TrimPrefix(name, "no")]; name != "" && !ok {
++			return fmt.Errorf("unknown experiment %q: the compiler's experiments are onstore", name)
++		}
++	}
+ 	if o.BuildMode != "" {
+ 		valid := slices.Contains(validBuildModeOptions, o.BuildMode)
+ 		if !valid {
+--- a/compileopts/config.go
++++ b/compileopts/config.go
+@@ -146,10 +146,29 @@
+ 	for i := 1; i <= c.GoMinorVersion; i++ {
+ 		tags = append(tags, fmt.Sprintf("go1.%d", i))
+ 	}
++	if c.Experiment("onstore") {
++		tags = append(tags, "psx.onstore")
++	}
+ 	tags = append(tags, c.Options.Tags...)
+ 	return tags
+ }
+ 
++// Experiment reports whether the compiler's experiment called name is on:
++// as it is by default, unless -experiment names it, or names it after
++// "no" to turn it off.
++func (c *Config) Experiment(name string) bool {
++	on := experiments[name]
++	for _, e := range strings.Split(c.Options.Experiment, ",") {
++		switch strings.TrimSpace(e) {
++		case name:
++			on = true
++		case "no" + name:
++			on = false
++		}
++	}
++	return on
++}
++
+ // GC returns the garbage collection strategy in use on this platform. Valid
+ // values are "none", "leaking", "conservative" and "precise".
+ func (c *Config) GC() string {
+--- a/builder/build.go
++++ b/builder/build.go
+@@ -228,6 +228,7 @@
+ 		Nobounds:           config.Options.Nobounds,
+ 		PanicStrategy:      config.PanicStrategy(),
+ 		PanicUnwind:        config.PanicUnwind(),
++		Onstore:            config.Experiment("onstore"),
+ 	}
+ 
+ 	// Load the target machine, which is the LLVM object that contains all
+--- a/compiler/compiler.go
++++ b/compiler/compiler.go
+@@ -62,6 +62,10 @@
+ 	Nobounds           bool // Whether to skip bounds checks
+ 	PanicStrategy      string
+ 	PanicUnwind        string
++
++	// The onstore experiment (onstore.go): a method marked //go:onstore
++	// runs after each store to the fields it names.
++	Onstore bool
+ }
+ 
+ // compilerContext contains function-independent data that should still be
+@@ -103,6 +107,7 @@
+ 	packageDir       string          // directory for this package
+ 	runtimePkg       *types.Package
+ 	localTypeNames   typeutil.Map // *types.Named (synthetic local from generic instantiation) -> string
++	onstoreHooks     map[*types.Named]*onstoreHook
+ }
+ 
+ // newCompilerContext returns a new compiler context ready for use, most
+@@ -1249,6 +1254,11 @@
+ 	if b.info.allocates {
+ 		b.llvmFn.AddFunctionAttr(b.ctx.CreateStringAttribute("tinygo-allocates", ""))
+ 	}
++	if b.info.onstore {
++		// A //go:onstore method runs after every store to the fields it
++		// names, and is inlined there.
++		b.llvmFn.AddFunctionAttr(b.ctx.CreateEnumAttribute(llvm.AttributeKindID("alwaysinline"), 0))
++	}
+ 
+ 	if b.info.interrupt {
+ 		// Mark this function as an interrupt.
+@@ -1412,6 +1422,7 @@
+ // diagnostic.
+ func (b *builder) createFunction() {
+ 	b.createFunctionStart(false)
++	b.checkOnstoreAddrs()
+ 
+ 	// Fill blocks with instructions.
+ 	b.loweringBody = true
+@@ -1646,6 +1657,7 @@
+ 			return
+ 		}
+ 		b.storeValue(llvmAddr, instr.Val)
++		b.createOnstoreCalls(instr)
+ 	default:
+ 		b.addError(instr.Pos(), "unknown instruction: "+instr.String())
+ 	}
+--- a/compiler/symbol.go
++++ b/compiler/symbol.go
+@@ -46,6 +46,10 @@
+ 	// go:allocates: the function allocates on purpose, as a load does, and
+ 	// the frame loop may call it (transform.CheckFrameAllocs).
+ 	allocates bool
++
++	// go:onstore: the method runs after each store to the fields it names
++	// (onstore.go).
++	onstore bool
+ }
+ 
+ type inlineType int
+@@ -538,6 +542,8 @@
+ 			info.inline = inlineHint
+ 		case "//go:noinline":
+ 			info.inline = inlineNone
++		case "//go:onstore":
++			c.parseOnstore(info, f, parts)
+ 		case "//go:allocates":
+ 			// Kept out of line, so that transform.CheckFrameAllocs finds
+ 			// what it allocates inside it, by the attribute, after the
