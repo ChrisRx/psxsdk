@@ -34,20 +34,20 @@ Work is split in two:
 - The `yaroze` package's declarations (`yaroze/*.go` and `yaroze/libps.txt`):
   they are the library's public interface, from Sony's headers.
 - Kernel call trampolines and C storage in
-  `internal/toolchain/_tinygo/targets/playstation-yaroze-bios.S` and
-  `playstation-yaroze-libps-data.c`, and the TinyGo runtime.
-- The clean target, `playstation-yaroze-clean.json`, the start-up you
-  write for it, `playstation-yaroze-clean.S`, and the link script
-  `playstation-yaroze.ld`. (`playstation-yaroze-start.S` includes yours
-  under `LIBPS_CLEAN`. Sony's start-up, `playstation-yaroze.S`, left the
-  tree and stays off limits in history.)
+  `internal/toolchain/yaroze/bios.S` and `libps-data.c` beside it, the
+  runtime's hooks in `runtime.c`, and the TinyGo runtime.
+- The static build's target file, which `internal/toolchain/target.go`
+  writes, the start-up you write for it, `internal/toolchain/yaroze/clean.S`,
+  and the link script `yaroze.ld`. (`start.S` includes yours under
+  `LIBPS_CLEAN`. Sony's start-up, `playstation-yaroze.S`, left the tree
+  and stays off limits in history.)
 - Black-box tests: running programs or calling resident functions in the
   emulator and comparing observable results (`tests/`, `emu/emutest`).
   Reading the values of the library's public variables (those declared
   in `yaroze/`) in a reference run counts, looked up by exact name; never
   list, profile or disassemble the reference's functions, and never
   look up which of Sony's symbols an address falls in (from
-  `playstation-yaroze-symusr.S`, a link map or a disassembler's
+  `internal/toolchain/yaroze/symusr.S`, a link map or a disassembler's
   labels): a stalled or traced PC inside Sony's library stays an
   address. A tool must not read the instruction at the PC on Sony's side,
   even to decide what to log: `ARCHIVE_BUS` and `PROBE_BUS` show the I/O
@@ -78,7 +78,8 @@ summarize them:
   `link/libps.exe.gz` is no longer Sony's: it is the clean image, built from
   this library by `task image`, and fine to build and read. Its history in
   git, from when it was Sony's, is off limits.
-- `internal/toolchain/_tinygo/targets/playstation-yaroze-symusr-orig.S`.
+- `internal/toolchain/yaroze/symusr-orig.S`, and in history the same file as
+  `internal/toolchain/_tinygo/targets/playstation-yaroze-symusr-orig.S`.
 - Files that left the tree, in git history (`git log -p`, `git show`,
   `git diff` touching them): `exp/libps/` (the decompiled library) with
   `exp/libps/image/` and its tooling, `tests/zz_image_test.go`, and in

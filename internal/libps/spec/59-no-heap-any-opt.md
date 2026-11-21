@@ -27,7 +27,7 @@ The check comes from main's compiler. It refuses a program whose frame loop allo
 
 1. **Find every allocation in the library** at `--opt=0`, `1`, `2`, `s` and `z`, not only the ones above. To cover the whole library, not just what one program reaches:
    - Build the image with `image/make.sh` at each level if it can take a level. If it can't, add a way to `make.sh`'s build that leaves the default as it is.
-   - Look for `runtime.alloc` in its disassembly. Use `llvm-objdump -d` from the nix store's LLVM 22.
+   - Look for `runtime.alloc` in its disassembly. Use `llvm-objdump -d` from the nix store's LLVM 23.
    - A start-up allocation the library makes once is allowed only where `TestImageNoHeap` already allows it at the default level.
 2. **Remove each allocation** without changing what the code does. Closures that capture variables are the likely cause. A plain function, or passing the values as parameters, does the same job without one.
 3. **Keep the default build the same where you can.** Check whether the image at the default level changes. If its code changes, run the checks below and say what moved.

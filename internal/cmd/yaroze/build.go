@@ -67,22 +67,23 @@ func (f *buildFlags) register(cmd *cobra.Command) {
 	fl.StringSliceVar(&f.tags, "tags", nil, "extra build tags")
 	fl.Var(&f.loads, "load", "file@addr: put a file into the executable at a hexadecimal address, or with run --exe into memory there, as siocons' local dload did; may be repeated")
 	fl.BoolVarP(&f.verbose, "verbose", "v", false, "say which compiler runs, and how long each step takes")
-	fl.StringVar(&f.target, "target", "", "a TinyGo target file, JSON that inherits playstation-yaroze and changes what the program needs, such as where it is linked")
+	fl.StringVar(&f.target, "target", "", "a TinyGo target file of the program's own, JSON that inherits playstation and changes what the program needs, such as where it is linked; the program is laid over the resident library")
 	fl.BoolVar(&f.hot, "hot", false, "build a program that can take patches from the patch command while it runs: its main package's functions are called through slots, which costs a little speed, and 256KB is reserved for the patches")
 	fl.StringVar(&f.libps, "libps", "static", "the Net Yaroze library: static, linked into the program, or resident, the program laid over the image a Net Yaroze leaves in memory")
 	fl.StringVar(&f.experiment, "experiment", "", "turn the compiler's experiments on, or off with no before the name, comma separated: noonstore turns off onstore, which keeps the library's words in sprites and shapes up to date as their fields are set")
 }
 
-// targetName is the TinyGo target the --libps flag chooses.
-func (f *buildFlags) targetName() string {
+// mode is the way of building the --libps flag chooses.
+func (f *buildFlags) mode() toolchain.Mode {
 	if f.overImage() {
-		return toolchain.ResidentTarget
+		return toolchain.Resident
 	}
-	return toolchain.DefaultTarget
+	return toolchain.Static
 }
 
 // overImage reports whether the program is laid over the resident library. A
-// target file inherits the resident target and says for itself what it links.
+// target file of the program's own is built over the resident build's, and
+// says for itself what else it links.
 func (f *buildFlags) overImage() bool { return f.libps == "resident" || f.target != "" }
 
 // check rejects a --libps value that names no library.
@@ -137,7 +138,7 @@ func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
 	}
 	b := &toolchain.Build{
 		Package:    pkg,
-		TargetName: f.targetName(),
+		Mode:       f.mode(),
 		Opt:        f.opt,
 		Tags:       f.tags,
 		Hot:        f.hot,

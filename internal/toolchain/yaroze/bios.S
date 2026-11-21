@@ -1,4 +1,4 @@
-# BIOS calls for psxsdk's exp/libps, the Net Yaroze library in Go.
+# BIOS calls for internal/libps, the Net Yaroze library in Go.
 #
 # The kernel's functions are reached by jumping through a table's address,
 # 0xA0, 0xB0 or 0xC0, with the function number in t1. These take the

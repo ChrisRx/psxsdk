@@ -5,7 +5,7 @@
 
 # The routines the linked-in target has too.
 #define CLEAN_LIBRARY_ONLY
-#include "playstation-yaroze-clean.S"
+#include "../yaroze/clean.S"
 
 	.text
 

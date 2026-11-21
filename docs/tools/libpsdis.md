@@ -11,7 +11,7 @@ $ libpsdis -f putchar -f VSync  # named functions, to standard output
 $ libpsdis score -o scores.txt  # how close each entry point is
 ```
 
-The only names the image has are the entry points the SDK's `symusr.o` gives, as [`ecoff2asm`](ecoff2asm.md) converted them to `playstation-yaroze-symusr.S`. Every other function is named by its address, `func_8002048c`. A function starts at a named entry point or at the target of a `jal` and ends where the next begins; the few named symbols past the last call target are the library's variables, not code, unless a `jr ra` follows them.
+The only names the image has are the entry points the SDK's `symusr.o` gives, as [`ecoff2asm`](ecoff2asm.md) converted them to `internal/toolchain/yaroze/symusr.S`. Every other function is named by its address, `func_8002048c`. A function starts at a named entry point or at the target of a `jal` and ends where the next begins; the few named symbols past the last call target are the library's variables, not code, unless a `jr ra` follows them.
 
 Each function's listing begins with its name, address and size, what it calls and what calls it, and annotates each instruction with what it reaches for:
 

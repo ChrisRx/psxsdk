@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Makes the TinyGo tree the wasm compiler is built from, in $OUT/tinygo: a
 # copy of upstream TinyGo's source at the revision the flake builds (its
-# tinygo-src package), with the PlayStation targets and their runtime from
+# tinygo-src package), with the playstation target and its runtime from
 # internal/toolchain/_tinygo laid over it, tinygo-wasm.patch and
 # internal/toolchain's tinygo-hot.patch, tinygo-once.patch,
 # tinygo-keeps.patch, tinygo-frame.patch and tinygo-onstore.patch applied,

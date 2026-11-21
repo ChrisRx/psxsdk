@@ -1,6 +1,6 @@
-# Start-up for the playstation-yaroze-clean target: what runs from the
-# entry point to C main in a program built against psxsdk's exp/cleanlib.
-# Written from exp/cleanlib/spec/07-startup.md.
+# Start-up for a program with the clean library linked in: what runs from the
+# entry point to C main in a program built against internal/libps.
+# Written from internal/libps/spec/07-startup.md.
 #
 # At entry the BIOS has set sp and fp to the top of the stack and left
 # interrupts off. This sets gp, clears .sbss and .bss, hands the clean
@@ -115,7 +115,7 @@ libps_start_ra:
 	.word 0
 #endif
 
-# The routines of exp/cleanlib in assembly: its timing paths, where every
+# The routines of internal/libps in assembly: its timing paths, where every
 # instruction counts. Each instruction costs 2 cycles, and a GTE command none of
 # its own but its length, spent at the next GTE instruction that comes before it
 # is done, so that work between a command and its result reads free. The figures
@@ -1501,7 +1501,7 @@ gso_\name\():
 	.section .text.GsSortObject4, "ax", @progbits
 	.align 2
 
-# GsSortObject4(obj, ot, shift, scratch): spec 21 and exp/cleanlib/tmd.go. A polygon's
+# GsSortObject4(obj, ot, shift, scratch): spec 21 and internal/libps/tmd.go. A polygon's
 # cut is left to Go. This walks the runs GsLinkObject4 marked, with what it needs
 # between them on the stack: how many polygons are left, the translucency, the table of
 # loops for the light mode, and two words the GTE stores.

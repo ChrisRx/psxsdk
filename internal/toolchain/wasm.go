@@ -78,19 +78,15 @@ type sysrootEnv struct {
 	// having no clang, can build at. A sysroot written before they were
 	// recorded leaves it empty.
 	Opts []string `json:"opts"`
-	// Targets are the targets the cache holds C and assembly for: the
-	// sysroot's own and, when mkcache.sh built programs for it, the Go
-	// library's. A sysroot written before they were recorded leaves it
-	// empty, which is taken as the sysroot's own target alone.
+	// Targets are the modes the cache holds C and assembly for, by name:
+	// the ones mkcache.sh built programs for.
 	Targets []string `json:"targets"`
 }
 
-// targets is what the cache can build for: see sysrootEnv.Targets.
-func (w *Wasm) targets() []string {
-	if len(w.env.Targets) == 0 {
-		return []string{w.env.Target}
-	}
-	return w.env.Targets
+// targetDir is where the compiler sees the modes' target files, and the
+// files they name: TargetDir of its TINYGOROOT.
+func (w *Wasm) targetDir() string {
+	return guestSysroot + "/" + w.env.TINYGOROOT + "/" + TargetDir
 }
 
 // Where the compiler sees its own directories. The sysroot has to be at
@@ -163,8 +159,8 @@ func New(runtime string) (*Wasm, error) {
 	if err := json.Unmarshal(data, &w.env); err != nil {
 		return nil, fmt.Errorf("%s: %w", filepath.Join(w.sysroot, "env.json"), err)
 	}
-	if w.env.Target != ResidentTarget {
-		return nil, fmt.Errorf("the compiler's sysroot is for %s, not %s", w.env.Target, ResidentTarget)
+	if w.env.Target != BaseTarget {
+		return nil, fmt.Errorf("the compiler's sysroot is for %s, not %s", w.env.Target, BaseTarget)
 	}
 	markUsed(w.dir)
 	trimCache(cache, w.dir, time.Now())
@@ -257,19 +253,21 @@ func (w *Wasm) Compile(ctx context.Context, b *Build) error {
 	}
 	w.builds++
 	out := fmt.Sprintf("%s/prog%d.elf", guestTmp, w.builds)
-	target := b.TargetName
-	if target == "" {
-		target = DefaultTarget
+	mode := b.Mode
+	if mode == "" {
+		mode = Static
 	}
-	if !slices.Contains(w.targets(), target) {
-		return fmt.Errorf("the compiler's cache holds the C and assembly of %s only, so it cannot build for %s", strings.Join(w.targets(), " and "), target)
+	if !slices.Contains(w.env.Targets, string(mode)) {
+		return fmt.Errorf("the compiler's cache holds the C and assembly of a %s build only, so it cannot build %s", strings.Join(w.env.Targets, " and a "), mode)
 	}
+	target := mode.TargetPath(w.targetDir())
 	if b.Target != "" {
-		abs, err := filepath.Abs(b.Target)
-		if err != nil {
+		// The program's own target file, over the mode's.
+		name := fmt.Sprintf("target%d.json", w.builds)
+		if err := overTarget(b.Target, filepath.Join(w.tmp, name), target); err != nil {
 			return err
 		}
-		target = filepath.ToSlash(abs)
+		target = guestTmp + "/" + name
 	}
 	args := []string{"-target=" + target, "-opt=" + opt, "-C", filepath.ToSlash(wd), "-o", out}
 	if len(b.Tags) > 0 {

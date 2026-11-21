@@ -9,9 +9,9 @@ import (
 	"go.chrisrx.dev/psx/internal/volatile"
 )
 
-// The kernel's services, reached through the trampolines in the target's
-// playstation-yaroze-bios.S, and the library's interrupt handling built
-// on them.
+// The kernel's services, reached through the trampolines in
+// internal/toolchain/yaroze/bios.S, and the library's interrupt handling
+// built on them.
 
 // libps_syscall runs the syscall instruction with code in a0 and returns
 // the kernel's v0.

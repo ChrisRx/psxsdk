@@ -1,6 +1,0 @@
-{
-	"comment": "The static target with Sony's timing and leftover memory kept, as the resident image has them, for comparing with a reference (exp/cleanlib/build.sh). Programs build for playstation-yaroze-clean, which leaves them out.",
-	"inherits": ["playstation-yaroze-clean"],
-	"build-tags": ["fidelity"],
-	"cflags": ["-DLIBPS_FIDELITY"]
-}

@@ -1,5 +1,6 @@
 /*
- * Sony PlayStation (R3000A), standalone.
+ * Sony PlayStation (R3000A): the link script of a program that owns the
+ * console.
  *
  * RAM on a retail console is 2MB, mapped three times: cached through KSEG0
  * at 0x80000000, uncached through KSEG1 at 0xA0000000, and at 0x00000000 in
@@ -39,10 +40,10 @@ SECTIONS
 
   .text : ALIGN(4)
   {
-    /* The crt0 is the entry point and nothing references it, so it has to be
-     * kept explicitly and placed first: the loader is given one address and
-     * jumps there. */
-    KEEP(*(.init))
+    /* The crt0 goes first, so that the image begins with its entry point.
+     * ENTRY keeps it; it is not kept by name here, so that a program which
+     * defines _start itself leaves the target's own out. */
+    *(.text._start)
     *(.text)
     *(.text.*)
     . = ALIGN(4);

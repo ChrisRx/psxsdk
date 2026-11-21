@@ -43,14 +43,14 @@
 // data at fixed addresses, is in pad.go and memory.go.
 //
 // The library is only there on the console, so the package has two
-// builds. Under the yaroze tag, which the PlayStation TinyGo targets set,
-// each function is a bodyless declaration carrying //export, which in
-// TinyGo imports a C symbol rather than exporting a Go one. The yaroze
-// command builds for the playstation-yaroze-clean target by default, where
-// the linker resolves each against the clean library, internal/libps,
-// linked into the program. With --libps resident it builds for
-// playstation-yaroze, where the linker resolves each against the fixed
-// addresses in the target's symusr.S, exactly as it does for a C program.
+// builds. Under the yaroze tag, which the yaroze command sets on TinyGo's
+// playstation target, each function is a bodyless declaration carrying
+// //export, which in TinyGo imports a C symbol rather than exporting a Go
+// one. The yaroze command builds static by default, where the linker
+// resolves each against the clean library, internal/libps, linked into
+// the program. With --libps resident the linker resolves each against the
+// fixed addresses in internal/toolchain/yaroze/symusr.S, exactly as it
+// does for a C program.
 // In every other build, which is what an editor, go vet and go build see,
 // each function is a stub that panics, naming itself and saying where the
 // real one is: a program compiles and type-checks on a host, and fails at

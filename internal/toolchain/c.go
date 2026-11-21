@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -73,15 +74,17 @@ func (b *CBuild) logf(format string, args ...any) {
 	}
 }
 
-// The target's files a C program links, in order: the crt0 first, so that
-// _start is at the program's address.
+// The target's files a C program links, in order, each from the compiler's
+// TINYGOROOT: the crt0 first, so that _start is at the program's address.
+// They are the resident build's less what only a Go program needs, with
+// none of the playstation target's own but the integer helpers.
 var cTargetFiles = []string{
-	"playstation-yaroze-start.S",
-	"playstation-yaroze-symusr.S",
-	"playstation-yaroze-symusr-orig.S",
-	"playstation-yaroze-members.S",
-	"playstation-yaroze-gte.S",
-	"r3000-builtins.c",
+	TargetDir + "/start.S",
+	TargetDir + "/symusr.S",
+	TargetDir + "/symusr-orig.S",
+	TargetDir + "/members.S",
+	TargetDir + "/gte.S",
+	"targets/r3000-builtins.c",
 }
 
 // Where the compiler sees the directory of C files, include and rt.
@@ -253,7 +256,7 @@ func cDir(w *Wasm) string {
 // the same, but -fdata-sections gives each variable a section of its own,
 // which SUBALIGN sets the alignment of.
 func (w *Wasm) cLinkScript() (string, error) {
-	data, err := os.ReadFile(filepath.Join(w.sysroot, w.env.TINYGOROOT, "targets", "playstation-yaroze.ld"))
+	data, err := os.ReadFile(filepath.Join(w.sysroot, w.env.TINYGOROOT, TargetDir, "yaroze.ld"))
 	if err != nil {
 		return "", err
 	}
@@ -311,7 +314,7 @@ func (w *Wasm) cRuntime(ctx context.Context, tool cTool, stderr io.Writer, cdir,
 	sources := append([]string{}, cTargetFiles...)
 	sources = append(sources, "rt.c")
 	for _, s := range sources {
-		objects = append(objects, guestC+"/"+name+"/"+s+".o")
+		objects = append(objects, guestC+"/"+name+"/"+path.Base(s)+".o")
 	}
 	if complete(dir) {
 		return objects, nil
@@ -324,7 +327,7 @@ func (w *Wasm) cRuntime(ctx context.Context, tool cTool, stderr io.Writer, cdir,
 	flags := append(cFlags(opt), "-I"+guestC+"/include")
 	guest := guestTmp + "/" + filepath.Base(tmp)
 	for _, s := range sources {
-		src := guestSysroot + "/" + w.env.TINYGOROOT + "/targets/" + s
+		src := guestSysroot + "/" + w.env.TINYGOROOT + "/" + s
 		if s == "rt.c" {
 			src = guestC + "/rt.c"
 		}
@@ -335,7 +338,7 @@ func (w *Wasm) cRuntime(ctx context.Context, tool cTool, stderr io.Writer, cdir,
 		default:
 			args = append(args, "-x", "c")
 		}
-		args = append(args, "-c", src, "-o", guest+"/"+s+".o")
+		args = append(args, "-c", src, "-o", guest+"/"+path.Base(s)+".o")
 		if err := tool.run(ctx, stderr, args); err != nil {
 			return nil, fmt.Errorf("compiling %s: %w", s, err)
 		}

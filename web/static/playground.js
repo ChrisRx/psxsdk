@@ -320,7 +320,7 @@ residentBox.addEventListener("change", () => {
   try { localStorage.setItem("libps", residentBox.checked ? "resident" : "static"); } catch { /* no storage */ }
 });
 function offerLibrary(targets) {
-  residentLabel.hidden = !targets.includes("playstation-yaroze");
+  residentLabel.hidden = !targets.includes("resident");
 }
 // library is the library the next build is for.
 function library() {

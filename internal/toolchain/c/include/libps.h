@@ -3,8 +3,8 @@
  *
  * Written for psxsdk from the published Library Reference and the layouts
  * the yaroze package asserts, not copied from Sony's header. The functions
- * are the resident library's, at the addresses the target's
- * playstation-yaroze-symusr.S gives.
+ * are the resident library's, at the addresses
+ * internal/toolchain/yaroze/symusr.S gives.
  */
 #ifndef _LIBPS_H
 #define _LIBPS_H

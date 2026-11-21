@@ -26,9 +26,9 @@ import (
 // with its function word, as the SDK's macros give it.
 //
 // The three that move the control registers, SetRotMatrix, SetTransMatrix
-// and ReadFlag, are functions the playstation-yaroze target defines in
-// assembly, since inline assembly cannot name the register it is given a
-// value in, which the control moves' encoding needs.
+// and ReadFlag, are functions in assembly (internal/toolchain/yaroze/gte.S),
+// since inline assembly cannot name the register it is given a value in,
+// which the control moves' encoding needs.
 //
 // A block given a register says .set noat: the compiler may give it $at,
 // the register the assembler keeps for expanding its macros, and the

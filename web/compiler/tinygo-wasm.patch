@@ -806,7 +806,7 @@ index 0000000..8aed415
 +// compiler (cmd/tinygo-wasm) reads while building programs for one target,
 +// into a directory tree that a host can hand it as its file system:
 +//
-+//	tinygo-sysroot -target=playstation-yaroze -o sysroot ./examples/...
++//	tinygo-sysroot -target=playstation -o sysroot ./examples/...
 +//
 +// The tree holds, under goroot/, the standard library packages the named
 +// programs and their dependencies use, from the GOROOT merged with TinyGo's
@@ -1119,7 +1119,7 @@ index 0000000..8aed415
 +}
 diff --git a/cmd/tinygo-wasm/main.go b/cmd/tinygo-wasm/main.go
 new file mode 100644
-index 0000000..6e68fa1
+index 0000000..a27d68c
 --- /dev/null
 +++ b/cmd/tinygo-wasm/main.go
 @@ -0,0 +1,168 @@
@@ -1128,7 +1128,7 @@ index 0000000..6e68fa1
 +//
 +// It takes the build flags that matter there and the package to build:
 +//
-+//	tinygo-wasm -target=playstation-yaroze -o prog.elf ./prog
++//	tinygo-wasm -target=playstation -o prog.elf ./prog
 +//
 +// Everything the compiler needs, the Go standard library, TinyGo's own
 +// source tree and the modules the program imports, has to be in the file

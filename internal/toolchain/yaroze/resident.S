@@ -1,4 +1,4 @@
-# Start-up for a program on the resident library (exp/cleanlib/spec/26-members.md): what
+# Start-up for a program on the resident library (internal/libps/spec/26-members.md): what
 # runs from the entry point to C main, and from main's end back to the BIOS. Its time is
 # part of every program's boot, so it is kept to the cycle of the start-up this replaces,
 # by the probes in spec 26: InitHeap is reached 146 cycles after entry plus 10 per word

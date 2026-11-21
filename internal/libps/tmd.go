@@ -115,7 +115,7 @@ const primUnassigned = "GPU CODE %02xH not assigned.\n\x00"
 // its own for a run, with its layout known when it is compiled. A length of
 // 0, in a model that was never linked, ends the sort.
 //
-// All of that is in the target's assembly, playstation-yaroze-clean.S, each kind's loop
+// All of that is in assembly, internal/toolchain/yaroze/clean.S, each kind's loop
 // spending Sony's cycles on each way through: its points bad, turned away, or sorted
 // (spec 25, spec 31).
 //

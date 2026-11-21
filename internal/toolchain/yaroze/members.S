@@ -1,5 +1,5 @@
 # The routines a program for the resident library links into itself rather than calling
-# there (exp/cleanlib/spec/26-members.md): puts, SetVideoMode and Krom2Tim2, which call
+# there (internal/libps/spec/26-members.md): puts, SetVideoMode and Krom2Tim2, which call
 # into the library, and the float routines the compiler calls by name, which the static
 # target needs too. Each has a section of its own so that --gc-sections can drop it.
 #
