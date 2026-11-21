@@ -862,10 +862,10 @@ index 9d3398b..9d3a64e 100644
  import (
 diff --git a/cmd/tinygo-sysroot/main.go b/cmd/tinygo-sysroot/main.go
 new file mode 100644
-index 0000000..8aed415
+index 0000000..42be7ee
 --- /dev/null
 +++ b/cmd/tinygo-sysroot/main.go
-@@ -0,0 +1,315 @@
+@@ -0,0 +1,322 @@
 +// Command tinygo-sysroot gathers everything a WebAssembly build of the TinyGo
 +// compiler (cmd/tinygo-wasm) reads while building programs for one target,
 +// into a directory tree that a host can hand it as its file system:
@@ -1086,6 +1086,13 @@ index 0000000..8aed415
 +			return err
 +		}
 +	}
++	// compiler-rt's sources, for a target that links it: the compiler builds
++	// the library from them.
++	if config.Target.RTLib == "compiler-rt" {
++		if err := copyTree(filepath.Join(tinygoroot, "lib", "compiler-rt-builtins"), filepath.Join(out, "tinygo", "lib", "compiler-rt-builtins")); err != nil {
++			return err
++		}
++	}
 +	resourceDir := goenv.ClangResourceDir(false)
 +	if resourceDir == "" {
 +		return fmt.Errorf("the clang resource directory is not known; build with -ldflags=-X=github.com/tinygo-org/tinygo/goenv.clangResourceDir=DIR")
@@ -1158,7 +1165,7 @@ index 0000000..8aed415
 +		if e.IsDir() || path.Ext(name) != ".h" {
 +			continue
 +		}
-+		standard := strings.HasPrefix(name, "std") || strings.HasPrefix(name, "__std")
++		standard := strings.HasPrefix(name, "std") || strings.HasPrefix(name, "__std") || strings.HasPrefix(name, "__float")
 +		switch name {
 +		case "limits.h", "float.h", "inttypes.h", "iso646.h", "tgmath.h", "varargs.h", "unwind.h":
 +			standard = true

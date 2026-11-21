@@ -8,6 +8,8 @@
 	"goos": "linux",
 	"goarch": "mipsle",
 	"linker": "ld.lld",
+	"rtlib": "compiler-rt",
+	"softfloat": true,
 	"scheduler": "none",
 	"gc": "leaking",
 	"default-stack-size": 16384,
@@ -25,5 +27,8 @@
 	],
 	"ldflags": [
 		"--gc-sections"
+	],
+	"extra-files": [
+		"src/runtime/asm_mipsx.S"
 	]
 }

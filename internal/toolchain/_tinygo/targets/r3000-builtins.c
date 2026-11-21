@@ -1,25 +1,13 @@
 /*
- * The MIPS R3000A as the PlayStation uses it: the integer helpers the
- * compiler emits calls to and the ISA has no instruction for. Shared by
- * the playstation and playstation-yaroze targets.
+ * The MIPS R3000A as the PlayStation uses it: faster versions of helpers
+ * the compiler emits calls to and compiler-rt has.
  */
 
 /*
  * 64-bit integer division, which MIPS I has no instruction for and which Go
  * reaches for constantly: every duration arithmetic in the time package is a
- * division of an int64.
- *
- * These would normally come from compiler-rt, and the target asked for it at
- * first, but LLVM cannot compile compiler-rt's own soft-float builtins for
- * this ISA:
- *
- *   fatal error: error in backend: Cannot select:
- *   f32 = MipsISD::TruncIntFP, fixunssfdi.c:21:16
- *
- * so the whole library fails to build and takes the integer helpers, which
- * are fine, down with it. The four below are the ones a Go program actually
- * needs. For the same reason this target has no soft-float support at all:
- * float64 arithmetic emits calls to builtins that cannot be built.
+ * division of an int64. compiler-rt's divides a bit at a time; these, linked
+ * ahead of it, are taken in its place.
  */
 
 /*
@@ -213,25 +201,6 @@ __moddi3(long long a, long long b)
 
 	udivmod64(ua, ub, &r);
 	return neg ? -(long long)r : (long long)r;
-}
-
-/* Nonzero if either operand is NaN. Go needs it for float to int conversion
- * and libps.a lacks it. Compares bits so that no float op is needed. */
-int
-__unordsf2(float a, float b)
-{
-	union { float f; unsigned int u; } x = { a }, y = { b };
-
-	return (x.u & 0x7fffffff) > 0x7f800000 || (y.u & 0x7fffffff) > 0x7f800000;
-}
-
-int
-__unorddf2(double a, double b)
-{
-	union { double f; unsigned long long u; } x = { a }, y = { b };
-
-	return (x.u & 0x7fffffffffffffffULL) > 0x7ff0000000000000ULL ||
-	       (y.u & 0x7fffffffffffffffULL) > 0x7ff0000000000000ULL;
 }
 
 #pragma clang attribute pop

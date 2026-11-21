@@ -4,9 +4,9 @@
 # tinygo-src package), with the playstation target and its runtime from
 # internal/toolchain/_tinygo laid over it, tinygo-wasm.patch and
 # internal/toolchain's tinygo-hot.patch, tinygo-once.patch,
-# tinygo-keeps.patch, tinygo-frame.patch and tinygo-onstore.patch applied,
-# and compiler-rt's builtins, which TinyGo's tree takes from an LLVM
-# checkout and nixpkgs copies in. Of upstream's submodules only wasi-libc,
+# tinygo-keeps.patch, tinygo-frame.patch, tinygo-onstore.patch and
+# tinygo-upstream.patch applied, and compiler-rt's builtins, which TinyGo's
+# tree takes from an LLVM checkout and nixpkgs copies in. Of upstream's submodules only wasi-libc,
 # which TinyGo builds its libc from, is kept; the rest are the empty
 # directories a git archive has for them.
 #
@@ -41,7 +41,8 @@ ONCEPATCH=$HERE/../../internal/toolchain/tinygo-once.patch
 KEEPSPATCH=$HERE/../../internal/toolchain/tinygo-keeps.patch
 FRAMEPATCH=$HERE/../../internal/toolchain/tinygo-frame.patch
 ONSTOREPATCH=$HERE/../../internal/toolchain/tinygo-onstore.patch
-if [ -e "$TREE/.prepared" ] && [ "$TREE/.prepared" -nt "$HERE/tinygo-wasm.patch" ] && [ "$TREE/.prepared" -nt "$HOTPATCH" ] && [ "$TREE/.prepared" -nt "$ONCEPATCH" ] && [ "$TREE/.prepared" -nt "$KEEPSPATCH" ] && [ "$TREE/.prepared" -nt "$FRAMEPATCH" ] && [ "$TREE/.prepared" -nt "$ONSTOREPATCH" ] && [ "$TREE/.prepared" -nt "$HERE/tinygo-hot-wasm.patch" ] && [ "$TREE/.prepared" -nt "$HERE/tinygo-onstore-wasm.patch" ] && [ "$(cat "$TREE/.prepared")" = "$STAMP" ]; then
+UPSTREAMPATCH=$HERE/../../internal/toolchain/tinygo-upstream.patch
+if [ -e "$TREE/.prepared" ] && [ "$TREE/.prepared" -nt "$HERE/tinygo-wasm.patch" ] && [ "$TREE/.prepared" -nt "$HOTPATCH" ] && [ "$TREE/.prepared" -nt "$ONCEPATCH" ] && [ "$TREE/.prepared" -nt "$KEEPSPATCH" ] && [ "$TREE/.prepared" -nt "$FRAMEPATCH" ] && [ "$TREE/.prepared" -nt "$ONSTOREPATCH" ] && [ "$TREE/.prepared" -nt "$UPSTREAMPATCH" ] && [ "$TREE/.prepared" -nt "$HERE/tinygo-hot-wasm.patch" ] && [ "$TREE/.prepared" -nt "$HERE/tinygo-onstore-wasm.patch" ] && [ "$(cat "$TREE/.prepared")" = "$STAMP" ]; then
   exit 0
 fi
 echo "==> TinyGo tree"
@@ -82,4 +83,6 @@ patch -p1 -d "$TREE" < "$FRAMEPATCH"
 # which the flake applies too, and the flag on the wasm build command.
 patch -p1 -d "$TREE" < "$ONSTOREPATCH"
 patch -p1 -d "$TREE" < "$HERE/tinygo-onstore-wasm.patch"
+# Fixes meant for upstream TinyGo, which the flake applies too.
+patch -p1 -d "$TREE" < "$UPSTREAMPATCH"
 echo "$STAMP" > "$TREE/.prepared"
