@@ -1,3 +1,21 @@
+--- a/builder/build.go
++++ b/builder/build.go
+@@ -1082,6 +1082,15 @@
+ 			}
+ 			ldflags = append(ldflags, "-mllvm", "-mcpu="+config.CPU())
+ 			ldflags = append(ldflags, "-mllvm", "-mattr="+config.Features()) // needed for MIPS softfloat
++			if strings.HasPrefix(config.Triple(), "mips") {
++				// Go code checks for division by zero itself, before
++				// dividing, so the backend's check after each division is
++				// never taken: on MIPS I a branch and a break, and in older
++				// LLVM a trap instruction, which MIPS I does not have. It
++				// applies to C linked in with LTO too, where division by
++				// zero is undefined anyway.
++				ldflags = append(ldflags, "-mllvm", "-mno-check-zero-division")
++			}
+ 			switch config.LinkerFlavor() {
+ 			case "coff":
+ 				// Options for driving ld.lld in PE/COFF mode.
 --- a/builder/library.go
 +++ b/builder/library.go
 @@ -186,6 +186,12 @@
