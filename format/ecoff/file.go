@@ -45,8 +45,14 @@ type File struct {
 	LocalSymbols    []*Symbol
 	Sections        []*Section
 
+	// SymbolicHeader locates the symbol tables, the file and procedure
+	// descriptors and the line numbers (see Debug). It is nil for a file
+	// stripped of them.
+	SymbolicHeader *SymbolicHeader
+
 	byteOrder binary.ByteOrder
 	closer    io.Closer
+	r         io.ReaderAt
 }
 
 // A SectionHeader represents an ECOFF section header.
@@ -122,7 +128,7 @@ func Open(name string) (*File, error) {
 
 func NewFile(r io.ReaderAt) (*File, error) {
 	sr := io.NewSectionReader(r, 0, 1<<63-1)
-	f := new(File)
+	f := &File{r: r}
 	if _, err := r.ReadAt(f.FileHeader.Magic[:], 0); err != nil {
 		return nil, err
 	}
@@ -182,6 +188,7 @@ func NewFile(r io.ReaderAt) (*File, error) {
 		}
 		return nil, err
 	}
+	f.SymbolicHeader = shdr
 
 	sr.Seek(int64(shdr.ProceduresOffset), os.SEEK_SET)
 	for i := 0; i < int(shdr.ProceduresCount); i++ {
