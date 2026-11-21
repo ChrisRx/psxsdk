@@ -1,0 +1,39 @@
+--- a/builder/library.go
++++ b/builder/library.go
+@@ -186,6 +186,12 @@
+ 		args = append(args, "-march="+riscvMarch(config, "rv64gc"))
+ 	case "mips":
+ 		args = append(args, "-fno-pic")
++		if strings.Split(target, "-")[2] == "none" {
++			// Bare metal has no dynamic linker, and the rest of the
++			// program is not built to go through one: linking abicalls
++			// code with it is an error to lld.
++			args = append(args, "-mno-abicalls")
++		}
+ 	}
+ 	if config.Target.SoftFloat {
+ 		// Use softfloat instead of floating point instructions. This is
+--- a/compiler/compiler.go
++++ b/compiler/compiler.go
+@@ -859,7 +859,7 @@
+ 		Type:         diFuncType,
+ 		LocalToUnit:  true,
+ 		IsDefinition: isDefinition,
+-		ScopeLine:    0,
++		ScopeLine:    line,
+ 		Flags:        llvm.FlagPrototyped,
+ 		Optimized:    true,
+ 	})
+--- a/src/runtime/asm_mipsx.S
++++ b/src/runtime/asm_mipsx.S
+@@ -38,7 +38,9 @@
+ tinygo_longjmp:
+     // Note: the code we jump to assumes a0 is non-zero, which is already the
+     // case because that's the defer frame pointer.
+-    lw $sp, 0($a0) // jumpSP
++    // MIPS I has no load interlock: jr would read a1 before the load
++    // lands, so the load of sp goes between them.
+     lw $a1, 4($a0) // jumpPC
++    lw $sp, 0($a0) // jumpSP
+     jr $a1
+     nop
