@@ -77,7 +77,7 @@ index 266179b..21a51cc 100644
  				if err != nil {
  					return fmt.Errorf("failed to load bitcode file: %w", err)
  				}
-@@ -644,6 +658,53 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
+@@ -644,6 +658,60 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
  				if err != nil {
  					return fmt.Errorf("failed to link module: %w", err)
  				}
@@ -94,21 +94,19 @@ index 266179b..21a51cc 100644
 +				depsHash.Write([]byte(pkgJob.result + "\n"))
 +			}
 +			prelinked := filepath.Join(cacheDir, "prelink-"+hex.EncodeToString(depsHash.Sum(nil))+".bc")
-+			if _, err := os.Stat(prelinked); err == nil {
-+				mod.Dispose()
-+				mod, err = ctx.ParseBitcodeFile(prelinked)
-+				if err != nil {
-+					return fmt.Errorf("failed to load bitcode file: %w", err)
-+				}
-+				linker = llvm.NewLinker(mod)
-+				stage("parse prelinked deps", tLink)
-+			} else {
++			// A build that misses the cache writes the prelinked module and
++			// then parses it back like one that hits it, so both link main
++			// into the same module. Linked in memory, the module differs
++			// from its bitcode in type names, and LLVM inlined differently.
++			if _, err := os.Stat(prelinked); err != nil {
 +				linker = llvm.NewLinker(mod)
 +				for _, pkgJob := range deps {
 +					if err := linkPackage(pkgJob.result); err != nil {
 +						return err
 +					}
 +				}
++				linker.Dispose()
++				linker = llvm.Linker{}
 +				stage("link deps", tLink)
 +				t := time.Now()
 +				f, err := os.CreateTemp(cacheDir, "prelink-")
@@ -126,12 +124,21 @@ index 266179b..21a51cc 100644
 +				}
 +				stage("write prelinked deps", t)
 +			}
++			mod.Dispose()
++			mod = llvm.Module{}
++			if parsed, err := ctx.ParseBitcodeFile(prelinked); err != nil {
++				return fmt.Errorf("failed to load bitcode file: %w", err)
++			} else {
++				mod = parsed
++			}
++			linker = llvm.NewLinker(mod)
++			stage("parse prelinked deps", tLink)
 +			if err := linkPackage(packageJobs[len(packageJobs)-1].result); err != nil {
 +				return err
  			}
  
  			// Insert values from -ldflags="-X ..." into the IR.
-@@ -712,6 +773,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
+@@ -712,6 +780,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
  
  			// Run all optimization passes, which are much more effective now
  			// that the optimizer can see the whole program at once.
@@ -139,7 +146,7 @@ index 266179b..21a51cc 100644
  			err := optimizeProgram(mod, config)
  			if err != nil {
  				return err
-@@ -868,13 +930,24 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
+@@ -868,13 +937,24 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
  	// Add jobs to compile C and C++ files in all packages. This is part of CGo.
  	// TODO: do this as part of building the package to be able to link the
  	// bitcode files together.
@@ -165,7 +172,7 @@ index 266179b..21a51cc 100644
  		} {
  			for _, filename := range source.files {
  				abspath := filepath.Join(pkg.OriginalDir(), filename)
-@@ -1771,19 +1844,6 @@ func patchRP2040BootCRC(executable string) error {
+@@ -1771,19 +1851,6 @@ func patchRP2040BootCRC(executable string) error {
  	return replaceElfSection(executable, ".boot2", bytes)
  }
  
