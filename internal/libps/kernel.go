@@ -125,6 +125,28 @@ func ExitCriticalSection() {
 	libps_syscall(2)
 }
 
+// psxDisableInterrupts and psxRestoreInterrupts are the TinyGo runtime's
+// interrupt hooks (see "The platform hooks" in its
+// src/runtime/runtime_playstation.go) for a program with the library
+// linked in, as runtime.c has them for one over the resident library.
+// They are here rather than there because a call between the Go program
+// and the C file crosses separately optimized modules: with the hooks in
+// C, EnterCriticalSection and ExitCriticalSection stayed global functions
+// called the C way, and every function calling them kept room in its frame
+// for the arguments the C convention reserves.
+//
+//export psx_disable_interrupts
+func psxDisableInterrupts() int32 {
+	return EnterCriticalSection()
+}
+
+//export psx_restore_interrupts
+func psxRestoreInterrupts(state int32) {
+	if state != 0 {
+		ExitCriticalSection()
+	}
+}
+
 // putchar writes c to the TTY through the kernel's write(1, &c, 1) and
 // returns what the write returned. A "\n" goes as "\r" then "\n" (the kernel's write adds a
 // "\r" of its own before a "\n", so a line ends "\r\r\n" on the TTY).

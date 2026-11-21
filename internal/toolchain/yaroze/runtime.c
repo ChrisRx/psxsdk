@@ -80,7 +80,11 @@ psx_sleep(long long ns)
  * through it keeps the kernel's own view of the state consistent with
  * ours. EnterCriticalSection reports whether it was the call that masked
  * them, which is what makes nesting work.
+ *
+ * With the library linked in, these two are in Go, beside the calls they
+ * make (internal/libps/kernel.go, which says why).
  */
+#ifndef LIBPS_CLEAN
 HOOK int
 psx_disable_interrupts(void)
 {
@@ -93,3 +97,4 @@ psx_restore_interrupts(int state)
 	if (state != 0)
 		ExitCriticalSection();
 }
+#endif
