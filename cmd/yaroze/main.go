@@ -29,12 +29,15 @@
 // A directory of C sources with no Go in it is built as a C project from the
 // SDK, by the compiler with clang, which is downloaded the first time from
 // where wasm/full.json says (package go.chrisrx.dev/psx/internal/cproject).
+// yaroze debug debugs a C program with GDB for WebAssembly, from the
+// gdb-wasi project, downloaded the first time from where wasm/gdb.json says;
+// YAROZE_GDB names a gdb.wasm on disk instead.
 //
-// yaroze generate is discgen, for go:generate, and yaroze iso is mkdisc with
-// all of its flags. The converters are here too, each the tool of its name:
-// tim is png2tim, tmd obj2tmd, vag wav2vag, vab mkvab, seq smf2seq, scene
-// mkscene and arc mkarc. sio is siocons, Sony's SIOCONS for a Net Yaroze
-// on the serial cable.
+// yaroze generate, or gen, is discgen, for go:generate, and yaroze iso is
+// mkdisc with all of its flags. The converters are here too, each the tool
+// of its name: tim is png2tim, tmd obj2tmd, vag wav2vag, vab mkvab, seq
+// smf2seq, scene mkscene and archive, or arc, mkarc. sio is siocons, Sony's
+// SIOCONS for a Net Yaroze on the serial cable.
 package main
 
 import (
@@ -51,10 +54,13 @@ var (
 	sysroot []byte
 	//go:embed wasm/full.json
 	full []byte
+	//go:embed wasm/gdb.json
+	gdb []byte
 )
 
 func main() {
 	toolchain.Embed(compiler, sysroot)
 	toolchain.EmbedFull(full)
+	toolchain.EmbedGDB(gdb)
 	yarozecmd.Main("yaroze")
 }

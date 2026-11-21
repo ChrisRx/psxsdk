@@ -40,26 +40,57 @@ runs it under the wasmtime command when there is one, which is quicker.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(
+	root.AddGroup(
+		&cobra.Group{ID: groupPrograms, Title: "Building and running:"},
+		&cobra.Group{ID: groupAssets, Title: "Assets and discs:"},
+		&cobra.Group{ID: groupOther, Title: "Other:"},
+	)
+	root.SetHelpCommandGroupID(groupOther)
+	root.SetCompletionCommandGroupID(groupOther)
+	root.AddCommand(group(groupPrograms,
 		buildCommand(),
 		discCommand(),
 		runCommand(),
+		alias(debugCommand(), "dbg"),
 		patchCommand(),
-		envCommand(),
 		vetCommand(),
-		discgen.Command("generate"),
-		mkdisc.Command("iso"),
+		siocons.Command("sio"),
+		envCommand(),
+	)...)
+	root.AddCommand(group(groupAssets,
 		png2tim.Command("tim"),
 		obj2tmd.Command("tmd"),
 		wav2vag.Command("vag"),
 		mkvab.Command("vab"),
 		smf2seq.Command("seq"),
 		mkscene.Command("scene"),
-		mkarc.Command("arc"),
-		siocons.Command("sio"),
-	)
+		alias(mkarc.Command("archive"), "arc"),
+		alias(discgen.Command("generate"), "gen"),
+		mkdisc.Command("iso"),
+	)...)
 	if err := root.ExecuteContext(context.Shutdown()); err != nil {
 		fmt.Fprintf(os.Stderr, "%s: %v\n", name, err)
 		os.Exit(1)
 	}
+}
+
+// The groups yaroze --help lists the commands in.
+const (
+	groupPrograms = "programs"
+	groupAssets   = "assets"
+	groupOther    = "other"
+)
+
+// group puts each command in the help's group id.
+func group(id string, cmds ...*cobra.Command) []*cobra.Command {
+	for _, c := range cmds {
+		c.GroupID = id
+	}
+	return cmds
+}
+
+// alias gives cmd more names.
+func alias(cmd *cobra.Command, names ...string) *cobra.Command {
+	cmd.Aliases = append(cmd.Aliases, names...)
+	return cmd
 }

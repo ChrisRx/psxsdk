@@ -40,6 +40,7 @@ The program needs no build constraint. The `yaroze` package builds under the ord
 - [Writing programs in Go](writing-programs.md): what the packages give a program.
 - [The cookbook](../cookbook/index.md): how games did what most games do, each with a program that does nothing else.
 - [square](../examples/square.md), the next program up: the controller, files read off the disc, a model and music.
+- [Debugging](debugging.md): breakpoints, steps and variables with Delve or GDB, in the emulator or on a console.
 - [The playground](playground.md) does all of this in the browser, with nothing installed, starting from one of three programs.
 
 ## The compiler

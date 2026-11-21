@@ -44,4 +44,4 @@ var (
 
 A name is the file's path under the directory, its words run together in camel case, then its extension in capitals: `sound/STD0.VH` is `soundStd0VH`. Two files that would get the same name are an error. Files are placed under the directory's name in capitals unless `--root` says otherwise, and `-o` names the output. With `--into`, a file that grows needs the command run again, and `mkdisc` fails the build of a disc for one that has outgrown its array.
 
-[`yaroze`](yaroze.md) has it as `yaroze generate`, with the same flags.
+[`yaroze`](yaroze.md) has it as `yaroze generate`, or `yaroze gen`, with the same flags.

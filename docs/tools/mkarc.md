@@ -14,7 +14,7 @@ created "assets/LEVEL.ARC": 48,236 bytes from 119,320 (40%), 3 files, the larges
   CUBE.TMD            344 bytes, deflate, 55%
 ```
 
-[`yaroze`](yaroze.md) has it as `yaroze arc`, with the same flags.
+[`yaroze`](yaroze.md) has it as `yaroze archive`, or `yaroze arc`, with the same flags.
 
 Each entry is packed with deflate, unless that saves less than a tenth of it, as it does a sound bank or a movie, when it is stored as it is and the program can use it where it lies, with no copy; `-s NAME` stores one whatever it would pack to. Entries are named as the disc names files, in capitals, eight and three, from each file's name, so two files of a name cannot share an archive whatever their directories. `-l` lists an archive.
 

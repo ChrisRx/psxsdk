@@ -122,7 +122,7 @@ func run(cmd *cobra.Command, opts *options, auto string) error {
 	}()
 	// Control-C is a key here, which goes to the monitor, so the first
 	// signal to stop cancels the run instead of ending the process at once.
-	xcontext.AddHandler(cmd.Context(), func() {})
+	xcontext.AddHandler(cmd.Context(), func(os.Signal) {})
 	err = c.Run(cmd.Context(), auto)
 	if errors.Is(err, errTerminate) {
 		return nil

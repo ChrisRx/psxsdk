@@ -58,7 +58,7 @@ func run(ctx context.Context, opts *options, args []string) error {
 	// Under the shutdown context the tool runs with, the first Ctrl-C
 	// cancels ctx, which stops the upload between bytes and closes the port,
 	// and a second kills the process.
-	xcontext.AddHandler(ctx, func() {})
+	xcontext.AddHandler(ctx, func(os.Signal) {})
 	port, err := serial.Open(opts.DeviceName, opts.BaudRate)
 	if err != nil {
 		return err
