@@ -17,7 +17,7 @@ Each of these is a tool of its own, which `go:generate` lines and the playground
 
 | Tool | In yaroze | Purpose |
 | --- | --- | --- |
-| [discgen](discgen.md) | `yaroze generate` | Write the declarations that put a program's data files on its disc |
+| [discgen](discgen.md) | `yaroze generate` (`gen`) | Write the declarations that put a program's data files on its disc |
 | [mkdisc](mkdisc.md) | `yaroze iso` | Build a CD-XA disc image from a directory |
 | [png2tim](png2tim.md) | `yaroze tim` | Convert pictures into TIM images for sprites and textures, or with `-r` back into PNGs |
 | [obj2tmd](obj2tmd.md) | `yaroze tmd` | Convert a Wavefront OBJ model into a TMD |
@@ -25,7 +25,7 @@ Each of these is a tool of its own, which `go:generate` lines and the playground
 | [mkvab](mkvab.md) | `yaroze vab` | Build a VAB sound bank from a definition file and VAGs, read one back, or split one into VH and VB |
 | [smf2seq](smf2seq.md) | `yaroze seq` | Convert MIDI files into SEQ scores for the sound library |
 | [mkscene](mkscene.md) | `yaroze scene` | Cook a scene, as the playground's scene editor writes it, into the file package scene draws |
-| [mkarc](mkarc.md) | `yaroze arc` | Pack files into one archive for the disc, with deflate, which package archive unpacks piece by piece |
+| [mkarc](mkarc.md) | `yaroze archive` (`arc`) | Pack files into one archive for the disc, with deflate, which package archive unpacks piece by piece |
 | [siocons](siocons.md) | `yaroze sio` | Talk to a Net Yaroze over the serial cable, as Sony's SIOCONS did: a terminal on its monitor, with SIOCONS's local commands and batch files |
 
 ## Standalone
@@ -43,6 +43,7 @@ Each of these is a tool of its own, which `go:generate` lines and the playground
 | [psxemu](psxemu.md) | Run the emulator headless, with traces, VRAM dumps and screenshots, or drive a program with scripted presses, watched and poked memory, and a profile |
 | [psxtrace](psxtrace.md) | Print and diff instruction traces, compare VRAM dumps |
 | [ecoffdump](ecoffdump.md) | Display ECOFF object files, with disassembly |
+| [ecoff2elf](ecoff2elf.md) | Write an ELF with DWARF for an ECOFF program, so that current debuggers read its symbols |
 | [ecoff2asm](ecoff2asm.md) | Convert ECOFF objects to GNU as source, for relinking the Net Yaroze library as ELF |
 | [ecoffcmp](ecoff2asm.md) | Check ecoff2asm output against the original objects |
 | [libpsdis](libpsdis.md) | Annotated disassembly of a private copy of Sony's library, and scores against it, for the clean-room work |

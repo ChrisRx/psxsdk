@@ -62,7 +62,19 @@ type Options struct {
 	// which must have been built with --hot, each applied between frames
 	// as soon as it arrives, with a line on standard output.
 	Patches <-chan *hot.Patch
+
+	// Debug, if not nil, is called with the machine once it is loaded,
+	// before the window opens, and returns the function that runs a frame
+	// of it at each tick in place of the machine's own RunFrame, for a
+	// debugger that holds the machine stopped (yaroze debug). There is no
+	// fast start with it. The window closes when the function returns
+	// ErrClose.
+	Debug func(m *emu.Machine) (frame func() error, err error)
 }
+
+// ErrClose is what an Options.Debug frame function returns to close the
+// window.
+var ErrClose = errors.New("psxplay: closed")
 
 // Keys is the help on the keyboard and the gamepad, for a command's long
 // description.
@@ -150,6 +162,12 @@ func Run(opts Options) error {
 	}
 
 	g := &game{machine: m, fast: opts.Fast, patches: opts.Patches, shots: opts.Shots}
+	if opts.Debug != nil {
+		if g.debug, err = opts.Debug(m); err != nil {
+			return err
+		}
+		g.fast = false
+	}
 	watchShots(&g.shot)
 	if !opts.Mute {
 		g.sound = newSoundBuffer()
@@ -209,6 +227,9 @@ type game struct {
 
 	// patches delivers hot reload patches, applied as they arrive.
 	patches <-chan *hot.Patch
+
+	// debug runs a frame for a debugger, if there is one.
+	debug func() error
 
 	// shots is where a screenshot goes, and shot is set, from the signal's
 	// goroutine, when one is asked for; the next tick takes it.
@@ -398,7 +419,13 @@ func (g *game) Update() error {
 	// A tick runs to the next vertical blank. Without one in the budget,
 	// the display is whatever it was, and the next tick tries again.
 	for range g.frames() {
-		if _, err := g.machine.RunFrame(frameBudget); err != nil {
+		if g.debug != nil {
+			if err := g.debug(); errors.Is(err, ErrClose) {
+				return ebiten.Termination
+			} else if err != nil {
+				return fmt.Errorf("the emulator stopped: %w", err)
+			}
+		} else if _, err := g.machine.RunFrame(frameBudget); err != nil {
 			return fmt.Errorf("the emulator stopped: %w", err)
 		}
 		if g.sound != nil {

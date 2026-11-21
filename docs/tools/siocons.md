@@ -69,7 +69,7 @@ go
 
 ## Debugging
 
-The monitor's `rdb` starts the remote debugger, after which the line carries HSS, the binary protocol of the gdb that came with the Net Yaroze, rather than text. The [gdb manual](../manuals/gdb.md) has SIOCONS quit at that point and gdb take over with `target hss`. No gdb here speaks HSS, but package [`serial`](https://pkg.go.dev/go.chrisrx.dev/psx/serial)'s `Debugger` is the host's end of it in Go, which reads and writes registers and memory, steps and continues the program, and collects what it prints.
+The monitor's `rdb` starts the remote debugger, after which the line carries HSS, the binary protocol of the gdb that came with the Net Yaroze, rather than text. The [gdb manual](../manuals/gdb.md) has SIOCONS quit at that point and gdb take over with `target hss`. No current gdb speaks HSS, so [`yaroze debug --port`](yaroze.md#on-a-console) stands between the two: it serves GDB's own remote protocol and speaks HSS to the monitor. Package [`serial`](https://pkg.go.dev/go.chrisrx.dev/psx/serial)'s `Debugger` is the host's end of HSS in Go, which reads and writes registers and memory, steps and continues the program, and collects what it prints.
 
 ## Differences from SIOCONS
 

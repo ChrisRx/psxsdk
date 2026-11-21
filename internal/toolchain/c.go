@@ -393,39 +393,50 @@ func fullModule(ctx context.Context, b *CBuild) (string, error) {
 	if m.URL == "" {
 		return "", errors.New("building C needs the full compiler, and this yaroze does not say where to get it; set YAROZE_CC to a tinygo-full.wasm")
 	}
+	dir, err := fetch(ctx, m, "wasm-full-", "tinygo-full.wasm", "the full compiler", b.Stderr, b.logf)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "tinygo-full.wasm"), nil
+}
+
+// fetch returns the directory in the cache that holds the module m names,
+// as file: downloaded, checked and unpacked the first time, into a
+// directory named prefix and the start of its hash. what names it in
+// messages; stderr is told of the download.
+func fetch(ctx context.Context, m fullManifest, prefix, file, what string, stderr io.Writer, logf func(string, ...any)) (string, error) {
 	cache, err := cacheDir()
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(cache, "wasm-full-"+m.SHA256[:16])
-	module := filepath.Join(dir, "tinygo-full.wasm")
+	dir := filepath.Join(cache, prefix+m.SHA256[:16])
 	if complete(dir) {
 		markUsed(dir)
-		return module, nil
+		return dir, nil
 	}
-	fmt.Fprintf(b.Stderr, "yaroze: building C needs the full compiler; downloading %d MB, once\n", m.Size>>20)
+	fmt.Fprintf(stderr, "yaroze: %s is needed; downloading %d MB, once\n", what, m.Size>>20)
 	start := time.Now()
-	data, err := download(ctx, m)
+	data, err := download(ctx, m, what)
 	if err != nil {
 		return "", err
 	}
-	b.logf("c: downloaded the full compiler in %s", since(start))
+	logf("downloaded %s in %s", what, since(start))
 	zr, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
-		return "", fmt.Errorf("the full compiler: %w", err)
+		return "", fmt.Errorf("%s: %w", what, err)
 	}
 	tmp, err := os.MkdirTemp(cache, "wasm-tmp-")
 	if err != nil {
 		return "", err
 	}
 	defer os.RemoveAll(tmp)
-	f, err := os.Create(filepath.Join(tmp, "tinygo-full.wasm"))
+	f, err := os.Create(filepath.Join(tmp, file))
 	if err != nil {
 		return "", err
 	}
 	if _, err := io.Copy(f, zr); err != nil {
 		f.Close()
-		return "", fmt.Errorf("the full compiler: %w", err)
+		return "", fmt.Errorf("%s: %w", what, err)
 	}
 	if err := f.Close(); err != nil {
 		return "", err
@@ -438,31 +449,31 @@ func fullModule(ctx context.Context, b *CBuild) (string, error) {
 		return "", err
 	}
 	markUsed(dir)
-	return module, nil
+	return dir, nil
 }
 
 // download fetches the gzipped module m names and checks it against m's
-// hash, since it is about to be run.
-func download(ctx context.Context, m fullManifest) ([]byte, error) {
+// hash, since it is about to be run. what names it in errors.
+func download(ctx context.Context, m fullManifest, what string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.URL, nil)
 	if err != nil {
 		return nil, err
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("downloading the full compiler: %w", err)
+		return nil, fmt.Errorf("downloading %s: %w", what, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("downloading the full compiler from %s: %s", m.URL, resp.Status)
+		return nil, fmt.Errorf("downloading %s from %s: %s", what, m.URL, resp.Status)
 	}
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("downloading the full compiler: %w", err)
+		return nil, fmt.Errorf("downloading %s: %w", what, err)
 	}
 	sum := sha256.Sum256(data)
 	if got := hex.EncodeToString(sum[:]); got != m.SHA256 {
-		return nil, fmt.Errorf("the full compiler from %s has hash %s, not %s", m.URL, got, m.SHA256)
+		return nil, fmt.Errorf("%s from %s has hash %s, not %s", what, m.URL, got, m.SHA256)
 	}
 	return data, nil
 }
