@@ -93,16 +93,12 @@ if [ "$OPT" = 0 ]; then
   done >> "$OUT/cleanimage-clib.S"
 fi
 python3 -I "$HERE/gen.py" . "$OUT" "$OUT/exports.txt"
-# A package compiled just now can differ in size from the same one read back
-# from the cache, so the sizes are learned from a link that reads the cache, as
-# the packed link will.
 link
 if [ "$OPT" != 2 ]; then
   cp "$WORK/prog.elf" "$OUT/image.elf"
   echo "wrote $OUT/image.elf, unpacked, for TestNoHeapAnyOpt"
   exit 0
 fi
-link
 cp "$SYS/map.txt" "$OUT/map1.txt"
 # The public entry points alone, for the comparison tools to name calls by: tools
 # on the implementation side read this rather than the map.
