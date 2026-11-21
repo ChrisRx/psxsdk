@@ -24,6 +24,7 @@ tasks:
       - task: build:discs
       - task: build:hot
       - task: build:serial
+      - task: build:debug
       - task: build:hot:resident
       - task: build:discs:resident
       - go test -v ./tests/... ./internal/hot
@@ -277,6 +278,30 @@ tasks:
       - go run ./cmd/yaroze build --libps resident --opt=2 -o .build/serial/crash.elf ./tests/testdata/serial/crash
       - go run ./cmd/yaroze build --libps resident --opt=2 -o .build/serial/hwprobe.elf ./tests/testdata/serial/hwprobe
       - go run ./cmd/yaroze build --opt=2 --target serial/monitor/target.json -o .build/serial/monitor.elf ./serial/monitor
+
+  # The program the debugger tests run under GDB (tests/gdb_test.go), built
+  # with DWARF onto .build/debug: on a disc with the library linked in, for
+  # the emulator, and over the resident library, for the monitor's remote
+  # debugger. The tests are skipped without a gdb on the path, or the one
+  # PSX_GDB names: nix shell nixpkgs#gdb has one that knows the MIPS.
+  build:debug:
+    sources:
+      - 'tests/testdata/debug/**/*'
+      - 'yaroze/**/*.go'
+      - 'input/**/*.go'
+      - 'geom/**/*.go'
+      - 'gpu/**/*.go'
+      - 'internal/**/*'
+      - 'cmd/yaroze/**/*'
+      - 'link/**/*'
+    generates:
+      - .build/debug/steps.cue
+      - .build/debug/steps.elf
+      - .build/debug/steps-resident.elf
+    cmds:
+      - mkdir -p .build/debug
+      - go run ./cmd/yaroze disc --debug --opt=2 --elf .build/debug/steps.elf -o .build/debug/steps.bin ./tests/testdata/debug/steps
+      - go run ./cmd/yaroze build --debug --libps resident --opt=2 -o .build/debug/steps-resident.elf ./tests/testdata/debug/steps
 
   # The same fixtures built against the resident library, onto
   # .build/hot-resident, for TestPatchGo.

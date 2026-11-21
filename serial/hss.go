@@ -87,47 +87,73 @@ type Debugger struct {
 	// SEND packets while it runs.
 	Output io.Writer
 
+	// Text, if set, receives the bytes that come outside packets, which is
+	// how a program the monitor's go command started prints: the clean
+	// monitor's packets are then only the stops.
+	Text io.Writer
+
 	// Signal is the signal the program last stopped for.
 	Signal uint32
+
+	// rx is what has come of the packet being read.
+	rx []byte
 }
 
 // NewDebugger returns the host's end of the remote debugger on port.
 func NewDebugger(port *Port) *Debugger { return &Debugger{port: port} }
+
+// read reads a packet's bytes, the header and the data with its padding.
+// What it has of a packet when the port's read fails, as when ctx is done
+// or nothing comes in time, is kept in rx, and the next read goes on from
+// there, so that a caller may wait in short turns without losing the
+// packet one of them ends in. Bytes that are no part of a packet go to
+// Text.
+func (d *Debugger) read(ctx context.Context) ([]byte, error) {
+	for {
+		if n := len(d.rx); n >= 12 {
+			size := int(binary.LittleEndian.Uint16(d.rx[8:]))
+			if size > hssMax {
+				d.rx = d.rx[:0]
+				continue
+			}
+			if n == 12+size+size&1 {
+				b := d.rx
+				d.rx = nil
+				return b, nil
+			}
+		}
+		c, err := d.port.ReceiveByte(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if n := len(d.rx); n < 3 && c != "HSs"[n] {
+			d.text(d.rx)
+			d.rx = d.rx[:0]
+			if c != 'H' {
+				d.text([]byte{c})
+				continue
+			}
+		}
+		d.rx = append(d.rx, c)
+	}
+}
+
+func (d *Debugger) text(b []byte) {
+	if d.Text != nil && len(b) > 0 {
+		d.Text.Write(b)
+	}
+}
 
 // receive reads a packet, answering it with an ACK, or a NAK if its sum is
 // wrong, and reading the next. Text the program sends, in SEND packets,
 // goes to Output.
 func (d *Debugger) receive(ctx context.Context) (HSSPacket, error) {
 	for {
-		var head [12]byte
-		for i := 0; i < len(head); {
-			c, err := d.port.ReceiveByte(ctx)
-			if err != nil {
-				return HSSPacket{}, err
-			}
-			if i < 3 && c != "HSs"[i] {
-				i = 0
-				if c == 'H' {
-					i = 1
-				}
-				head[0] = c
-				continue
-			}
-			head[i] = c
-			i++
+		b, err := d.read(ctx)
+		if err != nil {
+			return HSSPacket{}, err
 		}
-		n := int(binary.LittleEndian.Uint16(head[8:]))
-		if n > hssMax {
-			continue
-		}
-		b := append(head[:], make([]byte, n+n&1)...)
-		for i := 12; i < len(b); i++ {
-			c, err := d.port.ReceiveByte(ctx)
-			if err != nil {
-				return HSSPacket{}, err
-			}
-			b[i] = c
-		}
+		n := int(binary.LittleEndian.Uint16(b[8:]))
 		p := HSSPacket{Code: b[3], Addr: binary.LittleEndian.Uint32(b[4:]), Data: b[12 : 12+n]}
 		if p.Code == HSSAck || p.Code == HSSNak {
 			return p, nil
