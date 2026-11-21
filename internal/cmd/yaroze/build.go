@@ -31,6 +31,7 @@ type buildFlags struct {
 	hot     bool
 	target  string
 	libps   string
+	debug   bool
 
 	// experiment is the compiler's -experiment flag.
 	experiment string
@@ -70,6 +71,7 @@ func (f *buildFlags) register(cmd *cobra.Command) {
 	fl.StringVar(&f.target, "target", "", "a TinyGo target file of the program's own, JSON that inherits playstation and changes what the program needs, such as where it is linked; the program is laid over the resident library")
 	fl.BoolVar(&f.hot, "hot", false, "build a program that can take patches from the patch command while it runs: its main package's functions are called through slots, which costs a little speed, and 256KB is reserved for the patches")
 	fl.StringVar(&f.libps, "libps", "static", "the Net Yaroze library: static, linked into the program, or resident, the program laid over the image a Net Yaroze leaves in memory")
+	fl.BoolVar(&f.debug, "debug", false, "keep DWARF debug information, and write the ELF that holds it beside the output, for yaroze debug and gdb")
 	fl.StringVar(&f.experiment, "experiment", "", "turn the compiler's experiments on, or off with no before the name, comma separated: noonstore turns off onstore, which keeps the library's words in sprites and shapes up to date as their fields are set")
 }
 
@@ -142,6 +144,7 @@ func (f *buildFlags) build(ctx context.Context, pkg, exe, elf string) error {
 		Opt:        f.opt,
 		Tags:       f.tags,
 		Hot:        f.hot,
+		Debug:      f.debug,
 		Experiment: f.experiment,
 		Target:     f.target,
 		Output:     filepath.Join(tmp, "prog.elf"),
@@ -272,7 +275,11 @@ emulator's debugger wants.`,
 			if strings.EqualFold(filepath.Ext(out), ".elf") {
 				return f.build(cmd.Context(), pkg, "", out)
 			}
-			return f.build(cmd.Context(), pkg, out, "")
+			elf := ""
+			if f.debug {
+				elf = debugELF(out)
+			}
+			return f.build(cmd.Context(), pkg, out, elf)
 		},
 	}
 	cmd.Flags().StringVarP(&out, "output", "o", "", "the file to write: a PSX-EXE, or an ELF if it ends in .elf")
@@ -341,6 +348,12 @@ func (f *discFlags) disc(ctx context.Context, pkg, bin string, stdout io.Writer)
 	return nil
 }
 
+// debugELF is the ELF --debug writes beside the output named out: its name
+// with .elf in place of its extension.
+func debugELF(out string) string {
+	return strings.TrimSuffix(out, filepath.Ext(out)) + ".elf"
+}
+
 // binName is the .bin for an output named name, which may be the .cue.
 func binName(name string) string {
 	if strings.EqualFold(filepath.Ext(name), ".cue") {
@@ -382,6 +395,9 @@ reads the sectors in place, or compressed with --deflate.`,
 					return err
 				}
 				out = name + ".bin"
+			}
+			if f.debug && f.elf == "" {
+				f.elf = debugELF(binName(out))
 			}
 			return f.disc(cmd.Context(), pkg, binName(out), cmd.OutOrStdout())
 		},

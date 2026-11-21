@@ -30,6 +30,9 @@ type Build struct {
 	Tags    []string // extra build tags
 	Output  string   // the ELF to write
 
+	// Debug keeps DWARF in the ELF, for a debugger (yaroze debug).
+	Debug bool
+
 	// Hot builds a program that can take hot reload patches, and HotBase
 	// and HotAt build a patch for the program whose ELF HotBase names,
 	// linked at HotAt, instead of a program (see internal/hot).

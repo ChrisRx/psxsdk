@@ -273,6 +273,9 @@ func (w *Wasm) Compile(ctx context.Context, b *Build) error {
 	if len(b.Tags) > 0 {
 		args = append(args, "-tags="+strings.Join(b.Tags, " "))
 	}
+	if b.Debug {
+		args = append(args, "-debug")
+	}
 	args = append(args, b.hotArgs()...)
 	if b.Experiment != "" {
 		args = append(args, "-experiment="+b.Experiment)
