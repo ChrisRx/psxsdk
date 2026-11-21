@@ -1,17 +1,30 @@
 --- a/clang/include/clang/Support/Compiler.h
 +++ b/clang/include/clang/Support/Compiler.h
-@@ -54,7 +54,7 @@
- #define CLANG_ABI LLVM_ATTRIBUTE_VISIBILITY_DEFAULT
+@@ -62,7 +62,7 @@
+ #define CLANG_ABI_EXPORT LLVM_ATTRIBUTE_VISIBILITY_DEFAULT
  #define CLANG_TEMPLATE_ABI LLVM_ATTRIBUTE_VISIBILITY_DEFAULT
  #define CLANG_EXPORT_TEMPLATE
 -#elif defined(__MACH__) || defined(__WASM__) || defined(__EMSCRIPTEN__)
 +#elif defined(__MACH__) || defined(__WASM__) || defined(__wasm__) || defined(__EMSCRIPTEN__) // __wasm__ is how the compiler spells it
  #define CLANG_ABI LLVM_ATTRIBUTE_VISIBILITY_DEFAULT
+ #define CLANG_ABI_EXPORT LLVM_ATTRIBUTE_VISIBILITY_DEFAULT
  #define CLANG_TEMPLATE_ABI
- #define CLANG_EXPORT_TEMPLATE
+--- a/clang/lib/AST/ByteCode/Interp.cpp
++++ b/clang/lib/AST/ByteCode/Interp.cpp
+@@ -40,8 +40,9 @@
+ // We disable it on MSVC generally since it doesn't seem to be able
+ // to handle the way we use tailcalls.
+ // PPC can't tail-call external calls, which is a problem for InterpNext.
++// WebAssembly has tail calls only as a feature that is off by default.
+ #if defined(_MSC_VER) || defined(__powerpc__) || !defined(MUSTTAIL) ||         \
+-    defined(__i386__) || defined(__sparc__)
++    defined(__i386__) || defined(__sparc__) || defined(__wasm__)
+ #undef MUSTTAIL
+ #define MUSTTAIL
+ #define USE_TAILCALLS 0
 --- a/clang/lib/Frontend/CompilerInvocation.cpp
 +++ b/clang/lib/Frontend/CompilerInvocation.cpp
-@@ -84,7 +84,9 @@
+@@ -85,7 +85,9 @@
  #include <cstddef>
  #include <cstring>
  #include <ctime>
@@ -21,7 +34,7 @@
  #include <limits>
  #include <memory>
  #include <optional>
-@@ -4524,6 +4526,7 @@
+@@ -4588,6 +4590,7 @@
        Diags.Report(diag::err_cc1_unbounded_vscale_min);
    }
  
@@ -29,7 +42,7 @@
    if (const Arg *A = Args.getLastArg(OPT_frandomize_layout_seed_file_EQ)) {
      std::ifstream SeedFile(A->getValue(0));
  
-@@ -4533,6 +4536,7 @@
+@@ -4597,6 +4600,7 @@
  
      std::getline(SeedFile, Opts.RandstructSeed);
    }
@@ -63,14 +76,28 @@
 @@ -187,6 +193,7 @@
    // Flush the last type/layout, if there is one.
    if (!CurrentType.empty())
-     Layouts[CurrentType] = CurrentLayout;
+     Layouts[CurrentType] = std::move(CurrentLayout);
 +#endif
  }
  
  bool
+--- a/libcxx/include/__locale_dir/locale_base_api.h
++++ b/libcxx/include/__locale_dir/locale_base_api.h
+@@ -134,7 +134,10 @@
+ //       (by providing global non-reserved names) and the new API. As we move individual platforms
+ //       towards the new way of defining the locale base API, this should disappear since each platform
+ //       will define those directly.
+-#    include <__locale_dir/locale_base_api/ibm.h>
++// wasi-libc has the functions ibm.h makes up for z/OS, and declares them.
++#    if !defined(__wasi__)
++#      include <__locale_dir/locale_base_api/ibm.h>
++#    endif
+ 
+ #    include <__locale_dir/locale_base_api/bsd_locale_fallbacks.h>
+ 
 --- a/llvm/include/llvm/CodeGen/TargetSubtargetInfo.h
 +++ b/llvm/include/llvm/CodeGen/TargetSubtargetInfo.h
-@@ -231,6 +231,13 @@
+@@ -239,6 +239,13 @@
    /// allocation.
    virtual bool enablePostRAMachineScheduler() const;
  
@@ -86,7 +113,7 @@
  
 --- a/llvm/lib/CodeGen/MachineBlockPlacement.cpp
 +++ b/llvm/lib/CodeGen/MachineBlockPlacement.cpp
-@@ -2192,6 +2192,13 @@
+@@ -2194,6 +2194,13 @@
      if (Pred->succ_size() > 2)
        continue;
  
@@ -111,10 +138,10 @@
 +#if !defined(__wasi__)
  #include <setjmp.h>
 +#endif
- 
- using namespace llvm;
- 
-@@ -31,7 +35,9 @@
+ #ifdef __APPLE__
+ #include <sys/resource.h>
+ #endif
+@@ -34,7 +38,9 @@
    const CrashRecoveryContextImpl *Next;
  
    CrashRecoveryContext *CRC;
@@ -124,7 +151,7 @@
    volatile unsigned Failed : 1;
    unsigned SwitchedThread : 1;
    unsigned ValidJumpBuffer : 1;
-@@ -73,8 +79,10 @@
+@@ -76,8 +82,10 @@
      CRC->RetCode = RetCode;
  
      // Jump back to the RunSafely we were called under.
@@ -135,7 +162,7 @@
  
      // Otherwise let the caller decide of the outcome of the crash. Currently
      // this occurs when using SEH on Windows with MSVC or clang-cl.
-@@ -329,6 +337,11 @@
+@@ -335,6 +343,11 @@
    }
  }
  
@@ -147,7 +174,7 @@
  #else // !_WIN32
  
  // Generic POSIX implementation.
-@@ -417,10 +430,12 @@
+@@ -431,10 +444,12 @@
      CrashRecoveryContextImpl *CRCI = new CrashRecoveryContextImpl(this);
      Impl = CRCI;
  
@@ -195,7 +222,7 @@
  }
  
  std::error_code current_path(SmallVectorImpl<char> &result) {
-@@ -564,6 +576,9 @@
+@@ -569,6 +581,9 @@
    // The file system can have an arbitrary structure on z/OS; must go with the
    // conservative answer.
    return false;
@@ -225,7 +252,7 @@
  //===-- llvm/Support/raw_socket_stream.cpp - Socket streams --*- C++ -*-===//
  //
  // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
-@@ -356,3 +359,4 @@
+@@ -370,3 +373,4 @@
    }
    return raw_fd_stream::read(Ptr, Size);
  }
@@ -253,6 +280,96 @@
                                  [FeatureMips2, FeatureMips3_32,
                                   FeatureMips3_32r2, FeatureGP64Bit,
                                   FeatureFP64Bit]>;
+--- a/llvm/lib/Target/Mips/MipsBranchExpansion.cpp
++++ b/llvm/lib/Target/Mips/MipsBranchExpansion.cpp
+@@ -735,46 +735,52 @@
+ template <typename Pred, typename Safe>
+ bool MipsBranchExpansion::handleMFLOSlot(Pred Predicate, Safe SafeInSlot) {
+   bool Changed = false;
+-  bool hasPendingMFLO = false;
+ 
+-  for (MachineFunction::iterator FI = MFp->begin(); FI != MFp->end(); ++FI) {
+-    for (Iter I = FI->begin(); I != FI->end(); ++I) {
+-
+-      if (!Predicate(*I) && !hasPendingMFLO) {
++  for (MachineBasicBlock &MBB : *MFp) {
++    for (Iter I = MBB.begin(); I != MBB.end(); ++I) {
++      if (!Predicate(*I))
+         continue;
+-      }
+ 
+-      Iter IInSlot;
+-      bool LastInstInFunction =
+-          std::next(I) == FI->end() && std::next(FI) == MFp->end();
+-      // We need process several situations:
+-      // mflo is last instruction, do not process;
+-      // mflo + div, add two nop between them;
+-      // mflo + none-div + none-div, do not process;
+-      // mflo + none-div + div, add nop between none-div and div.
+-      if (!LastInstInFunction) {
+-        std::pair<Iter, bool> Res = getNextMachineInstr(std::next(I), &*FI);
+-        LastInstInFunction |= Res.second;
+-        IInSlot = Res.first;
+-        if (LastInstInFunction)
++      // The two instructions that run after I: the ones in delay slots
++      // count, a load's delay nop among them, and debug values and the
++      // rest that emit no code do not, so that a build with debug
++      // information comes out the same as one without. A branch is always
++      // followed by its slot, so the two never reach past one; the walk
++      // goes on into the next block only where control falls into it.
++      MachineBasicBlock *B = &MBB;
++      MachineBasicBlock::instr_iterator J = std::next(I->getIterator());
++      unsigned Seen = 0;
++      bool Unsafe = false;
++      while (Seen < 2) {
++        if (J == B->instr_end()) {
++          MachineBasicBlock *Next = B->getNextNode();
++          if (!Next || !B->isSuccessor(Next))
++            break;
++          B = Next;
++          J = B->instr_begin();
++          continue;
++        }
++        if (J->isTransient() || J->isBundle()) {
++          ++J;
+           continue;
+-        if (!SafeInSlot(*IInSlot, *I)) {
+-          Changed = true;
+-          TII->insertNop(*(I->getParent()), std::next(I), I->getDebugLoc())
+-              ->bundleWithPred();
+-          NumInsertedNops++;
+-          if (IsMFLOMFHI(I->getOpcode())) {
+-            TII->insertNop(*(I->getParent()), std::next(I), I->getDebugLoc())
+-                ->bundleWithPred();
+-            NumInsertedNops++;
+-          }
+-          if (hasPendingMFLO)
+-            hasPendingMFLO = false;
+-        } else if (hasPendingMFLO)
+-          hasPendingMFLO = false;
+-        else if (IsMFLOMFHI(I->getOpcode()))
+-          hasPendingMFLO = true;
++        }
++        if (!SafeInSlot(*J, *I)) {
++          Unsafe = true;
++          break;
++        }
++        ++Seen;
++        ++J;
++      }
++      if (!Unsafe)
++        continue;
++
++      // The nops go right after I, ahead of anything that runs between it
++      // and the instruction that must wait.
++      for (; Seen < 2; ++Seen) {
++        TII->insertNop(MBB, std::next(I), I->getDebugLoc())->bundleWithPred();
++        NumInsertedNops++;
+       }
++      Changed = true;
+     }
+   }
+ 
 --- a/llvm/lib/Target/Mips/MipsDelaySlotFiller.cpp
 +++ b/llvm/lib/Target/Mips/MipsDelaySlotFiller.cpp
 @@ -16,6 +16,7 @@
@@ -279,8 +396,8 @@
 +                           " block");
  STATISTIC(UsefulSlots, "Number of delay slots filled with instructions that"
                         " are not NOP.");
- 
-@@ -69,7 +73,15 @@
+ STATISTIC(R5900ShortLoopNops, "Number of delay slots left as NOP for R5900 "
+@@ -71,7 +75,15 @@
  static cl::opt<bool> DisableSuccBBSearch(
    "disable-mips-df-succbb-search",
    cl::init(true),
@@ -297,7 +414,7 @@
    cl::Hidden);
  
  static cl::opt<bool> DisableBackwardSearch(
-@@ -80,6 +92,32 @@
+@@ -82,6 +94,32 @@
  
  extern cl::opt<CompactBranchPolicy> MipsCompactBranchPolicy;
  
@@ -330,7 +447,7 @@
  namespace {
  
    using Iter = MachineBasicBlock::iterator;
-@@ -173,6 +211,17 @@
+@@ -175,6 +213,17 @@
  
      void init(const MachineInstr &MI);
  
@@ -348,7 +465,7 @@
      /// This function sets all caller-saved registers in Defs.
      void setCallerSaved(const MachineInstr &MI);
  
-@@ -230,7 +279,9 @@
+@@ -232,7 +281,9 @@
      bool hasHazard_(const MachineInstr &MI) override { return true; }
    };
  
@@ -359,7 +476,7 @@
    class LoadFromStackOrConst : public InspectMemInstr {
    public:
      LoadFromStackOrConst() : InspectMemInstr(false) {}
-@@ -320,6 +371,19 @@
+@@ -322,12 +373,35 @@
                          const BranchInformation &BranchInfo, RegDefsUses &RegDU,
                          InspectMemInstr &IM) const;
  
@@ -376,10 +493,28 @@
 +    bool moveOpensLoadDelay(const MipsSubtarget &STI,
 +                            const MachineInstr &Candidate) const;
 +
++    /// Returns true if a copy of Candidate in the delay slot of one of the
++    /// branches in BrMap, the predecessors' branches a successor search fills
++    /// along with the slot it searches for, could let the instruction that
++    /// runs next on either of the branch's paths read its result too early,
++    /// or if that instruction cannot be found.
++    bool cloneExposesHazard(const MipsSubtarget &STI, const BB2BrMap &BrMap,
++                            const MachineInstr &Candidate) const;
++
      /// This function searches range [Begin, End) for an instruction that can be
-     /// moved to the delay slot. Returns true on success.
+-    /// moved to the delay slot. Returns true on success.
++    /// moved to the delay slot. Returns true on success. A successor search
++    /// passes BrMap, the other slots the instruction will be copied to.
      template <typename IterTy>
-@@ -343,6 +407,11 @@
+     bool searchRange(MachineBasicBlock &MBB, IterTy Begin, IterTy End,
+                      const BranchInformation &BranchInfo, RegDefsUses &RegDU,
+-                     InspectMemInstr &IM, Iter Slot, IterTy &Filler) const;
++                     InspectMemInstr &IM, Iter Slot, IterTy &Filler,
++                     const BB2BrMap *BrMap = nullptr) const;
+ 
+     /// This function searches in the backward direction for an instruction that
+     /// can be moved to the delay slot. Returns true on success.
+@@ -345,6 +419,11 @@
      bool searchSuccBBs(MachineBasicBlock &MBB, Iter Slot,
                         const BranchInformation &BranchInfo) const;
  
@@ -391,7 +526,7 @@
      /// Pick a successor block of MBB. Return NULL if MBB doesn't have a
      /// successor block that is not a landing pad.
      MachineBasicBlock *selectSuccBB(MachineBasicBlock &B) const;
-@@ -352,6 +421,13 @@
+@@ -354,6 +433,13 @@
      std::pair<MipsInstrInfo::BranchType, MachineInstr *>
      getBranch(MachineBasicBlock &MBB, const MachineBasicBlock &Dst) const;
  
@@ -405,7 +540,7 @@
      /// Examine Pred and see if it is possible to insert an instruction into
      /// one of its branches delay slot or its end.
      bool examinePred(MachineBasicBlock &Pred, const MachineBasicBlock &Succ,
-@@ -379,11 +455,16 @@
+@@ -452,11 +538,16 @@
    MachineFunction *MF = Filler->getParent()->getParent();
  
    for (const auto &I : BrMap) {
@@ -424,7 +559,7 @@
      }
    }
  }
-@@ -428,6 +509,21 @@
+@@ -501,6 +592,21 @@
    }
  }
  
@@ -446,7 +581,7 @@
  void RegDefsUses::setCallerSaved(const MachineInstr &MI) {
    assert(MI.isCall());
  
-@@ -545,14 +641,49 @@
+@@ -618,14 +724,49 @@
    if (MI.mayStore())
      return true;
  
@@ -499,15 +634,15 @@
    }
  
    return true;
-@@ -687,6 +818,7 @@
-         !(InMicroMipsMode && STI.hasMips32r6())) {
+@@ -772,6 +913,7 @@
+         !(InMicroMipsMode && STI.hasMips32r6()) && !SkipForFixR5900) {
  
        bool Filled = false;
 +      FirstNextMBBInstr = firstInstrAfter(MBB);
        const auto BranchInfo =
            BranchInformation(I, MBB.end(), FirstNextMBBInstr);
  
-@@ -727,6 +859,7 @@
+@@ -812,6 +954,7 @@
          }
          ++FilledSlots;
          Changed = true;
@@ -515,7 +650,7 @@
          continue;
        }
      }
-@@ -755,6 +888,7 @@
+@@ -840,6 +983,7 @@
      MIBundleBuilder(MBB, I, std::next(I, 2));
      ++FilledSlots;
      Changed = true;
@@ -523,7 +658,17 @@
    }
    return Changed;
  }
-@@ -804,6 +938,12 @@
+@@ -849,7 +993,8 @@
+                                       IterTy End,
+                                       const BranchInformation &BranchInfo,
+                                       RegDefsUses &RegDU, InspectMemInstr &IM,
+-                                      Iter Slot, IterTy &Filler) const {
++                                      Iter Slot, IterTy &Filler,
++                                      const BB2BrMap *BrMap) const {
+   for (IterTy I = Begin; I != End;) {
+     IterTy CurrI = I;
+     ++I;
+@@ -889,6 +1034,15 @@
      if (delayHasHazard(STI, *CurrI, BranchInfo, RegDU, IM))
        continue;
  
@@ -533,10 +678,13 @@
 +    if (moveOpensLoadDelay(STI, *CurrI))
 +      continue;
 +
++    if (BrMap && cloneExposesHazard(STI, *BrMap, *CurrI))
++      continue;
++
      bool InMicroMipsMode = STI.inMicroMipsMode();
      const MipsInstrInfo *TII = STI.getInstrInfo();
      unsigned Opcode = (*Slot).getOpcode();
-@@ -892,17 +1032,55 @@
+@@ -977,17 +1131,55 @@
    return true;
  }
  
@@ -596,7 +744,7 @@
    RegDefsUses RegDU(*MBB.getParent()->getSubtarget().getRegisterInfo());
    bool HasMultipleSuccs = false;
    BB2BrMap BrMap;
-@@ -923,6 +1101,7 @@
+@@ -1008,13 +1200,14 @@
    // predecessors have multiple successors.
    if (HasMultipleSuccs) {
      IM.reset(new LoadFromStackOrConst());
@@ -604,7 +752,15 @@
    } else {
      const MachineFrameInfo &MFI = Fn->getFrameInfo();
      IM.reset(new MemDefsUses(&MFI));
-@@ -939,6 +1118,97 @@
+   }
+ 
+   if (!searchRange(MBB, SuccBB->begin(), SuccBB->end(), BranchInfo, RegDU, *IM,
+-                   Slot, Filler))
++                   Slot, Filler, &BrMap))
+     return false;
+ 
+   insertDelayFiller(Filler, BrMap);
+@@ -1024,6 +1217,97 @@
    return true;
  }
  
@@ -702,7 +858,7 @@
  MachineBasicBlock *
  MipsDelaySlotFiller::selectSuccBB(MachineBasicBlock &B) const {
    if (B.succ_empty())
-@@ -1015,6 +1285,50 @@
+@@ -1100,6 +1384,50 @@
    return true;
  }
  
@@ -753,7 +909,7 @@
  bool MipsDelaySlotFiller::delayHasHazard(const MipsSubtarget &STI,
                                           const MachineInstr &Candidate,
                                           const BranchInformation &BranchInfo,
-@@ -1028,52 +1342,100 @@
+@@ -1113,52 +1441,163 @@
    HasHazard |= IM.hasHazard(Candidate);
    HasHazard |= RegDU.update(Candidate, 0, Candidate.getNumOperands());
  
@@ -796,13 +952,7 @@
 -      }
 +  return HasHazard;
 +}
- 
--      // If this is a direct branch we should find a MBB operand for the jump
--      // target
--      const MachineBasicBlock *TargetMBB = BranchInfo.getBranchTarget();
--      if (!TargetMBB || TargetMBB->empty()) {
--        return true;
--      }
++
 +bool MipsDelaySlotFiller::moveExposesLoadHazard(
 +    const MipsSubtarget &STI, const MachineInstr &Candidate) const {
 +  // The processors delayHasHazard checks a candidate for.
@@ -810,6 +960,45 @@
 +  const bool FPUDelay = !STI.hasMips32() && !STI.hasMips4();
 +  if (!LoadDelay && !FPUDelay)
 +    return false;
++
++  // A delay slot filled earlier holds a load, or a move out of the floating
++  // point unit, that was checked against the instruction then first in this
++  // block. Taking that instruction away for a later slot puts the next one
++  // first, and it must not read the result either. Any filled branch of a
++  // predecessor counts, whether this block is its target or its
++  // fall-through.
++  const MachineBasicBlock &MBB = *Candidate.getParent();
++  if (firstExecutedInstr(MBB, nullptr) != &Candidate)
++    return false;
+ 
+-      // If this is a direct branch we should find a MBB operand for the jump
+-      // target
+-      const MachineBasicBlock *TargetMBB = BranchInfo.getBranchTarget();
+-      if (!TargetMBB || TargetMBB->empty()) {
++  const MipsInstrInfo *TII = STI.getInstrInfo();
++  const MachineInstr *Next = firstExecutedInstr(MBB, &Candidate);
++  for (const MachineBasicBlock *Pred : MBB.predecessors()) {
++    for (const MachineInstr &MI : Pred->instrs()) {
++      if (!MI.isBundledWithPred())
++        continue;
++      const bool Load = LoadDelay && TII->HasLoadDelaySlot(MI);
++      const bool FPU = FPUDelay && TII->HasFPUDelaySlot(MI);
++      if (!Load && !FPU)
++        continue;
++      const MachineInstr &Branch = *std::prev(MI.getIterator());
++      if (!Branch.isBranch())
++        continue;
++      if (!Next)
+         return true;
+-      }
++      if (Load && !TII->SafeInLoadDelaySlot(*Next, MI))
++        return true;
++      if (FPU && !TII->SafeInFPUDelaySlot(*Next, MI))
++        return true;
++    }
++  }
++  return false;
++}
  
 -      const auto &BranchTargetInstr = TargetMBB->instr_front();
 -      bool HasNewHazard =
@@ -827,36 +1016,65 @@
 -        }
 -      }
 -      return HasNewHazard;
-+  // A delay slot filled earlier holds a load, or a move out of the floating
-+  // point unit, that was checked against the instruction then first in this
-+  // block. Taking that instruction away for a later slot puts the next one
-+  // first, and it must not read the result either. Any filled branch of a
-+  // predecessor counts, whether this block is its target or its
-+  // fall-through.
-+  const MachineBasicBlock &MBB = *Candidate.getParent();
-+  if (firstExecutedInstr(MBB, nullptr) != &Candidate)
++bool MipsDelaySlotFiller::cloneExposesHazard(
++    const MipsSubtarget &STI, const BB2BrMap &BrMap,
++    const MachineInstr &Candidate) const {
++  // The processors delayHasHazard checks a candidate for.
++  const MipsInstrInfo *TII = STI.getInstrInfo();
++  const bool Load = STI.hasMips1() && !STI.hasMips2() &&
++                    TII->HasLoadDelaySlot(Candidate);
++  const bool FPU = !STI.hasMips32() && !STI.hasMips4() &&
++                   TII->HasFPUDelaySlot(Candidate);
++  if (!Load && !FPU)
 +    return false;
 +
-+  const MipsInstrInfo *TII = STI.getInstrInfo();
-+  const MachineInstr *Next = firstExecutedInstr(MBB, &Candidate);
-+  for (const MachineBasicBlock *Pred : MBB.predecessors()) {
-+    for (const MachineInstr &MI : Pred->instrs()) {
-+      if (!MI.isBundledWithPred())
-+        continue;
-+      const bool Load = LoadDelay && TII->HasLoadDelaySlot(MI);
-+      const bool FPU = FPUDelay && TII->HasFPUDelaySlot(MI);
-+      if (!Load && !FPU)
-+        continue;
-+      const MachineInstr &Branch = *std::prev(MI.getIterator());
-+      if (!Branch.isBranch())
-+        continue;
-+      if (!Next)
++  // Whether Next may run just after Candidate. With Candidate gone from its
++  // block, the instruction behind it there is the one that runs.
++  auto Safe = [&](const MachineInstr *Next) {
++    if (!Next)
++      return false;
++    if (Load && !TII->SafeInLoadDelaySlot(*Next, Candidate))
++      return false;
++    if (FPU && !TII->SafeInFPUDelaySlot(*Next, Candidate))
++      return false;
++    return true;
++  };
++
++  for (const auto &[Pred, Br] : BrMap) {
++    // A predecessor without a branch gets the copy at its end, outside any
++    // slot, where the hazard pass that runs after this one sees it.
++    if (!Br)
++      continue;
++
++    // The branch target.
++    const MachineBasicBlock *Target = nullptr;
++    for (const MachineOperand &MO : Br->operands())
++      if (MO.isMBB())
++        Target = MO.getMBB();
++    if (!Target || !Safe(firstExecutedInstr(*Target, &Candidate)))
++      return true;
++
++    if (!Br->isConditionalBranch())
++      continue;
++
++    // The fall-through: the next instruction in Pred, an unconditional
++    // branch say, or else the first one in the block laid out after it.
++    const MachineInstr *Next = nullptr;
++    const MachineBasicBlock &PredBB = *Pred;
++    for (MachineBasicBlock::const_iterator
++             I = std::next(MachineBasicBlock::const_iterator(Br)),
++             E = PredBB.end();
++         I != E && !Next; ++I)
++      if (!I->isMetaInstruction())
++        Next = &*I;
++    if (!Next) {
++      MachineFunction::const_iterator After = std::next(Pred->getIterator());
++      if (After == Pred->getParent()->end())
 +        return true;
-+      if (Load && !TII->SafeInLoadDelaySlot(*Next, MI))
-+        return true;
-+      if (FPU && !TII->SafeInFPUDelaySlot(*Next, MI))
-+        return true;
++      Next = firstExecutedInstr(*After, &Candidate);
      }
++    if (!Safe(Next))
++      return true;
    }
 +  return false;
 +}
@@ -903,17 +1121,6 @@
      return true;
    default:
      return false;
-@@ -708,6 +710,10 @@
- unsigned MipsInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
-   switch (MI.getOpcode()) {
-   default:
-+    if (MI.hasDelaySlot()) {
-+      // instr + 1 nop
-+      return MI.getDesc().getSize() + 4;
-+    }
-     return MI.getDesc().getSize();
-   case  TargetOpcode::INLINEASM:
-   case  TargetOpcode::INLINEASM_BR: {       // Inline Asm: Variable size.
 --- a/llvm/lib/Target/Mips/MipsSubtarget.cpp
 +++ b/llvm/lib/Target/Mips/MipsSubtarget.cpp
 @@ -74,7 +74,6 @@
@@ -939,7 +1146,7 @@
    if (MipsArchVersion == Mips5)
 --- a/llvm/lib/Target/Mips/MipsSubtarget.h
 +++ b/llvm/lib/Target/Mips/MipsSubtarget.h
-@@ -243,6 +243,11 @@
+@@ -246,6 +246,11 @@
    void getCriticalPathRCs(RegClassVector &CriticalPathRCs) const override;
    CodeGenOptLevel getOptLevelToEnablePostRAScheduler() const override;
  

@@ -28,9 +28,11 @@ on:
 jobs:
   build:
     # Pinned rather than ubuntu-latest: go-llvm and TinyGo name the system's
-    # LLVM 22 paths, /usr/include/llvm-22 and /usr/lib/llvm-22/lib, before the
-    # shell's, and Ubuntu 26.04 has an LLVM 22 there, built with Xtensa, which
-    # the shell's is not, so a native TinyGo built on it fails to start.
+    # LLVM paths, /usr/include/llvm-23 and /usr/lib/llvm-23/lib now, before
+    # the shell's. Ubuntu 26.04 had an LLVM 22 there when the compiler was
+    # built with that version, built with Xtensa, which the shell's is not,
+    # so a native TinyGo built on it failed to start, and an image that
+    # gains an LLVM 23 would do the same.
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     permissions:

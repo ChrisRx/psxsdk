@@ -1,6 +1,6 @@
 --- a/main.go
 +++ b/main.go
-@@ -1814,6 +1814,7 @@
+@@ -1816,6 +1816,7 @@
  	hot := flag.Bool("hot", false, "PlayStation targets: build a program that can take hot reload patches")
  	hotBase := flag.String("hot-base", "", "PlayStation targets: build a hot reload patch for the program whose ELF is given, built with -hot")
  	hotAt := flag.String("hot-at", "", "the address, hexadecimal, to link the patch of -hot-base at")
@@ -8,7 +8,7 @@
  	llvmFeatures := flag.String("llvm-features", "", "comma separated LLVM features to enable")
  	cpuprofile := flag.String("cpuprofile", "", "cpuprofile output")
  	monitor := flag.Bool("monitor", false, "enable serial monitor")
-@@ -1965,6 +1966,7 @@
+@@ -1970,6 +1971,7 @@
  		Hot:                     *hot,
  		HotBase:                 *hotBase,
  		HotAt:                   *hotAt,
@@ -63,7 +63,7 @@
  		if !valid {
 --- a/compileopts/config.go
 +++ b/compileopts/config.go
-@@ -146,10 +146,29 @@
+@@ -162,10 +162,29 @@
  	for i := 1; i <= c.GoMinorVersion; i++ {
  		tags = append(tags, fmt.Sprintf("go1.%d", i))
  	}
@@ -95,7 +95,7 @@
  func (c *Config) GC() string {
 --- a/builder/build.go
 +++ b/builder/build.go
-@@ -228,6 +228,7 @@
+@@ -230,6 +230,7 @@
  		Nobounds:           config.Options.Nobounds,
  		PanicStrategy:      config.PanicStrategy(),
  		PanicUnwind:        config.PanicUnwind(),
@@ -116,7 +116,7 @@
  }
  
  // compilerContext contains function-independent data that should still be
-@@ -103,6 +107,7 @@
+@@ -105,6 +109,7 @@
  	packageDir       string          // directory for this package
  	runtimePkg       *types.Package
  	localTypeNames   typeutil.Map // *types.Named (synthetic local from generic instantiation) -> string
@@ -124,7 +124,7 @@
  }
  
  // newCompilerContext returns a new compiler context ready for use, most
-@@ -1249,6 +1254,11 @@
+@@ -1256,6 +1261,11 @@
  	if b.info.allocates {
  		b.llvmFn.AddFunctionAttr(b.ctx.CreateStringAttribute("tinygo-allocates", ""))
  	}
@@ -136,7 +136,7 @@
  
  	if b.info.interrupt {
  		// Mark this function as an interrupt.
-@@ -1412,6 +1422,7 @@
+@@ -1419,6 +1429,7 @@
  // diagnostic.
  func (b *builder) createFunction() {
  	b.createFunctionStart(false)
@@ -144,7 +144,7 @@
  
  	// Fill blocks with instructions.
  	b.loweringBody = true
-@@ -1646,6 +1657,7 @@
+@@ -1653,6 +1664,7 @@
  			return
  		}
  		b.storeValue(llvmAddr, instr.Val)
@@ -154,7 +154,7 @@
  	}
 --- a/compiler/symbol.go
 +++ b/compiler/symbol.go
-@@ -46,6 +46,10 @@
+@@ -47,6 +47,10 @@
  	// go:allocates: the function allocates on purpose, as a load does, and
  	// the frame loop may call it (transform.CheckFrameAllocs).
  	allocates bool
@@ -165,8 +165,8 @@
  }
  
  type inlineType int
-@@ -538,6 +542,8 @@
- 			info.inline = inlineHint
+@@ -551,6 +555,8 @@
+ 			}
  		case "//go:noinline":
  			info.inline = inlineNone
 +		case "//go:onstore":

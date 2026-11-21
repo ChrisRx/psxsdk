@@ -62,7 +62,7 @@ for p in $(sed -n 's/^[[:space:]]*path = //p' "$SRC/.gitmodules"); do
 done
 cp -r "$OVERLAY"/. "$TREE"
 
-CRT=$(nix build --no-link --print-out-paths "$NIXPKGS#llvmPackages_22.compiler-rt.src")
+CRT=$(nix build --no-link --print-out-paths "$NIXPKGS#llvmPackages_23.compiler-rt.src")
 mkdir -p "$TREE/lib/compiler-rt-builtins"
 cp -a "$CRT"/compiler-rt/lib/builtins/* "$TREE/lib/compiler-rt-builtins/"
 chmod -R u+w "$TREE"

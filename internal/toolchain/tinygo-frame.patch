@@ -1,6 +1,6 @@
 --- a/compiler/symbol.go
 +++ b/compiler/symbol.go
-@@ -42,6 +42,10 @@
+@@ -43,6 +43,10 @@
  	// go:keeps: each parameter named, and the function after which it is
  	// not kept, if any.
  	keeps map[string]string
@@ -11,8 +11,8 @@
  }
  
  type inlineType int
-@@ -534,6 +538,12 @@
- 			info.inline = inlineHint
+@@ -547,6 +551,12 @@
+ 			}
  		case "//go:noinline":
  			info.inline = inlineNone
 +		case "//go:allocates":
@@ -26,7 +26,7 @@
  				continue
 --- a/compiler/compiler.go
 +++ b/compiler/compiler.go
-@@ -1246,6 +1246,9 @@
+@@ -1253,6 +1253,9 @@
  		noinline := b.ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0)
  		b.llvmFn.AddFunctionAttr(noinline)
  	}
@@ -36,7 +36,7 @@
  
  	if b.info.interrupt {
  		// Mark this function as an interrupt.
-@@ -1737,6 +1740,20 @@
+@@ -1768,6 +1771,20 @@
  	return comparison != nil && isMemequalArrayComparison(comparison)
  }
  
@@ -57,7 +57,7 @@
  func isDereference(value ssa.Value) bool {
  	unop, ok := value.(*ssa.UnOp)
  	return ok && unop.Op == token.MUL
-@@ -3958,6 +3975,14 @@
+@@ -4004,6 +4021,14 @@
  			if canUseDereferencePointer(unop) {
  				return x, nil
  			}
@@ -74,7 +74,7 @@
  	case token.XOR: // ^x, toggle all bits in integer
 --- a/transform/optimizer.go
 +++ b/transform/optimizer.go
-@@ -117,6 +117,12 @@
+@@ -121,6 +121,12 @@
  		}
  		OptimizeStringToBytes(mod)
  		OptimizeStringEqual(mod)
@@ -89,7 +89,7 @@
  		// Must be run at any optimization level.
 --- a/compileopts/config.go
 +++ b/compileopts/config.go
-@@ -36,6 +36,15 @@
+@@ -43,6 +43,15 @@
  	Target         *TargetSpec
  	GoMinorVersion int
  	TestConfig     TestConfig
@@ -107,7 +107,7 @@
  // Triple returns the LLVM target triple, like armv6m-unknown-unknown-eabi.
 --- a/builder/build.go
 +++ b/builder/build.go
-@@ -281,6 +281,15 @@
+@@ -282,6 +282,15 @@
  		}
  	}
  

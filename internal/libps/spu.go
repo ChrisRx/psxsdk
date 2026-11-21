@@ -496,7 +496,11 @@ func (sv *sndVoice) free() bool {
 
 // allocVoice chooses a voice for a tone of priority prior: the lowest
 // free one, or else one stolen (see stealVoice). It returns -1 if there
-// is none.
+// is none. It stays out of line: inlined into the vertical blank
+// handler, as LLVM 23 does, it makes that too big for its place in the
+// resident image.
+//
+//go:noinline
 func allocVoice(prior uint8, pending bool) int {
 	v := -1
 	for i := range snd.voices {

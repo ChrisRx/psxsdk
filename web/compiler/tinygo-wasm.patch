@@ -1,8 +1,8 @@
 diff --git a/builder/build.go b/builder/build.go
-index d41062c..ef12501 100644
+index 266179b..21a51cc 100644
 --- a/builder/build.go
 +++ b/builder/build.go
-@@ -29,7 +29,6 @@ import (
+@@ -30,7 +30,6 @@ import (
  	"sync"
  	"time"
  
@@ -10,7 +10,7 @@ index d41062c..ef12501 100644
  	"github.com/tinygo-org/tinygo/compileopts"
  	"github.com/tinygo-org/tinygo/compiler"
  	"github.com/tinygo-org/tinygo/compiler/llvmutil"
-@@ -241,12 +240,15 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
+@@ -242,12 +241,15 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
  	defer machine.Dispose()
  
  	// Load entire program AST into memory.
@@ -26,7 +26,7 @@ index d41062c..ef12501 100644
  	result := BuildResult{
  		ModuleRoot: lprogram.MainPkg().Module.Dir,
  		MainDir:    lprogram.MainPkg().Dir,
-@@ -256,10 +258,12 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
+@@ -257,10 +259,12 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
  		// If there is no module root, just the regular root.
  		result.ModuleRoot = lprogram.MainPkg().Root
  	}
@@ -39,7 +39,7 @@ index d41062c..ef12501 100644
  
  	// Embed module build information so runtime/debug.ReadBuildInfo() works,
  	// mirroring what the standard `go build` toolchain does. We fill
-@@ -304,8 +308,14 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
+@@ -305,8 +309,14 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
  
  	// Create the *ssa.Program. This does not yet build the entire SSA of the
  	// program so it's pretty fast and doesn't need to be parallelized.
@@ -55,21 +55,29 @@ index d41062c..ef12501 100644
  
  	// Add jobs to compile each package.
  	// Packages that have a cache hit will not be compiled again.
-@@ -600,8 +610,11 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
- 			// anything, it only links the bitcode files together.
+@@ -614,12 +624,16 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
+ 			debug.FreeOSMemory()
  			ctx := llvm.NewContext()
  			mod = ctx.NewModule("main")
--			for _, pkgJob := range packageJobs {
--				pkgMod, err := ctx.ParseBitcodeFile(pkgJob.result)
 +			tLink := time.Now()
 +			defer func() { stage("parse+link bitcode", tLink) }()
+ 			// Use one Linker for all packages. LinkModules rescans the whole
+-			// module on every call.
+-			linker := llvm.NewLinker(mod)
+-			defer linker.Dispose()
+-			for _, pkgJob := range packageJobs {
+-				pkgMod, err := ctx.ParseBitcodeFile(pkgJob.result)
++			// module on every call. It is made once mod is the module the
++			// packages are linked into, which the prelinked one replaces.
++			var linker llvm.Linker
++			defer func() { linker.Dispose() }()
 +			// linkPackage links a package's bitcode into mod.
 +			linkPackage := func(path string) error {
 +				pkgMod, err := ctx.ParseBitcodeFile(path)
  				if err != nil {
  					return fmt.Errorf("failed to load bitcode file: %w", err)
  				}
-@@ -626,6 +639,51 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
+@@ -644,6 +658,53 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
  				if err != nil {
  					return fmt.Errorf("failed to link module: %w", err)
  				}
@@ -92,8 +100,10 @@ index d41062c..ef12501 100644
 +				if err != nil {
 +					return fmt.Errorf("failed to load bitcode file: %w", err)
 +				}
++				linker = llvm.NewLinker(mod)
 +				stage("parse prelinked deps", tLink)
 +			} else {
++				linker = llvm.NewLinker(mod)
 +				for _, pkgJob := range deps {
 +					if err := linkPackage(pkgJob.result); err != nil {
 +						return err
@@ -121,7 +131,7 @@ index d41062c..ef12501 100644
  			}
  
  			// Insert values from -ldflags="-X ..." into the IR.
-@@ -694,6 +752,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
+@@ -712,6 +773,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
  
  			// Run all optimization passes, which are much more effective now
  			// that the optimizer can see the whole program at once.
@@ -129,7 +139,33 @@ index d41062c..ef12501 100644
  			err := optimizeProgram(mod, config)
  			if err != nil {
  				return err
-@@ -1732,19 +1791,6 @@ func patchRP2040BootCRC(executable string) error {
+@@ -868,13 +930,24 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
+ 	// Add jobs to compile C and C++ files in all packages. This is part of CGo.
+ 	// TODO: do this as part of building the package to be able to link the
+ 	// bitcode files together.
++	//
++	// The extcxx tag leaves the C++ files to whoever links the program: the
++	// compiler's own WebAssembly build sets it, whose C++ is go-llvm's
++	// bindings and the builder's drivers, compiled with LLVM's headers and
++	// the libc++ LLVM was built with before the compiler is linked
++	// (web/compiler/glue in psxsdk).
++	extCXX := slices.Contains(config.BuildTags(), "extcxx")
+ 	for _, pkg := range lprogram.Sorted() {
++		cxxFiles := pkg.CXXFiles
++		if extCXX {
++			cxxFiles = nil
++		}
+ 		for _, source := range []struct {
+ 			files []string
+ 			flags []string
+ 		}{
+ 			{pkg.CFiles, pkg.CFlags},
+-			{pkg.CXXFiles, pkg.CXXFlags},
++			{cxxFiles, pkg.CXXFlags},
+ 		} {
+ 			for _, filename := range source.files {
+ 				abspath := filepath.Join(pkg.OriginalDir(), filename)
+@@ -1771,19 +1844,6 @@ func patchRP2040BootCRC(executable string) error {
  	return replaceElfSection(executable, ".boot2", bytes)
  }
  
@@ -221,8 +257,64 @@ index 0000000..aae796b
 +		pkg.Build()
 +	}
 +}
+diff --git a/builder/cc1as.cpp b/builder/cc1as.cpp
+index 68f13ad..5e7b929 100644
+--- a/builder/cc1as.cpp
++++ b/builder/cc1as.cpp
+@@ -298,6 +298,12 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
+   MCOptions.ImplicitMapSyms = Opts.ImplicitMapsyms;
+   MCOptions.X86RelaxRelocations = Opts.X86RelaxRelocations;
+   MCOptions.X86Sse2Avx = Opts.X86Sse2Avx;
++#if LLVM_VERSION_MAJOR >= 23
++  // LLVM 23, as clang's cc1as_main.cpp has it there: the option that
++  // initSections took as an argument, and a context that reads the options
++  // through the assembler info.
++  MCOptions.MCNoExecStack = Opts.NoExecStack;
++#endif
+   MCOptions.CompressDebugSections = Opts.CompressDebugSections;
+   MCOptions.AsSecureLogFile = Opts.AsSecureLogFile;
+ 
+@@ -327,8 +333,12 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
+       TheTarget->createMCSubtargetInfo(Opts.Triple, Opts.CPU, FS));
+   assert(STI && "Unable to create subtarget info!");
+ 
++#if LLVM_VERSION_MAJOR >= 23
++  MCContext Ctx(Opts.Triple, *MAI, *MRI, *STI, &SrcMgr);
++#else
+   MCContext Ctx(Opts.Triple, MAI.get(), MRI.get(), STI.get(), &SrcMgr,
+                 &MCOptions);
++#endif
+ 
+   bool PIC = false;
+   if (Opts.RelocationModel == "static") {
+@@ -425,7 +435,11 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
+     Triple T = Opts.Triple;
+     Str.reset(TheTarget->createMCObjectStreamer(
+         T, Ctx, std::move(MAB), std::move(OW), std::move(CE), *STI));
++#if LLVM_VERSION_MAJOR >= 23
++    Str.get()->initSections(*STI);
++#else
+     Str.get()->initSections(Opts.NoExecStack, *STI);
++#endif
+     if (T.isOSBinFormatMachO() && T.isOSDarwin()) {
+       Triple *TVT = Opts.DarwinTargetVariantTriple
+                         ? &*Opts.DarwinTargetVariantTriple
+@@ -450,8 +464,13 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
+       createMCAsmParser(SrcMgr, Ctx, *Str.get(), *MAI));
+ 
+   // FIXME: init MCTargetOptions from sanitizer flags here.
++#if LLVM_VERSION_MAJOR >= 23
++  std::unique_ptr<MCTargetAsmParser> TAP(
++      TheTarget->createMCAsmParser(*STI, *Parser, *MCII));
++#else
+   std::unique_ptr<MCTargetAsmParser> TAP(
+       TheTarget->createMCAsmParser(*STI, *Parser, *MCII, MCOptions));
++#endif
+   if (!TAP)
+     Failed = Diags.Report(diag::err_target_unknown_triple) << Opts.Triple.str();
+ 
 diff --git a/builder/config.go b/builder/config.go
-index 8aa2363..703570d 100644
+index bf4d57c..6018a77 100644
 --- a/builder/config.go
 +++ b/builder/config.go
 @@ -3,7 +3,6 @@ package builder
@@ -233,7 +325,7 @@ index 8aa2363..703570d 100644
  
  	"github.com/tinygo-org/tinygo/compileopts"
  	"github.com/tinygo-org/tinygo/goenv"
-@@ -45,15 +44,9 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
+@@ -41,15 +40,9 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
  
  	// Check that the Go toolchain version isn't too new, if we haven't been
  	// compiled with the latest Go version.
@@ -251,7 +343,7 @@ index 8aa2363..703570d 100644
  	config := &compileopts.Config{
  		Options:        options,
 diff --git a/builder/jobs.go b/builder/jobs.go
-index b4959fe..bd4ae16 100644
+index de32dde..c2f374d 100644
 --- a/builder/jobs.go
 +++ b/builder/jobs.go
 @@ -94,7 +94,8 @@ func runJobs(job *compileJob, sema chan struct{}) error {
@@ -273,8 +365,8 @@ index b4959fe..bd4ae16 100644
  				numRunningJobs++
  				continue
  
-@@ -215,5 +216,8 @@ func runJob(job *compileJob, doneChan chan *compileJob) {
- 		}
+@@ -216,5 +217,8 @@ func runJob(job *compileJob, doneChan chan *compileJob) {
+ 		job.run = nil
  	}
  	job.duration = time.Since(start)
 +	if job.run != nil {
@@ -676,7 +768,7 @@ index 0000000..d3624d3
 +	return nil
 +}
 diff --git a/cgo/cgo.go b/cgo/cgo.go
-index 01ca089..8f9d6fa 100644
+index aced87c..51465df 100644
 --- a/cgo/cgo.go
 +++ b/cgo/cgo.go
 @@ -1,3 +1,5 @@
@@ -685,39 +777,6 @@ index 01ca089..8f9d6fa 100644
  // Package cgo implements CGo by modifying a loaded AST. It does this by parsing
  // the `import "C"` statements found in the source code with libclang and
  // generating stub function and global declarations.
-@@ -551,6 +553,19 @@ func (p *cgoPackage) parseCGoPreprocessorLines(text string, pos token.Pos) strin
- 			}
- 			p.makePathsAbsolute(flags)
- 			p.cflags = append(p.cflags, flags...)
-+		case "CXXFLAGS":
-+			// C++ files are not compiled here, so the flags for them are
-+			// checked and dropped, rather than rejected: the Go toolchain
-+			// accepts the line, and packages written for it carry one.
-+			flags, err := shlex.Split(value)
-+			if err != nil {
-+				p.addErrorAfter(pos, text[:lineStart+colon+1], "failed to parse flags in #cgo line: "+err.Error())
-+				continue
-+			}
-+			if err := checkCompilerFlags(name, flags); err != nil {
-+				p.addErrorAfter(pos, text[:lineStart+colon+1], err.Error())
-+				continue
-+			}
- 		case "LDFLAGS":
- 			flags, err := shlex.Split(value)
- 			if err != nil {
-@@ -1427,6 +1442,12 @@ func (f *cgoFile) walker(cursor *astutil.Cursor, names map[string]clangCursor) b
- 			return true
- 		}
- 		if x.Name == "C" {
-+			if node.Sel.Name == "unsigned" {
-+				// C.unsigned is C.uint: unsigned and unsigned int are
-+				// the same type in C, and the Go toolchain's cgo treats
-+				// them as one.
-+				node.Sel.Name = "uint"
-+			}
- 			name := "_Cgo_" + node.Sel.Name
- 			if found, ok := names[node.Sel.Name]; ok {
- 				name = f.getASTDeclName(node.Sel.Name, found, false)
 diff --git a/cgo/const.go b/cgo/const.go
 index 9e7b06b..9d5e910 100644
 --- a/cgo/const.go
@@ -729,7 +788,7 @@ index 9e7b06b..9d5e910 100644
  
  // This file implements a parser of a subset of the C language, just enough to
 diff --git a/cgo/libclang.go b/cgo/libclang.go
-index 5a434ce..49a9929 100644
+index 1dbbd83..367d53b 100644
 --- a/cgo/libclang.go
 +++ b/cgo/libclang.go
 @@ -1,3 +1,5 @@
@@ -750,10 +809,10 @@ index e8098fa..cc2fd8b 100644
  // are slightly different from the ones defined in libclang.go, but they
 diff --git a/cgo/process_wasm.go b/cgo/process_wasm.go
 new file mode 100644
-index 0000000..90be0ce
+index 0000000..8f9d89b
 --- /dev/null
 +++ b/cgo/process_wasm.go
-@@ -0,0 +1,22 @@
+@@ -0,0 +1,27 @@
 +//go:build wasm
 +
 +package cgo
@@ -764,17 +823,22 @@ index 0000000..90be0ce
 +	"go/token"
 +)
 +
++// Flags holds the CGO_CPPFLAGS, CGO_CFLAGS, and CGO_CXXFLAGS environment flags.
++type Flags struct {
++	CPPFlags, CFlags, CXXFlags []string
++}
++
 +// Process would parse the `import "C"` fragments of files with libclang and
 +// add the declarations they need to the AST. A WebAssembly build of the
 +// compiler leaves libclang out, which takes a good part of clang with it,
 +// and TinyGo's cgo passes structs in a way wasm's C ABI does not accept
 +// anyway, so packages that use cgo cannot be built by it.
-+func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cflags []string, goos string) ([]*ast.File, []string, []string, []string, map[string][]byte, []error) {
++func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cflags []string, env Flags, goos, goarch string, buildTags []string) ([]*ast.File, []string, []string, []string, []string, map[string][]byte, []error) {
 +	var pos token.Position
 +	if len(files) > 0 {
 +		pos = fset.Position(files[0].Package)
 +	}
-+	return nil, nil, nil, nil, nil, []error{scanner.Error{Pos: pos, Msg: "cgo is not supported by this build of the compiler"}}
++	return nil, nil, nil, nil, nil, nil, []error{scanner.Error{Pos: pos, Msg: "cgo is not supported by this build of the compiler"}}
 +}
 diff --git a/cgo/security.go b/cgo/security.go
 index 081081f..b1a4918 100644
@@ -1292,7 +1356,7 @@ index 0000000..a27d68c
 +	return 0
 +}
 diff --git a/goenv/goenv.go b/goenv/goenv.go
-index cecb5a8..9962679 100644
+index db749f7..54c91cf 100644
 --- a/goenv/goenv.go
 +++ b/goenv/goenv.go
 @@ -4,7 +4,6 @@ package goenv
@@ -1434,8 +1498,45 @@ index 0000000..7e074f1
 +	})
 +	return goEnvVarsErr
 +}
+diff --git a/loader/analysis.go b/loader/analysis.go
+index 8b2a876..6e468d7 100644
+--- a/loader/analysis.go
++++ b/loader/analysis.go
+@@ -1,3 +1,5 @@
++//go:build !wasm
++
+ package loader
+ 
+ import (
+diff --git a/loader/analysis_wasm.go b/loader/analysis_wasm.go
+new file mode 100644
+index 0000000..4534a25
+--- /dev/null
++++ b/loader/analysis_wasm.go
+@@ -0,0 +1,21 @@
++//go:build wasm
++
++package loader
++
++import "strings"
++
++// Loading for analysis (analysis.go) is what `tinygo fix` does, which this
++// build of the compiler does not have: it would bring in go/packages, and
++// with it a go command to run. These are the parts of it the loader itself
++// calls, for a load that is never for analysis and has no overlay.
++
++func analysisImportPath(path string) string {
++	if index := strings.Index(path, " ["); index >= 0 {
++		return path[:index]
++	}
++	return path
++}
++
++func analysisOverlay(goroot string, overlay map[string][]byte) (func(), []string, error) {
++	return func() {}, nil, nil
++}
 diff --git a/loader/goroot.go b/loader/goroot.go
-index 0aab0a0..1a8d121 100644
+index 36c8315..ee100ea 100644
 --- a/loader/goroot.go
 +++ b/loader/goroot.go
 @@ -32,9 +32,10 @@ import (
@@ -1452,7 +1553,7 @@ index 0aab0a0..1a8d121 100644
  	goroot := goenv.Get("GOROOT")
  	if goroot == "" {
  		return "", errors.New("could not determine GOROOT")
-@@ -238,6 +239,8 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
+@@ -241,6 +242,8 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
  		"crypto/x509/internal/macos/": false,
  		"device/":                     false,
  		"examples/":                   false,
@@ -1461,7 +1562,7 @@ index 0aab0a0..1a8d121 100644
  		"internal/":                   true,
  		"internal/abi/":               false,
  		"internal/binary/":            false,
-@@ -255,6 +258,7 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
+@@ -258,6 +261,7 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
  		"net/":                        true,
  		"net/http/":                   false,
  		"os/":                         true,
@@ -1522,10 +1623,10 @@ index 0000000..4c7664c
 +}
 diff --git a/loader/keep.go b/loader/keep.go
 new file mode 100644
-index 0000000..fdb6ef1
+index 0000000..6d0e7f5
 --- /dev/null
 +++ b/loader/keep.go
-@@ -0,0 +1,133 @@
+@@ -0,0 +1,134 @@
 +package loader
 +
 +import (
@@ -1634,6 +1735,7 @@ index 0000000..fdb6ef1
 +	p.Files = k.pkg.Files
 +	p.FileHashes = k.pkg.FileHashes
 +	p.CFlags = k.pkg.CFlags
++	p.CXXFlags = k.pkg.CXXFlags
 +	p.CGoHeaders = k.pkg.CGoHeaders
 +	p.EmbedGlobals = k.pkg.EmbedGlobals
 +	p.Pkg = k.pkg.Pkg
@@ -1661,10 +1763,10 @@ index 0000000..fdb6ef1
 +}
 diff --git a/loader/list_exec.go b/loader/list_exec.go
 new file mode 100644
-index 0000000..3aa8e1c
+index 0000000..a5e1516
 --- /dev/null
 +++ b/loader/list_exec.go
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,39 @@
 +//go:build !wasm
 +
 +package loader
@@ -1681,8 +1783,9 @@ index 0000000..3aa8e1c
 +// listPackages runs `go list` with the given extra arguments on pkgs and
 +// returns what it printed: the JSON of each package, one after the other.
 +// Standard library tests run it from wd, in the merged GOROOT, so that the
-+// package there is the one found.
-+func listPackages(config *compileopts.Config, extraArgs, pkgs []string, wd string) ([]byte, error) {
++// package there is the one found. A failure of `go list` ends the process
++// with its exit code, except when loading for analysis, which reports it.
++func listPackages(config *compileopts.Config, extraArgs, pkgs []string, wd string, analysis bool) ([]byte, error) {
 +	cmd, err := List(config, extraArgs, pkgs)
 +	if err != nil {
 +		return nil, err
@@ -1696,7 +1799,7 @@ index 0000000..3aa8e1c
 +	cmd.Stderr = os.Stderr
 +	err = cmd.Run()
 +	if err != nil {
-+		if exitErr, ok := err.(*exec.ExitError); ok {
++		if exitErr, ok := err.(*exec.ExitError); ok && !analysis {
 +			os.Exit(exitErr.ExitCode())
 +		}
 +		return nil, fmt.Errorf("failed to run `go list`: %s", err)
@@ -1705,7 +1808,7 @@ index 0000000..3aa8e1c
 +}
 diff --git a/loader/list_wasm.go b/loader/list_wasm.go
 new file mode 100644
-index 0000000..c6df169
+index 0000000..e83f3ed
 --- /dev/null
 +++ b/loader/list_wasm.go
 @@ -0,0 +1,499 @@
@@ -1750,7 +1853,7 @@ index 0000000..c6df169
 +// The go command adds tags for its default experiments and the GOARCH
 +// variant when it selects files; those are not knowable here, so the host
 +// passes what `go list -f '{{context.ToolTags}}'` printed in GOTOOLTAGS.
-+func listPackages(config *compileopts.Config, extraArgs, pkgs []string, wd string) ([]byte, error) {
++func listPackages(config *compileopts.Config, extraArgs, pkgs []string, wd string, analysis bool) ([]byte, error) {
 +	if config.TestConfig.CompileTestBinary || config.TestConfig.StandardPackage {
 +		return nil, errors.New("tests cannot be built by this build of the compiler")
 +	}
@@ -2209,18 +2312,18 @@ index 0000000..c6df169
 +	return keys
 +}
 diff --git a/loader/loader.go b/loader/loader.go
-index feec2f2..182cc79 100644
+index 7996154..bef4ea1 100644
 --- a/loader/loader.go
 +++ b/loader/loader.go
-@@ -14,7 +14,6 @@ import (
- 	"go/types"
+@@ -16,7 +16,6 @@ import (
  	"io"
+ 	"maps"
  	"os"
 -	"os/exec"
  	"path"
  	"path/filepath"
  	"runtime"
-@@ -96,6 +95,7 @@ type Package struct {
+@@ -104,6 +103,7 @@ type Package struct {
  	EmbedGlobals map[string][]*EmbedFile
  	Pkg          *types.Package
  	info         types.Info
@@ -2228,21 +2331,21 @@ index feec2f2..182cc79 100644
  }
  
  type EmbedFile struct {
-@@ -132,7 +132,7 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
+@@ -144,7 +144,7 @@ func load(config *compileopts.Config, inputs []string, typeChecker types.Config,
  		goroot:      goroot,
  		workingDir:  wd,
  		Packages:    make(map[string]*Package),
 -		fset:        token.NewFileSet(),
 +		fset:        newFset(),
+ 		analysis:    analysis,
+ 		overlay:     overlay,
+ 		sources:     make(map[string][]byte),
+@@ -162,27 +162,13 @@ func load(config *compileopts.Config, inputs []string, typeChecker types.Config,
  	}
- 
- 	// List the dependencies of this package, in raw JSON format.
-@@ -140,27 +140,13 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
- 	if config.TestConfig.CompileTestBinary {
- 		extraArgs = append(extraArgs, "-test")
- 	}
--	cmd, err := List(config, extraArgs, []string{inputPkg})
-+	listed, err := listPackages(config, extraArgs, []string{inputPkg}, wd)
+ 	defer cleanup()
+ 	extraArgs = append(extraArgs, overlayFlag...)
+-	cmd, err := List(config, extraArgs, inputs)
++	listed, err := listPackages(config, extraArgs, inputs, wd, analysis)
  	if err != nil {
  		return nil, err
  	}
@@ -2255,7 +2358,7 @@ index feec2f2..182cc79 100644
 -	cmd.Stderr = os.Stderr
 -	err = cmd.Run()
 -	if err != nil {
--		if exitErr, ok := err.(*exec.ExitError); ok {
+-		if exitErr, ok := err.(*exec.ExitError); ok && !analysis {
 -			os.Exit(exitErr.ExitCode())
 -		}
 -		return nil, fmt.Errorf("failed to run `go list`: %s", err)
@@ -2267,7 +2370,7 @@ index feec2f2..182cc79 100644
  	var pkgErrors []error
  	for {
  		pkg := &Package{
-@@ -352,9 +338,12 @@ func (p *Program) MainPkg() *Package {
+@@ -374,9 +360,12 @@ func (p *Program) MainPkg() *Package {
  //
  // Idempotent.
  func (p *Program) Parse() error {
@@ -2281,7 +2384,7 @@ index feec2f2..182cc79 100644
  		err := pkg.Parse()
  		if err != nil {
  			return err
-@@ -367,7 +356,9 @@ func (p *Program) Parse() error {
+@@ -389,7 +378,9 @@ func (p *Program) Parse() error {
  		if err != nil {
  			return err
  		}
@@ -2579,7 +2682,7 @@ index 0000000..a0d9a07
 +func (ComparableHasher[T]) Hash(h *Hash, v T) { WriteComparable(h, v) }
 +func (ComparableHasher[T]) Equal(x, y T) bool { return x == y }
 diff --git a/src/internal/poll/fd_wasip1.go b/src/internal/poll/fd_wasip1.go
-index bfb0d4d..734c39c 100644
+index 5dcddbc..bf80b94 100644
 --- a/src/internal/poll/fd_wasip1.go
 +++ b/src/internal/poll/fd_wasip1.go
 @@ -21,7 +21,6 @@ package poll
@@ -2590,11 +2693,10 @@ index bfb0d4d..734c39c 100644
  	"syscall"
  	"time"
  	"unsafe"
-@@ -513,37 +512,3 @@ const (
- 	wasiErrnoAgain uint32 = 6
+@@ -514,40 +513,6 @@ const (
  	wasiErrnoIntr  uint32 = 27
  )
--
+ 
 -// wait parks the current goroutine until the FD becomes ready in the
 -// given direction. No deadline; mirrors the helper of the same name in
 -// package syscall (intentionally duplicated rather than linknamed
@@ -2628,6 +2730,10 @@ index bfb0d4d..734c39c 100644
 -	runtime_netpoll_done(pd)
 -	return nil
 -}
+-
+ // byteCount turns the -1 a failed read or write returns into 0, as Go's
+ // internal/poll does in fd_unix.go.
+ func byteCount(n int, err error) (int, error) {
 diff --git a/src/internal/poll/park_wasip1.go b/src/internal/poll/park_wasip1.go
 new file mode 100644
 index 0000000..f1df555

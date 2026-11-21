@@ -1,6 +1,6 @@
 --- a/cmd/tinygo-wasm/main.go
 +++ b/cmd/tinygo-wasm/main.go
-@@ -68,6 +68,9 @@
+@@ -91,6 +91,9 @@
  	printIR := flags.Bool("printir", false, "print LLVM IR")
  	verifyIR := flags.Bool("verifyir", false, "run extra verification steps on LLVM IR")
  	interpTimeout := flags.Duration("interp-timeout", 180*time.Second, "interp optimization pass timeout")
@@ -10,7 +10,7 @@
  	if err := flags.Parse(args); err != nil {
  		return 2
  	}
-@@ -89,6 +92,9 @@
+@@ -113,6 +116,9 @@
  		Semaphore: make(chan struct{}, 1),
  		Debug:     true,
  		Tags:      strings.Fields(*tags),
