@@ -1,7 +1,7 @@
 --- a/compiler/symbol.go
 +++ b/compiler/symbol.go
-@@ -38,6 +38,10 @@
- 	noheap        bool       // go:noheap
+@@ -39,6 +39,10 @@
+ 	noruntime     bool       // go:noruntime
  	variadic      bool       // go:variadic (CGo only)
  	inline        inlineType // go:inline
 +
@@ -11,7 +11,7 @@
  }
  
  type inlineType int
-@@ -275,10 +279,24 @@
+@@ -276,10 +280,24 @@
  		nocapture := c.ctx.CreateEnumAttribute(nocaptureKind, 0)
  		for i, typ := range paramTypes {
  			if typ.TypeKind() == llvm.PointerTypeKind {
@@ -36,8 +36,8 @@
  
  	// Build the function if needed.
  	c.maybeCreateSyntheticFunction(fn, llvmFn)
-@@ -543,6 +561,22 @@
- 			if slices.Contains(f.Pkg.Pkg.Imports(), types.Unsafe) {
+@@ -560,6 +578,22 @@
+ 			if c.checkDefinition(hasBody, comment, pragma) && c.checkUnsafe(f.Pkg, comment, pragma) {
  				info.nobounds = true
  			}
 +		case "//go:keeps":
@@ -61,7 +61,7 @@
  			// Following the upstream Go implementation, we only do this for
 --- a/compiler/compiler.go
 +++ b/compiler/compiler.go
-@@ -186,6 +186,7 @@
+@@ -190,6 +190,7 @@
  	unwindReturn       llvm.BasicBlock
  	asyncifyCatchIndex int
  	difunc             llvm.Metadata
@@ -69,7 +69,7 @@
  	dilocals           map[*types.Var]llvm.Metadata
  	initInlinedAt      llvm.Metadata            // fake inlinedAt position
  	initPseudoFuncs    map[string]llvm.Metadata // fake "inlined" functions for proper init debug locations
-@@ -1573,6 +1574,8 @@
+@@ -1580,6 +1581,8 @@
  	if b.Debug {
  		b.setDebugLocation(getPos(instr))
  	}
@@ -78,7 +78,7 @@
  
  	switch instr := instr.(type) {
  	case ssa.Value:
-@@ -2546,6 +2549,35 @@
+@@ -2577,6 +2580,35 @@
  	return min(maxSize, (uint64(1)<<goHeapAddressBits)/elementSize)
  }
  
@@ -126,7 +126,7 @@
  			// Set a different calling convention if needed.
 --- a/transform/optimizer.go
 +++ b/transform/optimizer.go
-@@ -110,6 +110,11 @@
+@@ -114,6 +114,11 @@
  		// For the PlayStation targets, what is allocated once becomes a
  		// global (transform/once.go).
  		HoistOnceAllocs(mod, config)

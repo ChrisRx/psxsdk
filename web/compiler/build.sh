@@ -18,9 +18,11 @@
 #  1. An overlay of the LLVM source tree, symlinks into the nix store with
 #     the files llvm/llvm-wasi.patch changes copied and patched: WASI has no
 #     signals, processes or sockets, and LLVM's Support library assumes them.
-#  2. libc++ and libc++abi for wasm32-wasi with their threading API on, so
-#     that LLVM's headers, which use std::mutex and friends whatever
-#     LLVM_ENABLE_THREADS says, compile. Nothing starts a thread.
+#  2. libc++ and libc++abi for wasm32-wasi, from that overlay, since libc++
+#     23 needs a line of the patch to build against wasi-libc, with their
+#     threading API on, so that LLVM's headers, which use std::mutex and
+#     friends whatever LLVM_ENABLE_THREADS says, compile. Nothing starts a
+#     thread.
 #  3. LLVM, clang and lld for wasm32-wasi, as static libraries, with only
 #     the Mips backend (llvm/configure.sh).
 #  4. The glue: go-llvm's C++ bindings, an lld driver, TinyGo's in-process
@@ -50,16 +52,18 @@ export HERE OUT JOBS NIXPKGS
 mkdir -p "$OUT"
 
 echo "==> nix store paths"
-LLVM_SRC=$(nix build --no-link --print-out-paths "$NIXPKGS#llvmPackages_22.llvm.monorepoSrc")
-TBLGEN=$(nix build --no-link --print-out-paths "$NIXPKGS#llvmPackages_22.tblgen")/bin
-CLANG_LIB=$(nix build --no-link --print-out-paths "$NIXPKGS#llvmPackages_22.clang.cc.lib")
-CLANG_BIN=$(nix build --no-link --print-out-paths "$NIXPKGS#llvmPackages_22.clang-unwrapped")/bin
+LLVM_SRC=$(nix build --no-link --print-out-paths "$NIXPKGS#llvmPackages_23.llvm.monorepoSrc")
+TBLGEN=$(nix build --no-link --print-out-paths "$NIXPKGS#llvmPackages_23.tblgen")/bin
+CLANG_LIB=$(nix build --no-link --print-out-paths "$NIXPKGS#llvmPackages_23.clang.cc.lib")
+CLANG_BIN=$(nix build --no-link --print-out-paths "$NIXPKGS#llvmPackages_23.clang-unwrapped")/bin
 export LLVM_SRC TBLGEN
 
 # cross runs a command in a wasm32-wasi cross shell: $CC and $CXX are the
 # wasi clang wrappers, with wasi-libc and libc++, and cmake and ninja are
 # at hand. dev runs one in the shell nixpkgs builds TinyGo in, which has the
-# Go toolchain and LLVM TinyGo's native build needs.
+# Go toolchain and LLVM TinyGo's native build needs; nixpkgs' package is of
+# an older TinyGo and names LLVM 22, so it is given LLVM 23 in its place, as
+# the flake does for its own TinyGo.
 # The cross shell asks for static linking through NIX_CFLAGS_LINK, which
 # the build machine's own gcc wrapper reads too, and glibc has no static
 # library there; the native tablegen LLVM builds for itself has to link, so
@@ -68,7 +72,7 @@ cross() {
   nix develop --impure --expr "let pkgs = import (builtins.getFlake \"$NIXPKGS\") { system = builtins.currentSystem; }; in pkgs.pkgsCross.wasi32.mkShell { nativeBuildInputs = [ pkgs.cmake pkgs.ninja pkgs.python3 ]; }" --command bash -c "unset NIX_CFLAGS_LINK; $1"
 }
 dev() {
-  nix develop "$NIXPKGS#tinygo" --command bash -c "export GOFLAGS=-mod=mod GOPROXY=https://proxy.golang.org,direct; $1"
+  nix develop --impure --expr "let pkgs = import (builtins.getFlake \"$NIXPKGS\") { system = builtins.currentSystem; }; in pkgs.tinygo.override { llvmPackages_22 = pkgs.llvmPackages_23; }" --command bash -c "export GOFLAGS=-mod=mod GOPROXY=https://proxy.golang.org,direct; $1"
 }
 
 "$HERE/prepare.sh"
@@ -80,7 +84,7 @@ if [ ! -e "$SRC/.patched" ]; then
   echo "==> LLVM source overlay"
   rm -rf "$SRC"
   mkdir -p "$SRC"
-  for d in llvm clang lld cmake third-party libunwind; do
+  for d in llvm clang lld cmake third-party libunwind libcxx libcxxabi libc runtimes; do
     cp -rs "$LLVM_SRC/$d" "$SRC/$d"
   done
   chmod -R u+w "$SRC"
@@ -144,11 +148,15 @@ echo "==> tinygo-full.wasm and tinygo.wasm"
 # builds as often as it is asked, keeping the standard library parsed and
 # type-checked between builds (cmd/tinygo-wasm). The full build runs as a
 # command under wasmtime to fill the cache.
+# TinyGo compiles the C++ files of a cgo package since 0.44, which here are
+# go-llvm's bindings and its own clang and lld drivers: the glue step has
+# compiled those already, with LLVM's headers and its libc++, so the extcxx
+# tag, which tinygo-wasm.patch adds, has TinyGo leave them alone.
 FLAGS='-scheduler=none -panic-unwind=explicit'
-TAGS='byollvm llvm22 custommalloc'
+TAGS='byollvm llvm23 custommalloc extcxx'
 dev "cd '$TREE' \
-  && go build -tags llvm22 -ldflags '-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=$CLANG_LIB/lib/clang/22' -o build/tinygo . \
-  && go build -tags llvm22 -ldflags '-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=$CLANG_LIB/lib/clang/22' -o build/tinygo-sysroot ./cmd/tinygo-sysroot \
+  && go build -tags llvm23 -ldflags '-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=$CLANG_LIB/lib/clang/23' -o build/tinygo . \
+  && go build -tags llvm23 -ldflags '-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=$CLANG_LIB/lib/clang/23' -o build/tinygo-sysroot ./cmd/tinygo-sysroot \
   && export PATH=\"\$PWD/build:$CLANG_BIN:\$PATH\" \
   && export CGO_CFLAGS='-I$OUT/llvm-build/include -I$SRC/llvm/include' \
   && tinygo build -target='$OUT/tinygo-wasm-full.json' -tags '$TAGS' $FLAGS -o '$OUT/tinygo-full.wasm' ./cmd/tinygo-wasm \

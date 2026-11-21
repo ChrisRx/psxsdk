@@ -628,7 +628,7 @@ tasks:
       # The patched TinyGo tree's tinygo-sysroot, built here when the
       # compiler task has not: it links LLVM, so it builds in the
       # playground shell.
-      - test -x {{.TREE}}/build/tinygo-sysroot || (cd {{.TREE}} && GOFLAGS=-mod=mod go build -tags llvm22 -ldflags "-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=$(clang-22 -print-resource-dir)" -o build/tinygo-sysroot ./cmd/tinygo-sysroot)
+      - test -x {{.TREE}}/build/tinygo-sysroot || (cd {{.TREE}} && GOFLAGS=-mod=mod go build -tags llvm23 -ldflags "-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=$(clang-23 -print-resource-dir)" -o build/tinygo-sysroot ./cmd/tinygo-sysroot)
       - rm -rf .build/sysroot
       # The tags are the ones a Net Yaroze build sets on the playstation
       # target, yaroze, and a static one besides, cleanlib, so that the

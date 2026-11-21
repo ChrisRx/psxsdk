@@ -1,6 +1,6 @@
 --- a/main.go
 +++ b/main.go
-@@ -1811,6 +1811,9 @@
+@@ -1813,6 +1813,9 @@
  	timeout := flag.Duration("timeout", 20*time.Second, "the length of time to retry locating the MSD volume to be used for flashing")
  	programmer := flag.String("programmer", "", "which hardware programmer to use")
  	ldflags := flag.String("ldflags", "", "Go link tool compatible ldflags")
@@ -10,7 +10,7 @@
  	llvmFeatures := flag.String("llvm-features", "", "comma separated LLVM features to enable")
  	cpuprofile := flag.String("cpuprofile", "", "cpuprofile output")
  	monitor := flag.Bool("monitor", false, "enable serial monitor")
-@@ -1959,6 +1962,9 @@
+@@ -1964,6 +1967,9 @@
  		WITPackage:              witPackage,
  		WITWorld:                witWorld,
  		GoCompatibility:         *gocompatibility,
@@ -39,7 +39,7 @@
  // Verify performs a validation on the given options, raising an error if options are not valid.
 --- a/builder/build.go
 +++ b/builder/build.go
-@@ -772,6 +772,41 @@
+@@ -804,6 +804,41 @@
  	}
  	result.Binary = result.Executable // final file
  	ldflags := append(config.LDFlags(), "-o", result.Executable)
@@ -81,7 +81,7 @@
  
  	if config.Options.BuildMode == "c-shared" {
  		if !strings.HasPrefix(config.Triple(), "wasm32-") {
-@@ -1329,6 +1363,9 @@
+@@ -1369,6 +1404,9 @@
  	if err != nil {
  		return err
  	}
@@ -91,7 +91,7 @@
  	if config.VerifyIR() {
  		// Only verify if we really need it.
  		// The IR has already been verified before writing the bitcode to disk
-@@ -1351,6 +1388,14 @@
+@@ -1391,6 +1429,14 @@
  	if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
  		return errors.New("verification failure after LLVM optimization passes")
  	}

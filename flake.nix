@@ -68,7 +68,12 @@
       # the playground's compiler.
       #
       # This is nixpkgs' own derivation with the source swapped, so it keeps
-      # the LLVM and Go versions nixpkgs pinned for the release it packaged.
+      # the Go version nixpkgs pinned for the release it packaged. That
+      # release is older than the source here and is built with LLVM 22,
+      # which the derivation takes as its llvmPackages_22 argument: it is
+      # given LLVM 23, the version the playground's compiler is built with
+      # (web/compiler/build.sh), and the build tag and clang resource
+      # directory follow from it.
       # It does mean building TinyGo rather than taking it from the binary
       # cache.
       #
@@ -79,8 +84,8 @@
         pkgs.fetchFromGitHub {
           owner = "tinygo-org";
           repo = "tinygo";
-          rev = "cb015201fd424e0d51a6100038071044409668ba";
-          hash = "sha256-mE+Du7dSGurAPX9XEbJvbC7yC9LnkWHjci5ahzN/6UQ=";
+          rev = "344590c7152e620f3b5369fc289e5d91caf9649d";
+          hash = "sha256-Qf8/PtNaUdZEz8nn8oYdj0MWoSGzzHPC3AsjNo7zmRs=";
           fetchSubmodules = true;
           # cmsis-svd carries several GB of vendor data for parts that have
           # nothing to do with this, which nixpkgs drops for the same reason.
@@ -91,13 +96,13 @@
 
       mkTinygo =
         pkgs:
-        pkgs.tinygo.overrideAttrs (
+        (pkgs.tinygo.override { llvmPackages_22 = pkgs.llvmPackages_23; }).overrideAttrs (
           final: prev: {
-            version = "0.44.0-dev-playstation";
+            version = "0.44.0-playstation";
 
             src = tinygoSrc pkgs;
 
-            vendorHash = "sha256-Bliaz1fMIUnHD/S3ggNMRXh0rIlwrCCOXMr+uiP8NGc=";
+            vendorHash = "sha256-PWU4bZOPdFFXDPG6FN8LbdJ0nKAri8o03nizvZ5rSWM=";
 
             # nixpkgs carries a patch for the makefiles, which is against the
             # release it packaged and no longer applies: make/release.mk has

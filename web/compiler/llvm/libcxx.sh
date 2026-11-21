@@ -4,7 +4,7 @@
 # whether or not LLVM itself runs threads, compile. Nothing ever starts a
 # thread: the pthread functions wasi-libc leaves out are stubbed when the
 # compiler is linked (../glue/wasi-stubs.c). Run by build.sh in the cross
-# shell; LLVM_SRC is the LLVM monorepo and OUT the output directory.
+# shell; SRC is the patched LLVM source tree and OUT the output directory.
 set -euxo pipefail
 BUILD=$OUT/libcxx-build
 PREFIX=$OUT/libcxx
@@ -13,7 +13,7 @@ export NIX_CXXSTDLIB_COMPILE_wasm32_unknown_wasip1=" "
 export NIX_CXXSTDLIB_LINK_wasm32_unknown_wasip1=" "
 mkdir -p "$BUILD"
 cd "$BUILD"
-cmake -G Ninja "$LLVM_SRC/runtimes" \
+cmake -G Ninja "$SRC/runtimes" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$PREFIX" \
   -DCMAKE_SYSTEM_NAME=WASI -DCMAKE_SYSTEM_PROCESSOR=wasm32 -DUNIX=1 \
