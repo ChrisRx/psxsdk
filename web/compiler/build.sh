@@ -38,7 +38,7 @@
 #     the playground task.
 #
 # The whole thing takes about 50 minutes on 20 cores, most of it LLVM, and
-# tinygo.wasm comes out around 75MB, 22MB compressed. The last steps, with
+# tinygo.wasm comes out around 45MB, 15MB compressed. The last steps, with
 # wasm-opt, need over 10GB of memory.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
