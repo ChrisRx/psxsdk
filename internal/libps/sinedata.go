@@ -6,7 +6,7 @@ package libps
 
 // sineTable is the sine of each angle of the first quarter turn, 0 to
 // 1024 in 4096ths of a turn, in 4.12 fixed point. It lives with RotMatrix and
-// the others that read it, in the target's assembly (playstation-yaroze-clean.S),
+// the others that read it, in assembly (internal/toolchain/yaroze/clean.S),
 // which gen/sine prints.
 //
 //go:extern libps_sine_table

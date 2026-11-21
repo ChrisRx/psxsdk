@@ -50,16 +50,16 @@
         cross.buildPackages.binutils-unwrapped
       ];
 
-      # TinyGo, upstream's source with the PlayStation targets and their
+      # TinyGo, upstream's source with the playstation target and its
       # runtime laid over it from internal/toolchain/_tinygo, the same files
-      # yaroze lays over a TinyGo that lacks them.
+      # yaroze lays over a TinyGo that lacks them. The Net Yaroze's own
+      # files are not among them: they live in internal/toolchain/yaroze.
       #
       # They have to go into TinyGo's own tree rather than sit beside it as an
       # out-of-tree target file, because TinyGo selects a target's runtime
       # files by build tag from inside its source tree: src/runtime/
       # runtime_playstation.go, arch_playstation.go and interrupt/
-      # interrupt_playstation.go, and their yaroze counterparts. They only
-      # add files, so the revision here is whichever upstream commit they
+      # interrupt_playstation.go. They only add files, so the revision here is whichever upstream commit they
       # were last checked against, and the source is kept in this repository
       # rather than a fork of TinyGo.
       #

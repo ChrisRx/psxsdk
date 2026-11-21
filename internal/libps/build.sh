@@ -4,10 +4,11 @@
 # .build/NAME/NAME.cue, with prog.elf beside it. Run from the repository
 # root.
 #
-# This builds for the fidelity target, whose C and assembly no cache holds
-# compiled, so it uses the full compiler, which has clang, over a copy of
-# the sysroot task yaroze makes. This checkout's packages are synced into
-# the copy, so an edit builds without refreshing the sysroot.
+# This is a fidelity build (internal/toolchain's Mode), whose C and assembly
+# no cache holds compiled, so it uses the full compiler, which has clang,
+# over a copy of the sysroot task yaroze makes. This checkout's packages,
+# and the Net Yaroze's C and assembly, are synced into the copy, so an edit
+# builds without refreshing the sysroot.
 set -euo pipefail
 NAME=$1 DIR=$2
 SYS=.build/clean-sysroot
@@ -36,6 +37,9 @@ for d in $(cd internal/libps && find . -mindepth 1 -type d -not -path './spec*' 
   sync "internal/libps/${d#./}"
 done
 cp internal/toolchain/_tinygo/targets/*.json internal/toolchain/_tinygo/targets/*.S internal/toolchain/_tinygo/targets/*.c internal/toolchain/_tinygo/targets/*.ld "$SYS/tinygo/targets/"
+mkdir -p "$SYS/tinygo/yaroze"
+cp internal/toolchain/yaroze/* "$SYS/tinygo/yaroze/"
+go run ./internal/toolchain/mktargets "$SYS/tinygo/yaroze"
 
 eval "$(python3 -I - "$SYS/env.json" <<'PY'
 import json, shlex, sys
@@ -63,7 +67,7 @@ wasmtime run --allow-precompiled \
   --env GOROOT="$GOROOT" --env GOVERSION="$GOVERSION" --env GOTOOLTAGS="$GOTOOLTAGS" \
   --env TINYGOROOT="$TINYGOROOT" --env GOMODCACHE="$GOMODCACHE" --env TINYGO_BUILD_ID="dev" \
   --env HOME=/tmp --env XDG_CACHE_HOME=/tmp/cache --env TMPDIR=/tmp --env PWD=/work \
-  -- "$CWASM" -o /work/prog.elf -target=playstation-yaroze-clean-fidelity -opt=2 ${TGOFLAGS:-} /work/prog 2>&1 | grep -v 'MIPS-I support' || true
+  -- "$CWASM" -o /work/prog.elf -target=/sysroot/tinygo/yaroze/fidelity.json -opt=2 ${TGOFLAGS:-} /work/prog 2>&1 | grep -v 'MIPS-I support' || true
 [ -f "$WORK/prog.elf" ] || { echo "build failed" >&2; exit 1; }
 cp "$WORK/prog.elf" "$OUT/prog.elf"
 go run ./tools/mips1fix "$OUT/prog.elf" | tail -1

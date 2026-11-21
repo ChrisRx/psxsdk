@@ -46,7 +46,7 @@ The program needs no build constraint. The `yaroze` package builds under the ord
 
 `yaroze` carries its compiler: TinyGo compiled to WebAssembly, the one the [playground](/play/) runs in the browser, so no tinygo command is involved and nothing but Go is installed. It runs under wazero, which is built in, or under the wasmtime command when there is one, which is quicker (`--runtime`, or `YAROZE_RUNTIME`). It builds at the optimization levels its sysroot's cache holds, 2 by default and z. [`yaroze`](../tools/yaroze.md) has the details.
 
-The Nix flake in this repository provides a TinyGo with the PlayStation targets, which is what that compiler is built from and what working on the targets needs; it is not needed to build a program.
+The Nix flake in this repository provides a TinyGo with the PlayStation target, which is what that compiler is built from and what working on the target needs; it is not needed to build a program.
 
 ## Working on psxsdk itself
 

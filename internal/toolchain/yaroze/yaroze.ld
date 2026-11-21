@@ -1,11 +1,11 @@
 /*
- * playstation-yaroze.ld - link script for Net Yaroze programs built as
+ * yaroze.ld - link script for Net Yaroze programs built as
  * mipsel-none-elf
  *
  * The Net Yaroze boot disk (DTL-S3035) leaves libps.exe resident in RAM and
  * runs a serial loader. A Net Yaroze program is therefore not self-contained:
  * it is linked against fixed addresses inside that resident library.
- * playstation-yaroze-symusr.S supplies those addresses, converted directly
+ * symusr.S supplies those addresses, converted directly
  * from the SDK's symusr.o so they cannot drift from the original.
  *
  * RAM map:
@@ -38,7 +38,7 @@ __stack_size = DEFINED(__stack_size) ? __stack_size : 0x10000;
 
 SECTIONS
 {
-  /* playstation-yaroze-symusr.S defines every libps entry point as an
+  /* symusr.S defines every libps entry point as an
    * absolute symbol, so nothing here places the resident library: its code
    * is already in RAM and the link only needs the addresses. The symbols used
    * to be offsets into a NOLOAD section placed at 0x80000000, which size(1)
@@ -57,7 +57,7 @@ SECTIONS
 
   .text : ALIGN(4)
   {
-    /* playstation-yaroze.S is first on the link line, so its _start lands at
+    /* start.S is first on the link line, so its _start lands at
      * the base of the image. Note that *(.text.*) has to stay below *(.text):
      * at -O2 GCC puts main in .text.startup, and matching that first would
      * place main ahead of the real entry point. */
@@ -146,7 +146,7 @@ SECTIONS
    * weak.
    * The reserve used to be 256K, which for a program whose globals filled
    * most of the space below the stack put _heap_start past _heap_end, so
-   * that its first allocation was fatal. runtime_yaroze.go hands InitHeap
+   * that its first allocation was fatal. runtime.c hands InitHeap
    * the reserve again at startup, so that libps's malloc stops at it rather
    * than growing into Go's heap should anything call it. */
   __libps_heap_size = DEFINED(__libps_heap_size) ? __libps_heap_size : 16K;
@@ -179,7 +179,7 @@ SECTIONS
          "the program leaves no room for a heap between its end and the stack: it is too large for the console")
 
   /* The CD entry points symusr.o does not list are in
-   * playstation-yaroze-cd.S. */
+   * cd.S. */
 
   /* Sections a modern toolchain emits that have no meaning here, and which
    * would otherwise be copied into the flat image handed to the console. */

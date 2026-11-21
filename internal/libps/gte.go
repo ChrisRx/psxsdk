@@ -17,8 +17,8 @@ import (
 // load.
 
 // SetRotMatrix and SetTransMatrix load the GTE's rotation matrix and
-// translation from m; ReadFlag returns its FLAG register. The target
-// defines them in assembly (playstation-yaroze-gte.S).
+// translation from m; ReadFlag returns its FLAG register. They are in
+// assembly (internal/toolchain/yaroze/gte.S).
 //
 //export SetRotMatrix
 func SetRotMatrix(m *MATRIX)

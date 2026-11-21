@@ -1,10 +1,12 @@
 //go:build playstation
 
-// Interrupt control for the Sony PlayStation, standalone.
+// Interrupt control for the Sony PlayStation.
 //
 // Masking is the IEc bit of the R3000's COP0 status register, which only
 // privileged code can touch, so the two halves are in
-// targets/playstation.S.
+// targets/playstation.S. They are two of the runtime's platform hooks: a
+// program that runs under something that keeps the interrupt state itself
+// replaces them (see runtime_playstation.go in package runtime).
 //
 // A bare-metal target has to supply this file even when it has nothing
 // interesting to say, because the generic interrupt_none.go is built only

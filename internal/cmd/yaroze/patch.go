@@ -55,7 +55,7 @@ func (f *buildFlags) patch(ctx context.Context, pkg, base string, at uint32, out
 	}
 	b := &toolchain.Build{
 		Package:    pkg,
-		TargetName: f.targetName(),
+		Mode:       f.mode(),
 		Opt:        f.opt,
 		Tags:       f.tags,
 		HotBase:    abs,

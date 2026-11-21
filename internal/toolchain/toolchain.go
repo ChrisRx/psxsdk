@@ -18,15 +18,6 @@ import (
 	"time"
 )
 
-// DefaultTarget is the TinyGo target yaroze builds for unless a Build names
-// another: the program with the clean library, internal/libps, linked in.
-const DefaultTarget = "playstation-yaroze-clean"
-
-// ResidentTarget is the target of a program laid over the resident library,
-// as a Net Yaroze runs one: the boot disc's library on real hardware, and the
-// image link.Libps holds otherwise.
-const ResidentTarget = "playstation-yaroze"
-
 // DefaultOpt is the optimization level a build has when it names none: for
 // speed, since a game's frame has a budget. TinyGo's own default is z, for
 // size.
@@ -51,14 +42,16 @@ type Build struct {
 	// turn it off, such as noonstore (see docs/architecture/compiler.md).
 	Experiment string
 
-	// TargetName is the TinyGo target, one the compiler's cache holds,
-	// DefaultTarget if empty.
-	TargetName string
+	// Mode is which library the program gets and how it is laid out, one
+	// the compiler's cache holds, Static if empty. Each mode is a TinyGo
+	// target file laid over BaseTarget (see WriteTargets).
+	Mode Mode
 
-	// Target is a TinyGo target file to build for instead of TargetName: JSON
-	// that inherits it and changes what a program needs changed, such as
-	// the address it is linked at, which ldflags of --defsym=__load=ADDR
-	// set (the serial monitor's is one).
+	// Target is a TinyGo target file of the program's own: JSON that
+	// inherits BaseTarget and changes what the program needs changed,
+	// such as the address it is linked at, which ldflags of
+	// --defsym=__load=ADDR set (the serial monitor's is one). It is built
+	// over Mode, with the mode's target file in place of BaseTarget.
 	Target string
 
 	Stderr io.Writer // the compiler's output

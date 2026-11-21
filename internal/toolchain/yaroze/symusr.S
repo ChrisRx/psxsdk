@@ -2,8 +2,8 @@
 #
 # MIPSEL ECOFF executable - start=0x00000000 size=0 sections=3
 
-# Under LIBPS_GO, the playstation-yaroze-go target, the program brings
-# its own library (psxsdk's exp/libps) and nothing is resident: the
+# Under LIBPS_GO, the static build, the program brings
+# its own library (internal/libps) and nothing is resident: the
 # file defines nothing, so a call the library lacks fails at link time
 # by name.
 #ifndef LIBPS_GO

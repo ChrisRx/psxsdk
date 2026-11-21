@@ -33,8 +33,8 @@ type GsPOSITION struct {
 	Offx, Offy int16
 }
 
-// The library's variables programs reach by name, whose storage is in the
-// target's playstation-yaroze-libps-data.c. Each is declared on its own:
+// The library's variables programs reach by name, whose storage is in
+// internal/toolchain/yaroze/libps-data.c. Each is declared on its own:
 // TinyGo ignores go:extern on a variable in a var group, and makes it a Go
 // variable programs never see.
 

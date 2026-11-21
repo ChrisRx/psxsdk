@@ -7,9 +7,9 @@
 // not be read while working on it; spec/ holds the behavior to implement.
 //
 // Each function is exported under its C name, as the resident library's
-// entry points were, so that a program built for the playstation-yaroze-clean
-// target, the default, links against it statically. The target sets the
-// cleanlib tag. Built as the resident image (task image), the library is
+// entry points were, so that a program built static, yaroze's default,
+// links against it. That build sets the cleanlib tag (see
+// internal/toolchain's Mode). Built as the resident image (task image), the library is
 // what a program built with --libps resident is laid over.
 package libps
 

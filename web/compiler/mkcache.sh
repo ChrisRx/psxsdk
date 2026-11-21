@@ -9,8 +9,11 @@
 # SYSROOT/cache and TINYGO.wasm's hash into its env.json as buildID. Each
 # PROGRAM is the directory of a main package within one of the sysroot's
 # modules, given as a path inside the sysroot (mod/go.chrisrx.dev/psx/examples/check),
-# built for the sysroot's target, or for another named after an @
-# (mod/go.chrisrx.dev/psx/examples/dino/@playstation-yaroze-clean).
+# built for the sysroot's target, or for what is named after an @
+# (mod/go.chrisrx.dev/psx/examples/dino/@static): one of yaroze's ways of
+# building, static or resident, whose target file is in the sysroot's
+# tinygo/yaroze (internal/toolchain's mktargets writes them), or else a
+# TinyGo target.
 #
 # The compiler in the browser has no clang, so the C and assembly files the
 # target needs have to be compiled here, against the same paths, and found
@@ -36,8 +39,9 @@
 # each program is built at every level in OPTS: z by default, TinyGo's own
 # and the playground's. task yaroze runs it again over a copy of the
 # playground's sysroot with OPTS=2, the level yaroze builds at by default.
-# env.json's opts lists the levels the cache holds, and its targets the
-# targets, which the playground reads to know what it can offer.
+# env.json's opts lists the levels the cache holds, and its targets what
+# was named after an @, which yaroze and the playground read to know what
+# they can build.
 set -euo pipefail
 usage="usage: mkcache.sh COMPILER.wasm TINYGO.wasm SYSROOT PROGRAM..."
 FULL=$(realpath "${1:?$usage}")
@@ -87,13 +91,17 @@ printf 'module play\n\ngo %s\n\n%s' "$(echo "$GOVERSION" | sed -E 's/^go([0-9]+\
 # wasmtime compiles the module once, since that takes a while.
 wasmtime compile -o "$WORK/tinygo.cwasm" "$FULL"
 for spec in "$@"; do
-  # A program is built for the sysroot's target, or for the one named
-  # after an @: dir@playstation-yaroze-clean, whose C and assembly entries
-  # differ from the default target's by their flags.
+  # A program is built for the sysroot's target, or for what is named
+  # after an @: dir@static, one of yaroze's ways of building, each with
+  # its own C and assembly and flags for them, built by its target file,
+  # at the path the compiler sees it at.
   prog=${spec%@*}
   progtarget=$target
   case "$spec" in *@*) progtarget=${spec##*@} ;; esac
   case " $targets " in *" $progtarget "*) ;; *) targets="$targets $progtarget" ;; esac
+  if [ -f "$SYSROOT/${TINYGOROOT#/sysroot/}/yaroze/$progtarget.json" ]; then
+    progtarget=$TINYGOROOT/yaroze/$progtarget.json
+  fi
   rm -rf "$WORK/prog"
   mkdir -p "$WORK/prog"
   cp "$SYSROOT/$prog"/*.go "$WORK/prog/"
@@ -124,8 +132,8 @@ python3 - "$SYSROOT/env.json" $targets <<'PY'
 import json, sys
 p, targets = sys.argv[1], sys.argv[2:]
 env = json.load(open(p))
-# The targets the cache holds C and assembly for, those of an earlier run
-# on the same sysroot included.
+# What the cache holds C and assembly for, as the programs named it, those
+# of an earlier run on the same sysroot included.
 env["targets"] = env.get("targets", []) + [t for t in dict.fromkeys(targets) if t not in env.get("targets", [])]
 json.dump(env, open(p, "w"), indent="\t")
 open(p, "a").write("\n")

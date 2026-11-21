@@ -36,6 +36,12 @@
  * primes.
  */
 
+/*
+ * Compiled as -fno-builtin would compile them, so that no loop here is
+ * taken for a library function and made a call to it.
+ */
+#pragma clang attribute push(__attribute__((no_builtin)), apply_to = function)
+
 /* nlz returns the number of leading zero bits in x, which is not 0. */
 static int
 nlz(unsigned int x)
@@ -227,3 +233,5 @@ __unorddf2(double a, double b)
 	return (x.u & 0x7fffffffffffffffULL) > 0x7ff0000000000000ULL ||
 	       (y.u & 0x7fffffffffffffffULL) > 0x7ff0000000000000ULL;
 }
+
+#pragma clang attribute pop

@@ -5,8 +5,8 @@
 #	web/compiler/build.sh .build/compiler
 #
 # TinyGo is upstream's source at the revision the flake builds, with the
-# PlayStation targets and runtime from internal/toolchain/_tinygo laid over
-# it. The changes that make the compiler itself run as a WebAssembly
+# playstation target and its runtime from internal/toolchain/_tinygo laid
+# over it; the Net Yaroze's files are psxsdk's own, outside the compiler. The changes that make the compiler itself run as a WebAssembly
 # program are in tinygo-wasm.patch, which prepare.sh applies to that tree
 # in OUTDIR/tinygo. Everything else comes from
 # nixpkgs, at the revision the flake pins: the LLVM sources, the wasm32-wasi

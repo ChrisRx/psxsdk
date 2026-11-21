@@ -9,13 +9,14 @@
 //	yaroze run ./mygame          # the disc, played in a window (package psxplay)
 //
 // A build is the steps that are tools of their own here, run in-process:
-// TinyGo compiles the package for the playstation-yaroze-clean target, with
-// the library linked in, the trap instructions LLVM leaves in that an R3000A
-// cannot run are replaced with nops (link.MIPS1Traps), the ELF becomes a
-// PSX-EXE as it is (link.Standalone), and for a disc mkdisc writes the image
-// with the files the program registers with package disc. With --libps
-// resident the target is playstation-yaroze and the program is combined
-// with the resident library's image instead (link.Executable).
+// TinyGo compiles the package for its playstation target with the Net
+// Yaroze's files laid over it and the library linked in (toolchain.Static),
+// the trap instructions LLVM leaves in that an R3000A cannot run are
+// replaced with nops (link.MIPS1Traps), the ELF becomes a PSX-EXE as it is
+// (link.Standalone), and for a disc mkdisc writes the image with the files
+// the program registers with package disc. With --libps resident the
+// program calls the resident library at its addresses (toolchain.Resident)
+// and is combined with that library's image instead (link.Executable).
 //
 // TinyGo is the playground's compiler, TinyGo compiled to WebAssembly,
 // embedded with its sysroot, a copy of the playground's with the cache

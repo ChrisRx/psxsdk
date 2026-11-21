@@ -20,6 +20,7 @@ if [ "$OPT" != 2 ]; then OUT=.build/cleanimage-opt$OPT; fi
 SYS=.build/cleanimage-sysroot
 FULL=.build/compiler/tinygo-full.wasm
 T=internal/toolchain/_tinygo/targets
+Y=internal/toolchain/yaroze
 # The copy is made again whenever task yaroze has written a newer sysroot, or
 # an old copy would go on building the image from a stale runtime. The stamp is
 # written after a whole copy, so a copy without one counts as stale too.
@@ -29,7 +30,7 @@ if [ ! -f "$SYS/.copied" ] || [ "$SRC/env.json" -nt "$SYS/.copied" ]; then
   echo "make.sh: copying $SRC to $SYS" >&2
   rm -rf "${SYS:?}"
   cp -R "$SRC" "$SYS"
-  cat "$HERE/runtime_hook.go.txt" >> "$SYS/goroot/src/runtime/runtime_yaroze.go"
+  cat "$HERE/runtime_hook.go.txt" >> "$SYS/goroot/src/runtime/runtime_playstation.go"
   touch "$SYS/.copied"
 fi
 MOD=$SYS/mod/go.chrisrx.dev/psx
@@ -41,6 +42,8 @@ done
 mkdir -p "$OUT"
 rm -f "$OUT/libps.exe"
 cp "$T"/*.S "$T"/*.c "$SYS/tinygo/targets/"
+mkdir -p "$SYS/tinygo/yaroze"
+cp "$Y"/* "$SYS/tinygo/yaroze/"
 grep -hoE '^//export [A-Za-z_0-9]+' internal/libps/*.go | awk '{print $2}' | sort -u > "$OUT/exports.txt"
 
 eval "$(python3 -I - "$SYS/env.json" <<'PY'
@@ -68,18 +71,18 @@ if [ ! -f "$CWASM" ] || [ "$FULL" -nt "$CWASM" ]; then
 fi
 
 link() {
-  cp "$OUT"/playstation-yaroze-cleanimage* "$SYS/tinygo/targets/"
+  cp "$OUT"/cleanimage* "$SYS/tinygo/yaroze/"
   rm -f "$WORK/prog.elf"
   wasmtime run --allow-precompiled \
     --dir "$SYS::/sysroot" --dir "$WORK::/work" --dir "$WORK/tmp::/tmp" --dir "$SYS/cache::/tmp/cache/tinygo" \
     --env GOROOT="$GOROOT" --env GOVERSION="$GOVERSION" --env GOTOOLTAGS="$GOTOOLTAGS" \
     --env TINYGOROOT="$TINYGOROOT" --env GOMODCACHE="$GOMODCACHE" --env TINYGO_BUILD_ID="dev" \
     --env HOME=/tmp --env XDG_CACHE_HOME=/tmp/cache --env TMPDIR=/tmp --env PWD=/work \
-    -- "$CWASM" -o /work/prog.elf -target=playstation-yaroze-cleanimage -opt="$OPT" ${TGOFLAGS:-} /work/prog 2>&1 | grep -v 'MIPS-I support' || true
+    -- "$CWASM" -o /work/prog.elf -target=/sysroot/tinygo/yaroze/cleanimage.json -opt="$OPT" ${TGOFLAGS:-} /work/prog 2>&1 | grep -v 'MIPS-I support' || true
   [ -f "$WORK/prog.elf" ] || { echo "link failed" >&2; exit 1; }
 }
 
-cp "$HERE/clib.S" "$OUT/playstation-yaroze-cleanimage-clib.S"
+cp "$HERE/clib.S" "$OUT/cleanimage-clib.S"
 if [ "$OPT" = 0 ]; then
   # Level 0 keeps the runtime's float32 printing and its unwinding, which
   # nothing in the library calls, and the image has no single-precision
@@ -87,7 +90,7 @@ if [ "$OPT" = 0 ]; then
   # allocations, never run, so each of those names is a break instruction.
   for f in tinygo_longjmp __nesf2 __gtsf2 __ltsf2 __gesf2 __lesf2 __fixsfsi __floatsisf __subsf3; do
     printf '.section .text.%s\n.global %s\n.type %s, @function\n%s:\n\tbreak\n' "$f" "$f" "$f" "$f"
-  done >> "$OUT/playstation-yaroze-cleanimage-clib.S"
+  done >> "$OUT/cleanimage-clib.S"
 fi
 python3 -I "$HERE/gen.py" . "$OUT" "$OUT/exports.txt"
 # A package compiled just now can differ in size from the same one read back
@@ -114,10 +117,10 @@ heads() {
   python3 -I "$HERE/gen.py" . "$OUT" "$OUT/exports.txt" "$OUT/map1.txt" "$OUT/map2.txt" "$WORK/flat.exe" >/dev/null
 }
 heads
-cp "$OUT/playstation-yaroze-cleanimage.S" "$WORK/stubs.S"
+cp "$OUT/cleanimage.S" "$WORK/stubs.S"
 link
 heads
-cmp "$WORK/stubs.S" "$OUT/playstation-yaroze-cleanimage.S"
+cmp "$WORK/stubs.S" "$OUT/cleanimage.S"
 cp "$WORK/prog.elf" "$OUT/image.elf"
 # The image's Go heap is 8 bytes (gen.py): the library must allocate nothing,
 # and an allocation would stop it at run time with no message. The runtime's

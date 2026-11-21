@@ -38,7 +38,7 @@ go build -o bin/ ./cmd/... ./tools/...
 go test ./...
 ```
 
-The examples are built with `yaroze`, which carries its own compiler, TinyGo compiled to WebAssembly, so no tinygo command is needed. The Nix flake provides what working on the repository itself takes: the TinyGo with the PlayStation targets that compiler is built from, the cross binutils, [go-task](https://taskfile.dev), mednafen and a patched [psxe](https://github.com/allkern/psxe):
+The examples are built with `yaroze`, which carries its own compiler, TinyGo compiled to WebAssembly, so no tinygo command is needed. The Nix flake provides what working on the repository itself takes: the TinyGo with the PlayStation target that compiler is built from, the cross binutils, [go-task](https://taskfile.dev), mednafen and a patched [psxe](https://github.com/allkern/psxe):
 
 ```bash
 nix develop            # or: direnv allow

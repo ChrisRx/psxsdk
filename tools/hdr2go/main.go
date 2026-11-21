@@ -738,7 +738,7 @@ func keepsComment(ks []keep) []string {
 // parameters that the library keeps after it returns, and the function
 // after which it no longer needs it, if there is one, with # starting a
 // remark. Each becomes a //go:keeps pragma on the function's declaration,
-// which the PlayStation targets' TinyGo reads (transform/keeps.go in
+// which the TinyGo yaroze embeds reads (transform/keeps.go in
 // internal/toolchain/_tinygo).
 func readKeeps(path string) (map[string][]keep, error) {
 	keeps := make(map[string][]keep)

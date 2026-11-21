@@ -8,23 +8,28 @@
 //
 //	png2tim ..., obj2tmd ..., discgen assets   (the //go:generate lines, in
 //	                                          order, in any of the Go files)
-//	tinygo build -target=playstation-yaroze -o prog.elf ./prog
+//	tinygo build -target=/sysroot/tinygo/yaroze/static.json -o prog.elf ./prog
 //	mips1fix prog.elf
 //	eco2exe prog.elf prog.exe
 //	mkdisc -o prog.bin --volume-id prog.exe --boot MAIN.EXE --file MAIN.EXE=prog.exe --src prog
 //
+// The target is TinyGo's playstation with what makes a program a Net
+// Yaroze's laid over it, by a target file in the sysroot for each way of
+// building, which yaroze writes there (internal/toolchain's WriteTargets).
 // A program links the clean library in, as yaroze builds one by default, so
-// the target is playstation-yaroze-clean and elf2exe writes it out as it is.
-// Built for the resident library (yaroze --libps resident) it is compiled for
-// the sysroot's own target, and eco2exe lays it over the image.
+// the target file is static.json and elf2exe writes the program out as it
+// is. Built for the resident library (yaroze --libps resident) it is
+// resident.json, and eco2exe lays the program over the image.
 //
 // It runs in a browser worker or in Node, so it takes the module loader and
 // the fetched bytes from its caller rather than fetching itself.
 import { Dir, ExitError, File, FileSystem, WASI } from "./wasi.js";
 
-// STATIC_TARGET is the target that links the library in,
-// toolchain.DefaultTarget.
-export const STATIC_TARGET = "playstation-yaroze-clean";
+// The ways of building a program, as env.json's targets names the ones the
+// compiler's cache can build: toolchain.Static, linking the library in, and
+// toolchain.Resident.
+export const STATIC = "static";
+export const RESIDENT = "resident";
 
 // readTar adds the files of a tar archive (ustar or GNU, uncompressed) to
 // fs under prefix.
@@ -199,13 +204,12 @@ export class Pipeline {
 	// compiler's -experiment flag, as "noonstore" to build without onstore
 	// (see docs/architecture/compiler.md), or empty for its defaults.
 	async build(project, log, { hot = false, libps = "static", experiment = "" } = {}) {
-		if (libps !== "static" && libps !== "resident") throw new Error(`no ${libps} library: static or resident`);
-		const linked = libps === "static";
-		const target = linked ? STATIC_TARGET : this.env.target;
-		if (!this.targets().includes(target)) throw new Error(`the compiler's cache cannot build for ${target}`);
+		if (libps !== STATIC && libps !== RESIDENT) throw new Error(`no ${libps} library: static or resident`);
+		const linked = libps === STATIC;
+		if (!this.targets().includes(libps)) throw new Error(`the compiler's cache cannot build a ${libps} program`);
 		const { fs, env } = this.workspace(project);
 		if (!(await this.generate(project, fs, log))) return { ok: false };
-		const tinygo = ["tinygo", "-target=" + target];
+		const tinygo = ["tinygo", "-target=" + this.target(libps)];
 		if (hot) tinygo.push("-hot");
 		if (experiment) tinygo.push("-experiment=" + experiment);
 		const steps = [
@@ -239,19 +243,25 @@ export class Pipeline {
 		const { fs, env } = this.workspace(project);
 		fs.put("/work/base.elf", base);
 		if (!(await this.generate(project, fs, log))) return { ok: false };
-		const target = libps === "static" ? STATIC_TARGET : this.env.target;
 		const steps = [
-			["tinygo", ["tinygo", "-target=" + target, ...(experiment ? ["-experiment=" + experiment] : []), "-hot-base=/work/base.elf", "-hot-at=0x" + at.toString(16), "-o", "/work/patch.elf", "/work/prog"]],
+			["tinygo", ["tinygo", "-target=" + this.target(libps), ...(experiment ? ["-experiment=" + experiment] : []), "-hot-base=/work/base.elf", "-hot-at=0x" + at.toString(16), "-o", "/work/patch.elf", "/work/prog"]],
 			["mips1fix", ["mips1fix", "-q", "/work/patch.elf"]],
 		];
 		if (!(await this.steps(steps, env, fs, log))) return { ok: false };
 		return { ok: true, elf: fs.get("/work/patch.elf") };
 	}
 
-	// targets are the TinyGo targets the compiler's cache holds the C and
-	// assembly of, which are the ones it can build for.
+	// targets are the ways of building the compiler's cache holds the C and
+	// assembly of, STATIC and RESIDENT among them, which are the ones it
+	// can build.
 	targets() {
-		return this.env.targets ?? [this.env.target];
+		return this.env.targets ?? [];
+	}
+
+	// target is the TinyGo target file of a way of building, as the compiler
+	// sees it: in the sysroot, beside the files it names.
+	target(libps) {
+		return `/sysroot/${this.env.TINYGOROOT}/yaroze/${libps}.json`;
 	}
 
 	// workspace stages a project with the sysroot, the compiler's cache and

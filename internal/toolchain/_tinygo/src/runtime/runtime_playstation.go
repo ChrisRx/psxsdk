@@ -1,31 +1,94 @@
 //go:build playstation
 
-// Runtime support for the Sony PlayStation (R3000A, MIPS I), standalone.
+// Runtime support for the Sony PlayStation (R3000A, MIPS I).
 //
-// Nothing is assumed to be in memory besides the BIOS. The program is the
-// whole of the machine: it is loaded at 0x80010000, owns RAM from the end of
-// its own .bss to the stack, and reaches the console's hardware by writing
-// to the I/O registers itself.
-//
-// This is the plain console. For a Net Yaroze, where the boot disc leaves
-// Sony's development library resident and the program calls into it, see the
-// playstation-yaroze target: there the library is the C library and provides
-// the clock, the console and the critical sections that are done here by
-// hand.
+// As the target comes, nothing is assumed to be in memory besides the BIOS.
+// The program is the whole of the machine: it is loaded at 0x80010000, owns
+// RAM from the end of its own .bss to the stack, and reaches the console's
+// hardware by writing to the I/O registers itself. An SDK that puts
+// something else under the program, or beside it, changes that through the
+// hooks below.
 //
 // What is deliberately absent is any access to the GPU, the controllers, the
 // CD-ROM or the SPU. Those belong in a package of their own rather than in
 // the runtime, which only has to answer for memory, time and a way to print.
+//
+// # The platform hooks
+//
+// The runtime itself touches no hardware. Everything it needs of the machine
+// it asks of the six functions declared below, and it expects the crt0 and
+// the link script to have done the rest before main is called. The target's
+// files define all of it for a program that owns the console, and define it
+// weak, so that a program that does not, one that runs under a development
+// kit's resident library, a kernel of its own, or another SDK's C library,
+// can replace any piece by defining the same symbol in a C or assembly file
+// of its own. Nothing in TinyGo has to change for that: a target file that
+// inherits this one and lists the file is enough,
+//
+//	{
+//		"inherits": ["playstation"],
+//		"extra-files": ["path/to/hooks.S"]
+//	}
+//
+// and the linker takes the strong definition over the weak one, leaving the
+// default out of the program. A hook written in C costs nothing to call if
+// it is small: C is optimized together with the program at link time, and
+// the hook is inlined into the runtime. The hooks, each with its default:
+//
+//   - psx_init() is called once, first thing in main, before the heap is
+//     set up and before any package is initialized, so it may not allocate.
+//     It is the place to start a clock or to tell a library where the
+//     program's memory ends. Default (targets/playstation-libc.c): start
+//     root counter 2 counting the system clock divided by eight.
+//
+//   - psx_putchar(c) writes one byte of the program's output, for print,
+//     println and a panic's message. Default (targets/playstation.S): the
+//     BIOS's std_out_putchar.
+//
+//   - psx_nanotime() returns the time since start-up in nanoseconds, and
+//     must never go backwards. It is called for time.Now and its like.
+//     Default (targets/playstation-libc.c): root counter 2, which has to
+//     be read at least every 15.5ms to be right.
+//
+//   - psx_sleep(ns) returns after the given number of nanoseconds, for
+//     time.Sleep. A clock coarser than a nanosecond rounds as it sees fit.
+//     Default (targets/playstation-libc.c): poll psx_nanotime's counter.
+//
+//   - psx_disable_interrupts() masks interrupts and returns a state to hand
+//     to psx_restore_interrupts(state), which unmasks them if the matching
+//     disable was the one that masked them: zero means they were masked
+//     already and are to stay so. They bracket the runtime's critical
+//     sections and are what runtime/interrupt's Disable and Restore call.
+//     Default (targets/playstation.S): the IEc bit of the COP0 status
+//     register.
+//
+// The pieces that are not functions the runtime calls can be replaced the
+// same way:
+//
+//   - _start, the entry point (targets/playstation.S), which sets the stack
+//     pointer, clears .bss and calls main. Whatever replaces it has to have
+//     .bss cleared by the time it does.
+//
+//   - memset, memcpy, memmove, memcmp and strlen
+//     (targets/playstation-libc.c), which the compiler emits calls to.
+//
+//   - The link script, by the target file's linkerscript. It has to define
+//     what TinyGo's bare-metal runtime reads: _heap_start and _heap_end,
+//     _globals_start and _globals_end, and _stack_top.
 
 package runtime
 
-import "unsafe"
-
-// Written in targets/playstation.S, because they are a BIOS call and two
-// COP0 writes.
+//export psx_init
+func psx_init()
 
 //export psx_putchar
 func psx_putchar(c int32)
+
+//export psx_nanotime
+func psx_nanotime() int64
+
+//export psx_sleep
+func psx_sleep(ns int64)
 
 //export psx_disable_interrupts
 func psx_disable_interrupts() int32
@@ -47,109 +110,36 @@ func buffered() int {
 	return 0
 }
 
-//go:extern _sbss
-var _sbss [0]byte
-
-//go:extern _ebss
-var _ebss [0]byte
-
 // main is the entry point the crt0 jumps to.
+//
+// There is no preinit, which on a typical bare-metal target clears .bss and
+// copies .data out of ROM: the crt0 has cleared .bss, and there is no .data
+// to copy, since the loader reads the whole image into RAM before the
+// program starts and initialized globals are already where they belong.
 //
 //export main
 func main() {
-	preinit()
-	initTimer()
+	psx_init()
 	run()
 }
 
-// preinit clears .bss. There is no .data to copy: the loader reads the whole
-// image into RAM before the program starts, so initialised globals are
-// already where they belong.
-//
-// It runs before anything else in Go, which is why it may not touch a global
-// of its own.
-func preinit() {
-	ptr := unsafe.Pointer(&_sbss)
-	for ptr != unsafe.Pointer(&_ebss) {
-		*(*uint32)(ptr) = 0
-		ptr = unsafe.Add(ptr, 4)
-	}
-}
+// Time is counted in nanoseconds, which is what the clock hooks deal in, so
+// a tick is a nanosecond.
 
-// Root counter 2, one of the three hardware timers, is the clock. Counter 0
-// is tied to the dot clock and counter 1 to the horizontal retrace, both of
-// which stop meaning anything if the program reprograms the display; counter
-// 2 is driven by the CPU clock and keeps running whatever the GPU is doing.
-//
-// I/O is uncached at these addresses in every region, so no cache
-// maintenance is needed around them.
-const (
-	timerCount  = 0x1f801120 // current value, 16 bits
-	timerMode   = 0x1f801124 // clock source and counting mode
-	timerTarget = 0x1f801128
-
-	// Clock source 2 is the CPU clock divided by eight. Writing the mode
-	// register also resets the counter.
-	timerModeDiv8 = 2 << 8
-
-	// 33.8688MHz divided by eight. Expressed as a ratio against a
-	// nanosecond it is 312500/1323 exactly, which is what the conversions
-	// below use instead of rounding to 236ns a tick.
-	timerNsNum = 312500
-	timerNsDen = 1323
-)
-
-func mmio32(addr uintptr) *uint32 {
-	return (*uint32)(unsafe.Pointer(addr))
-}
-
-func initTimer() {
-	*mmio32(timerTarget) = 0
-	*mmio32(timerMode) = timerModeDiv8
-	timerLast = 0
-	timerHigh = 0
-}
-
-// The counter is 16 bits and wraps every 15.5ms, so the high bits are kept
-// in software and advanced whenever a read comes back lower than the one
-// before it.
-//
-// That makes the clock correct only if it is read more often than it wraps.
-// sleepTicks polls, so a sleep of any length is accounted for exactly, but a
-// program that computes a duration across more than 15.5ms of doing nothing
-// else will read it short. Keeping the whole thing honest would mean taking
-// the timer interrupt, which would mean owning the exception vector, which is
-// not the runtime's to own on a machine where the program may want it.
-var (
-	timerLast uint16
-	timerHigh uint64
-)
-
-func ticks() timeUnit {
-	now := uint16(*mmio32(timerCount))
-	if now < timerLast {
-		timerHigh += 1 << 16
-	}
-	timerLast = now
-	return timeUnit(timerHigh + uint64(now))
-}
-
-// Both conversions are exact. They overflow after about 80 days of uptime,
-// which is longer than the hardware has ever been asked to stay on.
 func ticksToNanoseconds(ticks timeUnit) int64 {
-	return int64(ticks) * timerNsNum / timerNsDen
+	return int64(ticks)
 }
 
 func nanosecondsToTicks(ns int64) timeUnit {
-	return timeUnit(ns * timerNsDen / timerNsNum)
+	return timeUnit(ns)
 }
 
-// sleepTicks busy-waits. With the scheduler disabled there is nothing else to
-// run, and halting the CPU would need an interrupt to wake it.
+func ticks() timeUnit {
+	return timeUnit(psx_nanotime())
+}
+
 func sleepTicks(d timeUnit) {
-	target := ticks() + d
-	for ticks() < target {
-	}
+	psx_sleep(int64(d))
 }
 
 func exit(code int) {

@@ -1,8 +1,8 @@
 /* The storage of the Net Yaroze library's variables that programs reach
- * by name, for psxsdk's exp/libps, the library in Go: GsDISPENV and
+ * by name, for internal/libps, the library in Go: GsDISPENV and
  * the rest, which the yaroze package declares with go:extern. TinyGo
  * defines no symbol for a Go variable, so the storage is here, under the
- * playstation-yaroze-go target only; under the resident library the names
+ * static build only; under the resident library the names
  * are its own, at fixed addresses. The sizes are the C structs'. */
 
 #define VAR(name, size) unsigned char name[size] __attribute__((aligned(4)))

@@ -11,5 +11,5 @@ func applyMatrix(m *Matrix, v Vector) Vector { panic(stub("Matrix.Apply")) }
 // stub is the message a call panics with: what was called, and that it
 // runs only on the console.
 func stub(name string) string {
-	return "geom." + name + ": the GTE is only on the console; build for the playstation-yaroze target"
+	return "geom." + name + ": the GTE is only on the console; build with the yaroze command"
 }
