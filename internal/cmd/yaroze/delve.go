@@ -8,13 +8,13 @@ import (
 	"os"
 	"strings"
 
-	"github.com/go-delve/delve/pkg/config"
-	"github.com/go-delve/delve/pkg/terminal"
-	"github.com/go-delve/delve/service"
-	"github.com/go-delve/delve/service/dap"
-	"github.com/go-delve/delve/service/debugger"
-	"github.com/go-delve/delve/service/rpc2"
-	"github.com/go-delve/delve/service/rpccommon"
+	"github.com/ChrisRx/delve/pkg/config"
+	"github.com/ChrisRx/delve/pkg/terminal"
+	"github.com/ChrisRx/delve/service"
+	"github.com/ChrisRx/delve/service/dap"
+	"github.com/ChrisRx/delve/service/debugger"
+	"github.com/ChrisRx/delve/service/rpc2"
+	"github.com/ChrisRx/delve/service/rpccommon"
 )
 
 // isGoProgram reports whether the ELF at path is a Go program, which Delve

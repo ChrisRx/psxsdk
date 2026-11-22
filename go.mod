@@ -3,9 +3,9 @@ module go.chrisrx.dev/psx
 go 1.27.3
 
 require (
+	github.com/ChrisRx/delve v0.0.0-20261122133250-448c49c66c05
 	github.com/ChrisRx/wazero v0.0.0-20261116205937-3f122248aff2
 	github.com/alecthomas/chroma/v2 v2.27.0
-	github.com/go-delve/delve v1.25.2
 	github.com/google/go-dap v0.12.0
 	github.com/gopikchr/gopikchr v0.0.0-20251102185413-ac35dc1606f8
 	github.com/hajimehoshi/ebiten/v2 v2.10.5
@@ -49,5 +49,3 @@ require (
 // Sony's manuals, 11MB of PDFs the docs site serves, which nothing that
 // imports the module reads: left out of the module zip and of ./... patterns.
 ignore ./docs/manuals
-
-replace github.com/go-delve/delve => github.com/ChrisRx/delve v0.0.0-20261121201242-42929d620d60
