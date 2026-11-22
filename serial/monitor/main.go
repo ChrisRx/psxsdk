@@ -14,8 +14,9 @@
 // commands war, waw, var, vaw, cb and play, and the continuous dbc, dhc,
 // dwc, sbc, shc and swc; the disassembler, di and dis; the user commands,
 // sc, ac and dc; the device drivers, ad and dd; baud with a new speed;
-// cls; and rdb, the remote debugger, in the HSS protocol of the Net
-// Yaroze's gdb, written from that gdb's source.
+// cls; rdb, the remote debugger, in the HSS protocol of the Net Yaroze's
+// gdb, written from that gdb's source; and clean, in no help, which tells
+// a host this monitor from Sony's, which answers it with ?.
 //
 // It lives where the boot disc's monitor does, between the resident library
 // and the program, at 80068000, which target.json links it at, with its

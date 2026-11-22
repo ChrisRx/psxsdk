@@ -42,6 +42,11 @@ var regLabels = [numRegs]string{
 	"pc(epc)=", "hi     =", "lo     =", "sr     =", "cr     =",
 }
 
+// cleanReply is the clean command's answer: the monitor, the version of
+// what follows, and what it has beyond Sony's monitor. stop is a Control-B
+// stopping a program go started, for the remote debugger.
+const cleanReply = "clean monitor 1 stop\r\n"
+
 // defaultStack is where go points a program's stack if nothing has set sp.
 const defaultStack = 0x801ffff0
 
@@ -259,6 +264,11 @@ func command(l []byte) {
 	case is(name, "dc"):
 		deleteUser(args)
 	case is(name, "cls"):
+	case is(name, "clean"):
+		// Not in the help: says to a host that this is the clean monitor,
+		// and what it has beyond Sony's, which answers ? (see
+		// serial.Monitor.Clean).
+		line.puts(cleanReply)
 	default:
 		if !runUser(split(l)) {
 			line.puts("?\r\n")

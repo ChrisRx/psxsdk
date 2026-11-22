@@ -493,3 +493,23 @@ func TestMonitorBaud(t *testing.T) {
 		assert.Equal(t, "57600 bps\r\n", command(t, port, "baud"))
 	})
 }
+
+// TestMonitorClean checks that a host can tell the monitors apart: ours
+// answers the clean command, which is in no help, and Sony's answers ?.
+func TestMonitorClean(t *testing.T) {
+	eachMonitor(t, func(t *testing.T, boot boot) {
+		_, port, mon := boot(t)
+		reply := command(t, port, "clean")
+		features, ok, err := mon.Clean(t.Context())
+		assert.NoError(t, err)
+		if strings.Contains(t.Name(), "sony") {
+			assert.Equal(t, "?\r\n", reply)
+			assert.Equal(t, false, ok)
+			assert.Equal(t, []string(nil), features)
+			return
+		}
+		assert.Equal(t, "clean monitor 1 stop\r\n", reply)
+		assert.Equal(t, true, ok)
+		assert.Equal(t, []string{"stop"}, features)
+	})
+}

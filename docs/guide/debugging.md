@@ -282,7 +282,7 @@ go tool yaroze debug --port /dev/ttyUSB0,115200
 
 The program is built for the library the console has in memory, uploaded, and started with a breakpoint at its first instruction. Everything above works the same way, with these differences:
 
-- Control-C stops the program only under the clean monitor. Under the Net Yaroze boot disc's monitor, start with `--start rdb`, and the program then runs until a breakpoint or a fault.
+- Control-C stops the program only under the clean monitor. `yaroze debug` asks the monitor which it is, and under the Net Yaroze boot disc's monitor it says so, and the program runs until a breakpoint or a fault.
 - The library is the console's, and the program's ELF has no symbols for it. A program stopped inside the library has no backtrace past it. Set a breakpoint in the program and continue.
 - Each stop reads the registers over the cable, a packet and its answer for each, about 2000 bytes on the cable in all. At 115200 bps that is a few tenths of a second a stop, and at 9600 bps a few seconds.
 
