@@ -42,6 +42,7 @@ type debugFlags struct {
 	baud      int
 	start     string
 	takeOver  bool
+	raise     bool
 	play      psxplay.Options
 	headless  bool
 	fast      bool
@@ -137,7 +138,8 @@ says how it is started:
 	fl.Lookup("elf").Usage = "the ELF to write when building a package, the package's name with .elf if not given, or the ELF of the program on a disc given"
 	fl.StringVar(&f.listen, "listen", "localhost:1234", "the address to wait for the debugger on")
 	fl.StringVarP(&f.port, "port", "p", "", "DEVICE[,BAUD]: debug on the console on this serial device, through its monitor, rather than in the emulator")
-	fl.IntVarP(&f.baud, "baud", "B", 0, "the serial device's speed, 9600 if neither this nor --port gives one")
+	fl.IntVarP(&f.baud, "baud", "B", 0, "the serial device's speed, found by asking the monitor if neither this nor --port gives one (115200 for --start attach, which can't ask)")
+	fl.BoolVar(&f.raise, "raise-baud", true, "with --port, raise the line to 115200 bps for the session with the monitor's baud command, leaving the memory card's speed as it is")
 	fl.StringVar(&f.start, "start", gdbserver.StartAuto, "with --port, how the program is started: auto, go, rdb or attach")
 	fl.BoolVar(&f.takeOver, "take-over", true, "with --port and --start auto, replace Sony's monitor with the clean one, which can stop the program; false starts it with rdb under Sony's")
 	// The window's flags, as run has them, less those for what debug does
@@ -403,7 +405,7 @@ func (f *debugFlags) debugEmulator(cmd *cobra.Command, arg string) error {
 // already.
 func (f *debugFlags) debugSerial(cmd *cobra.Command, arg string, given bool) error {
 	ctx := cmd.Context()
-	device, baud := f.port, 9600
+	device, baud := f.port, 0
 	if dev, b, ok := strings.Cut(f.port, ","); ok {
 		device = dev
 		if n, err := strconv.Atoi(b); err == nil {
@@ -411,6 +413,12 @@ func (f *debugFlags) debugSerial(cmd *cobra.Command, arg string, given bool) err
 		}
 	}
 	baud = cmp.Or(f.baud, baud)
+	// A program the clean monitor runs is reset by the Control-C that
+	// finding the speed sends, so attach takes the speed a session leaves.
+	detect := baud == 0 && f.start != gdbserver.StartAttach
+	if baud == 0 {
+		baud = serial.FastSpeed
+	}
 
 	d := &debugged{elf: f.elf}
 	var prog *serial.Program
@@ -436,6 +444,22 @@ func (f *debugFlags) debugSerial(cmd *cobra.Command, arg string, given bool) err
 		return err
 	}
 	defer port.Close()
+	if detect {
+		if baud, err = port.DetectSpeed(ctx); err != nil {
+			return err
+		}
+	}
+	if f.raise && baud < serial.FastSpeed && f.start != gdbserver.StartAttach {
+		fmt.Fprintf(os.Stderr, "yaroze: raising the line from %d to %d bps for the session\n", baud, serial.FastSpeed)
+		mon, err := serial.NewMonitor(ctx, port)
+		if err != nil {
+			return err
+		}
+		if err := mon.RaiseSpeed(ctx, serial.FastSpeed); err != nil {
+			return err
+		}
+		baud = serial.FastSpeed
+	}
 	if prog != nil {
 		fmt.Fprintf(os.Stderr, "yaroze: uploading to %s at %d bps\n", device, baud)
 	}

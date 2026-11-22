@@ -73,6 +73,10 @@ type sio1 struct {
 	inEnd     uint64 // when the last of in arrives
 	out       []byte
 
+	// hostBaud is the host end's speed, which SerialLine.SetBaud sets, or
+	// 0 for whatever the port is set to.
+	hostBaud int
+
 	cycles *uint64
 	due    uint64
 	wake   *bool // set when due changes
@@ -119,7 +123,7 @@ func (s *sio1) advance() {
 	for {
 		if s.txAt != 0 && now >= s.txAt {
 			if s.connected {
-				s.out = append(s.out, s.tx)
+				s.out = append(s.out, s.carried(s.tx))
 			}
 			s.txFree, s.txAt = s.txAt, 0
 			if s.ctrl&sioTXIRQ != 0 {
@@ -134,10 +138,24 @@ func (s *sio1) advance() {
 	}
 	n := 0
 	for n < len(s.in) && now >= s.in[n].at {
-		s.receive(s.in[n].b)
+		s.receive(s.carried(s.in[n].b))
 		n++
 	}
 	s.in = s.in[n:]
+}
+
+// carried is a byte as it comes off the line at the other end, which is
+// garble while the host's speed and the port's disagree by more than 5%.
+func (s *sio1) carried(b byte) byte {
+	if s.hostBaud == 0 {
+		return b
+	}
+	port := 33868800 / float64(s.bitCycles())
+	d := (port - float64(s.hostBaud)) / float64(s.hostBaud)
+	if d < -0.05 || d > 0.05 {
+		return garble
+	}
+	return b
 }
 
 // receive takes a byte that has arrived from the host.
@@ -289,6 +307,18 @@ const lineSteps = 20_000
 type SerialLine struct {
 	m *Machine
 }
+
+// SetBaud sets the host's speed. A byte either way that arrives while it
+// is not the console's, within 5%, arrives as garbage, as on a cable whose
+// ends disagree.
+func (l *SerialLine) SetBaud(baud int) error {
+	l.m.sio1.hostBaud = baud
+	return nil
+}
+
+// garble is what a byte becomes at the wrong speed: here always the same
+// byte, as a start bit and then the line idle read too fast or too slow.
+const garble = 0xff
 
 // ConnectSerial plugs a cable into the serial port and returns its host
 // end.

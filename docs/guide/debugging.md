@@ -277,10 +277,10 @@ The GDB has to be one built for MIPS targets. A distribution's `gdb-multiarch` i
 With a serial cable to a console whose monitor is waiting at its prompt, `--port` debugs the program there:
 
 ```bash
-go tool yaroze debug --port /dev/ttyUSB0,115200
+go tool yaroze debug --port /dev/ttyUSB0
 ```
 
-The program is built for the library the console has in memory, uploaded, and started with a breakpoint at its first instruction. Everything above works the same way, with these differences:
+`yaroze debug` finds the speed the monitor is at, and raises it to 115200 bps for the session if it is slower, without changing the speed on the memory card. The program is built for the library the console has in memory, uploaded, and started with a breakpoint at its first instruction. Everything above works the same way, with these differences:
 
 - Only the clean monitor can stop a running program, so under the Net Yaroze boot disc's monitor `yaroze debug` first uploads the clean one in its place, about 100 KB, some ten seconds at 115200 bps. The library the boot disc started stays as it is. Control-C then works as in the emulator, and the console stays on the clean monitor until it is reset, so the next session starts at once.
 - `--take-over=false` keeps the boot disc's monitor, and debugs the program under its remote debugger, which runs it until a breakpoint or a fault. There:
@@ -288,6 +288,6 @@ The program is built for the library the console has in memory, uploaded, and st
   - Control-C cannot stop the program. Pressing it twice within half a second ends `yaroze debug`.
   - The console stays in the monitor's remote debugger once the session ends, with no way back to the monitor's prompt. Reset it before the next upload.
 - The library is the console's, and the program's ELF has no symbols for it. A program stopped inside the library has no backtrace past it. Set a breakpoint in the program and continue.
-- Each stop reads the registers over the cable, a packet and its answer for each, about 2000 bytes on the cable in all. At 115200 bps that is a few tenths of a second a stop, and at 9600 bps a few seconds.
+- Each stop reads the registers over the cable, a packet and its answer for each, about 2000 bytes on the cable in all. At 115200 bps that is a few tenths of a second a stop. At 9600 bps, with `--raise-baud=false`, it is a few seconds.
 
 [`yaroze`](../tools/yaroze.md#debugging) has every flag, and the differences between the emulator and a console in full.
