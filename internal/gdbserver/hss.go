@@ -75,6 +75,7 @@ type HSS struct {
 	// stoppable says a Control-B stops the program: the clean monitor's go
 	// started it.
 	stoppable bool
+	returned  bool
 	interrupt atomic.Bool
 }
 
@@ -207,6 +208,39 @@ func takeOver(ctx context.Context, port *serial.Port, mon *serial.Monitor, opts 
 	}
 	return mon, nil
 }
+
+// Where the clean monitor starts again when a program returns to it: its
+// start, on its own stack at the top of its space (serial/monitor's run and
+// target.json).
+const (
+	monitorStart = 0x80068000
+	monitorStack = 0x8008fff0
+)
+
+// Kill sends the console back to the clean monitor's prompt, when its go
+// started the program: the program, stopped, carries on from the
+// monitor's start, as the monitor does when a program returns to it.
+// Sony's remote debugger has no way back, and the program is left as it
+// is.
+func (h *HSS) Kill(ctx context.Context) error {
+	if !h.stoppable {
+		return nil
+	}
+	if err := h.d.WriteRegister(ctx, 29, monitorStack); err != nil {
+		return err
+	}
+	if err := h.d.WriteRegister(ctx, serial.HSSRegEPC, monitorStart); err != nil {
+		return err
+	}
+	if err := h.d.Continue(ctx); err != nil {
+		return err
+	}
+	h.returned = true
+	return nil
+}
+
+// Returned reports whether Kill sent the console back to the monitor.
+func (h *HSS) Returned() bool { return h.returned }
 
 // Stoppable reports whether Interrupt stops the program: whether the
 // clean monitor's go command started it.

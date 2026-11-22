@@ -283,6 +283,7 @@ go tool yaroze debug --port /dev/ttyUSB0
 `yaroze debug` finds the speed the monitor is at, and raises it to 115200 bps for the session if it is slower, without changing the speed on the memory card. The program is built for the library the console has in memory, uploaded, and started with a breakpoint at its first instruction. Everything above works the same way, with these differences:
 
 - Only the clean monitor can stop a running program, so under the Net Yaroze boot disc's monitor `yaroze debug` first uploads the clean one in its place, about 100 KB, some ten seconds at 115200 bps. The library the boot disc started stays as it is. Control-C then works as in the emulator, and the console stays on the clean monitor until it is reset, so the next session starts at once.
+- When the debugger quits, or kills the program, the console goes back to the clean monitor's prompt, ready for the next upload.
 - `--take-over=false` keeps the boot disc's monitor, and debugs the program under its remote debugger, which runs it until a breakpoint or a fault. There:
   - Set the breakpoints before `continue`. The debugger's prompt comes back only when the program reaches one or faults.
   - Control-C cannot stop the program. Pressing it twice within half a second ends `yaroze debug`.

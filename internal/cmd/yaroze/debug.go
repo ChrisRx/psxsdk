@@ -256,6 +256,10 @@ func (f *debugFlags) serve(ctx context.Context, t gdbserver.Target, d *debugged,
 	}
 	defer l.Close()
 	s := gdbserver.New(t)
+	// GDB or Delve here is the whole session: when it goes, by quit or
+	// detach, a console goes back to its monitor. With --serve the
+	// program is left running for the next debugger.
+	s.EndOnDetach = !f.serveOnly
 	s.Stdout = os.Stdout
 	if f.packets {
 		s.Logf = func(format string, args ...any) { fmt.Fprintf(os.Stderr, "gdb: "+format+"\n", args...) }
@@ -479,7 +483,11 @@ func (f *debugFlags) debugSerial(cmd *cobra.Command, arg string, given bool) err
 	// A register is a packet each way on the cable, and GDB reads them all
 	// at each stop, which at 9600 bps takes longer than the two seconds it
 	// waits for an answer by default.
-	return f.serve(ctx, t, d, "on the console at "+device, "-ex", "set remotetimeout 30")
+	err = f.serve(ctx, t, d, "on the console at "+device, "-ex", "set remotetimeout 30")
+	if t.Returned() {
+		fmt.Fprintln(os.Stderr, "yaroze: the console is back at the clean monitor's prompt")
+	}
+	return err
 }
 
 // debugELFOf writes the ELF with DWARF for the ECOFF program at path, whose

@@ -35,6 +35,12 @@ type Server struct {
 	// Logf, if set, is given each packet as it comes and goes.
 	Logf func(format string, args ...any)
 
+	// EndOnDetach has a debugger that detaches end the program as a kill
+	// does (Killer) rather than leave it running, for a session with one
+	// debugger, which is over when it goes. GDB's quit detaches from a
+	// remote target it didn't start.
+	EndOnDetach bool
+
 	// own says the server keeps the software breakpoints itself, the
 	// target having none, and breaks is those: the word each replaced
 	// while the program runs, by address.
@@ -216,13 +222,28 @@ func (s *Server) Session(ctx context.Context, rw io.ReadWriter) error {
 			case actDetach:
 				clear(s.breaks)
 				s.clearPlaced()
+				if k, ok := s.Target.(Killer); ok && s.EndOnDetach {
+					c.write([]byte("OK"))
+					s.kill(ctx, k)
+					return ErrKilled
+				}
 				s.start(ctx, false)
 				c.write([]byte("OK"))
 				return nil
 			case actKill:
+				if k, ok := s.Target.(Killer); ok {
+					s.kill(ctx, k)
+				}
 				return ErrKilled
 			}
 		}
+	}
+}
+
+// kill ends the program the Killer's way, saying so if it can't.
+func (s *Server) kill(ctx context.Context, k Killer) {
+	if err := k.Kill(ctx); err != nil {
+		output{s}.Write([]byte("yaroze debug: " + err.Error() + "\n"))
 	}
 }
 
