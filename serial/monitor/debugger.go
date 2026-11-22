@@ -65,6 +65,7 @@ const breakInsn = 0x0005000d
 // rdb starts the remote debugger: with the stored registers, stopped, for a
 // trap, as if at a breakpoint before the program's first instruction.
 func rdb() {
+	con.setState(stateRDB)
 	line.puts("Loading Remote Debugger [monitor]...done.\r\nExec Remote Debugger (epc:")
 	line.putHex(funcAddr(debugLoop))
 	line.puts(")\r\n")
@@ -242,7 +243,7 @@ func hssPacket(buf []byte, code uint8, addr uint32, data []byte) []byte {
 func hssPut(code uint8, addr uint32, data []byte) {
 	p := hssPacket(sendBuf[:], code, addr, data)
 	for {
-		line.putBytes(p)
+		line.putRaw(p)
 		if c, _, _ := hssReceive(); c != hssNak {
 			return
 		}
@@ -252,7 +253,7 @@ func hssPut(code uint8, addr uint32, data []byte) {
 // hssAnswer sends an ACK or a NAK.
 func hssAnswer(code uint8) {
 	var b [12]byte
-	line.putBytes(hssPacket(b[:], code, 0, nil))
+	line.putRaw(hssPacket(b[:], code, 0, nil))
 }
 
 // hssReceive waits for a packet from the host and returns it, answering it
@@ -297,6 +298,7 @@ func hssReceive() (uint8, uint32, []byte) {
 // sendChar sends a character the program prints to the host, in a SEND
 // packet of its own, as the boot disc's debugger does.
 func sendChar(c byte) {
+	con.put(c)
 	var d [2]byte
 	d[0] = c
 	hssPut(hssSend, 0, d[:])

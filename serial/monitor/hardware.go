@@ -135,6 +135,7 @@ func colorBar() {
 	}
 	yaroze.DrawSync(0)
 	yaroze.SetDispMask(1)
+	con.hold()
 }
 
 // The drive's commands play uses.
