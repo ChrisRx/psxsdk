@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -53,7 +54,14 @@ func runGDB(ctx context.Context, s *gdbserver.Server, addr, elf string, options 
 		WithSkipValidationOnCacheHit(true).
 		WithDebugInfoEnabled(false).
 		WithCoreFeatures(api.CoreFeaturesV2|experimental.CoreFeaturesExceptionHandling))
-	defer r.Close(ctx)
+	// GDB left blocked when the run is cancelled (see below) holds the
+	// runtime, so it is closed only once GDB has ended.
+	ended := false
+	defer func() {
+		if ended {
+			r.Close(context.WithoutCancel(ctx))
+		}
+	}()
 	if _, err := wasi_snapshot_preview1.Instantiate(ctx, r); err != nil {
 		return err
 	}
@@ -102,13 +110,33 @@ func runGDB(ctx context.Context, s *gdbserver.Server, addr, elf string, options 
 		WithSysNanosleep().
 		WithRandSource(rand.Reader)
 
-	interceptInterrupts(ctx, func() { s.Interrupt() })
+	interceptInterrupts(ctx, func() {
+		// Under Sony's monitor nothing can stop a running program: say so,
+		// and how to end yaroze instead, rather than let Control-C seem to
+		// do nothing.
+		if err := s.Interrupt(); err != nil {
+			fmt.Fprintf(stderr, "\nyaroze: %v. Press Control-C twice quickly to end yaroze.\n", err)
+		}
+	})
 
 	ctx, restore := wasiterm.With(ctx, stdin, stdout, stderr)
 	defer restore()
-	mod, err := r.InstantiateModule(ctx, compiled, cfg)
-	if mod != nil {
-		mod.Close(ctx)
+	done := make(chan error, 1)
+	go func() {
+		mod, err := r.InstantiateModule(ctx, compiled, cfg)
+		if mod != nil {
+			mod.Close(context.WithoutCancel(ctx))
+		}
+		done <- err
+	}()
+	select {
+	case err = <-done:
+		ended = true
+	case <-ctx.Done():
+		// Two Control-Cs end yaroze, but GDB may be blocked reading the
+		// terminal, which nothing interrupts, so it is left behind: the
+		// terminal is restored and the process ends.
+		return nil
 	}
 	if exit := (*sys.ExitError)(nil); errors.As(err, &exit) && exit.ExitCode() == 0 {
 		return nil
