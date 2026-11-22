@@ -31,7 +31,9 @@
 // where wasm/full.json says (package go.chrisrx.dev/psx/internal/cproject).
 // yaroze debug debugs a C program with GDB for WebAssembly, from the
 // gdb-wasi project, downloaded the first time from where wasm/gdb.json says;
-// YAROZE_GDB names a gdb.wasm on disk instead.
+// YAROZE_GDB names a gdb.wasm on disk instead. yaroze debug --port uploads
+// the clean monitor in place of Sony's, from wasm/monitor.elf.gz, which
+// task yaroze builds from serial/monitor.
 //
 // yaroze generate, or gen, is discgen, for go:generate, and yaroze iso is
 // mkdisc with all of its flags. The converters are here too, each the tool
@@ -56,11 +58,14 @@ var (
 	full []byte
 	//go:embed wasm/gdb.json
 	gdb []byte
+	//go:embed wasm/monitor.elf.gz
+	monitor []byte
 )
 
 func main() {
 	toolchain.Embed(compiler, sysroot)
 	toolchain.EmbedFull(full)
 	toolchain.EmbedGDB(gdb)
+	yarozecmd.EmbedMonitor(monitor)
 	yarozecmd.Main("yaroze")
 }

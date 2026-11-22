@@ -714,6 +714,11 @@ tasks:
       - rm -f {{.SYSROOT}}/cache/prelink-*
       - mkdir -p cmd/yaroze/wasm
       - gzip -9 -n -c .build/compiler/tinygo.wasm > cmd/yaroze/wasm/tinygo.wasm.gz
+      # The clean monitor, which yaroze debug --port uploads in place of
+      # Sony's.
+      - mkdir -p .build/serial
+      - go run ./cmd/yaroze build --opt=2 --target serial/monitor/target.json -o .build/serial/monitor.elf ./serial/monitor
+      - gzip -9 -n -c .build/serial/monitor.elf > cmd/yaroze/wasm/monitor.elf.gz
       # The archive's directory is sysroot, as the playground's is.
       - tar --format=ustar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --mode=go-w -C .build --transform 's,^yaroze-sysroot,sysroot,' -cf - yaroze-sysroot | gzip -9 -n > cmd/yaroze/wasm/sysroot.tar.gz
       - go build -trimpath -ldflags=-s -o .build/yaroze ./cmd/yaroze

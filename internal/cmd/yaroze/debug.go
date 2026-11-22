@@ -41,6 +41,7 @@ type debugFlags struct {
 	port      string
 	baud      int
 	start     string
+	takeOver  bool
 	play      psxplay.Options
 	headless  bool
 	fast      bool
@@ -98,8 +99,13 @@ clean one. The package is built for the library the console has in memory
 monitor's remote debugger, the one the Net Yaroze's own gdb used. --start
 says how it is started:
 
-  auto    go on the clean monitor and rdb on Sony's, which yaroze asks the
-          monitor about. This is the default.
+  auto    go on the clean monitor, which yaroze asks the monitor about.
+          Sony's monitor is first replaced with the clean one, uploaded
+          over the cable, about 100KB, with Sony's library kept as the
+          boot disc left it. The console then stays on the clean monitor
+          until it is reset. With --take-over=false the program is
+          started with rdb under Sony's monitor instead. This is the
+          default.
   go      with the monitor's go command and a breakpoint at the first
           instruction. The clean monitor stops such a program for the
           debugger, there and whenever Control-C asks.
@@ -133,6 +139,7 @@ says how it is started:
 	fl.StringVarP(&f.port, "port", "p", "", "DEVICE[,BAUD]: debug on the console on this serial device, through its monitor, rather than in the emulator")
 	fl.IntVarP(&f.baud, "baud", "B", 0, "the serial device's speed, 9600 if neither this nor --port gives one")
 	fl.StringVar(&f.start, "start", gdbserver.StartAuto, "with --port, how the program is started: auto, go, rdb or attach")
+	fl.BoolVar(&f.takeOver, "take-over", true, "with --port and --start auto, replace Sony's monitor with the clean one, which can stop the program; false starts it with rdb under Sony's")
 	// The window's flags, as run has them, less those for what debug does
 	// its own way.
 	f.play.AddFlags(fl)
@@ -432,7 +439,13 @@ func (f *debugFlags) debugSerial(cmd *cobra.Command, arg string, given bool) err
 	if prog != nil {
 		fmt.Fprintf(os.Stderr, "yaroze: uploading to %s at %d bps\n", device, baud)
 	}
-	t, err := gdbserver.StartHSS(ctx, port, prog, f.start)
+	opts := gdbserver.HSSOptions{Start: f.start, Log: os.Stderr}
+	if f.takeOver {
+		if opts.TakeOver, err = takeOverMonitor(baud); err != nil {
+			return err
+		}
+	}
+	t, err := gdbserver.StartHSS(ctx, port, prog, opts)
 	if err != nil {
 		return err
 	}

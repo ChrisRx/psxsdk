@@ -152,7 +152,7 @@ The package is built over the library the console has in memory, as `--libps res
 
 | `--start` | The monitor | The program |
 | --- | --- | --- |
-| `auto`, the default | either | `go` on the clean monitor and `rdb` on Sony's. yaroze asks the monitor which it is before the upload, with a command only the clean monitor answers. |
+| `auto`, the default | either | `go` on the clean monitor. yaroze asks the monitor which it is before the upload, with a command only the clean monitor answers, and replaces Sony's with the clean one first, uploaded over the cable with Sony's library kept as the boot left it. `--take-over=false` starts the program with `rdb` under Sony's instead. |
 | `go` | the clean one | Started with `go`, with a breakpoint at its first instruction. Control-C stops it. |
 | `rdb` | either | Started under the monitor's `rdb`. Once it runs it cannot be stopped, short of a breakpoint or a fault. |
 | `attach` | the clean one | Nothing is uploaded. The program that `go` started earlier is stopped where it is. |
