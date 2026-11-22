@@ -3,7 +3,10 @@ package serial
 import (
 	"debug/elf"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"io"
+	"os"
 )
 
 // loaderAddr is where TakeOver's loader goes: near the top of RAM, below the
@@ -14,11 +17,25 @@ const loaderAddr = 0x801f0000
 // would otherwise read its speed from the memory card, and a read that failed
 // would leave it at another speed from the host, with no way to say so.
 func OpenMonitor(path string, baud uint32) (*Program, error) {
-	f, err := elf.Open(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
+	p, err := ReadMonitor(f, baud)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	return p, nil
+}
+
+// ReadMonitor is OpenMonitor for the ELF r holds, such as one a command
+// embeds.
+func ReadMonitor(r io.ReaderAt, baud uint32) (*Program, error) {
+	f, err := elf.NewFile(r)
+	if err != nil {
+		return nil, err
+	}
 	syms, err := f.Symbols()
 	if err != nil {
 		return nil, err
@@ -38,7 +55,7 @@ func OpenMonitor(path string, baud uint32) (*Program, error) {
 			}
 		}
 	}
-	return nil, fmt.Errorf("serial: %s has no main.savedBaud in its data", path)
+	return nil, errors.New("serial: the monitor has no main.savedBaud in its data")
 }
 
 // TakeOver returns what replaces the boot disc's monitor with another, on

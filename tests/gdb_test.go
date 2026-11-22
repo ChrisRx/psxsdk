@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"context"
 	"debug/elf"
+	"errors"
 	"net"
 	"os"
 	"os/exec"
@@ -283,7 +284,7 @@ func TestGDBMonitor(t *testing.T) {
 		t.FailNow()
 	}
 	_, port, _ := ourMonitor(t)
-	h, err := gdbserver.StartHSS(t.Context(), port, prog, gdbserver.StartGo)
+	h, err := gdbserver.StartHSS(t.Context(), port, prog, gdbserver.HSSOptions{Start: gdbserver.StartGo})
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -304,7 +305,7 @@ func TestStartAuto(t *testing.T) {
 			t.FailNow()
 		}
 		_, port, _ := boot(t)
-		h, err := gdbserver.StartHSS(t.Context(), port, prog, gdbserver.StartAuto)
+		h, err := gdbserver.StartHSS(t.Context(), port, prog, gdbserver.HSSOptions{Start: gdbserver.StartAuto})
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
@@ -313,6 +314,55 @@ func TestStartAuto(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, prog.PC, pc)
 	})
+}
+
+// TestStartTakeOver starts a program from Sony's monitor as yaroze debug
+// --port does by default: the clean monitor is uploaded in its place, with
+// Sony's library kept, and the program started with go, which a Control-B
+// then stops while it runs.
+func TestStartTakeOver(t *testing.T) {
+	path := debugProgram(t, "steps-resident.elf")
+	prog, err := serial.OpenProgram(path)
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	monitor, err := serial.OpenMonitor(serialProgram(t, "monitor"), 115200)
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	takeOver, err := serial.TakeOverMonitor(monitor)
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	_, port, _ := sonyMonitor(t)
+	var log strings.Builder
+	h, err := gdbserver.StartHSS(t.Context(), port, prog, gdbserver.HSSOptions{
+		Start:    gdbserver.StartAuto,
+		TakeOver: takeOver,
+		Log:      &log,
+	})
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	assert.Equal(t, true, strings.Contains(log.String(), "uploading the clean monitor"), log.String())
+	assert.Equal(t, true, h.Stoppable())
+	pc, err := h.ReadRegister(t.Context(), gdbserver.RegPC)
+	assert.NoError(t, err)
+	assert.Equal(t, prog.PC, pc)
+
+	// Let it run, and stop it.
+	var out strings.Builder
+	h.SetOutput(&out)
+	assert.NoError(t, h.Continue(t.Context()))
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	_, err = h.Wait(ctx)
+	cancel()
+	assert.Equal(t, true, errors.Is(err, context.DeadlineExceeded), err)
+	assert.NoError(t, h.Interrupt())
+	stop, err := h.Wait(t.Context())
+	assert.NoError(t, err)
+	assert.Equal(t, gdbserver.SIGINT, stop.Signal)
+	assert.Equal(t, true, strings.Contains(out.String(), "debug: start"), out.String())
 }
 
 // TestGDBRemoteDebugger debugs through each monitor's rdb, which Sony's has
@@ -326,7 +376,7 @@ func TestGDBRemoteDebugger(t *testing.T) {
 			t.FailNow()
 		}
 		_, port, _ := boot(t)
-		h, err := gdbserver.StartHSS(t.Context(), port, prog, gdbserver.StartRDB)
+		h, err := gdbserver.StartHSS(t.Context(), port, prog, gdbserver.HSSOptions{Start: gdbserver.StartRDB})
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}

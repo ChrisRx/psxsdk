@@ -35,10 +35,31 @@ const (
 	StartAttach = "attach"
 
 	// StartAuto asks the monitor which it is (serial.Monitor.Clean) and
-	// starts the program with go on the clean monitor, which can stop it,
-	// and with rdb on Sony's, which cannot.
+	// starts the program with go on the clean monitor, which can stop it.
+	// Sony's, which cannot, is first replaced with the clean one when
+	// HSSOptions.TakeOver says how, and otherwise the program is started
+	// with rdb.
 	StartAuto = "auto"
 )
+
+// HSSOptions say how StartHSS starts a program.
+type HSSOptions struct {
+	// Start is how: StartAuto, StartGo, StartRDB or StartAttach.
+	Start string
+
+	// TakeOver, if not nil, is the clean monitor as serial.TakeOverMonitor
+	// uploads it in place of Sony's, keeping Sony's library as the boot
+	// left it. StartAuto uploads it when it finds Sony's monitor.
+	TakeOver *serial.Program
+
+	// Log, if not nil, is told of a take-over as it goes.
+	Log io.Writer
+}
+
+// takeOverTimeout is how long the clean monitor gets to greet the host
+// once the take-over is uploaded: the loader copies it into place in a
+// moment.
+const takeOverTimeout = 10 * time.Second
 
 // waitTurn is how long HSS waits for the console at a time, between which
 // it looks for an Interrupt to send.
@@ -58,11 +79,12 @@ type HSS struct {
 }
 
 // StartHSS starts prog on the console at the other end of port, whose
-// monitor waits at its prompt, as start says, and returns it stopped. prog
+// monitor waits at its prompt, as opts say, and returns it stopped. prog
 // may be nil with StartRDB, for the program the monitor has loaded already,
 // and is not used with StartAttach. Stoppable then says whether Interrupt
 // can stop it.
-func StartHSS(ctx context.Context, port *serial.Port, prog *serial.Program, start string) (*HSS, error) {
+func StartHSS(ctx context.Context, port *serial.Port, prog *serial.Program, opts HSSOptions) (*HSS, error) {
+	start := opts.Start
 	h := &HSS{port: port}
 	if start == StartAttach {
 		h.stoppable = true
@@ -87,6 +109,12 @@ func StartHSS(ctx context.Context, port *serial.Port, prog *serial.Program, star
 		features, _, err := mon.Clean(ctx)
 		if err != nil {
 			return nil, err
+		}
+		if !slices.Contains(features, "stop") && opts.TakeOver != nil && prog != nil {
+			if mon, err = takeOver(ctx, port, mon, opts); err != nil {
+				return nil, err
+			}
+			features = []string{"stop"}
 		}
 		if slices.Contains(features, "stop") && prog != nil {
 			start = StartGo
@@ -142,6 +170,42 @@ func StartHSS(ctx context.Context, port *serial.Port, prog *serial.Program, star
 		return nil, fmt.Errorf("%q is no way to start a program: auto, go, rdb or attach", start)
 	}
 	return h, nil
+}
+
+// takeOver puts the clean monitor in place of Sony's, at its prompt on
+// the other end of port, and returns the clean one once it is at its own.
+func takeOver(ctx context.Context, port *serial.Port, mon *serial.Monitor, opts HSSOptions) (*serial.Monitor, error) {
+	if opts.Log != nil {
+		size := 0
+		for _, seg := range opts.TakeOver.Segments {
+			size += len(seg.Data)
+		}
+		fmt.Fprintf(opts.Log, "yaroze: the monitor is Sony's, which cannot stop a running program: uploading the clean monitor in its place, %d KB (--take-over=false keeps Sony's)\n", size/1024)
+	}
+	if err := mon.Load(ctx, opts.TakeOver); err != nil {
+		return nil, fmt.Errorf("uploading the clean monitor: %w", err)
+	}
+	if err := mon.Run(ctx); err != nil {
+		return nil, err
+	}
+	timeout := port.Timeout
+	port.Timeout = takeOverTimeout
+	defer func() { port.Timeout = timeout }()
+	// The clean monitor greets the host as it starts, as Sony's does.
+	if _, err := port.ReadUntil(ctx, "Communication baud rate"); err != nil {
+		return nil, fmt.Errorf("the clean monitor did not start: %w", err)
+	}
+	mon, err := serial.NewMonitor(ctx, port)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := mon.Command(ctx, ""); err != nil {
+		return nil, fmt.Errorf("the clean monitor does not answer: %w", err)
+	}
+	if _, ok, err := mon.Clean(ctx); err != nil || !ok {
+		return nil, fmt.Errorf("the monitor that started is not the clean one (%v)", err)
+	}
+	return mon, nil
 }
 
 // Stoppable reports whether Interrupt stops the program: whether the
