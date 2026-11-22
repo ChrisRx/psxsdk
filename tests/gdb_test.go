@@ -293,6 +293,28 @@ func TestGDBMonitor(t *testing.T) {
 	inOrder(t, out, append(gdbWant, gdbInterruptWant...))
 }
 
+// TestStartAuto starts a program on each monitor as yaroze debug does by
+// default: with go on ours, which can stop it, and with rdb on Sony's. Either
+// way the program is stopped at its first instruction.
+func TestStartAuto(t *testing.T) {
+	path := debugProgram(t, "steps-resident.elf")
+	eachMonitor(t, func(t *testing.T, boot boot) {
+		prog, err := serial.OpenProgram(path)
+		if !assert.NoError(t, err) {
+			t.FailNow()
+		}
+		_, port, _ := boot(t)
+		h, err := gdbserver.StartHSS(t.Context(), port, prog, gdbserver.StartAuto)
+		if !assert.NoError(t, err) {
+			t.FailNow()
+		}
+		assert.Equal(t, strings.HasSuffix(t.Name(), "/ours"), h.Stoppable())
+		pc, err := h.ReadRegister(t.Context(), gdbserver.RegPC)
+		assert.NoError(t, err)
+		assert.Equal(t, prog.PC, pc)
+	})
+}
+
 // TestGDBRemoteDebugger debugs through each monitor's rdb, which Sony's has
 // too. A program it runs cannot be interrupted.
 func TestGDBRemoteDebugger(t *testing.T) {

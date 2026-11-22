@@ -97,10 +97,11 @@ clean one. The package is built for the library the console has in memory
 monitor's remote debugger, the one the Net Yaroze's own gdb used. --start
 says how it is started:
 
+  auto    go on the clean monitor and rdb on Sony's, which yaroze asks the
+          monitor about. This is the default.
   go      with the monitor's go command and a breakpoint at the first
           instruction. The clean monitor stops such a program for the
-          debugger, there and whenever GDB's Control-C asks. This is the
-          default.
+          debugger, there and whenever Control-C asks.
   rdb     with the monitor's rdb command, which Sony's monitor has too.
           The program cannot be stopped once it runs, short of a
           breakpoint or a fault.
@@ -130,7 +131,7 @@ says how it is started:
 	fl.StringVar(&f.listen, "listen", "localhost:1234", "the address to wait for the debugger on")
 	fl.StringVarP(&f.port, "port", "p", "", "DEVICE[,BAUD]: debug on the console on this serial device, through its monitor, rather than in the emulator")
 	fl.IntVarP(&f.baud, "baud", "B", 0, "the serial device's speed, 9600 if neither this nor --port gives one")
-	fl.StringVar(&f.start, "start", gdbserver.StartGo, "with --port, how the program is started: go, rdb or attach")
+	fl.StringVar(&f.start, "start", gdbserver.StartAuto, "with --port, how the program is started: auto, go, rdb or attach")
 	// The window's flags, as run has them, less those for what debug does
 	// its own way.
 	f.play.AddFlags(fl)
@@ -400,7 +401,7 @@ func (f *debugFlags) debugSerial(cmd *cobra.Command, arg string, given bool) err
 
 	d := &debugged{elf: f.elf}
 	var prog *serial.Program
-	if f.start != gdbserver.StartAttach && (given || f.start == gdbserver.StartGo) {
+	if f.start != gdbserver.StartAttach && (given || f.start != gdbserver.StartRDB) {
 		tmp, err := os.MkdirTemp("", "yaroze-debug-")
 		if err != nil {
 			return err
@@ -428,6 +429,9 @@ func (f *debugFlags) debugSerial(cmd *cobra.Command, arg string, given bool) err
 	t, err := gdbserver.StartHSS(ctx, port, prog, f.start)
 	if err != nil {
 		return err
+	}
+	if f.start == gdbserver.StartAuto && !t.Stoppable() {
+		fmt.Fprintln(os.Stderr, "yaroze: the monitor is Sony's, so the program runs until a breakpoint or a fault: Control-C cannot stop it")
 	}
 	// A register is a packet each way on the cable, and GDB reads them all
 	// at each stop, which at 9600 bps takes longer than the two seconds it

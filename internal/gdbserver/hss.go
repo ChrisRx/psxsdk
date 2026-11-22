@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -32,6 +33,11 @@ const (
 	// StartAttach stops the program the clean monitor's go command
 	// started before, with a Control-B.
 	StartAttach = "attach"
+
+	// StartAuto asks the monitor which it is (serial.Monitor.Clean) and
+	// starts the program with go on the clean monitor, which can stop it,
+	// and with rdb on Sony's, which cannot.
+	StartAuto = "auto"
 )
 
 // waitTurn is how long HSS waits for the console at a time, between which
@@ -54,7 +60,8 @@ type HSS struct {
 // StartHSS starts prog on the console at the other end of port, whose
 // monitor waits at its prompt, as start says, and returns it stopped. prog
 // may be nil with StartRDB, for the program the monitor has loaded already,
-// and is not used with StartAttach.
+// and is not used with StartAttach. Stoppable then says whether Interrupt
+// can stop it.
 func StartHSS(ctx context.Context, port *serial.Port, prog *serial.Program, start string) (*HSS, error) {
 	h := &HSS{port: port}
 	if start == StartAttach {
@@ -74,6 +81,16 @@ func StartHSS(ctx context.Context, port *serial.Port, prog *serial.Program, star
 	}
 	if _, err := mon.Command(ctx, ""); err != nil {
 		return nil, fmt.Errorf("the monitor does not answer: %w", err)
+	}
+	if start == StartAuto {
+		start = StartRDB
+		features, _, err := mon.Clean(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if slices.Contains(features, "stop") && prog != nil {
+			start = StartGo
+		}
 	}
 	if prog != nil {
 		if err := mon.Load(ctx, prog); err != nil {
@@ -122,10 +139,14 @@ func StartHSS(ctx context.Context, port *serial.Port, prog *serial.Program, star
 			return nil, err
 		}
 	default:
-		return nil, fmt.Errorf("%q is no way to start a program: rdb, go or attach", start)
+		return nil, fmt.Errorf("%q is no way to start a program: auto, go, rdb or attach", start)
 	}
 	return h, nil
 }
+
+// Stoppable reports whether Interrupt stops the program: whether the
+// clean monitor's go command started it.
+func (h *HSS) Stoppable() bool { return h.stoppable }
 
 func (h *HSS) SetOutput(w io.Writer) {
 	// Under rdb the program's text comes in SEND packets, and under go as
@@ -167,7 +188,7 @@ func (h *HSS) Continue(ctx context.Context) error { return h.d.Continue(ctx) }
 // to use from two goroutines.
 func (h *HSS) Interrupt() error {
 	if !h.stoppable {
-		return errors.New("the program cannot be stopped: the monitor's remote debugger reads nothing while it runs, so it runs until a breakpoint or a fault (the clean monitor stops a program started with --start go)")
+		return errors.New("the program cannot be stopped: the monitor's remote debugger reads nothing while it runs, so it runs until a breakpoint or a fault (the clean monitor's go can stop one)")
 	}
 	h.interrupt.Store(true)
 	return nil

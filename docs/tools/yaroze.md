@@ -152,7 +152,8 @@ The package is built over the library the console has in memory, as `--libps res
 
 | `--start` | The monitor | The program |
 | --- | --- | --- |
-| `go`, the default | the clean one | Started with `go`, with a breakpoint at its first instruction. Control-C stops it. |
+| `auto`, the default | either | `go` on the clean monitor and `rdb` on Sony's. yaroze asks the monitor which it is before the upload, with a command only the clean monitor answers. |
+| `go` | the clean one | Started with `go`, with a breakpoint at its first instruction. Control-C stops it. |
 | `rdb` | either | Started under the monitor's `rdb`. Once it runs it cannot be stopped, short of a breakpoint or a fault. |
 | `attach` | the clean one | Nothing is uploaded. The program that `go` started earlier is stopped where it is. |
 

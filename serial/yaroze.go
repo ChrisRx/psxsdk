@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"strings"
 )
 
 const (
@@ -309,6 +310,27 @@ func (m *Monitor) RemoteDebugger(ctx context.Context) (*Debugger, error) {
 		return nil, err
 	}
 	return NewDebugger(m.port), nil
+}
+
+// Clean asks the monitor whether it is the clean one (serial/monitor), with
+// a command that monitor has and Sony's answers with ?, and returns what
+// it has beyond Sony's: "stop" says Stop works. ok is false for Sony's
+// monitor, and for a clean one from before the command.
+func (m *Monitor) Clean(ctx context.Context) (features []string, ok bool, err error) {
+	reply, err := m.Command(ctx, "clean")
+	if err != nil {
+		return nil, false, err
+	}
+	for line := range strings.SplitSeq(reply, "\r\n") {
+		if rest, found := strings.CutPrefix(line, "clean monitor "); found {
+			f := strings.Fields(rest)
+			if len(f) == 0 {
+				break
+			}
+			return f[1:], true, nil
+		}
+	}
+	return nil, false, nil
 }
 
 // Stop stops the program Run started, which the clean monitor (serial/monitor)
