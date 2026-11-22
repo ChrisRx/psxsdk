@@ -25,6 +25,7 @@ import (
 	"go.chrisrx.dev/psx/format/psx"
 	"go.chrisrx.dev/psx/internal/flags"
 	"go.chrisrx.dev/psx/internal/hot"
+	"go.chrisrx.dev/psx/internal/ttyout"
 )
 
 // frameBudget bounds the instructions a tick runs looking for a vertical
@@ -43,16 +44,17 @@ const sampleRate = 44100
 
 // Options say what to run and how.
 type Options struct {
-	Disc  string      // the cue sheet or .zip of a disc to put in the drive, or empty for none
-	BIOS  string      // a BIOS image to boot instead of the OpenBIOS built in
-	EXE   string      // a PSX-EXE to load when the BIOS reaches its shell
-	Card  string      // a memory card image for slot 1
-	Scale int         // the window's initial size, as a multiple of 320x240
-	Mute  bool        // leave the sound off
-	Fast  bool        // run as fast as the host allows, showing nothing, until the first picture
-	Loads flags.Loads // files to copy into RAM, with EXE
-	Title string      // the window's title, yaroze and what it runs if empty
-	Shots string      // the directory a screenshot is written into, on F12 or SIGUSR1
+	Disc    string      // the cue sheet or .zip of a disc to put in the drive, or empty for none
+	BIOS    string      // a BIOS image to boot instead of the OpenBIOS built in
+	EXE     string      // a PSX-EXE to load when the BIOS reaches its shell
+	Card    string      // a memory card image for slot 1
+	Scale   int         // the window's initial size, as a multiple of 320x240
+	Mute    bool        // leave the sound off
+	Fast    bool        // run as fast as the host allows, showing nothing, until the first picture
+	Loads   flags.Loads // files to copy into RAM, with EXE
+	Title   string      // the window's title, yaroze and what it runs if empty
+	BIOSLog bool        // print the BIOS's boot log, which is left out otherwise (package ttyout)
+	Shots   string      // the directory a screenshot is written into, on F12 or SIGUSR1
 
 	// Breaks are addresses to print the registers at each time the program
 	// reaches one.
@@ -95,6 +97,7 @@ process, for a script to take one of a running window.`
 // are the caller's to fill.
 func (o *Options) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&o.BIOS, "bios", "", "BIOS image to boot instead of the OpenBIOS built in")
+	fs.BoolVar(&o.BIOSLog, "bios-log", false, "print the log the BIOS prints as it boots, before what the program prints")
 	fs.StringVar(&o.EXE, "exe", "", "PSX-EXE to load when the BIOS reaches its shell, as psxe -x does, in place of building a package")
 	fs.StringVar(&o.Card, "card", "", "memory card image for slot 1, made blank if it does not exist, and written back on exit")
 	fs.IntVar(&o.Scale, "scale", 2, "the window's initial size, as a multiple of 320x240")
@@ -117,7 +120,8 @@ func Run(opts Options) error {
 	if err != nil {
 		return err
 	}
-	m.TTY = os.Stdout
+	tty := ttyout.New(os.Stdout, opts.BIOSLog)
+	m.TTY = tty
 	m.SetAudio(!opts.Mute)
 	for _, addr := range opts.Breaks {
 		m.SetBreak(addr, func(m *emu.Machine) bool {
@@ -153,6 +157,7 @@ func Run(opts Options) error {
 		if err := m.SideloadEXE(exe, bootBudget); err != nil {
 			return err
 		}
+		tty.Start()
 		for _, l := range opts.Loads {
 			if err := m.LoadRAM(l.Addr, l.Data); err != nil {
 				return err

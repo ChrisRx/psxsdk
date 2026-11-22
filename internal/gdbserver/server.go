@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"go.chrisrx.dev/psx/internal/ttyout"
 )
 
 // packetSize is the longest packet the server takes, which bounds how much
@@ -75,7 +77,7 @@ func New(t Target) *Server {
 		placed: map[uint32]int{},
 		last:   Stop{Signal: SIGTRAP},
 	}
-	t.SetOutput(output{s})
+	t.SetOutput(ttyout.Program(output{s}))
 	return s
 }
 
