@@ -411,7 +411,8 @@ type logo struct {
 	x, y, dx, dy int
 	color        int
 	at           uint32 // the clock at the last step
-	old          [2]int // where it was drawn, to be cleared
+	drawn        bool   // a frame of it is drawn, to show at the next flip
+	blank        int32  // the count of vertical blanks at the last flip
 }
 
 // The logo's size: PSXSDK in letters of 3 by 3 dots, over a flattened
@@ -436,6 +437,30 @@ func (l *logo) start(clock uint32) {
 	l.x, l.y = (320-logoW)/2, (conHeight-logoH)/2
 	l.dx, l.dy = 1, 1
 	l.at = clock
+	l.drawn = false
+}
+
+// logoBlanks is how many vertical blanks the logo shows each place for:
+// it moves a pixel every other frame.
+const logoBlanks = 2
+
+// pace says what the logo does at the library's count of vertical blanks,
+// vs: whether to show the frame drawn last, and whether to move and draw
+// the next. The first time, it only draws; from then on, every logoBlanks
+// blanks, it shows that frame and moves on to the next. Read as soon as a
+// blank starts, a flip then lands in the blank, whole, and the frame it
+// shows was drawn a frame or more before, so the GPU has finished it.
+func (l *logo) pace(vs int32) (flip, next bool) {
+	if !l.drawn {
+		l.drawn, l.blank = true, vs
+		return false, true
+	}
+	if vs-l.blank < logoBlanks {
+		return false, false
+	}
+	l.blank = vs
+	l.move()
+	return true, true
 }
 
 // step moves the logo as many steps as the clock says are due, and reports
@@ -444,21 +469,27 @@ func (l *logo) step(clock uint32) bool {
 	moved := false
 	for clock-l.at >= logoLines {
 		l.at += logoLines
-		l.x += l.dx
-		l.y += l.dy
-		bounced := false
-		if l.x <= logoMargin || l.x >= 320-logoMargin-logoW {
-			l.dx = -l.dx
-			bounced = true
-		}
-		if l.y <= logoMargin || l.y >= conHeight-logoMargin-logoH {
-			l.dy = -l.dy
-			bounced = true
-		}
-		if bounced {
-			l.color = (l.color + 1) % len(logoColors)
-		}
+		l.move()
 		moved = true
 	}
 	return moved
+}
+
+// move moves the logo a pixel, bouncing off the edges, and takes another
+// color at a bounce.
+func (l *logo) move() {
+	l.x += l.dx
+	l.y += l.dy
+	bounced := false
+	if l.x <= logoMargin || l.x >= 320-logoMargin-logoW {
+		l.dx = -l.dx
+		bounced = true
+	}
+	if l.y <= logoMargin || l.y >= conHeight-logoMargin-logoH {
+		l.dy = -l.dy
+		bounced = true
+	}
+	if bounced {
+		l.color = (l.color + 1) % len(logoColors)
+	}
 }
