@@ -371,6 +371,7 @@ func start() {
 		sp = defaultStack
 	}
 	clearStack(sp)
+	con.setState(stateRun)
 	setWatching(1)
 	installVector()
 	flushCache()
@@ -407,8 +408,12 @@ func get32() uint32 {
 // session.
 func binaryWrite() {
 	line.puts("binary\r")
+	// No drawing from here to the end: the host sends as fast as the line
+	// goes.
+	con.binary = true
 	for line.getc() == transferStart {
 		addr, size := get32(), get32()
+		con.startUpload(stateReceive, addr, size)
 		for size > 0 {
 			if line.getc() != blockStart {
 				end()
@@ -421,11 +426,14 @@ func binaryWrite() {
 			}
 			if line.getc() != sum {
 				line.putc('N')
+				con.retry()
 				continue
 			}
 			n := min(size, blockSize)
 			copy(memory(addr, n), block[:n])
 			line.putc('Y')
+			con.block(n)
+			statusTick()
 			addr += n
 			size -= n
 		}
@@ -445,8 +453,10 @@ func binaryWrite() {
 // makes, as Port does, gets a block in a fraction of a second.
 func binaryRead() {
 	line.puts("binary\r")
+	con.binary = true
 	for line.getc() == transferStart {
 		addr, size := get32(), get32()
+		con.startUpload(stateSend, addr, size)
 		for size > 0 {
 			if line.getc() != blockStart {
 				end()
@@ -462,6 +472,10 @@ func binaryRead() {
 				n := min(size, blockSize)
 				addr += n
 				size -= n
+				con.block(n)
+				statusTick()
+			} else {
+				con.retry()
 			}
 		}
 	}
@@ -472,5 +486,6 @@ func binaryRead() {
 // fetch it.
 func end() {
 	flushCache()
+	con.endUpload()
 	line.puts("end binary\r")
 }

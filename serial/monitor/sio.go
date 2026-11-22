@@ -20,6 +20,7 @@ var (
 const (
 	statTXReady = 1 << 0
 	statRXReady = 1 << 1
+	statOverrun = 1 << 4
 	statDSR     = 1 << 7 // the host is there
 	statCTS     = 1 << 8 // the host's RTS: it is ready for a byte
 )
@@ -67,7 +68,15 @@ func stat() uint32 { return volatile.LoadUint32(sioStat) }
 // status as it then is. A byte that would overfill ring is dropped.
 func (s *sio) poll() uint32 {
 	st := stat()
+	if st&statOverrun != 0 {
+		// A byte came to a full port and was lost: counted for the screen,
+		// and the error cleared.
+		con.overruns++
+		con.status = true
+		volatile.StoreUint16(sioCtrl, ctrlTXEnable|ctrlDTR|ctrlRXEnable|ctrlAck|ctrlRTS)
+	}
 	for st&statRXReady != 0 {
+		activity, received = true, true
 		c := volatile.LoadUint8(sioData)
 		if s.tail-s.head < uint32(len(s.ring)) {
 			s.ring[s.tail%uint32(len(s.ring))] = c
@@ -78,10 +87,24 @@ func (s *sio) poll() uint32 {
 	return st
 }
 
-// putc sends a byte once the port can take it and, while the host is
+// putc sends a byte, as text the screen's console shows too.
+func (s *sio) putc(c byte) {
+	s.send(c)
+	con.put(c)
+}
+
+// putRaw sends bytes that aren't text, such as the remote debugger's
+// packets, which the console leaves out.
+func (s *sio) putRaw(b []byte) {
+	for _, c := range b {
+		s.send(c)
+	}
+}
+
+// send sends a byte once the port can take it and, while the host is
 // there, it is ready for it. With no host, the byte goes nowhere rather
 // than holding up a program that prints.
-func (s *sio) putc(c byte) {
+func (s *sio) send(c byte) {
 	for s.poll()&statTXReady == 0 {
 	}
 	if s.poll()&statDSR != 0 {
@@ -89,6 +112,7 @@ func (s *sio) putc(c byte) {
 		}
 	}
 	volatile.StoreUint8(sioData, c)
+	activity = true
 }
 
 // putBytes sends b. The monitor writes out bytes it has with this rather
@@ -106,10 +130,15 @@ func (s *sio) puts(str string) {
 	}
 }
 
-// getc waits for a byte from the host.
+// getc waits for a byte from the host, giving the screen its turns
+// meanwhile, except while a transfer's bytes come, which are counted
+// between its blocks instead.
 func (s *sio) getc() byte {
 	for s.head == s.tail {
 		s.poll()
+		if !con.binary {
+			screenTick()
+		}
 	}
 	c := s.ring[s.head%uint32(len(s.ring))]
 	s.head++

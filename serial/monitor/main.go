@@ -26,11 +26,19 @@
 //
 // target.json also links it with --nmagic, without the segments' page
 // alignment, which would otherwise load the ELF headers into the library
-// below it.
+// below it, and with 1K of the library's malloc reserve rather than 16K:
+// nothing in the monitor calls it, and the space is the monitor's heap.
 //
 // The line runs at the speed the memory card in either slot gives in the
 // file the boot disc keeps it in, BWDTLS-03030CIP, and 9600 bps without
 // one.
+//
+// The screen is a console of what the monitor sends the host, under two
+// status lines: the speed, and what the monitor is doing, with a transfer's
+// progress and how long the last took. It is dim on black and moves a
+// little every minute, and after five minutes with nothing on the cable a
+// logo, PSXSDK over a disc, bounces around the screen in its place, so that a CRT left on the
+// monitor keeps no picture of it (console.go).
 package main
 
 import "go.chrisrx.dev/psx/yaroze"
@@ -58,6 +66,7 @@ func main() {
 	}
 	line.open(savedBaud)
 	installHook()
+	con.restarted()
 	line.puts("\r\nConnected CIP ver2.0\r\nCommunication baud rate ")
 	line.putDecimal(savedBaud)
 	line.puts(" bps\r\nOK\r\n")
