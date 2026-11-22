@@ -181,7 +181,14 @@ func ourMonitor(t *testing.T, opts ...emutest.Option) (*emutest.Machine, *serial
 // turn its RTS on, and checks it greets the host.
 func startMonitor(t *testing.T, m *emutest.Machine) (*emutest.Machine, *serial.Port, *serial.Monitor) {
 	t.Helper()
-	m.InsertCard(1, bootCard(t, 115200))
+	return startMonitorAt(t, m, 115200)
+}
+
+// startMonitorAt is startMonitor with the card's speed baud, which the
+// monitor starts at.
+func startMonitorAt(t *testing.T, m *emutest.Machine, baud uint32) (*emutest.Machine, *serial.Port, *serial.Monitor) {
+	t.Helper()
+	m.InsertCard(1, bootCard(t, baud))
 	line := m.ConnectSerial()
 	m.RunUntil(func() bool { return m.Bus.Read16(0x1f80105a)&0x20 != 0 }, 60*emutest.Second, "the monitor to raise RTS")
 	port := serial.NewPort(line)
@@ -193,7 +200,7 @@ func startMonitor(t *testing.T, m *emutest.Machine) (*emutest.Machine, *serial.P
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
-	assert.Equal(t, true, strings.Contains(reply, "Communication baud rate 115200 bps"), reply)
+	assert.Equal(t, true, strings.Contains(reply, fmt.Sprintf("Communication baud rate %d bps", baud)), reply)
 	return m, port, mon
 }
 

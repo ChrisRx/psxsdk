@@ -142,10 +142,10 @@ There are no watchpoints yet. GDB's `watch` works with `set can-use-hw-watchpoin
 
 ### On a console
 
-With `--port DEVICE[,BAUD]` the program is debugged on a console at the other end of the serial cable, with the monitor waiting at its prompt: the Net Yaroze boot disc's monitor, or the clean one, [`serial/monitor`](https://pkg.go.dev/go.chrisrx.dev/psx/serial/monitor). `-B` gives the speed too, 9600 if neither does.
+With `--port DEVICE[,BAUD]` the program is debugged on a console at the other end of the serial cable, with the monitor waiting at its prompt: the Net Yaroze boot disc's monitor, or the clean one, [`serial/monitor`](https://pkg.go.dev/go.chrisrx.dev/psx/serial/monitor). `-B` gives the speed too. With neither, yaroze finds it by sending a Control-C at each speed in turn until the monitor answers with its prompt. A slower speed is then raised to 115200 bps for the session, with the monitor's `baud` command, the memory card's speed left as it is, so that the console is back at the card's speed after a reset. `--raise-baud=false` keeps the speed the monitor is at. `--start attach` neither asks nor raises, since the Control-C would reset the running program, and takes 115200 unless told otherwise.
 
 ```bash
-yaroze debug --port /dev/ttyUSB0,115200 ./mygame
+yaroze debug --port /dev/ttyUSB0 ./mygame
 ```
 
 The package is built over the library the console has in memory, as `--libps resident` does, uploaded as [`siocons`](siocons.md) uploads a program, and debugged through the monitor's remote debugger, the one the Net Yaroze's own GDB used. `--start` says how the program is started:

@@ -513,3 +513,44 @@ func TestMonitorClean(t *testing.T) {
 		assert.Equal(t, []string{"stop"}, features)
 	})
 }
+
+// TestMonitorSpeed starts each monitor at 9600 bps, as a card that says
+// nothing else leaves it, finds its speed from the host, at first set to
+// another, and raises it to 115200 for the session, the card left alone.
+func TestMonitorSpeed(t *testing.T) {
+	for _, which := range []string{"sony", "ours"} {
+		t.Run(which, func(t *testing.T) {
+			parallel(t)
+			var m *emutest.Machine
+			if which == "sony" {
+				bios := os.Getenv("PSX_SONY_BIOS")
+				if bios == "" {
+					t.Skip("PSX_SONY_BIOS is not set")
+				}
+				m = emutest.Boot(t, emutest.BIOS(bios), emutest.Disc(bootDisc(t)))
+			} else {
+				m = emutest.Boot(t, emutest.BIOS(emutest.BIOSFromEnv(t)), emutest.Disc(disc(t, "monitor")))
+			}
+			_, port, _ := startMonitorAt(t, m, 9600)
+			// The host starts at the speed it would try first, which the
+			// line garbles.
+			assert.NoError(t, port.SetBaud(serial.FastSpeed))
+			baud, err := port.DetectSpeed(t.Context())
+			if !assert.NoError(t, err) {
+				t.FailNow()
+			}
+			assert.Equal(t, 9600, baud)
+			mon, err := serial.NewMonitor(t.Context(), port)
+			assert.NoError(t, err)
+			if !assert.NoError(t, mon.RaiseSpeed(t.Context(), serial.FastSpeed)) {
+				t.FailNow()
+			}
+			assert.Equal(t, "115200 bps\r\n", command(t, port, "baud"))
+			// Found again at the new speed.
+			assert.NoError(t, port.SetBaud(9600))
+			baud, err = port.DetectSpeed(t.Context())
+			assert.NoError(t, err)
+			assert.Equal(t, serial.FastSpeed, baud)
+		})
+	}
+}
