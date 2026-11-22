@@ -3,7 +3,7 @@ module go.chrisrx.dev/psx
 go 1.27.3
 
 require (
-	github.com/ChrisRx/delve v0.0.0-20261122133250-448c49c66c05
+	github.com/ChrisRx/delve v0.0.0-20261122141123-a6c8a67bf7cf
 	github.com/ChrisRx/wazero v0.0.0-20261116205937-3f122248aff2
 	github.com/alecthomas/chroma/v2 v2.27.0
 	github.com/google/go-dap v0.12.0
