@@ -329,6 +329,44 @@ article pre {
   line-height: 1.5;
 }
 article pre code { background: none; padding: 0; font-size: inherit; }
+
+/* A code block with its copy button (copy.js), which stays put while the
+   block scrolls sideways. */
+article .code { position: relative; }
+article .code .copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+article .code:hover .copy,
+article .code .copy:focus-visible,
+article .code .copy.done { opacity: 1; }
+article .code .copy:hover { color: var(--ink); border-color: var(--line-strong); }
+article .code .copy.done { color: var(--accent); }
+article .code .copy svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+@media (hover: none) {
+  article .code .copy { opacity: 1; }
+}
 .chroma { background: var(--surface) !important; }
 
 article table {
