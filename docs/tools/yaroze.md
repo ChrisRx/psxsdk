@@ -157,6 +157,8 @@ The package is built over the library the console has in memory, as `--libps res
 | `rdb` | either | Started under the monitor's `rdb`. Once it runs it cannot be stopped, short of a breakpoint or a fault. |
 | `attach` | the clean one | Nothing is uploaded. The program that `go` started earlier is stopped where it is. |
 
+When the debugger that `yaroze debug` runs quits or kills the program, a program the clean monitor started goes back to the monitor's prompt, as a program that returns does. GDB's `quit` detaches from a remote target, which counts too. With `--serve`, a debugger that detaches leaves the program running for the next one.
+
 A breakpoint here is a `break` instruction written over the program while it runs, and taken out again when it stops. A step is the monitor's, which runs a jump or a branch together with its delay slot. Memory outside RAM, the scratchpad, the I/O ports and the BIOS is refused, since reading it would be a bus error in the monitor itself.
 
 The library a console has in memory has no symbols in the program's ELF, so a backtrace from inside the library stops there.

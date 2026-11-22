@@ -62,8 +62,8 @@ func debugProgram(t *testing.T, name string) string {
 }
 
 // serveGDB serves target to debuggers on a port of the loopback address,
-// which it returns, until the test ends.
-func serveGDB(t *testing.T, target gdbserver.Target) string {
+// which it returns, until the test ends. options set up the server.
+func serveGDB(t *testing.T, target gdbserver.Target, options ...func(*gdbserver.Server)) string {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if !assert.NoError(t, err) {
@@ -71,6 +71,9 @@ func serveGDB(t *testing.T, target gdbserver.Target) string {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s := gdbserver.New(target)
+	for _, o := range options {
+		o(s)
+	}
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -294,6 +297,31 @@ func TestGDBMonitor(t *testing.T) {
 	inOrder(t, out, append(gdbWant, gdbInterruptWant...))
 }
 
+// TestGDBMonitorQuit quits GDB with the program stopped under the clean
+// monitor, as one ends a session with yaroze debug: GDB detaches, and the
+// console goes back to the monitor.
+func TestGDBMonitorQuit(t *testing.T) {
+	parallel(t)
+	gdbCommand(t)
+	path := debugProgram(t, "steps-resident.elf")
+	prog, err := serial.OpenProgram(path)
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	_, port, _ := ourMonitor(t)
+	h, err := gdbserver.StartHSS(t.Context(), port, prog, gdbserver.HSSOptions{Start: gdbserver.StartGo})
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	addr := serveGDB(t, h, func(s *gdbserver.Server) { s.EndOnDetach = true })
+	script := append(append([]string{}, gdbScript...), "continue", "quit")
+	out := runGDB(t, path, addr, script, "debug: second 2")
+	t.Log(out)
+	assert.Equal(t, true, h.Returned(), out)
+	_, err = port.ReadUntil(t.Context(), "Communication baud rate")
+	assert.NoError(t, err)
+}
+
 // TestStartAuto starts a program on each monitor as yaroze debug does by
 // default: with go on ours, which can stop it, and with rdb on Sony's. Either
 // way the program is stopped at its first instruction.
@@ -363,6 +391,73 @@ func TestStartTakeOver(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, gdbserver.SIGINT, stop.Signal)
 	assert.Equal(t, true, strings.Contains(out.String(), "debug: start"), out.String())
+}
+
+// TestKillReturnsToMonitor kills a program the clean monitor's go started,
+// stopped in the debugger, as GDB's kill and quit do: the console goes back
+// to the monitor's prompt, ready for the next upload.
+func TestKillReturnsToMonitor(t *testing.T) {
+	path := debugProgram(t, "steps-resident.elf")
+	prog, err := serial.OpenProgram(path)
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	m, port, _ := ourMonitor(t)
+	h, err := gdbserver.StartHSS(t.Context(), port, prog, gdbserver.HSSOptions{Start: gdbserver.StartGo})
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	// Running, then stopped where the program is, as Control-C leaves it.
+	assert.NoError(t, h.Continue(t.Context()))
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	h.Wait(ctx)
+	cancel()
+	assert.NoError(t, h.Interrupt())
+	_, err = h.Wait(t.Context())
+	assert.NoError(t, err)
+
+	assert.NoError(t, h.Kill(t.Context()))
+	assert.Equal(t, true, h.Returned())
+	// The monitor greets the host as it starts again, and answers.
+	_, err = port.ReadUntil(t.Context(), "Communication baud rate")
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	mon, err := serial.NewMonitor(t.Context(), port)
+	assert.NoError(t, err)
+	_, err = mon.Command(t.Context(), "")
+	assert.NoError(t, err)
+	_, ok, err := mon.Clean(t.Context())
+	assert.NoError(t, err)
+	assert.Equal(t, true, ok)
+	// The screen's console shows what was said, and none of the debugger's
+	// packets.
+	f, err := elf.Open(serialProgram(t, "monitor"))
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	defer f.Close()
+	syms, err := f.Symbols()
+	assert.NoError(t, err)
+	var text []byte
+	for _, sym := range syms {
+		if sym.Name == "main.con" {
+			for a := uint32(sym.Value); a < uint32(sym.Value+sym.Size); a++ {
+				text = append(text, m.Bus.Read8(a))
+			}
+		}
+	}
+	assert.Equal(t, true, bytes.Contains(text, []byte("Communication baud rate")), string(text))
+	assert.Equal(t, false, bytes.Contains(text, []byte("HSs")), string(text))
+	assert.Equal(t, true, bytes.Contains(text, []byte("program ended")), string(text))
+	// And it takes another program.
+	h, err = gdbserver.StartHSS(t.Context(), port, prog, gdbserver.HSSOptions{Start: gdbserver.StartGo})
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	pc, err := h.ReadRegister(t.Context(), gdbserver.RegPC)
+	assert.NoError(t, err)
+	assert.Equal(t, prog.PC, pc)
 }
 
 // TestGDBRemoteDebugger debugs through each monitor's rdb, which Sony's has

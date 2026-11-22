@@ -49,6 +49,12 @@ type Stop struct {
 
 // A Target is a program a Server debugs. It starts stopped. Its methods are
 // called one at a time, except Interrupt.
+// Killer is a Target that does something with the program when the
+// debugger kills it, rather than leave it as it is.
+type Killer interface {
+	Kill(ctx context.Context) error
+}
+
 type Target interface {
 	// ReadRegister and WriteRegister read and set a register of the stopped
 	// program, by its number.
