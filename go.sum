@@ -1,5 +1,5 @@
-github.com/ChrisRx/delve v0.0.0-20261122133250-448c49c66c05 h1:8R1cqFnK/YHwBuedB/jJHsmyoBJbn9RfwmkdjY7k8gc=
-github.com/ChrisRx/delve v0.0.0-20261122133250-448c49c66c05/go.mod h1:QXUhTgCMDbeImtA3s+DhcFwp4ScaEro/9+8qY3mD/qQ=
+github.com/ChrisRx/delve v0.0.0-20261122141123-a6c8a67bf7cf h1:FB9Dn4H87eHrosAV++87xZN4Rc9txZMFb5iDikT/GgU=
+github.com/ChrisRx/delve v0.0.0-20261122141123-a6c8a67bf7cf/go.mod h1:QXUhTgCMDbeImtA3s+DhcFwp4ScaEro/9+8qY3mD/qQ=
 github.com/ChrisRx/wazero v0.0.0-20261116205937-3f122248aff2 h1:pR7XkDOfMLcE4cZfJusRbsF+wOoropkqQTK1gjVVWhA=
 github.com/ChrisRx/wazero v0.0.0-20261116205937-3f122248aff2/go.mod h1:FD4DCVOcDFGvOqL4aMGadFN5jGl0ugpsz7Czuiy1PLM=
 github.com/alecthomas/assert/v2 v2.11.0 h1:2Q9r3ki8+JYXvGsDyBXwH3LcJ+WK5D0gc5E8vS6K3D0=
