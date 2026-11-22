@@ -241,8 +241,14 @@ func drawConsole() {
 		volatile.StoreUint32(gp1, 0x03000000) // display on
 	}
 	if con.saver {
-		if con.logo.step(con.clock) || con.full {
-			con.full = false
+		// Paced by vertical blanks, not the clock: the library counts them
+		// in its interrupt, and reading the count waits for nothing.
+		con.full = false
+		flip, next := con.logo.pace(yaroze.VSync(-1))
+		if flip {
+			showLogo()
+		}
+		if next {
 			drawLogo()
 		}
 		return
@@ -325,10 +331,20 @@ func drawStatus() {
 // discWidths are the half-widths of the logo's disc, a row each.
 var discWidths = [logoDisc]int{20, 34, 41, 47, 50, 52, 52, 52, 50, 47, 41, 34, 20}
 
-// drawLogo draws the logo where it is, in the buffer not on the screen, and
-// shows that one.
+// logoTop is the buffer drawLogo drew the logo's next frame into.
+var logoTop int
+
+// showLogo shows the frame drawLogo drew last.
+func showLogo() {
+	shown = logoTop
+	volatile.StoreUint32(gp1, 0x05000000|uint32(logoTop)<<10)
+}
+
+// drawLogo draws the logo where it is, in the buffer not on the screen, for
+// showLogo to show.
 func drawLogo() {
 	top := bufferY - shown
+	logoTop = top
 	drawTo(top)
 	gpuFill(0, top, 320, 240, 0)
 	l := &con.logo
@@ -352,6 +368,4 @@ func drawLogo() {
 	var b [len(name)]byte
 	copy(b[:], name)
 	gpuText(l.x+(logoW-len(name)*6)/2-1, dy+3, b[:], 6, 0)
-	shown = top
-	volatile.StoreUint32(gp1, 0x05000000|uint32(top)<<10)
 }

@@ -176,3 +176,18 @@ func TestConsoleHold(t *testing.T) {
 	assert.Equal(t, false, c.held)
 	assert.Equal(t, true, c.full && c.remode)
 }
+
+func TestLogoPace(t *testing.T) {
+	var l logo
+	l.start(0)
+	flip, next := l.pace(100)
+	assert.Equal(t, [2]bool{false, true}, [2]bool{flip, next}, "the first frame is drawn, not shown")
+	x := l.x
+	flip, next = l.pace(101)
+	assert.Equal(t, [2]bool{false, false}, [2]bool{flip, next}, "a blank later, nothing")
+	flip, next = l.pace(102)
+	assert.Equal(t, [2]bool{true, true}, [2]bool{flip, next}, "two later, shown and the next drawn")
+	assert.Equal(t, 1, l.x-x, "a pixel a flip")
+	flip, _ = l.pace(102)
+	assert.Equal(t, false, flip, "once a blank")
+}
