@@ -678,7 +678,7 @@ tasks:
           web/compiler/mkcache.sh .build/compiler/tinygo-full.wasm .build/compiler/tinygo.wasm .build/sysroot $programs
         else
           rm -rf .build/seed && mkdir -p .build/seed
-          tar -xzf cmd/yaroze/wasm/sysroot.tar.gz -C .build/seed --wildcards 'sysroot/cache/obj-*.bc' 'sysroot/cache/dep-*.json'
+          tar -xzf cmd/yaroze/wasm/sysroot.tar.gz -C .build/seed --wildcards 'sysroot/cache/obj-*.bc' 'sysroot/cache/dep-*.json' 'sysroot/cache/compiler-rt-*'
           OBJ_CACHE=.build/seed/sysroot/cache web/compiler/mkcache.sh .build/compiler/tinygo.wasm .build/compiler/tinygo.wasm .build/sysroot $programs
         fi
       - mkdir -p .build/site/play

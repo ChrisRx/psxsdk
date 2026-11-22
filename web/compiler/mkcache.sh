@@ -28,7 +28,8 @@
 # TINYGO.wasm itself, which cannot: then OBJ_CACHE names a directory
 # holding the obj-*.bc of an earlier run and the dep-*.json beside them,
 # which say what each was compiled from and are how the compiler finds
-# one, and they are copied in first. The sysroot yaroze embeds,
+# one, and they are copied in first, with any compiler-rt-* library
+# directory there. The sysroot yaroze embeds,
 # cmd/yaroze/wasm/sysroot.tar.gz, holds them, which is how the site is
 # built from a checkout with no compiler built. A C or assembly file the
 # seeded entries do not cover fails the build, since there is no clang to
@@ -54,6 +55,11 @@ if [ -n "${OBJ_CACHE:-}" ]; then
   n=$(ls "$OBJ_CACHE"/obj-*.bc "$OBJ_CACHE"/dep-*.json 2>/dev/null | wc -l)
   [ "$n" -gt 0 ] || { echo "mkcache.sh: OBJ_CACHE=$OBJ_CACHE holds no obj-*.bc and dep-*.json entries" >&2; exit 2; }
   cp "$OBJ_CACHE"/obj-*.bc "$OBJ_CACHE"/dep-*.json "$SYSROOT/cache/"
+  # The target's compiler-rt, built whole as a library rather than file by
+  # file, which the shipped compiler cannot build either.
+  for lib in "$OBJ_CACHE"/compiler-rt-*/; do
+    [ -d "$lib" ] && cp -r "$lib" "$SYSROOT/cache/"
+  done
   echo "mkcache: seeded $n compiled C and assembly entries, with their dependency lists, from $OBJ_CACHE"
 fi
 
