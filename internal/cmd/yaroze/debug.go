@@ -25,6 +25,7 @@ import (
 	"go.chrisrx.dev/psx/internal/project"
 	"go.chrisrx.dev/psx/internal/psxplay"
 	"go.chrisrx.dev/psx/internal/toolchain"
+	"go.chrisrx.dev/psx/internal/ttyout"
 	"go.chrisrx.dev/psx/link"
 	"go.chrisrx.dev/psx/serial"
 )
@@ -317,6 +318,10 @@ func (f *debugFlags) debugEmulator(cmd *cobra.Command, arg string) error {
 		if err != nil {
 			return err
 		}
+		// What the BIOS prints as it boots, with --bios-log; the server
+		// takes the output over once the program is stopped at its start.
+		tty := ttyout.New(os.Stdout, f.play.BIOSLog)
+		m.TTY = tty
 		if d.disc != "" {
 			disc, err := emu.OpenDisc(d.disc)
 			if err != nil {
@@ -337,6 +342,7 @@ func (f *debugFlags) debugEmulator(cmd *cobra.Command, arg string) error {
 			if err := m.SideloadEXE(d.exe, bootBudget); err != nil {
 				return err
 			}
+			tty.Start()
 		}
 		e, err := attach(m)
 		if err != nil {
