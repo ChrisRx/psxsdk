@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 )
 
 // The remote debugger the monitor's rdb command starts talks HSS, the
@@ -182,8 +183,34 @@ func (d *Debugger) receive(ctx context.Context) (HSSPacket, error) {
 }
 
 func (d *Debugger) ack(code uint8) error {
-	_, err := d.port.Write(HSSPacket{Code: code}.encode())
-	return err
+	return d.write(HSSPacket{Code: code}.encode())
+}
+
+// hssPiece and hssGap pace what the host sends: the console's receive
+// buffer holds 8 bytes, and while the program runs, the remote debugger of
+// Sony's monitor reads it too slowly for a packet sent whole. Measured on
+// a console under rdb: a 12-byte ACK sent at once was lost and the program
+// stopped for good, waiting for it, while 8 bytes and then the other 4
+// after a pause of 200 us or more always went through, as fast as the USB
+// adapter allows.
+const (
+	hssPiece = 8
+	hssGap   = time.Millisecond
+)
+
+// write sends b in pieces of hssPiece bytes, hssGap apart.
+func (d *Debugger) write(b []byte) error {
+	for len(b) > 0 {
+		n := min(len(b), hssPiece)
+		if _, err := d.port.Write(b[:n]); err != nil {
+			return err
+		}
+		b = b[n:]
+		if len(b) > 0 {
+			time.Sleep(hssGap)
+		}
+	}
+	return nil
 }
 
 // send sends a packet until the target acknowledges it, up to four times,
@@ -192,7 +219,7 @@ func (d *Debugger) ack(code uint8) error {
 func (d *Debugger) send(ctx context.Context, p HSSPacket) error {
 	b := p.encode()
 	for range 4 {
-		if _, err := d.port.Write(b); err != nil {
+		if err := d.write(b); err != nil {
 			return err
 		}
 		r, err := d.receive(ctx)
